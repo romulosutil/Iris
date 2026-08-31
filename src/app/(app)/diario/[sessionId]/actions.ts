@@ -9,7 +9,11 @@ import {
   capturarDiario,
   consolidarSessao,
   corrigirEscopoProtocolo,
+  enviarLoteAsr,
+  obterEstadoLote,
+  obterLoteMaisRecente,
   registrarAudioLocal,
+  type EstadoClipeAsr,
 } from "./logic";
 
 // ─── Wrappers para `useActionState` (resolvem o tenant do request) ────────────
@@ -118,6 +122,79 @@ export async function consolidarSessaoAction(
       return { error: "Só o terapeuta da sessão consolida." };
     console.error("consolidarSessaoAction:", err);
     return { error: "Não foi possível consolidar." };
+  }
+}
+
+// Ditado de voz (#72, T09). Chamado diretamente pelo componente de gravação
+// (não por `useActionState`/FormData — ainda não há UI de T11 nesta task),
+// com os Blobs gravados no cliente. O core (`enviarLoteAsr`, logic.ts) é
+// ctx-accepting e NUNCA pode ser exportado direto daqui: exportá-lo permitiria
+// a um cliente forjar `ctx` (clinicId/userId/role) e contornar a RLS — ver
+// memória do repo `ctx-forjavel-use-server`. Este wrapper resolve o `ctx` real
+// via `getTenantContext()` e só então chama o core.
+export type EnviarLoteAsrState = { error?: string; loteId?: string };
+export async function enviarLoteAsrAction(input: {
+  sessionId: string;
+  loteId: string;
+  clipes: Array<{ ordem: number; blob: Blob }>;
+}): Promise<EnviarLoteAsrState> {
+  const ctx = await getTenantContext();
+  try {
+    const clipes = await Promise.all(
+      input.clipes.map(async (c) => ({
+        ordem: c.ordem,
+        dados: new Uint8Array(await c.blob.arrayBuffer()),
+        contentType: c.blob.type || undefined,
+      })),
+    );
+    const r = await enviarLoteAsr(ctx, {
+      sessionId: input.sessionId,
+      loteId: input.loteId,
+      clipes,
+    });
+    if (r.error) return { error: r.error };
+    return { loteId: r.loteId };
+  } catch (err) {
+    if (err instanceof RoleError)
+      return { error: "Só o terapeuta da sessão envia o ditado de voz." };
+    console.error("enviarLoteAsrAction:", err);
+    return { error: "Não foi possível enviar o áudio para transcrição." };
+  }
+}
+
+// Ditado de voz (#72, T10). Leitura, chamada pela UI de polling (T11) e pela
+// própria página no carregamento (via `obterLoteMaisRecenteAction`, R26). O
+// core (`obterEstadoLote`/`obterLoteMaisRecente`, logic.ts) é ctx-accepting
+// e NUNCA pode ser exportado direto daqui, mesmo sendo leitura — mesmo
+// motivo de `enviarLoteAsrAction`: exportá-lo permitiria a um cliente forjar
+// `ctx` e contornar a RLS (memória `ctx-forjavel-use-server`).
+export async function obterEstadoLoteAction(
+  loteId: string,
+): Promise<{ error?: string; clipes?: EstadoClipeAsr[] }> {
+  const ctx = await getTenantContext();
+  try {
+    const clipes = await obterEstadoLote(ctx, loteId);
+    return { clipes };
+  } catch (err) {
+    if (err instanceof RoleError)
+      return { error: "Só o terapeuta da sessão acompanha a transcrição." };
+    console.error("obterEstadoLoteAction:", err);
+    return { error: "Não foi possível consultar o estado da transcrição." };
+  }
+}
+
+export async function obterLoteMaisRecenteAction(
+  sessionId: string,
+): Promise<{ error?: string; loteId?: string | null }> {
+  const ctx = await getTenantContext();
+  try {
+    const loteId = await obterLoteMaisRecente(ctx, sessionId);
+    return { loteId };
+  } catch (err) {
+    if (err instanceof RoleError)
+      return { error: "Só o terapeuta da sessão acompanha a transcrição." };
+    console.error("obterLoteMaisRecenteAction:", err);
+    return { error: "Não foi possível consultar o lote da sessão." };
   }
 }
 

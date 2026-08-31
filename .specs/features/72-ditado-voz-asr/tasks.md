@@ -1,0 +1,342 @@
+# Tasks — Issue #72: Ditado de Voz (ASR self-hosted)
+
+> Ler `context.md`, `spec.md` e `design.md` antes. Requisitos referenciados como R1-R27.
+> Fronteira de atomização: cada task é rejeitável ou aprovável isolada por um revisor.
+
+## Ordem e dependências
+
+```
+T01 ─┬─ T02 ── T03
+     └─ T09 ─┬─ T10 ── T11 ── T12
+T04 ─────────┘         │
+T05 ─┬─ T07 ── T08     T13
+T06 ─┘   │             T14
+         T15
+                       T16 (depende de todas) ── T17
+```
+
+---
+
+## T01 — Migração: colunas de ASR em `audio_capture`
+
+**Onde:** `src/db/schema.ts`, `db/migrations/` (gerada), `db/migrations/meta/`
+**Depende de:** —
+**Reusa:** padrão de enum + coluna do próprio `schema.ts`; grants de `0006_fase2_rls.sql:126`
+
+**O quê:** enum `asr_status` (`nao_solicitado`, `na_fila`, `transcrevendo`, `transcrito`, `falhou`); colunas `lote_id`, `ordem`, `asr_status` (default `nao_solicitado`), `transcricao_texto`, `transcrito_em`, `tentativas` (default 0); índice parcial da fila.
+
+**Done when:**
+
+- `pnpm db:generate` gerou o `.sql` + `meta/NNNN_snapshot.json`, commitados juntos.
+- O `.sql` gerado foi editado à mão só para adicionar o `GRANT UPDATE (lote_id, ordem, asr_status, transcricao_texto, transcrito_em, tentativas) ON audio_capture TO app_role;` — **sem tocar o snapshot**.
+- Constraints nomeadas no padrão Drizzle (`_fk`/`_pk`/`_unique`), não Postgres.
+- Verificado **medindo**: `information_schema.columns` mostra as 6 colunas e `has_column_privilege('app_role','audio_capture','asr_status','UPDATE')` é `true`.
+
+**Testes:** `src/db/migrations.test.ts` continua verde (journal, `when`, `idx`, tag).
+**Gate:** `pnpm format`, `pnpm test -- migrations`, `pnpm typecheck`
+
+⚠️ Enum novo + uso na mesma migração: `tipo::text` contorna o "unsafe use of new value" (memória `enum-novo-e-check-numa-migracao`).
+
+---
+
+## T02 — Funções `SECURITY DEFINER` da fila
+
+**Onde:** `db/migrations/NNNN_asr_fila.sql` (escrita à mão)
+**Depende de:** T01
+**Reusa:** `src/lib/export/acervo/motor.ts:141-170` como precedente de reserva atômica
+
+**O quê:** `app_asr_reservar(p_limite int)`, `app_asr_concluir(p_id uuid, p_texto text)`, `app_asr_falhar(p_id uuid, p_reverter_tentativa boolean DEFAULT false)`. Reserva com `FOR UPDATE SKIP LOCKED`, incremento de `tentativas` **na reserva**, teto de **3** tentativas **dentro da subquery do `LIMIT`** (R16).
+
+`p_reverter_tentativa = true` é o caminho do `503` do serviço ASR (saturação, não falha do clipe — design §6): volta a `na_fila` com `tentativas = greatest(tentativas - 1, 0)`, ignorando o teto. **Validar com Rômulo antes de fechar** — decisão de arquitetura nova.
+
+**Done when:**
+
+- Migração à mão com entrada manual no `_journal.json` e `when` = anterior **+ 1000**.
+- Nenhuma função resolve tenant com `current_setting('app.clinic_id')` cru — usa `app_clinic_id_atual()` onde precisar (é dentro de função).
+- Verificado em `pg_proc` com `prosecdef = true`, não em `git log`.
+- `app_asr_falhar(id, true)` sobre um clipe com `tentativas = 3` devolve ele a `na_fila` com `tentativas = 2` — medido no Postgres, não deduzido do SQL.
+
+**Testes:** —
+**Gate:** `pnpm db:migrate` local + consulta em `pg_proc`
+
+⚠️ Não editar migração já aplicada in-place (memória `editar-migracao-aplicada-nao-roda`); `CREATE OR REPLACE` torna o diff enganoso — medir o corpo em `pg_proc`.
+
+---
+
+## T03 — Teste de integração da fila
+
+**Onde:** `db/tests/asr-fila-rls.int.test.ts`
+**Depende de:** T02
+**Reusa:** fixtures de int-test existentes
+
+**Done when:** cobre — (a) `app_role` de clínica A não enxerga clipe de clínica B; (b) `app_asr_reservar` reserva cross-tenant e é idempotente sob dois ticks concorrentes (segunda chamada não devolve a mesma linha); (c) clipe com `tentativas` no teto **não** ocupa a janela do `LIMIT`; (d) `app_asr_falhar` no teto marca `falhou` definitivo e zera `objeto_ref`.
+
+**Testes:** os 4 cenários acima.
+**Gate:** `pnpm test:rls` — **conferir a contagem de arquivos coletados**, não só o verde (memória `vitest-int-test-coleta-zero`, `suite-rls-rodando-como-superusuario`).
+
+⚠️ E-mail de fixture novo e único; não reusar `coord@a.test` (memória `email-de-fixture-colide-entre-int-tests`). Sem `TRUNCATE` extra (memória `truncate-extra-colide-com-int-test-paralelo`).
+
+---
+
+## T04 — Bucket efêmero + client de storage
+
+**Onde:** `src/lib/asr/storage.ts`, provisionamento do bucket `iris-asr-efemero`
+**Depende de:** —
+**Reusa:** client de MinIO já usado em backup/exportação
+
+**Done when:** `guardar`, `ler`, `apagar` por chave; bucket com credencial própria, separada de backup e exportação; região/assinatura explícitas.
+
+**Testes:** unitário do client contra dublê.
+**Gate:** `pnpm format`, `pnpm test`
+
+⚠️ Dublê não cobre dialeto do destino (memória `teste-com-duble-nao-cobre-dialeto-do-destino`): `mc` assina `us-east-1` sem `MC_REGION`. O teste do dublê não prova a cópia — a prova é o smoke em T08.
+
+---
+
+## T05 — Interface `AsrProvider` + `StubAsrProvider` + `SelfHostedAsrProvider`
+
+**Onde:** `src/lib/asr/provider.ts`, `stub.ts`, `self-hosted.ts`
+**Depende de:** —
+
+**Done when:** seleção do provider é **estática por env**, sem `await import()` dinâmico; `StubAsrProvider` não faz rede nenhuma; `SelfHostedAsrProvider` tem timeout explícito e bearer `ASR_SERVICE_TOKEN`.
+
+- O corpo vai como `Uint8Array`/`Buffer`, **nunca stream**: o serviço exige `Content-Length` e recusa `400` em `Transfer-Encoding: chunked` (runbook §0).
+- Não-200 **não colapsa num erro só**. O provider distingue os códigos do contrato de recusa (design §6): `503` = saturação (devolve à fila revertendo tentativa), `400`/`413` = falha definitiva do clipe, `408`/`500` = falha transitória. Colapsar tudo em `throw new Error` faz o worker gastar as 3 tentativas em cima de um `413` que nunca vai mudar.
+
+**Testes:** stub devolve texto determinístico; self-hosted monta a requisição certa contra dublê de fetch; **um caso por código** do contrato de recusa (`400`, `408`, `413`, `503`, `500`) asserindo a classificação resultante, não a mensagem.
+**Gate:** `pnpm format`, `pnpm test`, `pnpm typecheck`
+
+⚠️ Dublê com arrow não é construtor (memória `duble-arrow-nao-e-construtor`) — se o provider for instanciado com `new`, o dublê precisa ser função/classe.
+
+---
+
+## T06 — Serviço faster-whisper (`infra/asr/`) + benchmark medido
+
+**Onde:** `infra/asr/Dockerfile`, `infra/asr/servidor.py`, `infra/asr/runbook.md`
+**Depende de:** —
+**Reusa:** molde `infra/billing/`
+
+**O quê:** container Python com `POST /transcrever` e `GET /saude`. Deps listadas à mão; modelo baixado **na build**.
+
+**Done when:**
+
+- `RUN --network=none` prova que o boot não depende de rede externa.
+- **Benchmark registrado no `runbook.md`**: tempo de transcrição de clipe de 2 min em `small` e `medium`, na VPS real (4 vCPU / 16 GB, sem GPU), em áudio PT-BR clínico. O tamanho de modelo escolhido e o tick de T08 **citam esse número**.
+- `ASR_SERVICE_TOKEN` ausente **derruba o boot** (`exit 1`), em vez de `/saude` verde com `/transcrever` em `401` para sempre.
+- Bearer comparado em tempo constante (`hmac.compare_digest` sobre bytes — `str` não-ASCII levanta `TypeError`).
+- Corpo limitado por `ASR_MAX_BYTES` (`413` acima do teto) e `Content-Length` malformado responde `400`, não fecha a conexão sem resposta.
+- **Corpo truncado responde `400`**: `len(corpo) != Content-Length` nunca transcreve — áudio parcial transcrito em `200` devolve um trecho como se fosse a nota inteira.
+- Teto de `ASR_MAX_CONCORRENTES` responde `503` (backstop do lado do serviço; o teto do agendador não é a única barreira nos 4 vCPU).
+- `500` não devolve `str(exc)` no corpo — causa fica no log do container (memória `mensagem-de-erro-que-afirma-causa`).
+- Contrato de recusa documentado no `runbook.md` §0 e refletido no design §6 — T05/T07 consomem dali.
+- Diretiva `# syntax=docker/dockerfile:1` na **primeira linha** do Dockerfile; em qualquer outra é comentário morto.
+- `requirements.txt` sem dependência que o serviço não importa.
+
+**Testes:** —
+**Gate:** build local da imagem + benchmark executado na VPS
+
+**Pendência aberta:** confirmar que o domínio público temporário usado no benchmark foi removido (runbook §5). Enquanto existir, o serviço está alcançável da internet — contraria R11. Verificar de fora com `curl`, não pelo painel.
+
+⚠️ O número tem que ser **medido**, não estimado (memória `verificar-fato-de-infra-com-medicao`). `[x] CONFIRMADO` sem prova custa mais que `[ ]`.
+
+---
+
+## T07 — Rota interna do worker
+
+**Onde:** `src/app/api/internal/jobs/asr-transcrever/route.ts` (+ `route.test.ts`)
+**Depende de:** T02, T04, T05
+**Reusa:** `api/internal/billing/fechar-ciclos/route.ts` (bearer `timingSafeEqual`, `runtime = "nodejs"`, `dynamic = "force-dynamic"`)
+
+**O quê:** autoriza por `ASR_JOB_TOKEN`; reserva lote via `app_asr_reservar`; por clipe baixa o objeto, chama o provider, chama `app_asr_concluir` ou `app_asr_falhar`, e **apaga o objeto no `finally`** (R11).
+
+**Done when:** falha de 1 clipe não aborta os demais do tick (R12); token ausente recusa tudo; o `finally` de apagar o objeto roda nos três desfechos; `503` do serviço chama `app_asr_falhar(id, true)` e os demais códigos chamam `app_asr_falhar(id)` — a classificação vem do provider (T05), a rota não reinterpreta status HTTP.
+
+**Testes:** token ausente → 401; lote de 3 com o do meio falhando → 2 `transcrito`, 1 de volta à fila, 3 objetos apagados; clipe que recebe `503` volta a `na_fila` com `tentativas` **igual ao valor de antes do tick** (mutação: trocar `app_asr_falhar(id, true)` por `app_asr_falhar(id)` tem que ficar vermelho); teto de 3 tentativas → `falhou` definitivo; dois ticks concorrentes chamando a rota ao mesmo tempo não processam o mesmo clipe duas vezes (idempotência vem do `SKIP LOCKED` de T02, aqui só se confirma pelo lado HTTP).
+**Gate:** `pnpm format`, `pnpm test`, `pnpm typecheck`, `pnpm lint`
+
+⚠️ Mensagem de erro não afirma causa única (memória `mensagem-de-erro-que-afirma-causa`) — reportar `Error.message` quando houver, senão o valor cru.
+
+---
+
+## T08 — Agendador + provisionamento no Easypanel
+
+**Onde:** `infra/asr/agendador.sh`, `infra/README.md`
+**Depende de:** T06, T07
+**Reusa:** `infra/retencao/agendador.sh`
+
+**Done when:**
+
+- Script versionado; painel só aponta o campo Comando.
+- Tick derivado do benchmark de T06.
+- **Serviço verificado de pé no painel**, com um lote real transcrito ponta a ponta — issue fechada não prova serviço rodando (memória `job-provisionado-nao-e-job-que-fecha-ciclo`).
+
+**Testes:** —
+**Gate:** smoke em produção com clínica de teste
+
+⚠️ Salvar env no Easypanel não aplica — exige "Implantar" (memória `easypanel-ambiente-expoe-segredos`).
+
+---
+
+## T09 — Server action `enviarLoteAsr`
+
+**Onde:** `src/app/(app)/diario/[sessionId]/logic.ts` (core) + `actions.ts` (wrapper)
+**Depende de:** T01, T04
+**Reusa:** `registrarAudioLocal` (`logic.ts:222`), `comEscrita`, `withTenant`, `getTenantContext`
+
+**O quê:** recebe `loteId` (gerado no **cliente**, `crypto.randomUUID()`) + N clipes com ordem, insere N linhas em `audio_capture` (`asr_status = 'na_fila'`, `lote_id`, `ordem` 0..N-1), sobe cada blob para o bucket efêmero e grava `objeto_ref`. Retorna `loteId` **imediatamente** (R9).
+
+**Done when:** o core ctx-accepting **não** é exportado de `actions.ts`; gate da flag recusa quando desligada (R21); recusa de consentimento não escapa como erro genérico; reenvio do **mesmo** `loteId` (retry de rede do cliente) não duplica as N linhas — a action checa existência do `lote_id` antes de inserir e devolve sucesso idempotente (R24).
+
+**Testes (int):** cria N linhas com ordem preservada; flag desligada → recusa; papel errado → recusa; mesmo `loteId` enviado duas vezes → só 1 conjunto de linhas no banco.
+**Gate:** `pnpm format`, `pnpm test`, `pnpm test:rls`, `pnpm typecheck`
+
+⚠️ `ctx` forjável em `"use server"` (memória `ctx-forjavel-use-server`).
+
+---
+
+## T10 — Leitura de estado do lote + limites de polling
+
+**Onde:** `src/app/(app)/diario/[sessionId]/logic.ts` + `actions.ts`
+**Depende de:** T09
+
+**O quê:** `obterEstadoLote(loteId)` → por clipe: `ordem`, `asr_status`, `transcricao_texto`. Leitura sob RLS do tenant do request. `obterLoteMaisRecente(sessionId)` → devolve o `loteId` mais recente daquela sessão (ou nulo), para a página resolver ao carregar se há lote em voo a retomar (R26).
+
+**Done when:** os limites de R20 estão no código e nomeados: intervalo de 3s, teto de 10 min. Estourado o teto, o retorno diz "segue processando", **nunca** "falhou". `obterLoteMaisRecente` é a fonte de verdade no reload — a UI nunca decide "retomar polling" a partir de estado local perdido no fechamento da aba (R26).
+
+**Testes (int):** lote de outro tenant não é legível; lote parcial devolve os transcritos e marca os pendentes; `obterLoteMaisRecente` após reload devolve o lote em `na_fila` corretamente, e devolve nulo quando não há lote na sessão.
+**Gate:** `pnpm format`, `pnpm test:rls`
+
+⚠️ `catch { setState(null) }` transforma falha de rede em afirmação clínica (memória `erro-renderizado-como-empty-state`) — erro de leitura é erro, não lista vazia.
+
+---
+
+## T11 — UI multi-clipe
+
+**Onde:** `src/app/(app)/diario/[sessionId]/audio-local.tsx`
+**Depende de:** T10
+**Reusa:** o próprio componente (D1) — evoluir, não substituir
+
+**O quê:** teto de 2 min por clipe com encerramento automático (R1); lista de clipes com duração, descartar e regravar por item (R4); sem teto de quantidade (R2); botão explícito "Enviar pra Iris analisar" (R5); ordem preservada (R6).
+
+**Convenção do arquivo:** os comentários de `audio-local.tsx` explicam o _porquê_, não o _o quê_ — ex. o comentário de `salvarAudioLocal` no `onstop` explica que é "persist-on-record: o áudio sobrevive a um reload antes de confirmar", não "salva o áudio". Manter o mesmo padrão nos comentários novos.
+
+**Done when:**
+
+- Nenhum clipe sobe ao terminar de gravar; a aba "Áudio" do `captura-form.tsx` continua funcionando; a11y do componente coberta.
+- **R24:** o botão "Enviar pra Iris analisar" desabilita no primeiro clique (`estado === "enviando"` cobre o lote inteiro, não só 1 clipe) e só reabilita se o envio falhar.
+- **R25:** nenhuma mudança de comportamento aqui — `MediaRecorder` em andamento simplesmente morre com a aba; nada a persistir intermediário.
+- **R27:** clipe cujo estado avançou para "enviado" perde os botões descartar/regravar da lista — só existem para clipe em `vazio`/`gravado`.
+
+**Testes:** teto de 2 min encerra sozinho; descartar remove o item e o blob; ordem da lista = ordem enviada; clique duplo em "Enviar" dispara só 1 chamada ao server action; item marcado "enviado" não renderiza mais botão de descartar/regravar.
+**Gate:** `pnpm format`, `pnpm test`, `pnpm lint`
+
+⚠️ Matcher nativo sobre o DOM cru — o repo **não tem jest-dom** (memória `repo-nao-tem-jest-dom`).
+
+---
+
+## T12 — Resultado no editor: parágrafos, marcador de IA, clipe não transcrito
+
+**Onde:** `audio-local.tsx` + `captura-form.tsx`
+**Depende de:** T11
+
+**O quê:** 1 clipe = 1 parágrafo, na ordem (R6); indicador visual de IA no rascunho (R17); clipe falho vira parágrafo marcado **"não transcrito"** com opção de reenviar do IndexedDB ou digitar à mão (R12, R13). Salvar segue sendo ato explícito (R18).
+
+**Done when:** o texto nunca vai direto para `session_note`; o marcador de IA é visível, não só `aria-label`.
+
+**Testes:** lote com 1 falha entre 3 → 2 parágrafos com texto, 1 marcado; nenhum caminho salva sem clique do terapeuta.
+**Gate:** `pnpm format`, `pnpm test`, `pnpm lint`
+
+⚠️ Componente do design system, nunca cor/estilo chumbado.
+
+---
+
+## T13 — Feature flag `FEATURE_FLAG_ASR_ENABLED`
+
+**Onde:** `src/lib/flags.ts`, `.env.example`
+**Depende de:** —
+
+**Done when:** server-only; ausente ou inválida = **desligada** (R21); gate no server action (autoridade) **e** na UI; o booleano chega à UI pelo server component, sem ler env no cliente.
+
+**Testes:** ausente → desligada; `"false"`/`"1"`/`"yes"` → desligada; só `"true"` liga.
+**Gate:** `pnpm format`, `pnpm test`, `pnpm typecheck`
+
+⚠️ Primeiro flag do repo — estabelece o padrão. Testar o comportamento, não a config (memória `teste-verde-que-nao-testa-nada`).
+
+---
+
+## T14 — Purga do IndexedDB
+
+**Onde:** `src/lib/audio/local-store.ts` (+ teste), ponto de logout
+**Depende de:** —
+**Reusa:** store `iris-audio-rascunho` existente — **não renomear**
+
+**O quê:** índice de clipes do lote no store; purga no **logout**; apagar clipe após o lote ser aceito (R8); flush em `window.online`. Codec dual `webm;opus` / `mp4` AAC (R7).
+
+**Done when:** logout deixa o store vazio; falha de IndexedDB nunca bloqueia o texto do diário (R23). Fechar a aba durante gravação não deixa lixo no store (R25 — nada é persistido antes de `onstop`). Reabrir a sessão depois de fechar a aba com lote em polling não reenvia nada — quem decide "tem lote em voo" é T10 (`obterLoteMaisRecente`, servidor), não o IndexedDB local (R26).
+
+**Testes:** purga no logout; fallback de codec escolhe `mp4` quando `webm;opus` não é suportado; erro de IndexedDB é degradação, não bloqueio.
+**Gate:** `pnpm format`, `pnpm test`
+
+---
+
+## T15 — Sweeper de objetos órfãos
+
+**Onde:** `infra/asr/agendador.sh` (passo adicional) ou script próprio
+**Depende de:** T07
+
+**O quê:** varre o bucket efêmero e apaga objeto com mais de 6h. **Não é retenção** — é limpeza de vazamento de container morto no meio do processamento.
+
+**Done when:** o predicado é **mtime**, não nome; bucket vazio não é erro.
+**Testes:** unitário do predicado de idade.
+**Gate:** `pnpm format`, `pnpm test`
+
+⚠️ Memória `auditar-por-nome-apagar-por-mtime`: `--older-than` mede mtime; nome antigo subido hoje não vence.
+
+---
+
+## T16 — Bateria de verificação da spec
+
+**Onde:** onde cada cenário couber
+**Depende de:** todas
+
+**O quê:** os 7 cenários de §3 do design doc, mais os do escopo desta issue:
+
+1. `StubAsrProvider` transcreve sem chamada de rede.
+2. Purga do IndexedDB no logout.
+3. Recusa de consentimento ASR **não** bloqueia salvar `SessionNote` por Modo 1 (R23).
+4. Retenção: objeto apagado em sucesso **e** em falha — **não existe TTL de 7 dias** (R11, D3).
+5. Fallback: falha de transcrição preserva o áudio **local** e permite digitação daquele parágrafo.
+6. Teto de clipe: gravação encerra sozinha aos 2 min e o clipe fica revisável.
+7. Lote parcialmente falho: N-1 transcrevem, 1 volta marcado "não transcrito".
+8. Flag desligada: a action recusa e a UI não oferece ditado.
+9. Transcrição entra no expurgo por paciente (`0128`) e na exportação do acervo (R19).
+
+**Régua de mutação por comportamento** (ponto 5 do handoff, `AGENTS.md` §5.2 — 1 teste por comportamento, não por linha):
+
+| Comportamento                                      | Mutação que precisa derrubar 1 teste                                                                                  |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Iniciar** gravação                               | remover `getUserMedia` da chamada → teste de "iniciar gravação chama o microfone" cai                                 |
+| **Parar** gravação aos 2 min                       | remover o `setTimeout`/corte automático → teste do cenário 6 cai, **sem** afetar o teste de iniciar                   |
+| **Iniciar** polling                                | remover a chamada inicial de `obterEstadoLote` pós-envio → teste de "lote enviado começa a consultar" cai             |
+| **Parar** polling no teto de 10 min                | remover a condição de teto → teste de "para de pedir depois de 10 min" cai, **sem** afetar o teste de iniciar polling |
+| **Mostrar** parágrafo transcrito                   | remover o mapeamento `asr_status='transcrito'` → parágrafo                                                            | teste do cenário 7 (N-1 transcrevem) cai                     |
+| **Esconder** ações de descartar/regravar pós-envio | remover a condição de R27                                                                                             | teste de "item enviado não tem botão" cai                    |
+| Apagar objeto efêmero                              | remover o `finally` de T07                                                                                            | teste de "objeto some em sucesso e em falha" (cenário 4) cai |
+
+**Done when:** cada linha da tabela acima corresponde a exatamente 1 teste cuja remoção do trecho de produção citado o derruba — testado por mutação real no código de produção, nunca no helper de teste (memória `mutante-equivalente-nao-pede-teste`).
+
+**Gate:** `pnpm format`, `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:rls` — **com contagem conferida**.
+
+---
+
+## T17 — Documentação e sincronização
+
+**Onde:** `docs/superpowers/specs/2026-08-02-issue-72-ditado-voz-asr-design.md`, `.env.example`, `infra/README.md`, corpo da issue #72, `BACKLOG.md`
+**Depende de:** T16
+
+**O quê:** reconciliar o design doc com a realidade medida (caminhos reais, store real, storage efêmero em vez de TTL 7d); documentar `FEATURE_FLAG_ASR_ENABLED`, `ASR_JOB_TOKEN`, `ASR_SERVICE_TOKEN` e o bucket no `.env.example`; runbook do serviço no `infra/README.md`; **atualizar o corpo da issue #72** para bater com esta spec.
+
+**Done when:** o corpo da issue não contradiz mais o que foi implementado.
+**Gate:** `pnpm format`, revisão humana
+
+⚠️ Executor implementa a **issue**, não a spec em comentário (memória `executor-implementa-issue-nao-spec`). Corpo da issue por `--body-file`, nunca inline no PowerShell (memória `corpo-de-issue-truncado-por-escape-do-powershell`).

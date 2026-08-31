@@ -1571,6 +1571,168 @@ Issue fechada **não** prova serviço de pé — a conferência é no painel.
 Depois do primeiro tick, o arquivo `/heartbeat/.ultima-retencao` existe e tem um
 timestamp dentro. Sem essas duas evidências, o serviço não está provisionado.
 
+## Worker de transcrição de ditado de voz (ASR self-hosted, #72, T08)
+
+Quem transforma "clipe gravado no bucket efêmero" em "texto na nota de sessão"
+é a rota interna `src/app/api/internal/jobs/asr-transcrever/route.ts` (T07).
+Este agendador **não** transcreve nada, **não** fala com o bucket efêmero e
+**não** fala com o serviço `iris-asr` (faster-whisper) — faz UM POST
+autenticado em `ASR_JOB_URL`, e é essa rota, dentro do app, que reserva o
+lote (`app_asr_reservar`, T02), baixa o objeto, chama o provider e
+conclui/falha cada clipe. Mesmo desenho e mesmo motivo do
+[job de fechamento de ciclo de faturamento](#job-de-fechamento-de-ciclo-de-faturamento-36-288)
+logo abaixo: a imagem deste job não herda o `node_modules` do app, e
+duplicar a chamada ao provider aqui repetiria o #156 — só que perdendo áudio
+clínico em vez de gerando cobrança errada.
+
+> **Runbook do serviço `iris-asr`** (rotas, variáveis, incidentes, benchmark
+> de modelo): [`infra/asr/runbook.md`](asr/runbook.md).
+
+### ⚠️ Estado desta seção — o que está pronto e o que ainda não
+
+- **Pronto e versionado**: `infra/asr/agendador.sh` (o laço),
+  `scripts/disparo-asr-transcrever.mjs` (o disparo HTTP) e
+  `infra/asr/Dockerfile.agendador` (a imagem — ver decisão de arquitetura
+  abaixo).
+- **NÃO fechado — bloqueia o piloto com dado real**: nenhum serviço foi
+  provisionado no painel do Easypanel a partir destes arquivos. Issue com
+  código versionado **não prova serviço de pé** (memória
+  `job-provisionado-nao-e-job-que-fecha-ciclo`) — falta o Passo de
+  provisionamento abaixo, executado pelo Rômulo, **e** um lote real
+  transcrito ponta a ponta (clipe gravado → texto na nota) contra a
+  clínica de teste. Nenhum dos dois pode ser feito a partir desta sessão
+  (sem acesso SSH/painel de produção).
+- **`INTERVALO_S=20` é um placeholder RACIOCINADO, não medido sob carga** —
+  ver a explicação completa nos comentários do próprio `agendador.sh` e a
+  nota logo abaixo. Revisar com observação real de produção antes do piloto.
+
+### Decisão de arquitetura nova — imagem compartilhada com o sweeper de T15 (validar com o Rômulo)
+
+`infra/asr/sweeper-orfaos.sh` (T15, backstop de objetos órfãos no bucket
+efêmero) foi implementado **antes** de T08 existir e ficou sem imagem
+Docker própria — o comentário no topo daquele script convidava T08 a
+decidir se compensava fundir os dois ticks. Decisão tomada agora:
+**não fundir os laços** (uma falha do worker de transcrição não deve
+derrubar o sweeper, e vice-versa), mas **compartilhar a imagem** —
+`infra/asr/Dockerfile.agendador` empacota os dois scripts `.mjs` magros do
+mesmo pipeline (`disparo-asr-transcrever.mjs` e `asr-sweeper-orfaos.mjs`), e
+cada serviço Easypanel construído a partir dela escolhe seu laço só pelo
+campo **Comando** (`/app/agendador.sh` ou `/app/sweeper-orfaos.sh`) — dois
+serviços separados, cada um com seu Comando/env/heartbeat/réplica no painel,
+exatamente como os demais pares deste arquivo. Isto também fecha, de
+carona, o gap de empacotamento que T15 tinha deixado em aberto (o sweeper
+nunca teve Dockerfile nem entrada em `scripts/ci/carga-imagens-infra.sh`).
+
+**Não está coberto por `carga-imagens-infra.sh`** ainda — ficaria como
+follow-up de quem provisionar esta imagem pela primeira vez, seguindo o
+molde das seções `carga_billing`/`carga_retencao` daquele script.
+
+### Passo 1 — o segredo do disparo, nos DOIS serviços
+
+Mesmo runbook do billing: gerar com `openssl rand -hex 32` e colar,
+**idêntico**, em `App` → `ASR_JOB_TOKEN` e no serviço do agendador ASR →
+`ASR_JOB_TOKEN`. Configurar só um dos dois dá 401 em 100% dos ticks. As duas
+variáveis (`ASR_JOB_URL`, `ASR_JOB_TOKEN`) já estão documentadas em
+`.env.example` desde T07.
+
+> ⚠️ A aba `Ambiente` do Easypanel mostra todo segredo em texto claro e o
+> painel roda em HTTP sem TLS — não tirar screenshot dela (memória
+> `easypanel-ambiente-expoe-segredos`). E **salvar env não aplica sozinho**:
+> é preciso clicar em **Implantar**, que reconstrói o serviço a partir do
+> HEAD de `main`.
+
+### Passo 1.5 — confirmar que a rota existe antes de abrir o painel
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -X POST \
+  https://irisclinica.ia.br/api/internal/jobs/asr-transcrever
+```
+
+Esperado: **401** (rota existe, token não bate ou está ausente). Se vier
+**404**, a rota não está no deploy de produção — parar e não provisionar o
+agendador em cima disso.
+
+### Passo 2 — criar o(s) serviço(s)
+
+1. **Novo serviço** → tipo **Aplicativo** → nome `asr-agendador` → Code
+   Source `romulosutil/Iris` → Builder **Dockerfile**, path
+   `infra/asr/Dockerfile.agendador`, build context na **raiz**, branch
+   `main`.
+2. **Volume persistente** em `/heartbeat` — sem ele o heartbeat some a cada
+   restart e "parado" passa a significar só "container reiniciou".
+3. **Env vars**:
+
+   ```
+   ASR_JOB_URL=https://irisclinica.ia.br/api/internal/jobs/asr-transcrever
+   ASR_JOB_TOKEN=<o mesmo valor do serviço App>
+   INTERVALO_S=20
+   ASR_HEARTBEAT_DIR=/heartbeat
+   ```
+
+4. **Comando** (aba `Avançado`): `/app/agendador.sh`.
+5. **Réplicas = 1.** Duas réplicas não corrompem a fila (`app_asr_reservar`
+   usa `FOR UPDATE SKIP LOCKED`), mas dobram a carga de POST sem necessidade.
+
+**Sweeper de T15, na MESMA imagem** — repetir os passos 1-5 num segundo
+serviço (`asr-sweeper`), trocando só:
+
+- **Comando**: `/app/sweeper-orfaos.sh`;
+- **Env**: `ASR_S3_ENDPOINT`, `ASR_S3_ACCESS_KEY`, `ASR_S3_SECRET_KEY`,
+  `ASR_SWEEPER_DATABASE_URL` (ver `.env.example` e `infra/asr/
+sweeper-orfaos.sh`) em vez das `ASR_JOB_*`.
+
+### Como saber que deu certo
+
+No log do serviço `asr-agendador`, logo após o primeiro deploy:
+
+```
+[agendador-asr] 2026-MM-DDTHH:MM:SSZ ativo. intervalo=20s · heartbeat=/heartbeat/.ultimo-disparo-asr
+```
+
+E, a cada tick, uma linha JSON única do disparo (formato de
+`scripts/disparo-asr-transcrever.mjs`):
+
+```json
+{
+  "job": "disparo-asr-transcrever",
+  "quando": "2026-MM-DDTHH:MM:SS.sssZ",
+  "ok": true,
+  "status": 200,
+  "falha": null,
+  "erro": null,
+  "processados": 0,
+  "transcritos": 0,
+  "falhas": 0,
+  "revertidos": 0,
+  "corpo": "{\"ok\":true,\"processados\":0,\"transcritos\":0,\"falhas\":0,\"revertidos\":0,\"resultados\":[]}"
+}
+```
+
+`"processados":0` é o resultado normal quando não há clipe na fila —
+**não** prova que uma transcrição real funciona ponta a ponta. Isso só a
+PENDÊNCIA abaixo fecha.
+
+### ❌ PENDENTE — o gate que só o Rômulo fecha, e só depois do provisionamento
+
+**Não considerar T08 encerrado sem os dois itens abaixo, medidos, não
+deduzidos** (mesma régua de `verificar-fato-de-infra-com-medicao` e
+`job-provisionado-nao-e-job-que-fecha-ciclo` — issue fechada não é serviço
+no ar):
+
+1. **Os dois serviços (`asr-agendador` e `asr-sweeper`) de pé no painel**,
+   com a linha `ativo.` no log e o heartbeat avançando — não só o deploy
+   "verde" no Easypanel.
+2. **Um lote real transcrito ponta a ponta** contra uma clínica de teste:
+   gravar um clipe de ditado de verdade na UI, confirmar que ele passa por
+   `na_fila` → `transcrevendo` → `transcrito` em `audio_capture`, e que o
+   texto chega na nota de sessão. Sem isso, o `"ok":true` do heartbeat só
+   prova que a rota responde — não que o pipeline inteiro (bucket → serviço
+   `iris-asr` → banco → UI) funciona com áudio real.
+
+**E revisar `INTERVALO_S`** com o volume de clipes/dia observado depois do
+piloto — o valor atual (20s) é raciocínio, não medição de fila sob carga.
+Registrar a revisão (e o resultado dos dois itens acima) no `BACKLOG.md`.
+
 ## Job de fechamento de ciclo de faturamento (#36, #288)
 
 Quem transforma "cliente usou o produto" em "cliente foi cobrado" é este

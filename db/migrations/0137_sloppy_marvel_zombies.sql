@@ -1,0 +1,1 @@
+ALTER TABLE "audio_capture" ADD CONSTRAINT "uq_audio_capture_lote_ordem" UNIQUE("lote_id","ordem");

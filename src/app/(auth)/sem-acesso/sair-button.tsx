@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { signOut } from "@/auth/client";
+import { purgarTudo } from "@/lib/audio/local-store";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -13,6 +14,8 @@ export function SairButton() {
   const router = useRouter();
 
   async function sair() {
+    // Falha de IndexedDB nunca bloqueia o logout (R23) — purgarTudo já degrada por dentro.
+    await purgarTudo();
     await signOut();
     router.push("/login");
   }

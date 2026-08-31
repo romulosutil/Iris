@@ -12,6 +12,17 @@ vi.mock("@/lib/extraction/provider", async (importOriginal) => {
     await importOriginal<typeof import("@/lib/extraction/provider")>();
   return { ...actual, resolveProvider: vi.fn(actual.resolveProvider) };
 });
+// T09 — o upload real (S3/MinIO) já é coberto por src/lib/asr/storage.test.ts;
+// aqui o dublê isola o comportamento de banco (linhas, idempotência, gate)
+// do serviço de rede externo.
+const guardarMock = vi.fn(
+  async (_chave: string, _dados: Uint8Array, _contentType?: string) =>
+    undefined,
+);
+vi.mock("@/lib/asr/storage", () => ({
+  guardar: (chave: string, dados: Uint8Array, contentType?: string) =>
+    guardarMock(chave, dados, contentType),
+}));
 
 const CLINIC_A = "00000000-0000-0000-0000-0000000000a1";
 const U_T1 = "00000000-0000-0000-0000-0000000071a1";
@@ -36,12 +47,17 @@ let owner: ReturnType<typeof postgres>;
 let capturarDiario: typeof import("./logic").capturarDiario;
 let corrigirEscopoProtocolo: typeof import("./logic").corrigirEscopoProtocolo;
 let registrarAudioLocal: typeof import("./logic").registrarAudioLocal;
+let enviarLoteAsr: typeof import("./logic").enviarLoteAsr;
 let appSql: typeof import("@/db/client").sql;
 
 describe.skipIf(!hasDb)("diário · captura", () => {
   beforeAll(async () => {
-    ({ capturarDiario, corrigirEscopoProtocolo, registrarAudioLocal } =
-      await import("./logic"));
+    ({
+      capturarDiario,
+      corrigirEscopoProtocolo,
+      registrarAudioLocal,
+      enviarLoteAsr,
+    } = await import("./logic"));
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
     await owner`TRUNCATE clinic, app_user, user_role, patient, protocol, session,
@@ -80,6 +96,28 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     });
     expect(r.error).toBeUndefined();
     expect(r.id).toBeTruthy();
+  });
+
+  // T16 cenário 3 (#72) — R23: recusa/ausência de consentimento de ASR (aqui
+  // representada pela flag desligada, já que não existe ainda um consentimento
+  // ASR dedicado no schema) nunca pode bloquear o Modo 1 (digitação). O core
+  // de `capturarDiario` não referencia `asrHabilitado`/ASR em nenhum ponto —
+  // este teste é o cheque de que essa independência não regride: se alguém
+  // introduzir um gate compartilhado, a asserção abaixo cai.
+  test("R23 · flag de ASR desligada não bloqueia captura de diário por digitação (Modo 1)", async () => {
+    const original = process.env.FEATURE_FLAG_ASR_ENABLED;
+    delete process.env.FEATURE_FLAG_ASR_ENABLED;
+    try {
+      const r = await capturarDiario(ctxT1, {
+        sessionId: SESS,
+        texto: "Digitado normalmente, ASR indisponível",
+      });
+      expect(r.error).toBeUndefined();
+      expect(r.id).toBeTruthy();
+    } finally {
+      if (original === undefined) delete process.env.FEATURE_FLAG_ASR_ENABLED;
+      else process.env.FEATURE_FLAG_ASR_ENABLED = original;
+    }
   });
 
   test("terapeuta que não é dono da sessão é barrado", async () => {
@@ -565,6 +603,352 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       expect(alertas[0]!.categoria).toBe("ideacao_suicida");
       expect(alertas[0]!.origem_extraction_id).toBe(ex[0]!.id);
       expect(alertas[0]!.rpd_entry_id).toBeNull();
+    });
+  });
+
+  // ─── #72 T09 — enviarLoteAsr ───────────────────────────────────────────────
+  describe("enviarLoteAsr (#72, T09)", () => {
+    const clipe = (ordem: number, texto = "x") => ({
+      ordem,
+      dados: new TextEncoder().encode(texto),
+      contentType: "audio/webm",
+    });
+
+    beforeAll(() => {
+      process.env.FEATURE_FLAG_ASR_ENABLED = "true";
+    });
+    afterAll(async () => {
+      delete process.env.FEATURE_FLAG_ASR_ENABLED;
+      // `app_asr_reservar` (T02) varre `audio_capture` INTEIRA, sem predicado
+      // de escopo: uma linha `na_fila` esquecida aqui entra na janela do LIMIT
+      // do worker em OUTRO arquivo de teste e desloca a ordem que ele espera
+      // (memória `int-test-vermelho-por-fixture-compartilhada`). A limpeza é
+      // por `DELETE` escopado nesta sessão, nunca `TRUNCATE`.
+      await limpar();
+    });
+
+    const limpar = () =>
+      owner`DELETE FROM audio_capture WHERE session_id = ${SESS}`;
+
+    test("cria N linhas com ordem preservada e sobe cada clipe", async () => {
+      await limpar();
+      guardarMock.mockClear();
+      const loteId = "00000000-0000-0000-0000-0000000a0001";
+      const r = await enviarLoteAsr(ctxT1, {
+        sessionId: SESS,
+        loteId,
+        clipes: [clipe(0, "um"), clipe(1, "dois"), clipe(2, "tres")],
+      });
+      expect(r.error).toBeUndefined();
+      expect(r.loteId).toBe(loteId);
+
+      const rows =
+        await owner`SELECT ordem, asr_status, objeto_ref FROM audio_capture
+                     WHERE lote_id = ${loteId} ORDER BY ordem`;
+      expect(rows.length).toBe(3);
+      expect(rows.map((r) => r.ordem)).toEqual([0, 1, 2]);
+      expect(rows.every((r) => r.asr_status === "na_fila")).toBe(true);
+      expect(rows.every((r) => typeof r.objeto_ref === "string")).toBe(true);
+      expect(guardarMock).toHaveBeenCalledTimes(3);
+    });
+
+    test("flag desligada recusa sem inserir nenhuma linha", async () => {
+      await limpar();
+      delete process.env.FEATURE_FLAG_ASR_ENABLED;
+      guardarMock.mockClear();
+      const loteId = "00000000-0000-0000-0000-0000000a0002";
+      const r = await enviarLoteAsr(ctxT1, {
+        sessionId: SESS,
+        loteId,
+        clipes: [clipe(0)],
+      });
+      expect(r.error).toBeTruthy();
+      process.env.FEATURE_FLAG_ASR_ENABLED = "true";
+
+      const rows =
+        await owner`SELECT id FROM audio_capture WHERE lote_id = ${loteId}`;
+      expect(rows.length).toBe(0);
+      expect(guardarMock).not.toHaveBeenCalled();
+    });
+
+    test("papel errado (não-terapeuta) é barrado antes de qualquer escrita", async () => {
+      await limpar();
+      const ctxErrado = {
+        clinicId: CLINIC_A,
+        userId: U_T1,
+        role: "coordenador",
+      } as const;
+      const loteId = "00000000-0000-0000-0000-0000000a0003";
+      await expect(
+        enviarLoteAsr(ctxErrado, {
+          sessionId: SESS,
+          loteId,
+          clipes: [clipe(0)],
+        }),
+      ).rejects.toThrow();
+
+      const rows =
+        await owner`SELECT id FROM audio_capture WHERE lote_id = ${loteId}`;
+      expect(rows.length).toBe(0);
+    });
+
+    test("reenvio do MESMO loteId não duplica as linhas (retry de rede)", async () => {
+      await limpar();
+      guardarMock.mockClear();
+      const loteId = "00000000-0000-0000-0000-0000000a0004";
+      const r1 = await enviarLoteAsr(ctxT1, {
+        sessionId: SESS,
+        loteId,
+        clipes: [clipe(0), clipe(1)],
+      });
+      expect(r1.error).toBeUndefined();
+      expect(guardarMock).toHaveBeenCalledTimes(2);
+
+      guardarMock.mockClear();
+      const r2 = await enviarLoteAsr(ctxT1, {
+        sessionId: SESS,
+        loteId,
+        clipes: [clipe(0), clipe(1)],
+      });
+      expect(r2.error).toBeUndefined();
+      expect(r2.loteId).toBe(loteId);
+      // idempotente: NÃO insere de novo nem re-sobe os blobs
+      expect(guardarMock).not.toHaveBeenCalled();
+
+      const rows =
+        await owner`SELECT id FROM audio_capture WHERE lote_id = ${loteId}`;
+      expect(rows.length).toBe(2);
+    });
+
+    // Review pós-PR (#72/T09): o teste sequencial acima (`await` entre as
+    // duas chamadas) não prova nada sobre a janela de corrida — a segunda
+    // chamada só começa depois que a primeira já commitou. Este teste
+    // dispara as DUAS com `Promise.all` (sem `await` entre elas), então as
+    // duas SELECT de idempotência rodam ANTES de qualquer uma inserir —
+    // exatamente o cenário de duplo clique / duas abas que o `UNIQUE
+    // (lote_id, ordem)` (migração 0137) existe para fechar.
+    test("duas chamadas CONCORRENTES com o MESMO loteId não duplicam (UNIQUE backstop, R24)", async () => {
+      await limpar();
+      guardarMock.mockClear();
+      const loteId = "00000000-0000-0000-0000-0000000a0005";
+      const chamada = () =>
+        enviarLoteAsr(ctxT1, {
+          sessionId: SESS,
+          loteId,
+          clipes: [clipe(0), clipe(1)],
+        });
+
+      const [r1, r2] = await Promise.all([chamada(), chamada()]);
+      expect(r1.error).toBeUndefined();
+      expect(r2.error).toBeUndefined();
+      expect(r1.loteId).toBe(loteId);
+      expect(r2.loteId).toBe(loteId);
+
+      const rows =
+        await owner`SELECT ordem FROM audio_capture WHERE lote_id = ${loteId} ORDER BY ordem`;
+      // só 1 conjunto de N linhas — não 2N — mesmo com as duas chamadas
+      // tendo passado pela checagem de idempotência ao mesmo tempo.
+      expect(rows.length).toBe(2);
+      expect(rows.map((r) => r.ordem)).toEqual([0, 1]);
+      // só quem venceu a corrida sobe os blobs; quem perdeu (23505) não
+      // re-tenta o upload.
+      expect(guardarMock).toHaveBeenCalledTimes(2);
+    });
+
+    // ─── revisão final de integração #72 ────────────────────────────────────
+    // O INSERT gravava `na_fila` + `objeto_ref` ANTES de o upload rodar, então
+    // existia um instante em que `app_asr_reservar` (T02) podia eleger uma
+    // linha cujo blob ainda não estava no bucket: `ler()` falhava, o clipe
+    // voltava à fila com uma tentativa a menos, e o objeto que chegasse
+    // depois já não tinha dono. Os dois testes abaixo medem esse instante.
+    test("entre o INSERT e o upload confirmado a linha NÃO é reservável", async () => {
+      await limpar();
+      guardarMock.mockClear();
+      const loteId = "00000000-0000-0000-0000-0000000a0006";
+
+      // Fotografa o estado DENTRO do primeiro `guardar()` — antes de qualquer
+      // promoção a `na_fila` ter acontecido para o lote.
+      let reservadosDurante: ReadonlyArray<unknown> | null = null;
+      let linhasDurante: Array<{
+        asr_status: string;
+        objeto_ref: string | null;
+      }> = [];
+      guardarMock.mockImplementationOnce(async () => {
+        reservadosDurante = await owner`SELECT id FROM app_asr_reservar(10)`;
+        linhasDurante = (await owner`
+          SELECT asr_status::text AS asr_status, objeto_ref
+            FROM audio_capture WHERE lote_id = ${loteId}`) as unknown as Array<{
+          asr_status: string;
+          objeto_ref: string | null;
+        }>;
+        return undefined;
+      });
+
+      const r = await enviarLoteAsr(ctxT1, {
+        sessionId: SESS,
+        loteId,
+        clipes: [clipe(0, "um"), clipe(1, "dois")],
+      });
+      expect(r.error).toBeUndefined();
+
+      // A fila não tinha NADA a entregar naquele instante — nem deste lote
+      // nem de qualquer outro (o `beforeAll` limpa `audio_capture`).
+      expect(reservadosDurante).toEqual([]);
+      expect(linhasDurante.length).toBe(2);
+      expect(
+        linhasDurante.every((l) => l.asr_status === "nao_solicitado"),
+      ).toBe(true);
+      expect(linhasDurante.every((l) => l.objeto_ref === null)).toBe(true);
+
+      // …e no fim, com os dois uploads confirmados, as duas estão na fila.
+      const depois = await owner`
+        SELECT ordem, asr_status::text AS asr_status, objeto_ref
+          FROM audio_capture WHERE lote_id = ${loteId} ORDER BY ordem`;
+      expect(depois.map((l) => l.asr_status)).toEqual(["na_fila", "na_fila"]);
+      expect(depois.every((l) => typeof l.objeto_ref === "string")).toBe(true);
+    });
+
+    test("upload que falha no meio: aquela linha NÃO fica na_fila (e sem objeto_ref); as outras seguem", async () => {
+      await limpar();
+      guardarMock.mockClear();
+      const loteId = "00000000-0000-0000-0000-0000000a0007";
+      // Só o clipe de ordem 1 falha ao subir.
+      guardarMock.mockImplementation(async (chave: string) => {
+        if (chave.endsWith(":1")) throw new Error("MinIO fora do ar");
+        return undefined;
+      });
+
+      const r = await enviarLoteAsr(ctxT1, {
+        sessionId: SESS,
+        loteId,
+        clipes: [clipe(0, "um"), clipe(1, "dois"), clipe(2, "tres")],
+      });
+      guardarMock.mockImplementation(async () => undefined);
+      // O lote inteiro não cai por causa de um clipe (R12).
+      expect(r.error).toBeUndefined();
+      expect(r.loteId).toBe(loteId);
+
+      const rows = (await owner`
+        SELECT ordem, asr_status::text AS asr_status, objeto_ref
+          FROM audio_capture WHERE lote_id = ${loteId} ORDER BY ordem`) as unknown as Array<{
+        ordem: number;
+        asr_status: string;
+        objeto_ref: string | null;
+      }>;
+      expect(rows.map((l) => l.asr_status)).toEqual([
+        "na_fila",
+        "falhou",
+        "na_fila",
+      ]);
+      // O que falhou é TERMINAL e sem referência: o worker nunca vai reservá-lo
+      // para depois não achar o objeto.
+      expect(rows[1]!.objeto_ref).toBeNull();
+      expect(typeof rows[0]!.objeto_ref).toBe("string");
+      expect(typeof rows[2]!.objeto_ref).toBe("string");
+    });
+  });
+
+  // ─── #72 T10 — obterEstadoLote / obterLoteMaisRecente ──────────────────────
+  describe("obterEstadoLote / obterLoteMaisRecente (#72, T10)", () => {
+    const CLINIC_B = "00000000-0000-0000-0000-0000000000b1";
+    const U_B1 = "00000000-0000-0000-0000-0000000b1ba1";
+    const PAC_B = "00000000-0000-0000-0000-00000000bac1";
+    const SESS_B = "00000000-0000-0000-0000-00000005e3a1";
+    const ctxB = {
+      clinicId: CLINIC_B,
+      userId: U_B1,
+      role: "terapeuta",
+    } as const;
+
+    beforeAll(async () => {
+      await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_B}, 'B')`;
+      await owner`INSERT INTO app_user (id, email, name) VALUES (${U_B1}, 'b1@x.com', 'B1')`;
+      await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES (${U_B1}, ${CLINIC_B}, 'terapeuta')`;
+      await owner`INSERT INTO patient (id, clinic_id, nome) VALUES (${PAC_B}, ${CLINIC_B}, 'PB')`;
+      await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, disciplina)
+        VALUES (${SESS_B}, ${CLINIC_B}, ${PAC_B}, ${U_B1}, now(), 'realizada', 'aba')`;
+    });
+    afterAll(async () => {
+      await owner`DELETE FROM audio_capture WHERE session_id = ${SESS_B}`;
+      await owner`DELETE FROM session WHERE id = ${SESS_B}`;
+      await owner`DELETE FROM patient WHERE id = ${PAC_B}`;
+      await owner`DELETE FROM user_role WHERE user_id = ${U_B1}`;
+      await owner`DELETE FROM app_user WHERE id = ${U_B1}`;
+      await owner`DELETE FROM clinic WHERE id = ${CLINIC_B}`;
+    });
+
+    const limpar = () =>
+      owner`DELETE FROM audio_capture WHERE session_id IN (${SESS}, ${SESS_B})`;
+
+    test("lote de outro tenant não é legível: obterEstadoLote devolve vazio", async () => {
+      await limpar();
+      const loteId = "00000000-0000-0000-0000-0000000b0001";
+      await owner`INSERT INTO audio_capture (session_id, clinic_id, lote_id, ordem, asr_status)
+        VALUES (${SESS_B}, ${CLINIC_B}, ${loteId}, 0, 'na_fila')`;
+
+      const { obterEstadoLote } = await import("./logic");
+      const clipes = await obterEstadoLote(ctxT1, loteId);
+      expect(clipes).toEqual([]);
+    });
+
+    test("lote de outro tenant não é legível: obterLoteMaisRecente ignora sessão de outra clínica", async () => {
+      await limpar();
+      const loteId = "00000000-0000-0000-0000-0000000b0002";
+      await owner`INSERT INTO audio_capture (session_id, clinic_id, lote_id, ordem, asr_status)
+        VALUES (${SESS_B}, ${CLINIC_B}, ${loteId}, 0, 'na_fila')`;
+
+      const { obterLoteMaisRecente } = await import("./logic");
+      // ctxT1 (clínica A) nem enxerga SESS_B (session_id de outra clínica) via
+      // RLS — o resultado é nulo, não um erro que distinguisse os dois casos.
+      const encontrado = await obterLoteMaisRecente(ctxT1, SESS_B);
+      expect(encontrado).toBeNull();
+
+      // Já pelo tenant dono, o lote aparece normalmente.
+      const proprio = await obterLoteMaisRecente(ctxB, SESS_B);
+      expect(proprio).toBe(loteId);
+    });
+
+    test("lote parcial devolve os transcritos e marca os pendentes", async () => {
+      await limpar();
+      const loteId = "00000000-0000-0000-0000-0000000a0010";
+      await owner`INSERT INTO audio_capture (session_id, clinic_id, lote_id, ordem, asr_status, transcricao_texto, transcrito_em)
+        VALUES
+          (${SESS}, ${CLINIC_A}, ${loteId}, 0, 'transcrito', 'primeiro trecho', now()),
+          (${SESS}, ${CLINIC_A}, ${loteId}, 1, 'na_fila', NULL, NULL),
+          (${SESS}, ${CLINIC_A}, ${loteId}, 2, 'falhou', NULL, NULL)`;
+
+      const { obterEstadoLote } = await import("./logic");
+      const clipes = await obterEstadoLote(ctxT1, loteId);
+      expect(clipes).toEqual([
+        {
+          ordem: 0,
+          asrStatus: "transcrito",
+          transcricaoTexto: "primeiro trecho",
+        },
+        { ordem: 1, asrStatus: "na_fila", transcricaoTexto: null },
+        { ordem: 2, asrStatus: "falhou", transcricaoTexto: null },
+      ]);
+    });
+
+    test("obterLoteMaisRecente após reload devolve o lote em na_fila corretamente", async () => {
+      await limpar();
+      const loteAntigo = "00000000-0000-0000-0000-0000000a0011";
+      const loteRecente = "00000000-0000-0000-0000-0000000a0012";
+      await owner`INSERT INTO audio_capture (session_id, clinic_id, lote_id, ordem, asr_status, criado_em)
+        VALUES (${SESS}, ${CLINIC_A}, ${loteAntigo}, 0, 'transcrito', now() - interval '1 hour')`;
+      await owner`INSERT INTO audio_capture (session_id, clinic_id, lote_id, ordem, asr_status, criado_em)
+        VALUES (${SESS}, ${CLINIC_A}, ${loteRecente}, 0, 'na_fila', now())`;
+
+      const { obterLoteMaisRecente } = await import("./logic");
+      const encontrado = await obterLoteMaisRecente(ctxT1, SESS);
+      expect(encontrado).toBe(loteRecente);
+    });
+
+    test("obterLoteMaisRecente devolve nulo quando não há lote na sessão", async () => {
+      await limpar();
+      const { obterLoteMaisRecente } = await import("./logic");
+      const encontrado = await obterLoteMaisRecente(ctxT1, SESS);
+      expect(encontrado).toBeNull();
     });
   });
 });

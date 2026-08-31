@@ -27,6 +27,9 @@ import { deveReextrair } from "@/lib/extraction/reextraction-policy";
 import { traduzirErroDeConsentimento } from "@/lib/consent/erros";
 import { diagnosticarBloqueioDeConsentimentoSeguro } from "@/lib/consent/diagnostico";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
+import { asrHabilitado } from "@/lib/flags";
+import { chaveClipe } from "@/lib/audio/local-store";
+import { guardar } from "@/lib/asr/storage";
 
 // ─── Guard de escrita por situação da conta (#163+#159) ────────────────────
 // Todo o diário é escrita clínica: conta em somente-leitura (trial expirado,
@@ -267,6 +270,206 @@ async function registrarAudioLocalCore(
 // Grava linha em `audio_capture` (mesmo que o blob ainda seja local) — é
 // escrita, entra no guard.
 export const registrarAudioLocal = comEscrita(registrarAudioLocalCore);
+
+const clipeAsrSchema = z.object({
+  ordem: z.number().int().nonnegative(),
+  dados: z.instanceof(Uint8Array),
+  contentType: z.string().optional(),
+});
+
+const enviarLoteAsrSchema = z.object({
+  sessionId: z.string().uuid(),
+  loteId: z.string().uuid(),
+  clipes: z.array(clipeAsrSchema).min(1),
+});
+
+/**
+ * Envia um lote de clipes de ditado de voz (#72, T09): insere N linhas em
+ * `audio_capture` (mesmo `lote_id`, `ordem` preservada) FORA da fila, sobe
+ * cada blob para o bucket efêmero (T04) e só então promove cada linha a
+ * `asr_status = 'na_fila'` — ver a nota sobre a ordem abaixo. Devolve o
+ * `loteId` IMEDIATAMENTE (R9) — a transcrição roda depois, assíncrona, via
+ * fila/worker de outra task (T07).
+ *
+ * `loteId` vem do CLIENTE (`crypto.randomUUID()`), não é gerado aqui: é a
+ * chave de idempotência do retry de rede (R24) — ver checagem abaixo.
+ */
+async function enviarLoteAsrCore(
+  ctx: TenantContext,
+  input: {
+    sessionId: string;
+    loteId: string;
+    clipes: Array<{ ordem: number; dados: Uint8Array; contentType?: string }>;
+  },
+): Promise<{
+  error?: string;
+  loteId?: string;
+  bloqueioConta?: BloqueioConta;
+}> {
+  requireRole(ctx, "terapeuta");
+  // R21: trava de MATURIDADE do serviço faster-whisper (não é gate de LGPD).
+  // Recusa ANTES de qualquer escrita ou upload — desligada, nem consome
+  // storage nem enfileira nada que o worker nunca vai processar.
+  if (!asrHabilitado()) {
+    return { error: "Ditado de voz está temporariamente indisponível." };
+  }
+  const parsed = enviarLoteAsrSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]!.message };
+  const { sessionId, loteId, clipes } = parsed.data;
+
+  try {
+    // R24: reenvio do MESMO loteId (retry de rede do cliente) não duplica —
+    // se já existe QUALQUER linha com esse lote_id NESTA sessão (RLS via
+    // withTenant já isola por clínica; `sessionId` reduz falso-positivo
+    // cross-sessão do mesmo `loteId`), devolve sucesso idempotente sem
+    // inserir de novo nem re-subir os blobs.
+    //
+    // Este SELECT-antes-do-INSERT NÃO é atômico sozinho: duas chamadas
+    // concorrentes (duplo clique, duas abas) podem passar aqui juntas antes
+    // de qualquer uma inserir. O backstop real é o `UNIQUE(lote_id, ordem)`
+    // (migração 0137, review pós-PR #72/T09) — o catch de `23505` logo
+    // abaixo é o caminho que de fato garante R24 sob concorrência; esta
+    // checagem só evita a viagem de rede de upload no caso comum
+    // (sequencial) sem precisar tentar o INSERT primeiro.
+    const existentes = await withTenant(ctx, (tx) =>
+      tx
+        .select({ id: audioCapture.id })
+        .from(audioCapture)
+        .where(
+          and(
+            eq(audioCapture.loteId, loteId),
+            eq(audioCapture.sessionId, sessionId),
+          ),
+        )
+        .limit(1),
+    );
+    if (existentes.length > 0) return { loteId };
+
+    // A linha NASCE FORA DA FILA (`nao_solicitado`, `objeto_ref` nulo) e só é
+    // promovida a `na_fila` depois que o upload daquele clipe confirmou —
+    // revisão final de integração #72. Inserir já `na_fila` com `objeto_ref`
+    // preenchido abria uma janela real: `app_asr_reservar` (que elege por
+    // `asr_status = 'na_fila' AND objeto_ref IS NOT NULL`) podia pegar a linha
+    // ANTES de o blob existir no bucket, `ler()` falhava, o clipe voltava à
+    // fila gastando tentativa — e o objeto que chegasse depois já não tinha
+    // dono. Nenhuma trava nova: o estado inicial é o próprio default da coluna.
+    const linhas = clipes.map((c) => ({
+      sessionId,
+      clinicId: ctx.clinicId,
+      loteId,
+      ordem: c.ordem,
+      asrStatus: "nao_solicitado" as const,
+      objetoRef: null,
+    }));
+
+    try {
+      await withTenant(ctx, async (tx) => {
+        await tx.insert(audioCapture).values(linhas);
+
+        const [sess] = await tx
+          .select({ patientId: session.patientId })
+          .from(session)
+          .where(eq(session.id, sessionId));
+        if (sess) {
+          await desarquivarPacienteSeArquivado(
+            tx,
+            ctx,
+            sess.patientId,
+            "audio_local",
+          );
+        }
+      });
+    } catch (err) {
+      // Backstop de R24: a outra chamada concorrente venceu a corrida e já
+      // inseriu as N linhas deste loteId — `uq_audio_capture_lote_ordem`
+      // (migração 0137) estourou 23505 na PRIMEIRA linha do values() que
+      // colidiu. Idempotente: devolve sucesso sem subir os blobs de novo
+      // (quem venceu a corrida já está subindo os dela).
+      if (
+        err instanceof Error &&
+        "code" in err &&
+        (err as { code?: string }).code === "23505"
+      ) {
+        return { loteId };
+      }
+      throw err;
+    }
+
+    // Upload FORA da transação (mesmo princípio da Fase B de
+    // `consolidarSessao`): não segura conexão/lock do Postgres durante a
+    // chamada de rede ao storage efêmero. Falha de upload de um clipe não
+    // derruba o lote inteiro nem o `loteId` já reservado.
+    //
+    // A ORDEM É O CONTRATO: sobe o blob, e SÓ ENTÃO promove aquela linha a
+    // `na_fila` com o `objeto_ref`. O worker (T07) só enxerga o clipe depois
+    // que o objeto existe. Se o processo morrer entre o `guardar` e o UPDATE,
+    // a linha fica `nao_solicitado` (nunca reservável) e o objeto órfão é
+    // recolhido pelo sweeper (T15) — perde-se a transcrição daquele clipe,
+    // nunca se gasta tentativa contra um objeto ausente.
+    const errosUpload: string[] = [];
+    for (const c of clipes) {
+      try {
+        const chave = chaveClipe(loteId, c.ordem);
+        await guardar(chave, c.dados, c.contentType);
+        await withTenant(ctx, (tx) =>
+          tx
+            .update(audioCapture)
+            .set({ asrStatus: "na_fila", objetoRef: chave })
+            .where(
+              and(
+                eq(audioCapture.loteId, loteId),
+                eq(audioCapture.ordem, c.ordem),
+              ),
+            ),
+        );
+      } catch (err) {
+        const detalhe = err instanceof Error ? err.message : String(err);
+        errosUpload.push(`clipe ${c.ordem}: ${detalhe}`);
+        // `falhou` (e não o `nao_solicitado` em que a linha já está): estado
+        // TERMINAL e visível — o terapeuta precisa distinguir "este clipe não
+        // vai ser transcrito" de "ainda não pedi transcrição". `objeto_ref`
+        // continua nulo, então a linha nunca entra na fila. Um erro AQUI
+        // também não pode derrubar os clipes seguintes do lote.
+        try {
+          await withTenant(ctx, (tx) =>
+            tx
+              .update(audioCapture)
+              .set({ asrStatus: "falhou" })
+              .where(
+                and(
+                  eq(audioCapture.loteId, loteId),
+                  eq(audioCapture.ordem, c.ordem),
+                ),
+              ),
+          );
+        } catch (errMarcacao) {
+          errosUpload.push(
+            `clipe ${c.ordem}: falha ao marcar 'falhou': ${
+              errMarcacao instanceof Error
+                ? errMarcacao.message
+                : String(errMarcacao)
+            }`,
+          );
+        }
+      }
+    }
+    if (errosUpload.length > 0) {
+      console.error(
+        "enviarLoteAsr: falha ao subir clipe(s):",
+        errosUpload.join("; "),
+      );
+    }
+
+    return { loteId };
+  } catch (err) {
+    const msg = await mensagemDeConsentimento(ctx, err, { sessionId });
+    if (msg) return { error: msg };
+    console.error("enviarLoteAsr:", err);
+    return { error: "Não foi possível enviar o áudio para transcrição." };
+  }
+}
+
+export const enviarLoteAsr = comEscrita(enviarLoteAsrCore);
 
 const consolidarSchema = z.object({
   sessionId: z.string().uuid(),
@@ -649,3 +852,93 @@ async function consolidarSessaoCore(
 // (Fase D) sequer acontecem — conta em somente-leitura não gasta provider nem
 // gera sinal que ninguém poderia tratar.
 export const consolidarSessao = comEscrita(consolidarSessaoCore);
+
+// ─── #72 T10 — leitura de estado do lote + limites de polling ─────────────
+//
+// R20: o CLIENTE consulta este estado periodicamente. Os limites vivem aqui,
+// nomeados, para não ficarem soltos como número mágico na UI (T11):
+// - POLLING_INTERVALO_MS: cada quantos ms o cliente deve perguntar de novo.
+// - POLLING_TETO_MS: depois de quanto tempo o cliente PARA de perguntar.
+// O teto é comportamento do cliente, não do servidor — estourá-lo nunca muda
+// a resposta daqui para "falhou". O servidor sempre devolve o estado real
+// (inclusive "ainda na_fila/processando" depois do teto); é a UI quem decide
+// parar de exibir um spinner e oferecer outra ação ao terapeuta.
+export const POLLING_INTERVALO_MS = 3000;
+export const POLLING_TETO_MS = 600_000;
+
+export type EstadoClipeAsr = {
+  ordem: number;
+  asrStatus: (typeof audioCapture.$inferSelect)["asrStatus"];
+  transcricaoTexto: string | null;
+};
+
+/**
+ * Estado atual de cada clipe de um lote, sob RLS do tenant do request. Não
+ * distingue "lote inexistente" de "lote de outra clínica" — em ambos os
+ * casos a query sob `withTenant` não enxerga a linha e o retorno é vazio
+ * (nunca um erro que vazasse a diferença entre os dois casos).
+ */
+async function obterEstadoLoteCore(
+  ctx: TenantContext,
+  loteId: string,
+): Promise<EstadoClipeAsr[]> {
+  requireRole(ctx, "terapeuta");
+  const parsed = z.string().uuid().safeParse(loteId);
+  if (!parsed.success) return [];
+
+  const rows = await withTenant(ctx, (tx) =>
+    tx
+      .select({
+        ordem: audioCapture.ordem,
+        asrStatus: audioCapture.asrStatus,
+        transcricaoTexto: audioCapture.transcricaoTexto,
+      })
+      .from(audioCapture)
+      .where(eq(audioCapture.loteId, parsed.data))
+      .orderBy(audioCapture.ordem),
+  );
+
+  return rows
+    .filter((r): r is typeof r & { ordem: number } => r.ordem !== null)
+    .map((r) => ({
+      ordem: r.ordem,
+      asrStatus: r.asrStatus,
+      transcricaoTexto: r.transcricaoTexto,
+    }));
+}
+
+export const obterEstadoLote = obterEstadoLoteCore;
+
+/**
+ * `loteId` mais recente daquela sessão, ou `null` se não houver nenhum. É a
+ * fonte de verdade no reload da página (R26): estado local de "estou fazendo
+ * polling de tal lote" se perde ao recarregar, então a página SEMPRE resolve
+ * de novo aqui — nunca a partir de um `loteId` guardado só no cliente — para
+ * decidir se há um lote em voo para retomar.
+ */
+async function obterLoteMaisRecenteCore(
+  ctx: TenantContext,
+  sessionId: string,
+): Promise<string | null> {
+  requireRole(ctx, "terapeuta");
+  const parsed = z.string().uuid().safeParse(sessionId);
+  if (!parsed.success) return null;
+
+  const [linha] = await withTenant(ctx, (tx) =>
+    tx
+      .select({ loteId: audioCapture.loteId })
+      .from(audioCapture)
+      .where(
+        and(
+          eq(audioCapture.sessionId, parsed.data),
+          isNotNull(audioCapture.loteId),
+        ),
+      )
+      .orderBy(sql`${audioCapture.criadoEm} DESC`)
+      .limit(1),
+  );
+
+  return linha?.loteId ?? null;
+}
+
+export const obterLoteMaisRecente = obterLoteMaisRecenteCore;

@@ -112,6 +112,14 @@ export const audioStatusUpload = pgEnum("audio_status_upload", [
   "falhou",
 ]);
 
+export const asrStatus = pgEnum("asr_status", [
+  "nao_solicitado",
+  "na_fila",
+  "transcrevendo",
+  "transcrito",
+  "falhou",
+]);
+
 export const extractionEstado = pgEnum("extraction_estado", [
   "sugerida",
   "pendente_reprocessamento",
@@ -1156,8 +1164,33 @@ export const audioCapture = pgTable(
     criadoEm: timestamp("criado_em", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    // Lote de ditado: N clipes gravados na mesma sessão sobem juntos (#72).
+    // `lote_id` é gerado no cliente para tornar o reenvio idempotente (R24).
+    loteId: uuid("lote_id"),
+    ordem: integer("ordem"),
+    asrStatus: asrStatus("asr_status").notNull().default("nao_solicitado"),
+    transcricaoTexto: text("transcricao_texto"),
+    transcritoEm: timestamp("transcrito_em", { withTimezone: true }),
+    // Incrementado na reserva, não na conclusão: worker morto no meio conta tentativa.
+    tentativas: integer("tentativas").notNull().default(0),
   },
-  (t) => [index("idx_audio_capture_session").on(t.sessionId)],
+  (t) => [
+    index("idx_audio_capture_session").on(t.sessionId),
+    // Fila do worker: só as linhas pendentes entram no índice.
+    index("idx_audio_capture_asr_fila")
+      .on(t.asrStatus, t.criadoEm)
+      .where(sql`${t.asrStatus} = 'na_fila'`),
+    index("idx_audio_capture_lote").on(t.loteId),
+    // Backstop de R24 (#72 T09, review pós-PR): a checagem de idempotência
+    // em `enviarLoteAsr` (SELECT antes do INSERT) não é atômica sozinha —
+    // duas chamadas concorrentes com o MESMO lote_id (duplo clique, duas
+    // abas) passam a checagem juntas antes de qualquer uma inserir. Este
+    // UNIQUE fecha a janela: a segunda transação estoura 23505, tratado
+    // pelo core como "já existe" (mesmo padrão de idempotência via
+    // constraint usado em `uq_session_numero_por_paciente`). Composto
+    // (não só lote_id) porque cada lote tem N linhas, uma por ordem.
+    unique("uq_audio_capture_lote_ordem").on(t.loteId, t.ordem),
+  ],
 );
 
 export const extraction = pgTable(
