@@ -27,6 +27,9 @@ import { deveReextrair } from "@/lib/extraction/reextraction-policy";
 import { traduzirErroDeConsentimento } from "@/lib/consent/erros";
 import { diagnosticarBloqueioDeConsentimentoSeguro } from "@/lib/consent/diagnostico";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
+import { asrHabilitado } from "@/lib/flags";
+import { chaveClipe } from "@/lib/audio/local-store";
+import { guardar } from "@/lib/asr/storage";
 
 // ─── Guard de escrita por situação da conta (#163+#159) ────────────────────
 // Todo o diário é escrita clínica: conta em somente-leitura (trial expirado,
@@ -267,6 +270,138 @@ async function registrarAudioLocalCore(
 // Grava linha em `audio_capture` (mesmo que o blob ainda seja local) — é
 // escrita, entra no guard.
 export const registrarAudioLocal = comEscrita(registrarAudioLocalCore);
+
+const clipeAsrSchema = z.object({
+  ordem: z.number().int().nonnegative(),
+  dados: z.instanceof(Uint8Array),
+  contentType: z.string().optional(),
+});
+
+const enviarLoteAsrSchema = z.object({
+  sessionId: z.string().uuid(),
+  loteId: z.string().uuid(),
+  clipes: z.array(clipeAsrSchema).min(1),
+});
+
+/**
+ * Envia um lote de clipes de ditado de voz (#72, T09): insere N linhas em
+ * `audio_capture` (`asr_status = 'na_fila'`, mesmo `lote_id`, `ordem`
+ * preservada) e sobe cada blob para o bucket efêmero (T04). Devolve o
+ * `loteId` IMEDIATAMENTE (R9) — a transcrição roda depois, assíncrona, via
+ * fila/worker de outra task (T07).
+ *
+ * `loteId` vem do CLIENTE (`crypto.randomUUID()`), não é gerado aqui: é a
+ * chave de idempotência do retry de rede (R24) — ver checagem abaixo.
+ */
+async function enviarLoteAsrCore(
+  ctx: TenantContext,
+  input: {
+    sessionId: string;
+    loteId: string;
+    clipes: Array<{ ordem: number; dados: Uint8Array; contentType?: string }>;
+  },
+): Promise<{
+  error?: string;
+  loteId?: string;
+  bloqueioConta?: BloqueioConta;
+}> {
+  requireRole(ctx, "terapeuta");
+  // R21: trava de MATURIDADE do serviço faster-whisper (não é gate de LGPD).
+  // Recusa ANTES de qualquer escrita ou upload — desligada, nem consome
+  // storage nem enfileira nada que o worker nunca vai processar.
+  if (!asrHabilitado()) {
+    return { error: "Ditado de voz está temporariamente indisponível." };
+  }
+  const parsed = enviarLoteAsrSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]!.message };
+  const { sessionId, loteId, clipes } = parsed.data;
+
+  try {
+    // R24: reenvio do MESMO loteId (retry de rede do cliente) não duplica —
+    // se já existe QUALQUER linha com esse lote_id nesta clínica (RLS via
+    // withTenant), devolve sucesso idempotente sem inserir de novo nem
+    // re-subir os blobs.
+    const existentes = await withTenant(ctx, (tx) =>
+      tx
+        .select({ id: audioCapture.id })
+        .from(audioCapture)
+        .where(eq(audioCapture.loteId, loteId))
+        .limit(1),
+    );
+    if (existentes.length > 0) return { loteId };
+
+    // Chave de storage determinística (mesmo formato de `chaveClipe`, T14,
+    // usado pelo cache local em IndexedDB) — não depende do `id` gerado pelo
+    // INSERT, então grava `objeto_ref` já no insert.
+    const linhas = clipes.map((c) => ({
+      sessionId,
+      clinicId: ctx.clinicId,
+      loteId,
+      ordem: c.ordem,
+      asrStatus: "na_fila" as const,
+      objetoRef: chaveClipe(loteId, c.ordem),
+    }));
+
+    await withTenant(ctx, async (tx) => {
+      await tx.insert(audioCapture).values(linhas);
+
+      const [sess] = await tx
+        .select({ patientId: session.patientId })
+        .from(session)
+        .where(eq(session.id, sessionId));
+      if (sess) {
+        await desarquivarPacienteSeArquivado(
+          tx,
+          ctx,
+          sess.patientId,
+          "audio_local",
+        );
+      }
+    });
+
+    // Upload FORA da transação (mesmo princípio da Fase B de
+    // `consolidarSessao`): não segura conexão/lock do Postgres durante a
+    // chamada de rede ao storage efêmero. Falha de upload de um clipe não
+    // derruba o lote inteiro nem o `loteId` já reservado — marca só aquele
+    // clipe como `falhou`; o worker (T07) nunca vai encontrá-lo `na_fila`
+    // sem o objeto correspondente no bucket.
+    const errosUpload: string[] = [];
+    for (const c of clipes) {
+      try {
+        await guardar(chaveClipe(loteId, c.ordem), c.dados, c.contentType);
+      } catch (err) {
+        const detalhe = err instanceof Error ? err.message : String(err);
+        errosUpload.push(`clipe ${c.ordem}: ${detalhe}`);
+        await withTenant(ctx, (tx) =>
+          tx
+            .update(audioCapture)
+            .set({ asrStatus: "falhou" })
+            .where(
+              and(
+                eq(audioCapture.loteId, loteId),
+                eq(audioCapture.ordem, c.ordem),
+              ),
+            ),
+        );
+      }
+    }
+    if (errosUpload.length > 0) {
+      console.error(
+        "enviarLoteAsr: falha ao subir clipe(s):",
+        errosUpload.join("; "),
+      );
+    }
+
+    return { loteId };
+  } catch (err) {
+    const msg = await mensagemDeConsentimento(ctx, err, { sessionId });
+    if (msg) return { error: msg };
+    console.error("enviarLoteAsr:", err);
+    return { error: "Não foi possível enviar o áudio para transcrição." };
+  }
+}
+
+export const enviarLoteAsr = comEscrita(enviarLoteAsrCore);
 
 const consolidarSchema = z.object({
   sessionId: z.string().uuid(),

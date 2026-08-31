@@ -9,6 +9,7 @@ import {
   capturarDiario,
   consolidarSessao,
   corrigirEscopoProtocolo,
+  enviarLoteAsr,
   registrarAudioLocal,
 } from "./logic";
 
@@ -118,6 +119,43 @@ export async function consolidarSessaoAction(
       return { error: "Só o terapeuta da sessão consolida." };
     console.error("consolidarSessaoAction:", err);
     return { error: "Não foi possível consolidar." };
+  }
+}
+
+// Ditado de voz (#72, T09). Chamado diretamente pelo componente de gravação
+// (não por `useActionState`/FormData — ainda não há UI de T11 nesta task),
+// com os Blobs gravados no cliente. O core (`enviarLoteAsr`, logic.ts) é
+// ctx-accepting e NUNCA pode ser exportado direto daqui: exportá-lo permitiria
+// a um cliente forjar `ctx` (clinicId/userId/role) e contornar a RLS — ver
+// memória do repo `ctx-forjavel-use-server`. Este wrapper resolve o `ctx` real
+// via `getTenantContext()` e só então chama o core.
+export type EnviarLoteAsrState = { error?: string; loteId?: string };
+export async function enviarLoteAsrAction(input: {
+  sessionId: string;
+  loteId: string;
+  clipes: Array<{ ordem: number; blob: Blob }>;
+}): Promise<EnviarLoteAsrState> {
+  const ctx = await getTenantContext();
+  try {
+    const clipes = await Promise.all(
+      input.clipes.map(async (c) => ({
+        ordem: c.ordem,
+        dados: new Uint8Array(await c.blob.arrayBuffer()),
+        contentType: c.blob.type || undefined,
+      })),
+    );
+    const r = await enviarLoteAsr(ctx, {
+      sessionId: input.sessionId,
+      loteId: input.loteId,
+      clipes,
+    });
+    if (r.error) return { error: r.error };
+    return { loteId: r.loteId };
+  } catch (err) {
+    if (err instanceof RoleError)
+      return { error: "Só o terapeuta da sessão envia o ditado de voz." };
+    console.error("enviarLoteAsrAction:", err);
+    return { error: "Não foi possível enviar o áudio para transcrição." };
   }
 }
 
