@@ -755,6 +755,39 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       expect(guardarMock).toHaveBeenCalledTimes(2);
     });
 
+    // O teste de `Promise.all` acima é timing-dependent: se a segunda chamada
+    // só alcançar o SELECT de idempotência DEPOIS de a primeira ter commitado,
+    // ela passa verde pelo caminho do SELECT sem nunca exercitar o `23505` —
+    // foi assim que o catch lendo `.code` na RAIZ (e não via `codigoPg`, que
+    // desembrulha o `DrizzleQueryError`) conviveu com CI verde e só quebrou
+    // intermitente. Este teste força a colisão DETERMINISTICAMENTE: as linhas
+    // do lote já existem em OUTRA sessão, então o SELECT (escopado por
+    // `sessionId`) não as vê e o INSERT bate no `uq_audio_capture_lote_ordem`.
+    test("colisão do UNIQUE (23505) é idempotente, não erro genérico (R24)", async () => {
+      await limpar();
+      guardarMock.mockClear();
+      const loteId = "00000000-0000-0000-0000-0000000a0006";
+      await owner`DELETE FROM audio_capture WHERE lote_id = ${loteId}`;
+      await owner`INSERT INTO audio_capture (clinic_id, session_id, lote_id, ordem, asr_status) VALUES
+        (${CLINIC_A}, ${SESS_COBERTURA}, ${loteId}, 0, 'nao_solicitado'),
+        (${CLINIC_A}, ${SESS_COBERTURA}, ${loteId}, 1, 'nao_solicitado')`;
+
+      const r = await enviarLoteAsr(ctxT1, {
+        sessionId: SESS,
+        loteId,
+        clipes: [clipe(0), clipe(1)],
+      });
+
+      expect(r.error).toBeUndefined();
+      expect(r.loteId).toBe(loteId);
+      // quem perde a corrida NÃO re-sobe os blobs
+      expect(guardarMock).not.toHaveBeenCalled();
+      const rows =
+        await owner`SELECT id FROM audio_capture WHERE lote_id = ${loteId}`;
+      expect(rows.length).toBe(2);
+      await owner`DELETE FROM audio_capture WHERE lote_id = ${loteId}`;
+    });
+
     // ─── revisão final de integração #72 ────────────────────────────────────
     // O INSERT gravava `na_fila` + `objeto_ref` ANTES de o upload rodar, então
     // existia um instante em que `app_asr_reservar` (T02) podia eleger uma
