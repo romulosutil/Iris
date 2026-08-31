@@ -1,5 +1,87 @@
-import { describe, expect, test } from "vitest";
-import { main, objetoExpirado, varrer } from "./asr-sweeper-orfaos.mjs";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+
+// ─── dublês de MÓDULO: só existem para os testes de `main()` (#494/T22) ─────
+//
+// POR QUE: até T22 os 4 testes de `main()` rejeitavam todos dentro de
+// `resolveConfig()` e NENHUM alcançava `varrer`. Com isso, trocar a fiação
+// `refsEmUso: criarConsultaEmUso(sql)` por `async () => new Set()` deixava a
+// suíte inteira verde — e o sweeper em produção passava a apagar áudio
+// `na_fila` VIVO, exatamente o cenário que a migração 0138 foi escrita para
+// impedir. Para medir a fiação é preciso `main()` chegar até o fim, e para
+// isso o Postgres e o S3 reais precisam ser dublados no nível do módulo.
+//
+// `vi.hoisted` porque as fábricas de `vi.mock` são içadas acima dos imports e
+// não podem fechar sobre `const` de topo de arquivo.
+const espiao = vi.hoisted(() => ({
+  paginas: [{ Contents: [] }],
+  paginaAtual: 0,
+  emUso: new Set(),
+  apagados: [],
+  consultas: [],
+  sqlEncerrado: false,
+  clientDestruido: false,
+}));
+
+vi.mock("postgres", () => {
+  // `postgres(url, opts)` devolve a tag `sql`. O dublê registra cada consulta
+  // e responde como `app_asr_objetos_em_uso`: das chaves perguntadas, devolve
+  // só as que o "banco" considera reivindicadas.
+  const postgres = () => {
+    const sql = async (strings, ...valores) => {
+      espiao.consultas.push({ texto: strings.join("$?"), valores });
+      const chaves = valores[0] ?? [];
+      return chaves.filter((c) => espiao.emUso.has(c)).map((ref) => ({ ref }));
+    };
+    sql.end = async () => {
+      espiao.sqlEncerrado = true;
+    };
+    return sql;
+  };
+  return { default: postgres };
+});
+
+vi.mock("@aws-sdk/client-s3", () => {
+  // Classes nomeadas (não arrow): `varrer` faz `new ListObjectsV2Command(...)`
+  // e o fake discrimina por `constructor.name` — memória do repo
+  // "duble-arrow-nao-e-construtor".
+  class ListObjectsV2Command {
+    constructor(input) {
+      this.input = input;
+    }
+  }
+  class DeleteObjectCommand {
+    constructor(input) {
+      this.input = input;
+    }
+  }
+  class S3Client {
+    constructor(config) {
+      espiao.configS3 = config;
+    }
+    async send(comando) {
+      if (comando.constructor.name === "ListObjectsV2Command") {
+        // Interruptor para o teste de limpeza de conexão: simula o MinIO fora
+        // do ar no meio da varredura.
+        if (espiao.erroList) throw new Error("MinIO indisponível");
+        const pagina = espiao.paginas[espiao.paginaAtual] ?? { Contents: [] };
+        espiao.paginaAtual += 1;
+        return pagina;
+      }
+      if (comando.constructor.name === "DeleteObjectCommand") {
+        espiao.apagados.push(comando.input.Key);
+        return {};
+      }
+      throw new Error(`comando inesperado: ${comando.constructor.name}`);
+    }
+    destroy() {
+      espiao.clientDestruido = true;
+    }
+  }
+  return { S3Client, ListObjectsV2Command, DeleteObjectCommand };
+});
+
+const { criarConsultaEmUso, main, objetoExpirado, varrer } =
+  await import("./asr-sweeper-orfaos.mjs");
 
 const HORA_MS = 60 * 60 * 1000;
 
@@ -326,5 +408,169 @@ describe("main — validação de argumentos e env (#72/T15)", () => {
     delete process.env.ASR_S3_SECRET_KEY;
     delete process.env.ASR_SWEEPER_DATABASE_URL;
     delete process.env.ASR_SWEEPER_LIMITE_HORAS;
+  });
+});
+
+// ─── #494/T22: a consulta de estado em si, que não tinha teste nenhum ───────
+describe("criarConsultaEmUso — a pergunta que separa órfão de trabalho vivo", () => {
+  /** Fake da tag `sql` do postgres.js: registra a consulta e devolve `linhas`. */
+  function fakeSql(linhas = []) {
+    const chamadas = [];
+    const sql = async (strings, ...valores) => {
+      chamadas.push({ texto: strings.join("$?"), valores });
+      return linhas;
+    };
+    sql.chamadas = chamadas;
+    return sql;
+  }
+
+  test("lista vazia não emite consulta nenhuma e devolve conjunto vazio", async () => {
+    const sql = fakeSql([{ ref: "nunca" }]);
+    await expect(criarConsultaEmUso(sql)([])).resolves.toEqual(new Set());
+    expect(sql.chamadas).toEqual([]);
+  });
+
+  test("devolve as refs QUE O BANCO reivindicou, não as que foram perguntadas", async () => {
+    // A mutação que este caso mata é o fail-open: trocar
+    // `new Set(linhas.map((l) => l.ref))` por `new Set()`. Com ela, `varrer`
+    // acharia que nada está em uso e apagaria o áudio de todo clipe `na_fila`
+    // mais velho que a janela. O oráculo é de CONJUNTO EXATO — um subconjunto
+    // vazio precisa reprovar.
+    const sql = fakeSql([{ ref: "lote:vivo" }]);
+    const emUso = await criarConsultaEmUso(sql)([
+      "lote:vivo",
+      "lote:orfao",
+      "lote:terminal",
+    ]);
+    expect(emUso).toEqual(new Set(["lote:vivo"]));
+    expect(emUso.has("lote:orfao")).toBe(false);
+  });
+
+  test("pergunta à FUNÇÃO 0138, nunca à tabela `audio_capture` direto", async () => {
+    // `audio_capture` tem FORCE RLS com policies `TO app_role` resolvidas por
+    // `app_clinic_id_exigido()`, e o sweeper não tem usuário logado nem
+    // `app.clinic_id`. Um `SELECT` cru na tabela devolveria ZERO LINHAS SEM
+    // ERRO — e zero linhas aqui significa "nada em uso, pode apagar tudo"
+    // (memória `grant-sem-policy-nega-tudo-em-silencio`, na direção mais
+    // perigosa possível). Por isso a consulta é asserida pelo TEXTO.
+    const sql = fakeSql([]);
+    await criarConsultaEmUso(sql)(["k"]);
+    expect(sql.chamadas).toHaveLength(1);
+    expect(sql.chamadas[0].texto).toContain("app_asr_objetos_em_uso");
+    expect(sql.chamadas[0].texto).not.toContain("audio_capture");
+  });
+
+  test("manda o array JS inteiro como UM parâmetro, sem achatar (regressão 22P02)", async () => {
+    // Medido contra o Postgres local (comentário do script): `sql.array(...)`
+    // ou `::text[]` fazem o driver mandar o array achatado em texto e o
+    // servidor responde `22P02 malformed array literal`. O array JS puro é
+    // serializado como `text[]` de verdade.
+    const sql = fakeSql([]);
+    await criarConsultaEmUso(sql)(["a", "b"]);
+    expect(sql.chamadas[0].valores).toEqual([["a", "b"]]);
+  });
+});
+
+// ─── #494/T22: a FIAÇÃO de main(), medida onde ela de fato roda ─────────────
+describe("main — a fiação da checagem de estado chega até varrer", () => {
+  const ENV = {
+    ASR_S3_ENDPOINT: "http://minio-teste:9000",
+    ASR_S3_ACCESS_KEY: "chave-acesso",
+    ASR_S3_SECRET_KEY: "chave-secreta",
+    ASR_SWEEPER_DATABASE_URL: "postgres://sweeper@localhost:5432/iris",
+    ASR_SWEEPER_LIMITE_HORAS: "6",
+  };
+
+  // Sete horas: os objetos plantados abaixo já venceram a janela de 6h, então
+  // a ÚNICA coisa que pode salvá-los do delete é a checagem de estado.
+  const antigo = new Date(Date.now() - 7 * HORA_MS);
+
+  beforeEach(() => {
+    Object.assign(process.env, ENV);
+    espiao.paginas = [{ Contents: [] }];
+    espiao.paginaAtual = 0;
+    espiao.emUso = new Set();
+    espiao.apagados = [];
+    espiao.consultas = [];
+    espiao.sqlEncerrado = false;
+    espiao.clientDestruido = false;
+    espiao.erroList = false;
+  });
+
+  afterEach(() => {
+    for (const k of Object.keys(ENV)) delete process.env[k];
+  });
+
+  test("objeto VENCIDO cuja linha está `na_fila` sobrevive a uma varredura REAL de main()", async () => {
+    // ESTE é o caso que os 4 testes antigos de `main()` não alcançavam: todos
+    // rejeitavam dentro de `resolveConfig()`. Trocar
+    // `refsEmUso: criarConsultaEmUso(sql)` por `async () => new Set()` os
+    // deixava verdes — e apagava o áudio vivo. Aqui a mutação some com
+    // `lote:vivo` do bucket e o conjunto exato de apagados reprova.
+    espiao.emUso = new Set(["lote:vivo"]);
+    espiao.paginas = [
+      {
+        Contents: [
+          { Key: "lote:vivo", LastModified: antigo },
+          { Key: "lote:orfao", LastModified: antigo },
+        ],
+      },
+    ];
+
+    await main(["--once"]);
+
+    expect(espiao.apagados).toEqual(["lote:orfao"]);
+  });
+
+  test("main() consulta o BANCO de verdade: uma consulta por página, com as chaves vencidas", async () => {
+    // Complemento do caso acima pelo outro lado: mesmo quando nada está em
+    // uso (e o desfecho de apagar seria idêntico ao da mutação), a pergunta
+    // ao banco precisa ter acontecido. Sem esta asserção, um sweeper que
+    // ignorasse o Postgres passaria sempre que a fila estivesse vazia — e a
+    // fila vazia é o estado normal na maior parte do tempo.
+    espiao.paginas = [
+      {
+        Contents: [
+          { Key: "lote:orfao", LastModified: antigo },
+          { Key: "lote:novo", LastModified: new Date() },
+        ],
+      },
+    ];
+
+    await main(["--once"]);
+
+    expect(espiao.consultas).toHaveLength(1);
+    expect(espiao.consultas[0].texto).toContain("app_asr_objetos_em_uso");
+    // Só o vencido vai à consulta — o mtime continua sendo o primeiro filtro.
+    expect(espiao.consultas[0].valores).toEqual([["lote:orfao"]]);
+    expect(espiao.apagados).toEqual(["lote:orfao"]);
+  });
+
+  test("--dry-run consulta o estado e não apaga nada", async () => {
+    espiao.emUso = new Set(["lote:vivo"]);
+    espiao.paginas = [
+      {
+        Contents: [
+          { Key: "lote:vivo", LastModified: antigo },
+          { Key: "lote:orfao", LastModified: antigo },
+        ],
+      },
+    ];
+
+    await main(["--once", "--dry-run"]);
+
+    expect(espiao.apagados).toEqual([]);
+    expect(espiao.consultas).toHaveLength(1);
+  });
+
+  test("fecha conexão do Postgres e do S3 mesmo quando a varredura explode", async () => {
+    // Um sweeper que vaza conexão a cada tick de agendador esgota o pool do
+    // Postgres em produção sem nunca falhar visivelmente.
+    espiao.erroList = true;
+
+    await expect(main(["--once"])).rejects.toThrow(/MinIO indisponível/);
+
+    expect(espiao.sqlEncerrado).toBe(true);
+    expect(espiao.clientDestruido).toBe(true);
   });
 });

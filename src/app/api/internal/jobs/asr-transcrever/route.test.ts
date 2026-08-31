@@ -1,169 +1,158 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { POST } from "./route";
-import { db } from "@/db/client";
-import * as storage from "@/lib/asr/storage";
-import * as provider from "@/lib/asr/provider";
-
+// @vitest-environment node
 /**
- * Guard de vazamento de texto clínico pela fronteira HTTP do worker (#494, T16).
+ * #494 / T22 — a AUTORIZAÇÃO da rota do worker de ASR, medida sozinha.
  *
- * O medo concreto: `concluirClipe` manda a transcrição como parâmetro vinculado
- * (`app_asr_concluir($1, $2)`). O `DrizzleQueryError` monta sua `.message` como
- * "Failed query: …\nparams: …" — COM o texto dentro. Se essa mensagem virar
- * corpo de resposta, ela termina na linha de log do
- * `scripts/disparo-asr-transcrever.mjs`, num painel Easypanel servido em HTTP
- * puro. Mesma classe da memória `campo-livre-de-terceiro-carrega-pii`.
+ * POR QUE UM ARQUIVO NOVO, unitário, e não mais casos no `route.int.test.ts`:
+ * a checagem de bearer (`autorizado()`, route.ts) acontece ANTES de qualquer
+ * ida ao banco. Amarrar a cobertura dela ao Postgres real significa que ela
+ * some inteira quando o `describe.skipIf(!hasDb)` pula o arquivo — e um guard
+ * de autenticação que só existe quando o banco existe não é um guard.
  *
- * Por isso o oráculo destes testes é sobre o `JSON.stringify` do corpo INTEIRO,
- * e não sobre um campo nomeado: um campo novo que voltasse a ecoar a mensagem
- * crua reprova aqui sem ninguém precisar lembrar de atualizar a assertiva.
+ * O QUE A SUÍTE ANTERIOR NÃO PEGAVA (achado T22): os dois únicos casos eram
+ * "sem header" e `"Bearer token-errado"` — 13 bytes contra um token de 23. A
+ * comparação em tempo constante curto-circuita no `a.length !== b.length`
+ * ANTES do `timingSafeEqual`, então mutar o `return timingSafeEqual(a, b)`
+ * para `return true` mantinha os dois verdes: qualquer portador com o
+ * comprimento certo seria aceito. E `ASR_JOB_TOKEN` era sempre definido no
+ * `beforeEach`, deixando "env ausente recusa tudo" com cobertura ZERO.
+ *
+ * Por isso todo token errado aqui é construído com o MESMO número de bytes do
+ * certo: é o único formato de entrada que atravessa o filtro de comprimento e
+ * chega no comparador de verdade.
  */
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// O módulo da rota importa `asrWorkerDb` no topo. Dublado para (a) o teste não
+// precisar de Postgres e (b) o número de chamadas virar o ORÁCULO de "passou
+// da autorização": zero chamadas prova que a recusa aconteceu antes da fila.
+const execute = vi.fn();
 vi.mock("@/db/client", () => ({
-  db: { execute: vi.fn() },
+  asrWorkerDb: { execute: (...args: unknown[]) => execute(...args) },
+  db: {},
+  authDb: {},
 }));
 
+// Storage e provider não devem sequer ser alcançados nestes testes; dublados
+// para que, se algum dia forem, a falha seja evidente e não uma ida à rede.
 vi.mock("@/lib/asr/storage", () => ({
   ler: vi.fn(),
+  guardar: vi.fn(),
   apagar: vi.fn(),
 }));
 
-vi.mock("@/lib/asr/provider", async (importOriginal) => {
-  // `AsrProviderError` REAL: a rota classifica por `instanceof`, e um dublê da
-  // classe faria o teste de saturação passar pelo caminho errado.
-  const original = await importOriginal<typeof provider>();
-  return { ...original, getAsrProvider: vi.fn() };
-});
+const { POST } = await import("./route");
 
-const TOKEN = "token-secreto-asr-123";
+// 23 bytes ASCII — o mesmo comprimento usado no `route.int.test.ts`.
+const TOKEN = "token-do-job-asr-72-t07";
+const URL_ROTA = "http://localhost/api/internal/jobs/asr-transcrever";
 
-// Texto que finge ser a nota de sessão ditada. Distinto o bastante para que uma
-// busca por substring no corpo não case por acidente.
-const TEXTO_CLINICO =
-  "paciente relatou ideacao suicida na sessao de terca-feira";
-
-const CLIPE = {
-  id: "11111111-1111-4111-8111-111111111111",
-  clinic_id: "22222222-2222-4222-8222-222222222222",
-  objeto_ref: "lote-abc:0",
-  lote_id: "lote-abc",
-  ordem: 0,
-};
-
-/** Espelha o formato real: `DrizzleQueryError` carrega os params na `.message`. */
-function erroDoBancoComTexto(texto: string): Error {
-  const err = new Error(
-    `Failed query: select app_asr_concluir($1, $2)\nparams: ${CLIPE.id},${texto}`,
-  );
-  err.name = "DrizzleQueryError";
-  (err as Error & { cause?: unknown }).cause = Object.assign(
-    new Error("value too long for type character varying"),
-    { code: "22001" },
-  );
-  return err;
+function requisicao(authorization?: string | null): Request {
+  const headers = new Headers();
+  if (authorization != null) headers.set("authorization", authorization);
+  return new Request(URL_ROTA, { method: "POST", headers });
 }
 
-function requisicaoAutorizada(): Request {
-  return new Request("http://localhost/api/internal/jobs/asr-transcrever", {
-    method: "POST",
-    headers: { authorization: `Bearer ${TOKEN}` },
-  });
+/** Token errado com EXATAMENTE o mesmo número de bytes do certo. */
+function mesmoComprimento(preenchimento: string): string {
+  return preenchimento.repeat(TOKEN.length).slice(0, TOKEN.length);
 }
 
-describe("POST /api/internal/jobs/asr-transcrever — categoria fechada (T16)", () => {
+describe("POST /api/internal/jobs/asr-transcrever — autorização (#494/T22)", () => {
   const envOriginal = process.env.ASR_JOB_TOKEN;
-  let erroDeLog: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    execute.mockReset();
+    // Tick vazio: o backstop devolve 0 expirados e a reserva devolve fila
+    // vazia. Serve só para o caminho AUTORIZADO conseguir chegar ao 200.
+    execute.mockResolvedValue([{ expirados: 0 }]);
     process.env.ASR_JOB_TOKEN = TOKEN;
-    vi.clearAllMocks();
-    erroDeLog = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.mocked(storage.ler).mockResolvedValue(new Uint8Array([1, 2, 3]));
-    vi.mocked(storage.apagar).mockResolvedValue(undefined);
-    vi.mocked(provider.getAsrProvider).mockReturnValue({
-      transcrever: vi.fn().mockResolvedValue({ texto: TEXTO_CLINICO }),
-    });
   });
 
   afterEach(() => {
-    erroDeLog.mockRestore();
-    process.env.ASR_JOB_TOKEN = envOriginal;
+    if (envOriginal === undefined) delete process.env.ASR_JOB_TOKEN;
+    else process.env.ASR_JOB_TOKEN = envOriginal;
   });
 
-  /**
-   * A rota faz quatro consultas distintas pelo mesmo `db.execute`; distinguir
-   * pelo objeto `sql` exigiria remontar os chunks do Drizzle. A ORDEM das
-   * chamadas dentro de um tick de um clipe é determinística
-   * (reservar → concluir → falhar → objetos_em_uso), então o dublê responde
-   * por posição.
-   */
-  function agendarChamadasDoBanco(aoConcluir: () => unknown) {
-    let chamada = 0;
-    vi.mocked(db.execute).mockImplementation((async () => {
-      chamada += 1;
-      if (chamada === 1) return [CLIPE] as unknown;
-      if (chamada === 2) return aoConcluir();
-      return [] as unknown;
-    }) as unknown as typeof db.execute);
-  }
+  it("token do MESMO comprimento mas conteúdo diferente é recusado (401) e não toca a fila", async () => {
+    // ESTE é o caso que mata `return true` no comparador: 23 bytes de 'x'
+    // passam pelo filtro de comprimento e só o `timingSafeEqual` os separa.
+    const falso = mesmoComprimento("x");
+    expect(falso).toHaveLength(TOKEN.length);
+    expect(falso).not.toBe(TOKEN);
 
-  it("não ecoa a transcrição no corpo quando o banco falha ao concluir", async () => {
-    agendarChamadasDoBanco(() => {
-      throw erroDoBancoComTexto(TEXTO_CLINICO);
-    });
+    const res = await POST(requisicao(`Bearer ${falso}`));
 
-    const res = await POST(requisicaoAutorizada());
+    expect(res.status).toBe(401);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("token que difere do certo em UM único byte é recusado (401)", async () => {
+    // Vizinho mais próximo possível: mesmo comprimento, mesmo prefixo, último
+    // byte trocado. Nenhuma comparação por prefixo/`startsWith` sobrevive.
+    const quase = `${TOKEN.slice(0, -1)}X`;
+    expect(quase).toHaveLength(TOKEN.length);
+
+    const res = await POST(requisicao(`Bearer ${quase}`));
+
+    expect(res.status).toBe(401);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("token certo com prefixo 'Bearer' ausente é recusado (401)", async () => {
+    const res = await POST(requisicao(TOKEN));
+    expect(res.status).toBe(401);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("token certo com esquema errado ('Token ') é recusado (401)", async () => {
+    const res = await POST(requisicao(`Token ${TOKEN}`));
+    expect(res.status).toBe(401);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("header ausente é recusado (401)", async () => {
+    const res = await POST(requisicao(null));
+    expect(res.status).toBe(401);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("ASR_JOB_TOKEN AUSENTE recusa até o header bem formado — nunca 'libera porque não configurou'", async () => {
+    // Cobertura zero até T22: o `beforeEach` do `route.int.test.ts` sempre
+    // definia a env, então remover `if (!esperado)` de `autorizado()` não
+    // derrubava nada. Sem env, `Buffer.from(undefined)` nem chega a existir —
+    // a recusa tem que ser explícita.
+    delete process.env.ASR_JOB_TOKEN;
+
+    const res = await POST(requisicao(`Bearer ${TOKEN}`));
+
+    expect(res.status).toBe(401);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("ASR_JOB_TOKEN vazio recusa igual a ausente (env definida mas em branco)", async () => {
+    // `""` é o formato real de "variável presente e vazia" no Easypanel —
+    // salvar o campo em branco define a env, não a remove. `!esperado` cobre
+    // os dois casos; sem ele, `""` cairia no comparador.
+    //
+    // NÃO dá para exercitar aqui o bearer VAZIO (`"Bearer "`), que seria o
+    // par de comprimento 0 casando no `timingSafeEqual`: `Headers.set()`
+    // normaliza o valor removendo o espaço final, então o header chega como
+    // `"Bearer"` e morre antes, no `startsWith`. Um teste sobre ele passaria
+    // pelo motivo errado.
+    process.env.ASR_JOB_TOKEN = "";
+
+    expect((await POST(requisicao(`Bearer ${TOKEN}`))).status).toBe(401);
+    expect((await POST(requisicao("Bearer x"))).status).toBe(401);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("CONTROLE POSITIVO: o token certo é aceito e o tick roda (200)", async () => {
+    // Sem este caso, todos os 401 acima seriam satisfeitos por uma rota que
+    // recusa TUDO — o teste de recusa só vale se a aceitação for observável.
+    const res = await POST(requisicao(`Bearer ${TOKEN}`));
+
     expect(res.status).toBe(200);
-    const corpo = await res.json();
-
-    expect(JSON.stringify(corpo)).not.toContain(TEXTO_CLINICO);
-    expect(corpo.resultados).toHaveLength(1);
-    expect(corpo.resultados[0]).toEqual({
-      id: CLIPE.id,
-      desfecho: "falhou",
-      categoria: "erro_interno",
-    });
-
-    // O log da app também não pode carregar a nota: o Easypanel serve o painel
-    // em HTTP puro, e o log do container é lido lá.
-    const logado = erroDeLog.mock.calls.map((c: unknown[]) => c.join(" ")).join("\n");
-    expect(logado).not.toContain(TEXTO_CLINICO);
-  });
-
-  it("preserva a classificação do provider como categoria fechada", async () => {
-    vi.mocked(provider.getAsrProvider).mockReturnValue({
-      transcrever: vi.fn().mockRejectedValue(
-        new provider.AsrProviderError("serviço saturado", "saturacao", {
-          status: 503,
-        }),
-      ),
-    });
-    agendarChamadasDoBanco(() => []);
-
-    const res = await POST(requisicaoAutorizada());
-    const corpo = await res.json();
-
-    expect(corpo.revertidos).toBe(1);
-    expect(corpo.resultados[0]).toEqual({
-      id: CLIPE.id,
-      desfecho: "revertido",
-      categoria: "saturacao",
-    });
-  });
-
-  it("não ecoa texto na resposta 500 quando o tick inteiro falha", async () => {
-    vi.mocked(db.execute).mockImplementation((async () => {
-      throw erroDoBancoComTexto(TEXTO_CLINICO);
-    }) as unknown as typeof db.execute);
-
-    const res = await POST(requisicaoAutorizada());
-    expect(res.status).toBe(500);
-    const corpo = await res.json();
-
-    expect(JSON.stringify(corpo)).not.toContain(TEXTO_CLINICO);
-    expect(corpo).toEqual({ ok: false, categoria: "erro_interno" });
-
-    const logado = erroDeLog.mock.calls.map((c: unknown[]) => c.join(" ")).join("\n");
-    expect(logado).not.toContain(TEXTO_CLINICO);
+    await expect(res.json()).resolves.toMatchObject({ ok: true });
+    expect(execute).toHaveBeenCalled();
   });
 });

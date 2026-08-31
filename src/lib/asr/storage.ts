@@ -52,12 +52,42 @@ function buildClient(): { client: S3Client; bucket: string } {
   return { client, bucket };
 }
 
+/**
+ * Apaga da string qualquer ocorrência LITERAL das credenciais em env (#494,
+ * T22).
+ *
+ * POR QUE ISTO É NECESSÁRIO: `mensagemSemSegredo` repassa `err.message`
+ * verbatim, e o erro do SDK v3 embute a credencial — uma falha de assinatura
+ * no MinIO volta com o cabeçalho `Authorization` inteiro na mensagem
+ * (`Credential=<ACCESS_KEY>/2026.../s3/aws4_request`). Sem esta passada, a
+ * chave atravessava o envelope e ia para o log do container, lido pelo painel
+ * do Easypanel servido em HTTP puro (memória `easypanel-ambiente-expoe-
+ * segredos`). Medido em `storage.test.ts`: com o erro realista, os três
+ * caminhos (guardar/ler/apagar) vazavam.
+ *
+ * Piso de 8 caracteres: um valor curto (ou vazio) casaria com pedaço de
+ * palavra comum e transformaria a mensagem em ruído — e um segredo de 7
+ * caracteres já é um problema maior que este.
+ */
+function redigirCredenciais(texto: string): string {
+  let saida = texto;
+  for (const segredo of [
+    process.env.ASR_S3_ACCESS_KEY,
+    process.env.ASR_S3_SECRET_KEY,
+  ]) {
+    if (segredo && segredo.length >= 8) {
+      saida = saida.split(segredo).join("[credencial redigida]");
+    }
+  }
+  return saida;
+}
+
 /** Mensagem de erro sem vazar credenciais, sem afirmar causa que não se
  * conhece — reporta `Error.message` quando houver, senão o valor cru (ver
  * memória do repo "mensagem-de-erro-que-afirma-causa"). */
 function mensagemSemSegredo(operacao: string, err: unknown): string {
   const detalhe = err instanceof Error ? err.message : String(err);
-  return `storage ASR: falha ao ${operacao} (${detalhe})`;
+  return `storage ASR: falha ao ${operacao} (${redigirCredenciais(detalhe)})`;
 }
 
 export async function guardar(
