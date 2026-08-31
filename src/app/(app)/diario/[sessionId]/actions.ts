@@ -14,8 +14,11 @@ import {
   obterEstadoLote,
   obterLoteMaisRecente,
   registrarAudioLocal,
-  type EstadoClipeAsr,
 } from "./logic";
+import type { EstadoClipeAsr } from "./constants";
+
+export type { EstadoClipeAsr };
+
 
 // ─── Wrappers para `useActionState` (resolvem o tenant do request) ────────────
 

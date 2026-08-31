@@ -20,7 +20,7 @@ import {
   POLLING_INTERVALO_MS,
   POLLING_TETO_MS,
   type EstadoClipeAsr,
-} from "./logic";
+} from "./constants";
 
 export interface ClipeLocal {
   idLocal: string;

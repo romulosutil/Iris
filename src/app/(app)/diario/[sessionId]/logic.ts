@@ -868,14 +868,12 @@ export const consolidarSessao = comEscrita(consolidarSessaoCore);
 // a resposta daqui para "falhou". O servidor sempre devolve o estado real
 // (inclusive "ainda na_fila/processando" depois do teto); é a UI quem decide
 // parar de exibir um spinner e oferecer outra ação ao terapeuta.
-export const POLLING_INTERVALO_MS = 3000;
-export const POLLING_TETO_MS = 600_000;
-
-export type EstadoClipeAsr = {
-  ordem: number;
-  asrStatus: (typeof audioCapture.$inferSelect)["asrStatus"];
-  transcricaoTexto: string | null;
-};
+import {
+  POLLING_INTERVALO_MS,
+  POLLING_TETO_MS,
+  type EstadoClipeAsr,
+} from "./constants";
+export { POLLING_INTERVALO_MS, POLLING_TETO_MS, type EstadoClipeAsr };
 
 /**
  * Estado atual de cada clipe de um lote, sob RLS do tenant do request. Não
