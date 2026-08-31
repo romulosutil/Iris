@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import { requireRole } from "@/auth/require-role";
+import { requireDiario } from "@/auth/require-role";
 import { withTenant, type TenantContext, type Tx } from "@/db/rls";
 import { codigoPg, constraintPg } from "@/db/pg-error";
 import {
@@ -92,7 +92,7 @@ async function capturarDiarioCore(
     visibilityLevel?: "multidisciplinary" | "discipline_only";
   },
 ): Promise<{ error?: string; id?: string; bloqueioConta?: BloqueioConta }> {
-  requireRole(ctx, "terapeuta");
+  requireDiario(ctx);
   const parsed = capturaSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
   try {
@@ -164,7 +164,7 @@ async function corrigirEscopoProtocoloCore(
   ctx: TenantContext,
   input: { sessionId: string; protocolIds: string[] },
 ): Promise<{ error?: string; bloqueioConta?: BloqueioConta }> {
-  requireRole(ctx, "terapeuta");
+  requireDiario(ctx);
   const parsed = escopoSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
   try {
@@ -227,7 +227,7 @@ async function registrarAudioLocalCore(
   ctx: TenantContext,
   input: { sessionId: string; duracaoSegundos?: number },
 ): Promise<{ error?: string; id?: string; bloqueioConta?: BloqueioConta }> {
-  requireRole(ctx, "terapeuta");
+  requireDiario(ctx);
   const parsed = audioSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
   try {
@@ -365,7 +365,7 @@ async function enviarLoteAsrCore(
   clipesComFalha?: number;
   bloqueioConta?: BloqueioConta;
 }> {
-  requireRole(ctx, "terapeuta");
+  requireDiario(ctx);
   // R21: trava de MATURIDADE do serviço faster-whisper (não é gate de LGPD).
   // Recusa ANTES de qualquer escrita ou upload — desligada, nem consome
   // storage nem enfileira nada que o worker nunca vai processar.
@@ -592,7 +592,7 @@ const consolidarSchema = z.object({
  *
  * Roda no contexto do terapeuta dono da sessão — `extraction_insert` e
  * `extraction_delete` (RLS) exigem `app_session_terapeuta_id(session_id) =
- * app.user_id`, então `requireRole` sozinho não bastaria sem essa condição.
+ * app.user_id`, então `requireDiario` sozinho não bastaria sem essa condição.
  */
 async function consolidarSessaoCore(
   ctx: TenantContext,
@@ -606,7 +606,7 @@ async function consolidarSessaoCore(
   numeroSequencial?: number;
   bloqueioConta?: BloqueioConta;
 }> {
-  requireRole(ctx, "terapeuta");
+  requireDiario(ctx);
   const parsed = consolidarSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
 
@@ -988,7 +988,7 @@ async function obterEstadoLoteCore(
   ctx: TenantContext,
   loteId: string,
 ): Promise<EstadoClipeAsr[]> {
-  requireRole(ctx, "terapeuta");
+  requireDiario(ctx);
   const parsed = z.string().uuid().safeParse(loteId);
   if (!parsed.success) return [];
 
@@ -1026,7 +1026,7 @@ async function obterLoteMaisRecenteCore(
   ctx: TenantContext,
   sessionId: string,
 ): Promise<string | null> {
-  requireRole(ctx, "terapeuta");
+  requireDiario(ctx);
   const parsed = z.string().uuid().safeParse(sessionId);
   if (!parsed.success) return null;
 
@@ -1071,7 +1071,7 @@ async function aceitarTranscricaoLoteCore(
   ctx: TenantContext,
   loteId: string,
 ): Promise<AceitarTranscricaoResultado> {
-  requireRole(ctx, "terapeuta");
+  requireDiario(ctx);
   const parsed = z.string().uuid().safeParse(loteId);
   if (!parsed.success) return { error: "Lote inválido." };
 

@@ -33,6 +33,11 @@ const PAC2 = "00000000-0000-0000-0000-0000000ac2a1";
 const PROTO = "00000000-0000-0000-0000-00000070c0a1";
 const SESS = "00000000-0000-0000-0000-00000005e1a1"; // terapeuta = U_T1
 const SESS_COBERTURA = "00000000-0000-0000-0000-00000005e2a1"; // terapeuta = U_COBERTURA
+// #506 — clínica solo: o fundador só tem papel `coordenador` (é o que
+// `criarClinicaEVinculo` grava), e é ele mesmo quem atende as sessões.
+const U_SOLO = "00000000-0000-0000-0000-0000000074a1";
+// ⚠ `...05e3a1` já é o SESS_B do describe de obterEstadoLote — não reusar.
+const SESS_SOLO = "00000000-0000-0000-0000-00000005e4a1"; // terapeuta = U_SOLO
 const GOAL_PAC = "00000000-0000-0000-0000-00000006a1a1";
 const GOAL_PAC2 = "00000000-0000-0000-0000-00000006a2a1";
 const ctxT1 = { clinicId: CLINIC_A, userId: U_T1, role: "terapeuta" } as const;
@@ -41,6 +46,11 @@ const ctxCobertura = {
   clinicId: CLINIC_A,
   userId: U_COBERTURA,
   role: "terapeuta",
+} as const;
+const ctxSolo = {
+  clinicId: CLINIC_A,
+  userId: U_SOLO,
+  role: "coordenador",
 } as const;
 
 let owner: ReturnType<typeof postgres>;
@@ -67,10 +77,12 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'A')`;
     await owner`INSERT INTO app_user (id, email, name) VALUES
       (${U_T1}, 't1@x.com', 'T1'), (${U_T2}, 't2@x.com', 'T2'),
-      (${U_COBERTURA}, 'cob@x.com', 'Cobertura')`;
+      (${U_COBERTURA}, 'cob@x.com', 'Cobertura'),
+      (${U_SOLO}, 'solo@x.com', 'Solo')`;
     await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
       (${U_T1}, ${CLINIC_A}, 'terapeuta'), (${U_T2}, ${CLINIC_A}, 'terapeuta'),
-      (${U_COBERTURA}, ${CLINIC_A}, 'terapeuta')`;
+      (${U_COBERTURA}, ${CLINIC_A}, 'terapeuta'),
+      (${U_SOLO}, ${CLINIC_A}, 'coordenador')`;
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
       (${PAC}, ${CLINIC_A}, 'P'), (${PAC2}, ${CLINIC_A}, 'P2')`;
     await owner`INSERT INTO protocol (id, clinic_id, nome, disciplina, familia) VALUES
@@ -80,7 +92,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     // numeração sob RLS.
     await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, disciplina) VALUES
       (${SESS}, ${CLINIC_A}, ${PAC}, ${U_T1}, now(), 'realizada', 'aba'),
-      (${SESS_COBERTURA}, ${CLINIC_A}, ${PAC}, ${U_COBERTURA}, now(), 'realizada', 'aba')`;
+      (${SESS_COBERTURA}, ${CLINIC_A}, ${PAC}, ${U_COBERTURA}, now(), 'realizada', 'aba'),
+      (${SESS_SOLO}, ${CLINIC_A}, ${PAC2}, ${U_SOLO}, now(), 'realizada', 'aba')`;
     await owner`INSERT INTO care_team_membership (patient_id, user_id, papel_na_equipe, disciplina)
       VALUES (${PAC}, ${U_T1}, 'terapeuta_referencia', 'ABA')`;
   });
@@ -126,6 +139,38 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       texto: "indevido",
     });
     expect(r.error).toBeTruthy(); // RLS WITH CHECK bloqueia
+  });
+
+  // #506 — o bug reportado: clínica de um terapeuta só. O fundador tem apenas
+  // papel `coordenador` (`criarClinicaEVinculo`) e `papelAtivo` faz coordenador
+  // vencer sempre, então `requireRole(ctx, "terapeuta")` deixava a clínica solo
+  // sem NENHUM caminho de escrita no diário. Agora passa — e escreve de fato,
+  // não só atravessa a guarda de papel.
+  test("#506 · coordenador dono da sessão (clínica solo) grava captura rápida", async () => {
+    const r = await capturarDiario(ctxSolo, {
+      sessionId: SESS_SOLO,
+      texto: "Sessão da clínica solo",
+    });
+    expect(r.error).toBeUndefined();
+    const rows =
+      await owner`SELECT texto, autor_id FROM session_note WHERE session_id = ${SESS_SOLO} AND tipo = 'captura_rapida'`;
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.texto).toBe("Sessão da clínica solo");
+    expect(rows[0]!.autor_id).toBe(U_SOLO);
+  });
+
+  // Contrapartida do teste acima: aceitar `coordenador` na guarda de papel NÃO
+  // abre o diário alheio. Quem restringe é a RLS (`session_note_insert` exige
+  // `app_session_terapeuta_id(session_id) = app.user_id`), não a guarda.
+  test("#506 · coordenador que NÃO é o terapeuta da sessão continua barrado", async () => {
+    const r = await capturarDiario(ctxSolo, {
+      sessionId: SESS,
+      texto: "diário de outro terapeuta",
+    });
+    expect(r.error).toBeTruthy();
+    const rows =
+      await owner`SELECT texto FROM session_note WHERE session_id = ${SESS} AND texto = 'diário de outro terapeuta'`;
+    expect(rows.length).toBe(0);
   });
 
   test("corrigir escopo grava protocolo com origem ajustada", async () => {
@@ -671,12 +716,15 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       expect(guardarMock).not.toHaveBeenCalled();
     });
 
-    test("papel errado (não-terapeuta) é barrado antes de qualquer escrita", async () => {
+    // #506: `coordenador` deixou de ser papel errado aqui (é o papel do dono de
+    // clínica solo). O papel que segue barrado é `admin_recepcao` —
+    // administrativo, não atende paciente, não escreve no diário.
+    test("papel errado (admin_recepcao) é barrado antes de qualquer escrita", async () => {
       await limpar();
       const ctxErrado = {
         clinicId: CLINIC_A,
         userId: U_T1,
-        role: "coordenador",
+        role: "admin_recepcao",
       } as const;
       const loteId = "00000000-0000-0000-0000-0000000a0003";
       await expect(
