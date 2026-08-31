@@ -153,6 +153,13 @@ function buildClient({ endpoint, accessKeyId, secretAccessKey, region }) {
     region,
     forcePathStyle: true, // obrigatório para MinIO self-hosted — mesma nota de storage.ts
     credentials: { accessKeyId, secretAccessKey },
+    // Mesma nota de src/lib/asr/storage.ts: SDK v3 recente anexa checksum por
+    // padrão, e MinIO devolve `400 InvalidRequest` no ListObjectsV2 — medido
+    // em produção ao provisionar #500 (mc ls funcionava com as MESMAS
+    // credenciais; só o SDK Node quebrava). Sem isto o sweeper nunca lista o
+    // bucket e a varredura falha, exit 1, todo tick.
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   });
 }
 

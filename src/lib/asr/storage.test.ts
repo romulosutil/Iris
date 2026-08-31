@@ -74,6 +74,20 @@ describe("storage ASR", () => {
     expect(ultimaConfig?.region).toBe("us-east-1");
   });
 
+  it("desliga checksum automático — MinIO devolve 400 InvalidRequest no ListObjectsV2 com o default do SDK", async () => {
+    // Achado em produção ao provisionar #500: `mc ls` funcionava com as
+    // MESMAS credenciais contra o mesmo bucket; só o SDK Node quebrava.
+    // Versões recentes de @aws-sdk/client-s3 anexam checksum por padrão em
+    // mais operações, e o MinIO medido (RELEASE.2025-09-07) rejeita. Mesmo
+    // fix em scripts/asr-sweeper-orfaos.mjs (que roda fora deste bundle).
+    const { guardar } = await import("./storage");
+    sendMock.mockResolvedValueOnce({});
+    await guardar("lote/1.wav", new Uint8Array([1, 2, 3]), "audio/wav");
+
+    expect(ultimaConfig?.requestChecksumCalculation).toBe("WHEN_REQUIRED");
+    expect(ultimaConfig?.responseChecksumValidation).toBe("WHEN_REQUIRED");
+  });
+
   it("guardar envia PutObjectCommand com bucket default e chave certos", async () => {
     const { guardar } = await import("./storage");
     sendMock.mockResolvedValueOnce({});
