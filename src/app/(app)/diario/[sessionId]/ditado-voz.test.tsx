@@ -61,7 +61,9 @@ function instalarMediaRecorder() {
         start() {
           // um chunk imediato: o blob precisa ter tamanho para ser gravado
           queueMicrotask(() =>
-            r.ondataavailable?.({ data: new Blob(["a"], { type: "audio/webm" }) }),
+            r.ondataavailable?.({
+              data: new Blob(["a"], { type: "audio/webm" }),
+            }),
           );
         },
         stop() {
@@ -120,9 +122,7 @@ describe("DitadoVoz — montagem do lote (T11)", () => {
 
     await vi.advanceTimersByTimeAsync(120_000);
 
-    await waitFor(() =>
-      expect(screen.getAllByRole("listitem").length).toBe(1),
-    );
+    await waitFor(() => expect(screen.getAllByRole("listitem").length).toBe(1));
   });
 
   it("nenhum clipe sobe ao terminar de gravar — só o clique explícito envia", async () => {
@@ -196,6 +196,33 @@ describe("DitadoVoz — montagem do lote (T11)", () => {
     expect(apagarAudioLocal).toHaveBeenCalled();
   });
 
+  it("descartar o primeiro de 3 renumera e AINDA envia os dois blobs restantes", async () => {
+    // Mutação que este teste mata: renumerar os blobs dentro do updater de
+    // `setClipes`. A lista na tela fica certa e o mapa de blobs esvazia — o
+    // lote sairia com 0 clipes e a tela não denunciaria nada.
+    const user = userEvent.setup();
+    render(<DitadoVoz sessionId="sess-1" aoAceitar={() => {}} />);
+
+    await gravarClipe(user);
+    await gravarClipe(user);
+    await gravarClipe(user);
+
+    const [primeiro] = screen.getAllByRole("listitem") as [HTMLElement];
+    await user.click(
+      within(primeiro).getByRole("button", { name: /descartar/i }),
+    );
+    await waitFor(() => expect(screen.getAllByRole("listitem").length).toBe(2));
+
+    await user.click(
+      screen.getByRole("button", { name: /enviar pra iris analisar/i }),
+    );
+    await waitFor(() => expect(enviarLoteAsrAction).toHaveBeenCalledTimes(1));
+    const [arg] = enviarLoteAsrAction.mock.calls[0] as [
+      { clipes: Array<{ ordem: number }> },
+    ];
+    expect(arg.clipes.map((c) => c.ordem)).toEqual([1, 2]);
+  });
+
   it("clipe já enviado perde descartar e regravar (R27)", async () => {
     // Mutação que este teste mata: renderizar as ações de edição sem checar a
     // fase do lote.
@@ -203,9 +230,7 @@ describe("DitadoVoz — montagem do lote (T11)", () => {
     render(<DitadoVoz sessionId="sess-1" aoAceitar={() => {}} />);
 
     await gravarClipe(user);
-    expect(
-      screen.queryByRole("button", { name: /descartar/i }),
-    ).not.toBeNull();
+    expect(screen.queryByRole("button", { name: /descartar/i })).not.toBeNull();
 
     await user.click(
       screen.getByRole("button", { name: /enviar pra iris analisar/i }),
@@ -232,9 +257,17 @@ describe("DitadoVoz — resultado no editor (T12)", () => {
     const user = userEvent.setup();
     obterEstadoLoteAction.mockResolvedValue({
       clipes: [
-        { ordem: 1, asrStatus: "transcrito", transcricaoTexto: "Primeiro trecho." },
+        {
+          ordem: 1,
+          asrStatus: "transcrito",
+          transcricaoTexto: "Primeiro trecho.",
+        },
         { ordem: 2, asrStatus: "falhou", transcricaoTexto: null },
-        { ordem: 3, asrStatus: "transcrito", transcricaoTexto: "Terceiro trecho." },
+        {
+          ordem: 3,
+          asrStatus: "transcrito",
+          transcricaoTexto: "Terceiro trecho.",
+        },
       ],
     });
     render(<DitadoVoz sessionId="sess-1" aoAceitar={() => {}} />);
@@ -306,7 +339,9 @@ describe("DitadoVoz — resultado no editor (T12)", () => {
         screen.queryByText(/não foi possível consultar o estado/i),
       ).not.toBeNull(),
     );
-    expect(screen.queryByRole("button", { name: /usar no diário/i })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /usar no diário/i }),
+    ).toBeNull();
   });
 });
 

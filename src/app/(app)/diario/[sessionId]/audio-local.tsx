@@ -7,8 +7,8 @@ import { apagarAudioLocal, salvarAudioLocal } from "@/lib/audio/local-store";
 import {
   formatarDuracao,
   TETO_CLIPE_MS,
-  usarGravador,
-} from "@/lib/audio/usar-gravador";
+  useGravador,
+} from "@/lib/audio/use-gravador";
 import { registrarAudioLocalAction } from "./actions";
 import { DitadoVoz } from "./ditado-voz";
 
@@ -89,7 +89,7 @@ export function AudioLocal({
     [gerarIdLocal],
   );
 
-  const gravador = usarGravador({ aoFinalizar });
+  const gravador = useGravador({ aoFinalizar });
 
   const descartar = useCallback(async () => {
     if (audioUrl) URL.revokeObjectURL(audioUrl);
@@ -195,7 +195,7 @@ export function AudioLocal({
 
       {(estado === "gravado" || estado === "enviando") && audioUrl ? (
         <div className="flex flex-col gap-2">
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          { }
           <audio src={audioUrl} controls className="w-full" />
           <div className="flex flex-wrap gap-2">
             <Button

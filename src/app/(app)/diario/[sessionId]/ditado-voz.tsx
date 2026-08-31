@@ -15,8 +15,8 @@ import {
 import {
   formatarDuracao,
   TETO_CLIPE_MS,
-  usarGravador,
-} from "@/lib/audio/usar-gravador";
+  useGravador,
+} from "@/lib/audio/use-gravador";
 import { POLLING_INTERVALO_MS, POLLING_TETO_MS } from "@/lib/asr/polling";
 import {
   aceitarTranscricaoLoteAction,
@@ -45,12 +45,16 @@ type Fase =
 
 type EstadoClipe = {
   ordem: number;
-  asrStatus: "nao_solicitado" | "na_fila" | "transcrevendo" | "transcrito" | "falhou";
+  asrStatus:
+    "nao_solicitado" | "na_fila" | "transcrevendo" | "transcrito" | "falhou";
   transcricaoTexto: string | null;
 };
 
 function novoLoteId(sessionId: string): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
     return crypto.randomUUID();
   }
   return `${sessionId}-${Date.now()}`;
@@ -134,7 +138,7 @@ export function DitadoVoz({
     [loteId, registrarUrl],
   );
 
-  const gravador = usarGravador({ aoFinalizar: aoFinalizarClipe });
+  const gravador = useGravador({ aoFinalizar: aoFinalizarClipe });
 
   // R26 — ao reabrir o diário, retoma o lote mais recente da sessão em vez de
   // começar do zero. Sem isso, um envio feito antes de fechar a aba fica
@@ -212,19 +216,20 @@ export function DitadoVoz({
         // best-effort — o rascunho local pode já não existir
       }
       // Renumera para manter `ordem` contígua e igual à posição na lista (R6).
-      setClipes((atuais) => {
-        const restantes = atuais.filter((c) => c.ordem !== ordem);
-        const blobs = blobsRef.current;
-        const antigos = new Map(blobs);
-        blobs.clear();
-        proximaOrdemRef.current = restantes.length;
-        return restantes.map((c, i) => {
-          const nova = i + 1;
-          const b = antigos.get(c.ordem);
-          if (b) blobs.set(nova, b);
-          return { ...c, ordem: nova };
-        });
+      // A renumeração dos blobs fica FORA do updater de propósito: o React
+      // invoca o updater mais de uma vez (StrictMode), e uma segunda passada
+      // sobre o mapa já renumerado não acharia mais as chaves antigas —
+      // esvaziaria os blobs com a lista intacta na tela.
+      const restantes = clipes.filter((c) => c.ordem !== ordem);
+      const antigos = blobsRef.current;
+      const renumerados = new Map<number, Blob>();
+      restantes.forEach((c, i) => {
+        const b = antigos.get(c.ordem);
+        if (b) renumerados.set(i + 1, b);
       });
+      blobsRef.current = renumerados;
+      proximaOrdemRef.current = restantes.length;
+      setClipes(restantes.map((c, i) => ({ ...c, ordem: i + 1 })));
     },
     [clipes, loteId],
   );
@@ -331,9 +336,7 @@ export function DitadoVoz({
       </p>
 
       {erro ? <Alert severidade="erro">{erro}</Alert> : null}
-      {gravador.erro ? (
-        <Alert severidade="erro">{gravador.erro}</Alert>
-      ) : null}
+      {gravador.erro ? <Alert severidade="erro">{gravador.erro}</Alert> : null}
 
       {gravador.estado === "gravando" ? (
         <div className="flex flex-col gap-2">
@@ -385,7 +388,7 @@ export function DitadoVoz({
                 {formatarDuracao(c.duracaoSegundos * 1000)}
               </span>
               {c.url ? (
-                // eslint-disable-next-line jsx-a11y/media-has-caption
+                 
                 <audio src={c.url} controls className="min-w-0 flex-1" />
               ) : null}
               {/* R27 — clipe já enviado não oferece descartar/regravar: essas
@@ -431,8 +434,8 @@ export function DitadoVoz({
       {fase === "acompanhando" ? (
         <div className="flex flex-col gap-2">
           <p role="status" className="text-sm font-semibold">
-            A Iris está transcrevendo {estados.length || clipes.length} clipe(s).
-            Você pode continuar escrevendo no diário enquanto isso.
+            A Iris está transcrevendo {estados.length || clipes.length}{" "}
+            clipe(s). Você pode continuar escrevendo no diário enquanto isso.
           </p>
           <Progress value={null} aria-label="Transcrição em andamento" />
           {erroLeitura ? (
@@ -520,8 +523,8 @@ export function DitadoVoz({
             ) : null}
           </div>
           <p className="text-ink-muted text-sm">
-            &quot;Usar no diário&quot; leva o texto para o rascunho da anotação —
-            revisar e salvar continua sendo seu.
+            &quot;Usar no diário&quot; leva o texto para o rascunho da anotação
+            — revisar e salvar continua sendo seu.
           </p>
         </section>
       ) : null}

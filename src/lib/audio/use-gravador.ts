@@ -33,7 +33,7 @@ export type Gravador = {
  * R25 — nada de estado intermediário persistido: uma gravação em andamento
  * morre com a aba, de propósito. O blob só existe depois do `onstop`.
  */
-export function usarGravador({
+export function useGravador({
   tetoMs = TETO_CLIPE_MS,
   aoFinalizar,
 }: {
