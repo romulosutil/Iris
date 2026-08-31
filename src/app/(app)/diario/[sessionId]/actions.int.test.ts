@@ -879,6 +879,122 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       expect(typeof rows[0]!.objeto_ref).toBe("string");
       expect(typeof rows[2]!.objeto_ref).toBe("string");
     });
+
+    // ─── #494 / T20 ─────────────────────────────────────────────────────────
+    // A idempotência tratava "inserido" como "concluído": bastava existir UMA
+    // linha com aquele `lote_id` para devolver `{ loteId }` sem subir nada.
+    // O critério real é upload + promoção a `na_fila`.
+    test("reenvio retoma o lote cujo INSERT commitou mas o upload não rodou (T20)", async () => {
+      await limpar();
+      guardarMock.mockClear();
+      const loteId = "00000000-0000-0000-0000-0000000a0008";
+      // Estado exato de uma queda de conexão logo depois do INSERT: linhas
+      // commitadas, fora da fila, sem objeto.
+      await owner`INSERT INTO audio_capture (clinic_id, session_id, lote_id, ordem, asr_status) VALUES
+        (${CLINIC_A}, ${SESS}, ${loteId}, 0, 'nao_solicitado'),
+        (${CLINIC_A}, ${SESS}, ${loteId}, 1, 'nao_solicitado')`;
+
+      const r = await enviarLoteAsr(ctxT1, {
+        sessionId: SESS,
+        loteId,
+        clipes: [clipe(0, "um"), clipe(1, "dois")],
+      });
+      expect(r.error).toBeUndefined();
+      expect(r.loteId).toBe(loteId);
+      expect(r.clipesComFalha).toBeUndefined();
+      // Retomou: subiu os DOIS blobs que nunca tinham subido.
+      expect(guardarMock).toHaveBeenCalledTimes(2);
+
+      const rows = (await owner`
+        SELECT ordem, asr_status::text AS asr_status, objeto_ref
+          FROM audio_capture WHERE lote_id = ${loteId} ORDER BY ordem`) as unknown as Array<{
+        ordem: number;
+        asr_status: string;
+        objeto_ref: string | null;
+      }>;
+      // Sem duplicar linha (o `UNIQUE(lote_id, ordem)` nem chega a ser tocado:
+      // a retomada pula o INSERT) e agora reserváveis pelo worker.
+      expect(rows.length).toBe(2);
+      expect(rows.map((l) => l.asr_status)).toEqual(["na_fila", "na_fila"]);
+      expect(rows.every((l) => typeof l.objeto_ref === "string")).toBe(true);
+    });
+
+    test("reenvio parcial sobe SÓ o clipe que ficou para trás (T20)", async () => {
+      await limpar();
+      guardarMock.mockClear();
+      const loteId = "00000000-0000-0000-0000-0000000a0009";
+      await owner`INSERT INTO audio_capture (clinic_id, session_id, lote_id, ordem, asr_status, objeto_ref) VALUES
+        (${CLINIC_A}, ${SESS}, ${loteId}, 0, 'na_fila', ${`asr/${loteId}:0`}),
+        (${CLINIC_A}, ${SESS}, ${loteId}, 1, 'transcrito', NULL),
+        (${CLINIC_A}, ${SESS}, ${loteId}, 2, 'nao_solicitado', NULL)`;
+
+      const r = await enviarLoteAsr(ctxT1, {
+        sessionId: SESS,
+        loteId,
+        clipes: [clipe(0, "um"), clipe(1, "dois"), clipe(2, "tres")],
+      });
+      expect(r.error).toBeUndefined();
+      expect(r.clipesComFalha).toBeUndefined();
+      // Só a ordem 2. `transcrito` não pode ser ressuscitado por retry, e
+      // `na_fila` já tem objeto no bucket.
+      expect(guardarMock).toHaveBeenCalledTimes(1);
+      expect(guardarMock.mock.calls[0]![0]).toContain(":2");
+
+      const rows = (await owner`
+        SELECT ordem, asr_status::text AS asr_status
+          FROM audio_capture WHERE lote_id = ${loteId} ORDER BY ordem`) as unknown as Array<{
+        ordem: number;
+        asr_status: string;
+      }>;
+      expect(rows.map((l) => l.asr_status)).toEqual([
+        "na_fila",
+        "transcrito",
+        "na_fila",
+      ]);
+    });
+
+    // O menor achado do T20: falha de upload só ia para `console.error` e o
+    // retorno era indistinguível do sucesso total.
+    test("falha de upload é reportada como contagem no retorno, sem detalhe de driver (T20)", async () => {
+      await limpar();
+      guardarMock.mockClear();
+      const loteId = "00000000-0000-0000-0000-0000000a000a";
+      guardarMock.mockImplementation(async (chave: string) => {
+        if (chave.endsWith(":1")) throw new Error("MinIO fora do ar");
+        return undefined;
+      });
+
+      const r = await enviarLoteAsr(ctxT1, {
+        sessionId: SESS,
+        loteId,
+        clipes: [clipe(0, "um"), clipe(1, "dois")],
+      });
+      guardarMock.mockImplementation(async () => undefined);
+
+      // Aceito (R12: um clipe não derruba o lote), mas NÃO silencioso.
+      expect(r.error).toBeUndefined();
+      expect(r.loteId).toBe(loteId);
+      expect(r.clipesComFalha).toBe(1);
+    });
+
+    test("reenvio sem o blob do clipe pendente devolve a contagem em vez de fingir sucesso (T20)", async () => {
+      await limpar();
+      guardarMock.mockClear();
+      const loteId = "00000000-0000-0000-0000-0000000a000b";
+      await owner`INSERT INTO audio_capture (clinic_id, session_id, lote_id, ordem, asr_status) VALUES
+        (${CLINIC_A}, ${SESS}, ${loteId}, 0, 'nao_solicitado'),
+        (${CLINIC_A}, ${SESS}, ${loteId}, 1, 'nao_solicitado')`;
+
+      // O cliente reenviou o lote sem os dados da ordem 1.
+      const r = await enviarLoteAsr(ctxT1, {
+        sessionId: SESS,
+        loteId,
+        clipes: [clipe(0, "um")],
+      });
+      expect(r.error).toBeUndefined();
+      expect(guardarMock).toHaveBeenCalledTimes(1);
+      expect(r.clipesComFalha).toBe(1);
+    });
   });
 
   // ─── #72 T10 — obterEstadoLote / obterLoteMaisRecente ──────────────────────

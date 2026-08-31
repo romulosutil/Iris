@@ -9,6 +9,7 @@ import {
   capturarDiario,
   consolidarSessao,
   corrigirEscopoProtocolo,
+  aceitarTranscricaoLote,
   enviarLoteAsr,
   obterEstadoLote,
   obterLoteMaisRecente,
@@ -132,7 +133,17 @@ export async function consolidarSessaoAction(
 // a um cliente forjar `ctx` (clinicId/userId/role) e contornar a RLS — ver
 // memória do repo `ctx-forjavel-use-server`. Este wrapper resolve o `ctx` real
 // via `getTenantContext()` e só então chama o core.
-export type EnviarLoteAsrState = { error?: string; loteId?: string };
+export type EnviarLoteAsrState = {
+  error?: string;
+  loteId?: string;
+  /**
+   * Quantos clipes do lote NÃO chegaram à fila (upload falhou, ou o reenvio
+   * não achou o blob). Ausente = tudo enfileirado. Propagado porque sem ele a
+   * UI não tem como distinguir "lote inteiro em voo" de "lote pela metade" e
+   * ficaria fazendo polling de um clipe que nunca vai ser transcrito.
+   */
+  clipesComFalha?: number;
+};
 export async function enviarLoteAsrAction(input: {
   sessionId: string;
   loteId: string;
@@ -153,7 +164,7 @@ export async function enviarLoteAsrAction(input: {
       clipes,
     });
     if (r.error) return { error: r.error };
-    return { loteId: r.loteId };
+    return { loteId: r.loteId, clipesComFalha: r.clipesComFalha };
   } catch (err) {
     if (err instanceof RoleError)
       return { error: "Só o terapeuta da sessão envia o ditado de voz." };
@@ -195,6 +206,26 @@ export async function obterLoteMaisRecenteAction(
       return { error: "Só o terapeuta da sessão acompanha a transcrição." };
     console.error("obterLoteMaisRecenteAction:", err);
     return { error: "Não foi possível consultar o lote da sessão." };
+  }
+}
+
+// Ditado de voz (#72, T25). Aceitar a transcrição no rascunho é ESCRITA: o
+// core apaga `transcricao_texto` no mesmo statement em que lê (R19). Mesma
+// regra dos wrappers acima — o core é ctx-accepting e nunca sai daqui.
+export type AceitarTranscricaoState = { error?: string; paragrafos?: string[] };
+export async function aceitarTranscricaoLoteAction(
+  loteId: string,
+): Promise<AceitarTranscricaoState> {
+  const ctx = await getTenantContext();
+  try {
+    const r = await aceitarTranscricaoLote(ctx, loteId);
+    if (r.error) return { error: r.error };
+    return { paragrafos: r.paragrafos ?? [] };
+  } catch (err) {
+    if (err instanceof RoleError)
+      return { error: "Só o terapeuta da sessão usa a transcrição no diário." };
+    console.error("aceitarTranscricaoLoteAction:", err);
+    return { error: "Não foi possível usar a transcrição no diário." };
   }
 }
 
