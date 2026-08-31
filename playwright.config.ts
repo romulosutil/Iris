@@ -61,6 +61,31 @@ if (!ehLocal && process.env.E2E_ALLOW_REMOTE !== "1") {
 
 const porta = new URL(baseURL).port || "3000";
 
+/**
+ * O spec do ditado de voz (`ditado-voz.spec.ts`, #494/T13) é OPT-IN por
+ * ambiente. Ele é o único da suíte que precisa de storage S3 (MinIO), da flag
+ * `FEATURE_FLAG_ASR_ENABLED` e do token do worker — o job `test-e2e` do CI hoje
+ * sobe só Postgres.
+ *
+ * Por que projeto condicional e não `test.skip(...)` dentro do spec:
+ * `scripts/ci/verificar-cobertura-e2e.mjs` REPROVA com `stats.skipped > 0`
+ * ("ambiente de CI nunca deveria disparar skip"). Um skip condicional
+ * derrubaria o job para todo mundo; um projeto que só existe quando o ambiente
+ * existe mantém a contagem de CI inalterada e, quando o ambiente ESTÁ de pé,
+ * roda o spec de verdade — sem terceira opção de "verde sem exercitar nada".
+ *
+ * Para tornar isto obrigatório (fechando de fato o ponto cego que deixou a #72
+ * chegar ao fim com a feature inutilizável) falta: subir um service MinIO no
+ * job `test-e2e`, criar o bucket `iris-asr-efemero`, exportar as 5 variáveis
+ * abaixo e subir os pisos do gate (`--min-tests`/`--min-files`).
+ */
+const asrE2ePronto =
+  process.env.FEATURE_FLAG_ASR_ENABLED === "true" &&
+  Boolean(process.env.ASR_S3_ENDPOINT) &&
+  Boolean(process.env.ASR_S3_ACCESS_KEY) &&
+  Boolean(process.env.ASR_S3_SECRET_KEY) &&
+  Boolean(process.env.ASR_JOB_TOKEN);
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
@@ -92,7 +117,10 @@ export default defineConfig({
       // Os specs `mobile-*` só fazem sentido no viewport de 360px. Sem este
       // ignore eles rodariam DUAS vezes — uma delas em 1280px de largura, onde
       // passariam sempre e dariam a impressão de cobertura mobile.
-      testIgnore: /mobile-.*\.spec\.ts/,
+      // `ditado-voz` sai daqui porque tem projeto próprio (ver `asrE2ePronto`):
+      // sem este ignore ele rodaria no chromium padrão mesmo com o ambiente ASR
+      // ausente, e falharia por infraestrutura, não por regressão.
+      testIgnore: [/mobile-.*\.spec\.ts/, /ditado-voz\.spec\.ts/],
       dependencies: ["servidor"],
     },
     {
@@ -110,6 +138,16 @@ export default defineConfig({
       testMatch: /mobile-.*\.spec\.ts/,
       dependencies: ["servidor"],
     },
+    ...(asrE2ePronto
+      ? [
+          {
+            name: "ditado-voz",
+            use: { ...devices["Desktop Chrome"] },
+            testMatch: /ditado-voz\.spec\.ts/,
+            dependencies: ["servidor"],
+          },
+        ]
+      : []),
   ],
   webServer: {
     // Invoca o binário do Next direto, sem passar pelo pnpm. `pnpm start`
