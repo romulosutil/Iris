@@ -60,11 +60,11 @@ chamador não ser a única barreira numa VPS de 4 vCPU sem GPU.
 Estas o Next.js lê para falar com o serviço. Ficam no ambiente da app no
 Easypanel, não no do `iris-asr`:
 
-| Variável                 | Papel                                                                                                                  | Obrigatória                            |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| `ASR_SERVICE_URL`        | URL completa da rota `/transcrever` no host **interno** do Swarm (ex. `http://espectro-mvp_iris-asr:8000/transcrever`) | **sim** com `ASR_PROVIDER=self-hosted` |
-| `ASR_SERVICE_TOKEN`      | Bearer enviado; tem que ser idêntico ao do serviço                                                                     | sim                                    |
-| `ASR_SERVICE_TIMEOUT_MS` | Timeout do POST, default `120000`                                                                                      | não                                    |
+| Variável                 | Papel                                                                                                                                                    | Obrigatória                            |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `ASR_SERVICE_URL`        | URL completa da rota `/transcrever` no host **interno** do Swarm — HÍFEN, não underscore (ex. `http://espectro-mvp-iris-asr:8080/transcrever`; ver §1.4) | **sim** com `ASR_PROVIDER=self-hosted` |
+| `ASR_SERVICE_TOKEN`      | Bearer enviado; tem que ser idêntico ao do serviço                                                                                                       | sim                                    |
+| `ASR_SERVICE_TIMEOUT_MS` | Timeout do POST, default `120000`                                                                                                                        | não                                    |
 
 `ASR_SERVICE_URL` ausente faz `SelfHostedAsrProvider` lançar — nunca aponte
 para o domínio público do serviço: áudio clínico não atravessa a internet
@@ -143,6 +143,32 @@ O laço `infra/asr/agendador.sh` também ganhou guarda de instância única
 apenas um segundo agendador **dentro do mesmo container**; a sobreposição via
 timeout de cliente é fechada pelas duas travas de banco acima, não por ela. Lock
 órfão de container morto é recuperado sozinho (o PID é conferido com `kill -0`).
+
+### 1.4 Host interno: hífen, nunca underscore (#500)
+
+> **[x] CONFIRMADO — medido em produção ao provisionar #500, 31/08/2026.**
+> MinIO devolve `400 InvalidRequest` ("not a valid hostname") quando o `Host`
+> do endpoint tem `_` — o Docker Swarm do Easypanel nomeia os serviços com
+> underscore (`espectro-mvp_iris-minio`, `espectro-mvp_iris-asr`), e é esse
+> literal que aparece pré-preenchido no painel. **Sempre trocar por hífen**
+> antes de colar em `ASR_S3_ENDPOINT`/`ASR_SERVICE_URL`: o Swarm registra os
+> dois nomes para o MESMO serviço (`getent hosts` resolve ambos para o mesmo
+> IP), então a troca é só de string, não de infraestrutura.
+>
+> **Por que só apareceu agora:** `mc` (o cliente MinIO) e o driver do
+> Postgres não validam o formato do `Host` da mesma forma — por isso
+> `DATABASE_URL`/`ASR_WORKER_DATABASE_URL`/`ASR_SWEEPER_DATABASE_URL` com
+> underscore funcionam sem problema, e um `mc ls` manual contra o mesmo
+> bucket, com as mesmas credenciais, não reproduzia o defeito. O bug é
+> específico do parser de `Host` do MinIO sobre HTTP/S3, e só apareceu
+> quando o `@aws-sdk/client-s3` do Node tentou o primeiro `ListObjectsV2`
+> de verdade (o sweeper, T15/#500).
+>
+> **Como confirmar depois de mudar:** o log do `asr-sweeper` deve trocar de
+> `ATENÇÃO: varredura FALHOU` para `varredura concluída: N objeto(s)
+inspecionado(s)`. `Resource: '/iris-asr-efemero/'` no erro antigo era só o
+> caminho da requisição — a causa estava no cabeçalho `Host`, não no bucket
+> nem nas credenciais.
 
 ## 2. Benchmark — small vs medium (T06)
 
