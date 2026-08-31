@@ -99,8 +99,30 @@ async function falharClipe(
 }
 
 /**
+ * O objeto efêmero ainda é reivindicado por alguma linha? Pergunta ao banco
+ * (`app_asr_objetos_em_uso`, migração 0138) em vez de recalcular aqui o teto
+ * de tentativas de `app_asr_falhar` — duas cópias da mesma aritmética
+ * envelheceriam separado, e o retorno da função é só o rowcount, não o estado
+ * resultante.
+ */
+async function objetoEmUso(ref: string): Promise<boolean> {
+  const linhas = await db.execute(
+    sql`SELECT ref FROM app_asr_objetos_em_uso(ARRAY[${ref}]::text[])`,
+  );
+  return (linhas as unknown as unknown[]).length > 0;
+}
+
+/**
  * Processa um clipe reservado: baixa o objeto, transcreve, conclui ou falha,
- * e SEMPRE apaga o objeto efêmero no fim (R11) — nos três desfechos.
+ * e apaga o objeto efêmero no fim (R11) SÓ NO DESFECHO DEFINITIVO.
+ *
+ * Dos três desfechos, dois devolvem o clipe a `na_fila` PRESERVANDO
+ * `objeto_ref` (503/saturação, que reverte a tentativa; e falha transitória
+ * abaixo do teto de 3) — apagar o objeto neles condenava o clipe: a próxima
+ * reserva o encontrava elegível, `ler()` falhava por objeto inexistente, e ele
+ * queimava as tentativas restantes até `falhou` sem nunca ter sido
+ * transcrito. Quem sabe em qual dos casos estamos é o BANCO, depois do
+ * `concluir`/`falhar` — daí a consulta abaixo.
  */
 async function processarClipe(clipe: LinhaReservada): Promise<ResultadoClipe> {
   try {
@@ -128,10 +150,18 @@ async function processarClipe(clipe: LinhaReservada): Promise<ResultadoClipe> {
       };
     }
   } finally {
-    // R11 — nenhum áudio sobrevive ao fim do tick. Falha ao apagar é logada,
-    // não relançada: não pode derrubar o desfecho já persistido no banco.
+    // R11 — nenhum áudio sobrevive ao fim do tick, exceto o que ainda vai ser
+    // relido numa próxima reserva. Falha ao consultar/apagar é logada, não
+    // relançada: não pode derrubar o desfecho já persistido no banco. E o
+    // erro cai no lado que NÃO apaga — objeto preservado a mais é vazamento
+    // que o sweeper (T15) recolhe na janela de 6h; objeto apagado a menos é
+    // áudio clínico perdido para sempre.
     try {
-      await apagar(clipe.objeto_ref);
+      // Sem `return` aqui: um `return` dentro de `finally` descartaria o
+      // `ResultadoClipe` já montado no `try`.
+      if (!(await objetoEmUso(clipe.objeto_ref))) {
+        await apagar(clipe.objeto_ref);
+      }
     } catch (err) {
       console.error(
         `[asr-transcrever] falha ao apagar objeto efêmero (${clipe.objeto_ref})`,

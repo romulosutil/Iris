@@ -174,7 +174,7 @@ describe.skipIf(!hasDb)(
       expect(res.status).toBe(401);
     });
 
-    test("lote de 3 com o do meio falhando: 2 transcrito, 1 de volta à fila, 3 objetos apagados", async () => {
+    test("lote de 3 com o do meio falhando: 2 transcrito, 1 de volta à fila, SÓ 2 objetos apagados", async () => {
       const idOk1 = "72a70000-0000-0000-0000-0000000000c1";
       const idFalha = "72a70000-0000-0000-0000-0000000000c2";
       const idOk2 = "72a70000-0000-0000-0000-0000000000c3";
@@ -202,15 +202,26 @@ describe.skipIf(!hasDb)(
         criadoEm: minutosAtras(10),
       });
 
-      const transcrever = vi
-        .fn()
-        .mockResolvedValueOnce({ texto: "primeiro clipe transcrito" })
-        .mockRejectedValueOnce(
-          new provider.AsrProviderError("falha definitiva", "definitiva", {
-            status: 400,
-          }),
-        )
-        .mockResolvedValueOnce({ texto: "terceiro clipe transcrito" });
+      // Dublês por CHAVE, não por ordem de chamada: uma linha `na_fila` órfã
+      // deixada por outro arquivo entraria na janela do LIMIT e deslocaria a
+      // sequência de `mockResolvedValueOnce`, atribuindo o texto do clipe A ao
+      // clipe B — o teste falharia dizendo algo que não é sobre o código.
+      vi.mocked(storage.ler).mockImplementation(async (chave: string) =>
+        new TextEncoder().encode(chave),
+      );
+      const transcrever = vi.fn(async (audio: Uint8Array) => {
+        const chave = new TextDecoder().decode(audio);
+        if (chave === "asr/72a7/c2") {
+          throw new provider.AsrProviderError(
+            "falha definitiva",
+            "definitiva",
+            {
+              status: 400,
+            },
+          );
+        }
+        return { texto: `transcrito ${chave}` };
+      });
       vi.mocked(provider.getAsrProvider).mockReturnValue({ transcrever });
 
       const res = await POST(requisicao());
@@ -222,21 +233,25 @@ describe.skipIf(!hasDb)(
 
       const clipe1 = await lerClipe(idOk1);
       expect(clipe1.asr_status).toBe("transcrito");
-      expect(clipe1.transcricao_texto).toBe("primeiro clipe transcrito");
+      expect(clipe1.transcricao_texto).toBe("transcrito asr/72a7/c1");
       expect(clipe1.objeto_ref).toBeNull();
 
       const clipe2 = await lerClipe(idFalha);
       expect(clipe2.asr_status).toBe("na_fila"); // volta à fila (abaixo do teto)
       expect(clipe2.tentativas).toBe(1); // cobrado UMA vez na reserva
+      expect(clipe2.objeto_ref).toBe("asr/72a7/c2"); // referência preservada
 
       const clipe3 = await lerClipe(idOk2);
       expect(clipe3.asr_status).toBe("transcrito");
 
-      // R11 — os TRÊS objetos foram apagados, independente do desfecho.
-      expect(vi.mocked(storage.apagar)).toHaveBeenCalledTimes(3);
+      // R11 só vale para desfecho DEFINITIVO (revisão final de integração
+      // #72): os dois transcritos têm o objeto apagado; o que voltou à fila
+      // MANTÉM o objeto, senão a próxima reserva o encontraria elegível e
+      // sem áudio, queimando as tentativas restantes.
+      expect(vi.mocked(storage.apagar)).toHaveBeenCalledTimes(2);
       expect(vi.mocked(storage.apagar)).toHaveBeenCalledWith("asr/72a7/c1");
-      expect(vi.mocked(storage.apagar)).toHaveBeenCalledWith("asr/72a7/c2");
       expect(vi.mocked(storage.apagar)).toHaveBeenCalledWith("asr/72a7/c3");
+      expect(vi.mocked(storage.apagar)).not.toHaveBeenCalledWith("asr/72a7/c2");
     });
 
     test("503 (saturação) volta a na_fila com tentativas IGUAL ao valor de antes do tick", async () => {
@@ -274,7 +289,9 @@ describe.skipIf(!hasDb)(
       expect(clipe.tentativas).toBe(1); // igual ao valor de ANTES do tick
       expect(clipe.objeto_ref).toBe("asr/72a7/d1"); // não zera nesse ramo
 
-      expect(vi.mocked(storage.apagar)).toHaveBeenCalledWith("asr/72a7/d1");
+      // E o objeto TAMBÉM não é apagado: o clipe vai ser relido na próxima
+      // reserva. Apagar aqui era o bug da revisão final de integração #72.
+      expect(vi.mocked(storage.apagar)).not.toHaveBeenCalled();
     });
 
     test("teto de 3 tentativas: falha definitiva marca `falhou`", async () => {
@@ -306,6 +323,9 @@ describe.skipIf(!hasDb)(
       expect(clipe.asr_status).toBe("falhou");
       expect(clipe.tentativas).toBe(3);
       expect(clipe.objeto_ref).toBeNull(); // desfecho definitivo zera a referência
+
+      // Desfecho definitivo: aí SIM o objeto some do bucket (R11).
+      expect(vi.mocked(storage.apagar)).toHaveBeenCalledWith("asr/72a7/e1");
     });
 
     test("duas chamadas concorrentes à rota não processam o mesmo clipe duas vezes", async () => {
