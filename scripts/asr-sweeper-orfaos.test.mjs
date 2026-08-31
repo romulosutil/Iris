@@ -28,6 +28,22 @@ function makeFakeClient({ paginas = [{ Contents: [] }] } = {}) {
   };
 }
 
+// Fake da checagem de estado: `emUso` é o conjunto de chaves que o banco
+// diria estar `na_fila`/`transcrevendo`. `chamadas` registra os lotes
+// consultados (uma consulta por página, não uma por objeto).
+function makeFakeRefsEmUso(emUso = []) {
+  const chamadas = [];
+  const conjunto = new Set(emUso);
+  const fn = async (chaves) => {
+    chamadas.push(chaves);
+    return new Set(chaves.filter((c) => conjunto.has(c)));
+  };
+  fn.chamadas = chamadas;
+  return fn;
+}
+
+const nenhumEmUso = () => makeFakeRefsEmUso([]);
+
 describe("objetoExpirado — o predicado de idade (#72/T15)", () => {
   test("objeto com mtime de agora não está expirado", () => {
     const agora = new Date("2026-08-30T12:00:00Z");
@@ -70,8 +86,12 @@ describe("varrer — a varredura do bucket (#72/T15)", () => {
     const client = makeFakeClient({ paginas: [{ Contents: [] }] });
 
     await expect(
-      varrer(client, "iris-asr-efemero", { agora, limiteHoras: 6 }),
-    ).resolves.toEqual({ inspecionados: 0, apagados: 0 });
+      varrer(client, "iris-asr-efemero", {
+        agora,
+        limiteHoras: 6,
+        refsEmUso: nenhumEmUso(),
+      }),
+    ).resolves.toEqual({ inspecionados: 0, apagados: 0, emUso: 0 });
     expect(client.apagados).toEqual([]);
   });
 
@@ -90,8 +110,12 @@ describe("varrer — a varredura do bucket (#72/T15)", () => {
     });
 
     await expect(
-      varrer(client, "iris-asr-efemero", { agora, limiteHoras: 6 }),
-    ).resolves.toEqual({ inspecionados: 2, apagados: 1 });
+      varrer(client, "iris-asr-efemero", {
+        agora,
+        limiteHoras: 6,
+        refsEmUso: nenhumEmUso(),
+      }),
+    ).resolves.toEqual({ inspecionados: 2, apagados: 1, emUso: 0 });
     expect(client.apagados).toEqual(["loteA/orfao-antigo.wav"]);
   });
 
@@ -106,8 +130,9 @@ describe("varrer — a varredura do bucket (#72/T15)", () => {
         agora,
         limiteHoras: 6,
         dryRun: true,
+        refsEmUso: nenhumEmUso(),
       }),
-    ).resolves.toEqual({ inspecionados: 1, apagados: 1 });
+    ).resolves.toEqual({ inspecionados: 1, apagados: 1, emUso: 0 });
     expect(client.apagados).toEqual([]);
   });
 
@@ -128,9 +153,97 @@ describe("varrer — a varredura do bucket (#72/T15)", () => {
     });
 
     await expect(
-      varrer(client, "iris-asr-efemero", { agora, limiteHoras: 6 }),
-    ).resolves.toEqual({ inspecionados: 2, apagados: 2 });
+      varrer(client, "iris-asr-efemero", {
+        agora,
+        limiteHoras: 6,
+        refsEmUso: nenhumEmUso(),
+      }),
+    ).resolves.toEqual({ inspecionados: 2, apagados: 2, emUso: 0 });
     expect(client.apagados).toEqual(["pagina1/orfao.wav", "pagina2/orfao.wav"]);
+  });
+});
+
+// ─── revisão final de integração #72: idade sozinha não decide ─────────────
+describe("varrer — checagem de estado antes de apagar (#72, integração)", () => {
+  const agora = new Date("2026-08-30T12:00:00Z");
+  const antigo = new Date(agora.getTime() - 7 * HORA_MS);
+
+  test("objeto VELHO cuja linha ainda está na fila NÃO é apagado nem contado como apagado", async () => {
+    // O caso que motivou o fix: fila represada / agendador parado por mais que
+    // a janela. Apagar aqui queimaria as 3 tentativas do clipe por motivo
+    // puramente operacional.
+    const client = makeFakeClient({
+      paginas: [{ Contents: [{ Key: "lote:0", LastModified: antigo }] }],
+    });
+
+    await expect(
+      varrer(client, "iris-asr-efemero", {
+        agora,
+        limiteHoras: 6,
+        refsEmUso: makeFakeRefsEmUso(["lote:0"]),
+      }),
+    ).resolves.toEqual({ inspecionados: 1, apagados: 0, emUso: 1 });
+    expect(client.apagados).toEqual([]);
+  });
+
+  test("órfão de verdade (nenhuma linha) e linha em estado terminal SÃO apagados", async () => {
+    // A função do banco só devolve chaves de linha `na_fila`/`transcrevendo`;
+    // "sem linha nenhuma" e "linha `transcrito`/`falhou`" chegam aqui do mesmo
+    // jeito — ausentes do conjunto — e os dois são lixo a recolher.
+    const refsEmUso = makeFakeRefsEmUso(["lote:emfila"]);
+    const client = makeFakeClient({
+      paginas: [
+        {
+          Contents: [
+            { Key: "lote:semlinha", LastModified: antigo },
+            { Key: "lote:terminal", LastModified: antigo },
+            { Key: "lote:emfila", LastModified: antigo },
+          ],
+        },
+      ],
+    });
+
+    await expect(
+      varrer(client, "iris-asr-efemero", {
+        agora,
+        limiteHoras: 6,
+        refsEmUso,
+      }),
+    ).resolves.toEqual({ inspecionados: 3, apagados: 2, emUso: 1 });
+    expect(client.apagados).toEqual(["lote:semlinha", "lote:terminal"]);
+  });
+
+  test("só os candidatos VENCIDOS vão para a consulta de estado (o mtime continua sendo o primeiro filtro)", async () => {
+    const recente = new Date(agora.getTime() - 1 * HORA_MS);
+    const refsEmUso = makeFakeRefsEmUso([]);
+    const client = makeFakeClient({
+      paginas: [
+        {
+          Contents: [
+            { Key: "velho", LastModified: antigo },
+            { Key: "novo", LastModified: recente },
+          ],
+        },
+      ],
+    });
+
+    await varrer(client, "iris-asr-efemero", {
+      agora,
+      limiteHoras: 6,
+      refsEmUso,
+    });
+    expect(refsEmUso.chamadas).toEqual([["velho"]]);
+  });
+
+  test("sem `refsEmUso` a varredura RECUSA rodar (fail-closed), sem apagar nada", async () => {
+    const client = makeFakeClient({
+      paginas: [{ Contents: [{ Key: "lote:0", LastModified: antigo }] }],
+    });
+
+    await expect(
+      varrer(client, "iris-asr-efemero", { agora, limiteHoras: 6 }),
+    ).rejects.toThrow(/exige `refsEmUso`/);
+    expect(client.apagados).toEqual([]);
   });
 });
 
@@ -151,10 +264,27 @@ describe("main — validação de argumentos e env (#72/T15)", () => {
     );
   });
 
+  test("recusa rodar sem ASR_SWEEPER_DATABASE_URL (não apaga por idade às cegas)", async () => {
+    process.env.ASR_S3_ENDPOINT = "http://minio-teste:9000";
+    process.env.ASR_S3_ACCESS_KEY = "chave-acesso";
+    process.env.ASR_S3_SECRET_KEY = "chave-secreta";
+    delete process.env.ASR_SWEEPER_DATABASE_URL;
+
+    await expect(main(["--once"])).rejects.toThrow(
+      /ASR_SWEEPER_DATABASE_URL ausente/,
+    );
+
+    delete process.env.ASR_S3_ENDPOINT;
+    delete process.env.ASR_S3_ACCESS_KEY;
+    delete process.env.ASR_S3_SECRET_KEY;
+  });
+
   test("rejeita ASR_SWEEPER_LIMITE_HORAS inválido", async () => {
     process.env.ASR_S3_ENDPOINT = "http://minio-teste:9000";
     process.env.ASR_S3_ACCESS_KEY = "chave-acesso";
     process.env.ASR_S3_SECRET_KEY = "chave-secreta";
+    process.env.ASR_SWEEPER_DATABASE_URL =
+      "postgres://ninguem@localhost:1/nada";
     process.env.ASR_SWEEPER_LIMITE_HORAS = "-1";
 
     await expect(main(["--once"])).rejects.toThrow(
@@ -164,6 +294,7 @@ describe("main — validação de argumentos e env (#72/T15)", () => {
     delete process.env.ASR_S3_ENDPOINT;
     delete process.env.ASR_S3_ACCESS_KEY;
     delete process.env.ASR_S3_SECRET_KEY;
+    delete process.env.ASR_SWEEPER_DATABASE_URL;
     delete process.env.ASR_SWEEPER_LIMITE_HORAS;
   });
 });

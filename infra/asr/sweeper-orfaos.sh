@@ -29,6 +29,12 @@
 #                             próprio script Node.
 #   ASR_S3_BUCKET             default iris-asr-efemero (validado no script Node).
 #   ASR_SWEEPER_LIMITE_HORAS  default 6 (validado no script Node).
+#   ASR_SWEEPER_DATABASE_URL  obrigatória — role de login membro de `app_role`.
+#                             O sweeper consulta `app_asr_objetos_em_uso`
+#                             (migração 0138) antes de apagar: objeto vencido
+#                             cuja linha ainda está `na_fila`/`transcrevendo` é
+#                             trabalho pendente, não órfão. Sem ela o script
+#                             recusa rodar.
 #
 # ISTO NÃO É RETENÇÃO/LGPD: é limpeza de vazamento de um bucket de trabalho
 # efêmero, deixado por um container que morreu no meio do processamento antes
@@ -62,6 +68,7 @@ faltando=()
 [[ -n "${ASR_S3_ENDPOINT:-}" ]] || faltando+=("ASR_S3_ENDPOINT")
 [[ -n "${ASR_S3_ACCESS_KEY:-}" ]] || faltando+=("ASR_S3_ACCESS_KEY")
 [[ -n "${ASR_S3_SECRET_KEY:-}" ]] || faltando+=("ASR_S3_SECRET_KEY")
+[[ -n "${ASR_SWEEPER_DATABASE_URL:-}" ]] || faltando+=("ASR_SWEEPER_DATABASE_URL")
 if [[ ${#faltando[@]} -gt 0 ]]; then
 	log "ERRO: variável(is) de ambiente ausente(s): ${faltando[*]}"
 	exit 1

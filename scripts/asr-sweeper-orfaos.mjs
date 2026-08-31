@@ -10,6 +10,16 @@
  * infra/retencao/agendador.sh) — é limpeza de vazamento de um bucket de
  * TRABALHO efêmero, não de arquivo/prontuário.
  *
+ * IDADE NÃO BASTA (revisão final de integração #72): um objeto velho pode ser
+ * de um clipe legitimamente `na_fila`, esperando um worker que não rodou (fila
+ * represada, agendador parado). Apagá-lo queimaria as 3 tentativas do clipe
+ * por motivo puramente operacional. Por isso, ANTES de apagar um candidato já
+ * vencido, o script pergunta ao banco (`app_asr_objetos_em_uso`, migração
+ * 0138) quais chaves ainda estão reivindicadas por uma linha
+ * `na_fila`/`transcrevendo` — essas são puladas. Só apaga o que ninguém
+ * reivindica (órfão de verdade) ou cuja linha já está em estado terminal
+ * (`transcrito`/`falhou`: vazamento que T07 deveria ter limpado).
+ *
  * COMO A IDADE É MEDIDA: pelo `LastModified` que o S3/MinIO devolve no
  * `ListObjectsV2` — o mtime real de quando o objeto foi ESCRITO no bucket.
  * NUNCA pelo nome/chave do objeto: um objeto com nome antigo re-subido agora
@@ -38,6 +48,10 @@
  *   ASR_S3_BUCKET               default iris-asr-efemero.
  *   ASR_S3_REGION               default us-east-1.
  *   ASR_SWEEPER_LIMITE_HORAS    default 6 (a janela do backstop, brief T15).
+ *   ASR_SWEEPER_DATABASE_URL    OBRIGATÓRIA. Role de login membro de
+ *                               `app_role` (é a quem a 0138 concede EXECUTE).
+ *                               Ausente → o script recusa rodar, em vez de
+ *                               apagar por idade sem saber o que está em uso.
  */
 import {
   S3Client,
@@ -45,6 +59,7 @@ import {
   DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import { pathToFileURL } from "node:url";
+import postgres from "postgres";
 
 const LIMITE_HORAS_DEFAULT = 6;
 
@@ -65,10 +80,38 @@ export function objetoExpirado(lastModified, agora, limiteHoras) {
   return idadeMs > limiteMs;
 }
 
+/**
+ * Fábrica da consulta "quais destas chaves ainda estão em uso" — a checagem de
+ * ESTADO que separa órfão de trabalho em andamento (revisão final de
+ * integração #72). Devolve uma função injetável em `varrer`, para o teste
+ * unitário poder responder sem Postgres real.
+ *
+ * A pergunta vai para `app_asr_objetos_em_uso` (SECURITY DEFINER, migração
+ * 0138) e não para um `SELECT` direto em `audio_capture`: a tabela tem FORCE
+ * RLS com policies `TO app_role` resolvidas por `app_clinic_id_exigido()`, e
+ * este script não tem usuário logado nem `app.clinic_id`. Consultar a tabela
+ * crua devolveria ZERO LINHAS SEM ERRO — e zero linhas aqui significa "nada
+ * em uso, pode apagar tudo" (memória `grant-sem-policy-nega-tudo-em-silencio`,
+ * na direção mais perigosa possível).
+ */
+export function criarConsultaEmUso(sql) {
+  return async (chaves) => {
+    if (chaves.length === 0) return new Set();
+    // `${chaves}` cru, sem `sql.array(...)` e sem `::text[]`: MEDIDO contra o
+    // Postgres local, essa combinação estoura `22P02 malformed array literal`
+    // (o cast explícito faz o driver mandar o array já achatado em texto). O
+    // array JS puro o postgres.js serializa como `text[]` de verdade.
+    const linhas = await sql`
+      SELECT ref FROM app_asr_objetos_em_uso(${chaves})`;
+    return new Set(linhas.map((l) => l.ref));
+  };
+}
+
 function resolveConfig() {
   const endpoint = process.env.ASR_S3_ENDPOINT;
   const accessKeyId = process.env.ASR_S3_ACCESS_KEY;
   const secretAccessKey = process.env.ASR_S3_SECRET_KEY;
+  const databaseUrl = process.env.ASR_SWEEPER_DATABASE_URL;
   const bucket = process.env.ASR_S3_BUCKET ?? "iris-asr-efemero";
   const region = process.env.ASR_S3_REGION ?? "us-east-1";
   const limiteHoras = Number(
@@ -78,6 +121,13 @@ function resolveConfig() {
   if (!endpoint || !accessKeyId || !secretAccessKey) {
     throw new Error(
       "sweeper ASR não configurado (ASR_S3_ENDPOINT/ASR_S3_ACCESS_KEY/ASR_S3_SECRET_KEY ausentes)",
+    );
+  }
+  // Sem banco o sweeper não roda: ele não teria como distinguir órfão de clipe
+  // ainda `na_fila` e apagaria áudio em uso. Recusar é a única falha segura.
+  if (!databaseUrl) {
+    throw new Error(
+      "ASR_SWEEPER_DATABASE_URL ausente — sem ela o sweeper não consegue checar quais objetos ainda estão em uso e apagaria áudio de clipes na fila.",
     );
   }
   if (!Number.isFinite(limiteHoras) || limiteHoras <= 0) {
@@ -93,6 +143,7 @@ function resolveConfig() {
     bucket,
     region,
     limiteHoras,
+    databaseUrl,
   };
 }
 
@@ -113,11 +164,21 @@ function buildClient({ endpoint, accessKeyId, secretAccessKey, region }) {
 export async function varrer(
   client,
   bucket,
-  { agora = new Date(), limiteHoras, dryRun = false } = {},
+  { agora = new Date(), limiteHoras, dryRun = false, refsEmUso } = {},
 ) {
+  // Fail-closed: sem a checagem de estado o sweeper decidiria só por idade e
+  // apagaria o áudio de um clipe legitimamente `na_fila` sempre que a fila
+  // represasse (ou o agendador ficasse parado) por mais que a janela.
+  if (typeof refsEmUso !== "function") {
+    throw new Error(
+      "varrer exige `refsEmUso` — a idade sozinha não distingue órfão de clipe ainda na fila.",
+    );
+  }
+
   let continuationToken;
   let inspecionados = 0;
   let apagados = 0;
+  let emUso = 0;
 
   do {
     const pagina = await client.send(
@@ -127,10 +188,36 @@ export async function varrer(
       }),
     );
 
-    for (const objeto of pagina.Contents ?? []) {
-      inspecionados += 1;
-      if (!objeto.Key || !objeto.LastModified) continue;
-      if (!objetoExpirado(objeto.LastModified, agora, limiteHoras)) continue;
+    const conteudo = pagina.Contents ?? [];
+    inspecionados += conteudo.length;
+
+    // Candidatos: só os que já passaram da janela. O predicado de idade
+    // continua sendo o mtime (`LastModified`) e nada mais — a checagem de
+    // estado ENTRA depois dele, não no lugar dele.
+    const candidatos = conteudo.filter(
+      (o) =>
+        o.Key &&
+        o.LastModified &&
+        objetoExpirado(o.LastModified, agora, limiteHoras),
+    );
+
+    // Uma consulta por página, não uma por objeto.
+    const reivindicados = await refsEmUso(candidatos.map((o) => o.Key));
+
+    for (const objeto of candidatos) {
+      // Linha ainda `na_fila`/`transcrevendo`: NÃO é órfão, é trabalho
+      // pendente que a próxima reserva vai ler. Não apaga e não conta como
+      // apagado — só objeto que ninguém reivindica (órfão de verdade) ou cuja
+      // linha já está em estado terminal (vazamento que T07 deixou para trás)
+      // é lixo.
+      if (reivindicados.has(objeto.Key)) {
+        emUso += 1;
+        log(
+          `preservado (ainda em uso: na_fila/transcrevendo): ${objeto.Key} ` +
+            `(mtime=${objeto.LastModified.toISOString()})`,
+        );
+        continue;
+      }
 
       if (dryRun) {
         log(
@@ -155,10 +242,11 @@ export async function varrer(
 
   log(
     `varredura concluída: ${inspecionados} objeto(s) inspecionado(s), ` +
-      `${apagados} apagado(s) (limite=${limiteHoras}h${dryRun ? ", dry-run" : ""}).`,
+      `${apagados} apagado(s), ${emUso} preservado(s) por ainda estar(em) em uso ` +
+      `(limite=${limiteHoras}h${dryRun ? ", dry-run" : ""}).`,
   );
 
-  return { inspecionados, apagados };
+  return { inspecionados, apagados, emUso };
 }
 
 export async function main(args = process.argv.slice(2)) {
@@ -172,13 +260,16 @@ export async function main(args = process.argv.slice(2)) {
 
   const config = resolveConfig();
   const client = buildClient(config);
+  const sql = postgres(config.databaseUrl, { max: 1 });
   try {
     await varrer(client, config.bucket, {
       limiteHoras: config.limiteHoras,
       dryRun,
+      refsEmUso: criarConsultaEmUso(sql),
     });
   } finally {
     client.destroy();
+    await sql.end();
   }
 }
 
