@@ -318,14 +318,28 @@ async function enviarLoteAsrCore(
 
   try {
     // R24: reenvio do MESMO loteId (retry de rede do cliente) não duplica —
-    // se já existe QUALQUER linha com esse lote_id nesta clínica (RLS via
-    // withTenant), devolve sucesso idempotente sem inserir de novo nem
-    // re-subir os blobs.
+    // se já existe QUALQUER linha com esse lote_id NESTA sessão (RLS via
+    // withTenant já isola por clínica; `sessionId` reduz falso-positivo
+    // cross-sessão do mesmo `loteId`), devolve sucesso idempotente sem
+    // inserir de novo nem re-subir os blobs.
+    //
+    // Este SELECT-antes-do-INSERT NÃO é atômico sozinho: duas chamadas
+    // concorrentes (duplo clique, duas abas) podem passar aqui juntas antes
+    // de qualquer uma inserir. O backstop real é o `UNIQUE(lote_id, ordem)`
+    // (migração 0137, review pós-PR #72/T09) — o catch de `23505` logo
+    // abaixo é o caminho que de fato garante R24 sob concorrência; esta
+    // checagem só evita a viagem de rede de upload no caso comum
+    // (sequencial) sem precisar tentar o INSERT primeiro.
     const existentes = await withTenant(ctx, (tx) =>
       tx
         .select({ id: audioCapture.id })
         .from(audioCapture)
-        .where(eq(audioCapture.loteId, loteId))
+        .where(
+          and(
+            eq(audioCapture.loteId, loteId),
+            eq(audioCapture.sessionId, sessionId),
+          ),
+        )
         .limit(1),
     );
     if (existentes.length > 0) return { loteId };
@@ -342,22 +356,38 @@ async function enviarLoteAsrCore(
       objetoRef: chaveClipe(loteId, c.ordem),
     }));
 
-    await withTenant(ctx, async (tx) => {
-      await tx.insert(audioCapture).values(linhas);
+    try {
+      await withTenant(ctx, async (tx) => {
+        await tx.insert(audioCapture).values(linhas);
 
-      const [sess] = await tx
-        .select({ patientId: session.patientId })
-        .from(session)
-        .where(eq(session.id, sessionId));
-      if (sess) {
-        await desarquivarPacienteSeArquivado(
-          tx,
-          ctx,
-          sess.patientId,
-          "audio_local",
-        );
+        const [sess] = await tx
+          .select({ patientId: session.patientId })
+          .from(session)
+          .where(eq(session.id, sessionId));
+        if (sess) {
+          await desarquivarPacienteSeArquivado(
+            tx,
+            ctx,
+            sess.patientId,
+            "audio_local",
+          );
+        }
+      });
+    } catch (err) {
+      // Backstop de R24: a outra chamada concorrente venceu a corrida e já
+      // inseriu as N linhas deste loteId — `uq_audio_capture_lote_ordem`
+      // (migração 0137) estourou 23505 na PRIMEIRA linha do values() que
+      // colidiu. Idempotente: devolve sucesso sem subir os blobs de novo
+      // (quem venceu a corrida já está subindo os dela).
+      if (
+        err instanceof Error &&
+        "code" in err &&
+        (err as { code?: string }).code === "23505"
+      ) {
+        return { loteId };
       }
-    });
+      throw err;
+    }
 
     // Upload FORA da transação (mesmo princípio da Fase B de
     // `consolidarSessao`): não segura conexão/lock do Postgres durante a

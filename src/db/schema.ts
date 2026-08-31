@@ -1181,6 +1181,15 @@ export const audioCapture = pgTable(
       .on(t.asrStatus, t.criadoEm)
       .where(sql`${t.asrStatus} = 'na_fila'`),
     index("idx_audio_capture_lote").on(t.loteId),
+    // Backstop de R24 (#72 T09, review pós-PR): a checagem de idempotência
+    // em `enviarLoteAsr` (SELECT antes do INSERT) não é atômica sozinha —
+    // duas chamadas concorrentes com o MESMO lote_id (duplo clique, duas
+    // abas) passam a checagem juntas antes de qualquer uma inserir. Este
+    // UNIQUE fecha a janela: a segunda transação estoura 23505, tratado
+    // pelo core como "já existe" (mesmo padrão de idempotência via
+    // constraint usado em `uq_session_numero_por_paciente`). Composto
+    // (não só lote_id) porque cada lote tem N linhas, uma por ordem.
+    unique("uq_audio_capture_lote_ordem").on(t.loteId, t.ordem),
   ],
 );
 

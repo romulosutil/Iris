@@ -691,5 +691,40 @@ describe.skipIf(!hasDb)("diário · captura", () => {
         await owner`SELECT id FROM audio_capture WHERE lote_id = ${loteId}`;
       expect(rows.length).toBe(2);
     });
+
+    // Review pós-PR (#72/T09): o teste sequencial acima (`await` entre as
+    // duas chamadas) não prova nada sobre a janela de corrida — a segunda
+    // chamada só começa depois que a primeira já commitou. Este teste
+    // dispara as DUAS com `Promise.all` (sem `await` entre elas), então as
+    // duas SELECT de idempotência rodam ANTES de qualquer uma inserir —
+    // exatamente o cenário de duplo clique / duas abas que o `UNIQUE
+    // (lote_id, ordem)` (migração 0137) existe para fechar.
+    test("duas chamadas CONCORRENTES com o MESMO loteId não duplicam (UNIQUE backstop, R24)", async () => {
+      await limpar();
+      guardarMock.mockClear();
+      const loteId = "00000000-0000-0000-0000-0000000a0005";
+      const chamada = () =>
+        enviarLoteAsr(ctxT1, {
+          sessionId: SESS,
+          loteId,
+          clipes: [clipe(0), clipe(1)],
+        });
+
+      const [r1, r2] = await Promise.all([chamada(), chamada()]);
+      expect(r1.error).toBeUndefined();
+      expect(r2.error).toBeUndefined();
+      expect(r1.loteId).toBe(loteId);
+      expect(r2.loteId).toBe(loteId);
+
+      const rows =
+        await owner`SELECT ordem FROM audio_capture WHERE lote_id = ${loteId} ORDER BY ordem`;
+      // só 1 conjunto de N linhas — não 2N — mesmo com as duas chamadas
+      // tendo passado pela checagem de idempotência ao mesmo tempo.
+      expect(rows.length).toBe(2);
+      expect(rows.map((r) => r.ordem)).toEqual([0, 1]);
+      // só quem venceu a corrida sobe os blobs; quem perdeu (23505) não
+      // re-tenta o upload.
+      expect(guardarMock).toHaveBeenCalledTimes(2);
+    });
   });
 });
