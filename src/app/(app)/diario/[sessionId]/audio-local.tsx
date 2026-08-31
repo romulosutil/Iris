@@ -2,10 +2,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { apagarAudioLocal, salvarAudioLocal } from "@/lib/audio/local-store";
+import {
+  formatarDuracao,
+  TETO_CLIPE_MS,
+  usarGravador,
+} from "@/lib/audio/usar-gravador";
 import { registrarAudioLocalAction } from "./actions";
+import { DitadoVoz } from "./ditado-voz";
 
-type Estado = "vazio" | "gravando" | "gravado" | "enviando";
+type Estado = "vazio" | "gravado" | "enviando";
 
 /**
  * Gravador de áudio local do diário. O blob é persistido no IndexedDB do
@@ -14,23 +21,30 @@ type Estado = "vazio" | "gravando" | "gravado" | "enviando";
  * o áudio. "Descartar" apaga o rascunho local de verdade e "Regravar" apaga
  * o anterior antes de iniciar uma nova gravação. Ninguém além do terapeuta
  * ouve o áudio antes da consolidação.
+ *
+ * Com o ditado de voz ligado (`asrHabilitado`, #72/R21), a aba entrega a UI
+ * multi-clipe (`DitadoVoz`) no lugar deste registro de 1 clipe: são fluxos
+ * diferentes — aqui o áudio VIRA a captura, lá ele vira texto para revisão.
+ * O booleano chega pronto do server component; nunca se lê `process.env` no
+ * cliente, onde a flag não existe e cairia para "desligado" em silêncio.
  */
 export function AudioLocal({
   sessionId,
   aoConfirmar,
+  asrHabilitado = false,
+  aoAceitarTranscricao,
 }: {
   sessionId: string;
   aoConfirmar: (audioCaptureId: string) => void;
+  asrHabilitado?: boolean;
+  aoAceitarTranscricao?: (paragrafos: string[]) => void;
 }) {
   const [estado, setEstado] = useState<Estado>("vazio");
   const [erro, setErro] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const streamRef = useRef<MediaStream | null>(null);
   const blobRef = useRef<Blob | null>(null);
-  const inicioRef = useRef<number>(0);
+  const duracaoRef = useRef<number>(1);
   const idLocalRef = useRef<string>("");
   const contadorIdRef = useRef(0);
   const audioUrlRef = useRef<string | null>(null);
@@ -41,7 +55,6 @@ export function AudioLocal({
 
   useEffect(() => {
     return () => {
-      streamRef.current?.getTracks().forEach((t) => t.stop());
       if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
     };
   }, []);
@@ -57,47 +70,26 @@ export function AudioLocal({
     return `${sessionId}-${Date.now()}-${contadorIdRef.current}`;
   }, [sessionId]);
 
-  const iniciarGravacao = useCallback(async () => {
-    setErro(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      chunksRef.current = [];
+  const aoFinalizar = useCallback(
+    async (blob: Blob, duracaoSegundos: number) => {
+      blobRef.current = blob;
+      duracaoRef.current = duracaoSegundos;
       idLocalRef.current = gerarIdLocal();
-      const recorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-      recorder.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        blobRef.current = blob;
-        setAudioUrl(URL.createObjectURL(blob));
-        setEstado("gravado");
-        stream.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
-        try {
-          // persist-on-record: o áudio sobrevive a um reload antes de confirmar
-          await salvarAudioLocal(idLocalRef.current, blob);
-        } catch {
-          setErro(
-            "Não foi possível salvar o áudio neste dispositivo. Evite recarregar a página antes de confirmar.",
-          );
-        }
-      };
-      inicioRef.current = Date.now();
-      recorder.start();
-      setEstado("gravando");
-    } catch {
-      setErro(
-        "Não foi possível acessar o microfone — verifique a permissão do navegador. O texto do diário continua salvo normalmente.",
-      );
-    }
-  }, [gerarIdLocal]);
+      setAudioUrl(URL.createObjectURL(blob));
+      setEstado("gravado");
+      try {
+        // persist-on-record: o áudio sobrevive a um reload antes de confirmar
+        await salvarAudioLocal(idLocalRef.current, blob);
+      } catch {
+        setErro(
+          "Não foi possível salvar o áudio neste dispositivo. Evite recarregar a página antes de confirmar.",
+        );
+      }
+    },
+    [gerarIdLocal],
+  );
 
-  const pararGravacao = useCallback(() => {
-    mediaRecorderRef.current?.stop();
-  }, []);
+  const gravador = usarGravador({ aoFinalizar });
 
   const descartar = useCallback(async () => {
     if (audioUrl) URL.revokeObjectURL(audioUrl);
@@ -117,8 +109,8 @@ export function AudioLocal({
 
   const regravar = useCallback(async () => {
     await descartar();
-    void iniciarGravacao();
-  }, [descartar, iniciarGravacao]);
+    gravador.iniciar();
+  }, [descartar, gravador]);
 
   const confirmar = useCallback(async () => {
     const blob = blobRef.current;
@@ -126,13 +118,9 @@ export function AudioLocal({
     setEstado("enviando");
     setErro(null);
     try {
-      const duracaoSegundos = Math.max(
-        1,
-        Math.round((Date.now() - inicioRef.current) / 1000),
-      );
       const formData = new FormData();
       formData.set("sessionId", sessionId);
-      formData.set("duracaoSegundos", String(duracaoSegundos));
+      formData.set("duracaoSegundos", String(duracaoRef.current));
       const resultado = await registrarAudioLocalAction({}, formData);
       if (resultado.error || !resultado.id) {
         setErro(resultado.error ?? "Não foi possível registrar o áudio.");
@@ -163,6 +151,15 @@ export function AudioLocal({
     }
   }, [audioUrl, sessionId, aoConfirmar]);
 
+  if (asrHabilitado) {
+    return (
+      <DitadoVoz
+        sessionId={sessionId}
+        aoAceitar={aoAceitarTranscricao ?? (() => {})}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <p className="text-ink-muted text-sm">
@@ -171,25 +168,28 @@ export function AudioLocal({
       </p>
 
       {erro ? <Alert severidade="erro">{erro}</Alert> : null}
+      {gravador.erro ? <Alert severidade="erro">{gravador.erro}</Alert> : null}
 
-      {estado === "vazio" ? (
-        <Button
-          type="button"
-          variante="neutra"
-          onClick={() => void iniciarGravacao()}
-        >
+      {estado === "vazio" && gravador.estado === "ocioso" ? (
+        <Button type="button" variante="neutra" onClick={gravador.iniciar}>
           Gravar áudio
         </Button>
       ) : null}
 
-      {estado === "gravando" ? (
-        <div className="flex items-center gap-3">
-          <span role="status" className="text-sm font-semibold">
-            Gravando…
-          </span>
-          <Button type="button" onClick={pararGravacao}>
-            Parar
-          </Button>
+      {gravador.estado === "gravando" ? (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-3">
+            <span role="status" className="text-sm font-semibold">
+              Gravando… {formatarDuracao(gravador.decorridoMs)}
+            </span>
+            <Button type="button" onClick={gravador.parar}>
+              Parar
+            </Button>
+          </div>
+          <Progress
+            value={(gravador.decorridoMs / TETO_CLIPE_MS) * 100}
+            aria-label="Tempo da gravação em relação ao teto de 2 minutos"
+          />
         </div>
       ) : null}
 

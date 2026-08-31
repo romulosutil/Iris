@@ -12,6 +12,7 @@ import {
 import { Stack } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { asrHabilitado } from "@/lib/flags";
 import { CapturaForm } from "./captura-form";
 import { ConsolidarForm } from "./consolidar-form";
 
@@ -136,6 +137,10 @@ export default async function DiarioPage({
           sessionId={sessionId}
           protocolos={dados.protocolos}
           protocolIdsPreSelecionados={preSelecionados}
+          // R21 — a flag é lida no servidor e desce como booleano. Ler
+          // `process.env` no cliente daria `undefined` e desligaria o ditado
+          // em silêncio, sem nenhum sinal de que a decisão foi acidental.
+          asrHabilitado={asrHabilitado()}
         />
       </Stack>
 

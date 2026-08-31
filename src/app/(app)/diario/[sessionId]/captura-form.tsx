@@ -26,10 +26,13 @@ export function CapturaForm({
   sessionId,
   protocolos,
   protocolIdsPreSelecionados,
+  asrHabilitado = false,
 }: {
   sessionId: string;
   protocolos: Protocolo[];
   protocolIdsPreSelecionados: string[];
+  /** Ditado de voz ligado (#72/R21) — resolvido no server component. */
+  asrHabilitado?: boolean;
 }) {
   const [textoState, textoAction] = useActionState<
     CapturarDiarioState,
@@ -43,6 +46,19 @@ export function CapturaForm({
     protocolIdsPreSelecionados,
   );
   const [audioConfirmado, setAudioConfirmado] = useState(false);
+  const [aba, setAba] = useState("texto");
+  // O textarea vira controlado só por causa do ditado: a transcrição aceita
+  // (R18) é ANEXADA ao que o terapeuta já digitou, nunca sobrescreve, e nada
+  // disso salva sozinho — o gesto de salvar continua sendo o botão.
+  const [texto, setTexto] = useState("");
+
+  function receberTranscricao(paragrafos: string[]) {
+    if (paragrafos.length === 0) return;
+    setTexto((atual) =>
+      [atual.trim(), paragrafos.join("\n\n")].filter(Boolean).join("\n\n"),
+    );
+    setAba("texto");
+  }
 
   function alternar(protocolId: string) {
     const proximos = selecionados.includes(protocolId)
@@ -85,7 +101,7 @@ export function CapturaForm({
         </p>
       ) : null}
 
-      <Tabs defaultValue="texto">
+      <Tabs value={aba} onValueChange={setAba}>
         <TabsList>
           <TabsTrigger value="texto">Texto</TabsTrigger>
           <TabsTrigger value="audio">Áudio</TabsTrigger>
@@ -104,6 +120,8 @@ export function CapturaForm({
                 name="texto"
                 required
                 rows={4}
+                value={texto}
+                onChange={(e) => setTexto(e.target.value)}
                 aria-describedby={textoState.error ? "texto-error" : undefined}
                 className="font-body focus-visible:outline-focus min-h-24 w-full rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-4 py-2.5 text-base text-[var(--text-primary)] outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
               />
@@ -129,6 +147,8 @@ export function CapturaForm({
             <AudioLocal
               sessionId={sessionId}
               aoConfirmar={() => setAudioConfirmado(true)}
+              asrHabilitado={asrHabilitado}
+              aoAceitarTranscricao={receberTranscricao}
             />
             {audioConfirmado ? (
               <Alert severidade="sucesso">Áudio registrado nesta sessão.</Alert>
