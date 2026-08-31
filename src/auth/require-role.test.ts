@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   MfaRequiredError,
+  requireDiario,
   requireMfaIfClinicalRole,
   requireRole,
 } from "./require-role";
@@ -31,6 +32,22 @@ describe("requireRole", () => {
     expect(() =>
       requireRole(ctx("terapeuta"), "coordenador", "terapeuta"),
     ).not.toThrow();
+  });
+});
+
+describe("requireDiario (#506)", () => {
+  test("terapeuta passa", () => {
+    expect(() => requireDiario(ctx("terapeuta"))).not.toThrow();
+  });
+
+  test("coordenador passa — é o papel do dono de clínica solo", () => {
+    expect(() => requireDiario(ctx("coordenador"))).not.toThrow();
+  });
+
+  test("admin_recepcao é barrado", () => {
+    expect(() => requireDiario(ctx("admin_recepcao"))).toThrow(
+      /admin_recepcao/,
+    );
   });
 });
 

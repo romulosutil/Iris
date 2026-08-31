@@ -69,3 +69,24 @@ export function requireMfaIfClinicalRole(ctx: TenantContext): void {
 export function requireAgendar(ctx: TenantContext): void {
   requireRole(ctx, "coordenador", "admin_recepcao");
 }
+
+/**
+ * Guarda das ações do diário de sessão (#506). Aceita `terapeuta` E
+ * `coordenador` — quem restringe a ESCRITA ao profissional que atendeu não é
+ * esta guarda, e sim a RLS: `session_note_insert`/`session_note_update`
+ * (migração `0006_fase2_rls.sql`) e `audio_update` exigem
+ * `app_session_terapeuta_id(session_id) = current_setting('app.user_id')`.
+ * Coordenador só escreve no diário das sessões em que ELE é o terapeuta.
+ *
+ * Motivo de aceitar coordenador: `criarClinicaEVinculo`
+ * (`src/auth/cadastro.ts`) concede só `coordenador` ao fundador, e
+ * `papelAtivo` (`src/auth/papel-ativo.ts`) faz `coordenador` vencer sempre —
+ * então numa clínica de um terapeuta só NENHUMA ação do diário tinha caminho
+ * de escrita, nem depois de o fundador se auto-conceder `terapeuta`. A agenda
+ * já trata coordenador como profissional que atende
+ * (`validarTerapeutaDaClinica` aceita `["terapeuta", "coordenador"]`), então o
+ * diário era o único módulo fora dessa régua.
+ */
+export function requireDiario(ctx: TenantContext): void {
+  requireRole(ctx, "terapeuta", "coordenador");
+}

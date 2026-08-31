@@ -117,6 +117,24 @@
 
 ---
 
+## 🏁 Sessão 31/08/2026 (4ª) — #506: clínica de um terapeuta só ficava sem NENHUM caminho de escrita no diário
+
+**O sintoma reportado por usuário real** era o ditado de voz recusando com "Só o terapeuta da sessão envia o ditado de voz.", mas o ditado só foi o primeiro botão clicado: `requireRole(ctx, "terapeuta")` guardava as **8** ações de `diario/[sessionId]/logic.ts` — captura de texto, escopo de protocolo, áudio local, consolidar, enviar lote ASR, ler estado do lote, aceitar transcrição, reprocessar extração. Nenhuma aceitava `coordenador`, que é o único papel que `criarClinicaEVinculo` (`src/auth/cadastro.ts`) grava para o fundador. Toda clínica solo nascia inutilizável no módulo mais central do produto.
+
+**O workaround que a issue propunha não funciona — medido.** A issue dizia para o coordenador se auto-convidar como terapeuta pela tela de Equipe. O `user_role` até é criado, mas `papelAtivo` (`src/auth/papel-ativo.ts:14`) devolve `coordenador` assim que ele está presente, e `resolveTenant` só lê o cookie de papel no ramo `needsSelection` — que nunca acontece nesse combo. `ctx.role` continuava `"coordenador"` e o diário seguia barrado. Consequência: as três opções de produto listadas na issue eram todas de **provisionamento**, e nenhuma delas resolveria sozinha.
+
+**Correção escolhida (decisão do Rômulo):** as ações do diário passam a aceitar `terapeuta` **e** `coordenador`, via `requireDiario` novo em `src/auth/require-role.ts` (mesmo idioma de `requireAgendar`). Sem migração, sem backfill — conserta as clínicas solo já existentes no deploy.
+
+**Por que isso não afrouxa nada:** quem restringe a escrita ao profissional que atendeu nunca foi a guarda de papel, e sim a RLS — `session_note_insert`/`session_note_update` (`db/migrations/0006_fase2_rls.sql:70-84`) e `audio_update` exigem `app_session_terapeuta_id(session_id) = current_setting('app.user_id')`. Coordenador de clínica grande continua sem alcançar diário alheio; ele só escreve onde ele mesmo é o terapeuta da sessão. A agenda já operava nessa régua: `validarTerapeutaDaClinica` (`src/app/(app)/agenda/queries.ts:313`) aceita `["terapeuta", "coordenador"]` como profissional que atende. O diário era o único módulo fora dela.
+
+**Auditoria que a issue pedia: feita e negativa.** `grep -rn 'requireRole(ctx' src --include=*.ts | grep -v test` — `requireRole(ctx, "terapeuta")` isolado só existia no diário. Todo outro gate ou já inclui `coordenador`, ou é administrativo por desenho (`pacientes/novo` = `admin_recepcao` + `coordenador`). Nenhum outro módulo travava clínica solo.
+
+**Verificação:** `pnpm typecheck` limpo, `pnpm lint` 0 erros, `pnpm test` 2253/2253, `pnpm test:rls` 1279/1279 (145 arquivos, 0 pulados). Mutação: revertendo `requireDiario` para `terapeuta` sozinho, os dois testes `#506` de `actions.int.test.ts` caem. O teste que exigia `coordenador` ser barrado foi reescrito para `admin_recepcao` — o papel que segue (corretamente) sem escrita no diário.
+
+**Aberto, não tocado nesta PR:** o modelo de papel múltiplo (`papelAtivo` fazendo `coordenador` vencer sempre, cadastro concedendo um papel só) continua como está. Enquanto isso valer, "ser coordenador" e "atender pacientes" seguem sendo o mesmo `ctx.role` — aceitável hoje porque a RLS é quem separa, mas é a raiz que a issue expôs.
+
+---
+
 ## 🏁 Sessão 31/08/2026 (3ª) — #494: a UI que faltava, os defeitos da revisão pós-merge e a limpeza da transcrição
 
 Fecha o grosso da #494 (continuação da #72). **T24 não entra e não podia entrar:** é o smoke no painel Easypanel, e só o Rômulo tem acesso — segue como o único item aberto da issue.
