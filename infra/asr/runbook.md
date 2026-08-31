@@ -21,6 +21,18 @@ Códigos que `/transcrever` devolve além de `200`/`401`, todos com corpo
 | `503`  | Teto de `ASR_MAX_CONCORRENTES` atingido                                                 | Devolve para `na_fila` **sem gastar tentativa** |
 | `500`  | Falha da transcrição. O corpo é genérico de propósito; a causa está no log do container | Falha transitória, conta tentativa              |
 
+Além desses, o provider (`src/lib/asr/self-hosted.ts`) trata como **recusa de
+infraestrutura** o `401`/`403` (token divergente entre app e serviço), o `404`
+(`ASR_SERVICE_URL` apontando para rota/host errado), o `502`/`504` (proxy do
+Easypanel reiniciando ou sem upstream) e o abort/falha de rede do próprio
+cliente. Todos recebem o mesmo tratamento do `503`: **devolve para `na_fila`
+sem gastar tentativa** (T14, #494). O motivo é que `falhou` zera `objeto_ref`
+(`0136`) e o worker então apaga o áudio do bucket efêmero — um
+`ASR_SERVICE_TOKEN` rotacionado só de um lado destruiria a fila inteira em
+~60s, com texto vazio e áudio perdido para sempre. Só `400`/`413` (áudio
+inválido) e erro de aplicação (`408`/`500`) contam contra o teto de 3
+tentativas.
+
 ## 1. Variáveis de ambiente
 
 | Variável                | Papel                                                            | Obrigatória |
@@ -42,6 +54,29 @@ O teto de `ASR_MAX_BYTES` deriva de R1 (clipe de 2 min): ~1,9 MB em webm/opus
 a 128 kbps, com folga de ~5x. `ASR_MAX_CONCORRENTES` é o **backstop do lado do
 serviço** — o agendador (T08) tem o teto dele; este existe para o teto do
 chamador não ser a única barreira numa VPS de 4 vCPU sem GPU.
+
+### 1.1 Envs do lado do APP (não do container `iris-asr`)
+
+Estas o Next.js lê para falar com o serviço. Ficam no ambiente da app no
+Easypanel, não no do `iris-asr`:
+
+| Variável                 | Papel                                                                                                                  | Obrigatória                            |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `ASR_SERVICE_URL`        | URL completa da rota `/transcrever` no host **interno** do Swarm (ex. `http://espectro-mvp_iris-asr:8000/transcrever`) | **sim** com `ASR_PROVIDER=self-hosted` |
+| `ASR_SERVICE_TOKEN`      | Bearer enviado; tem que ser idêntico ao do serviço                                                                     | sim                                    |
+| `ASR_SERVICE_TIMEOUT_MS` | Timeout do POST, default `120000`                                                                                      | não                                    |
+
+`ASR_SERVICE_URL` ausente faz `SelfHostedAsrProvider` lançar — nunca aponte
+para o domínio público do serviço: áudio clínico não atravessa a internet
+(R11, e ver pendência do §5).
+
+O default de `ASR_SERVICE_TIMEOUT_MS` **cita o §2 abaixo**: a mediana medida é
+43,31s, então 120000 ms dá ~2,8x de folga. Não baixar para perto da mediana —
+o abort do cliente não chega ao servidor (`servidor.py` segura o semáforo
+`_vagas` até o fim da transcrição e só o libera no `finally`, antes do
+`_responder`), então cada timeout prematuro deixa uma das
+`ASR_MAX_CONCORRENTES` vagas ocupada por trabalho abandonado e empurra todo o
+resto para `503`.
 
 ## 2. Benchmark — small vs medium (T06)
 
