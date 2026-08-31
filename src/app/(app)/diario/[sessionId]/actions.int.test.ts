@@ -98,6 +98,28 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     expect(r.id).toBeTruthy();
   });
 
+  // T16 cenário 3 (#72) — R23: recusa/ausência de consentimento de ASR (aqui
+  // representada pela flag desligada, já que não existe ainda um consentimento
+  // ASR dedicado no schema) nunca pode bloquear o Modo 1 (digitação). O core
+  // de `capturarDiario` não referencia `asrHabilitado`/ASR em nenhum ponto —
+  // este teste é o cheque de que essa independência não regride: se alguém
+  // introduzir um gate compartilhado, a asserção abaixo cai.
+  test("R23 · flag de ASR desligada não bloqueia captura de diário por digitação (Modo 1)", async () => {
+    const original = process.env.FEATURE_FLAG_ASR_ENABLED;
+    delete process.env.FEATURE_FLAG_ASR_ENABLED;
+    try {
+      const r = await capturarDiario(ctxT1, {
+        sessionId: SESS,
+        texto: "Digitado normalmente, ASR indisponível",
+      });
+      expect(r.error).toBeUndefined();
+      expect(r.id).toBeTruthy();
+    } finally {
+      if (original === undefined) delete process.env.FEATURE_FLAG_ASR_ENABLED;
+      else process.env.FEATURE_FLAG_ASR_ENABLED = original;
+    }
+  });
+
   test("terapeuta que não é dono da sessão é barrado", async () => {
     const r = await capturarDiario(ctxT2, {
       sessionId: SESS,
