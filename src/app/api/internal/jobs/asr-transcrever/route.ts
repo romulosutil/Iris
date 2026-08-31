@@ -2,7 +2,12 @@ import { timingSafeEqual } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { ler, apagar } from "@/lib/asr/storage";
-import { getAsrProvider, AsrProviderError } from "@/lib/asr/provider";
+import {
+  getAsrProvider,
+  AsrProviderError,
+  type AsrClassificacaoErro,
+} from "@/lib/asr/provider";
+import { codigoPg } from "@/db/pg-error";
 
 /**
  * Rota interna do worker de transcrição (#72, T07).
@@ -51,15 +56,49 @@ type LinhaReservada = {
 
 type Desfecho = "transcrito" | "falhou" | "revertido";
 
+/**
+ * Categoria fechada do desfecho de erro — o ÚNICO vocabulário de falha que
+ * atravessa a fronteira HTTP desta rota (#494, T16).
+ *
+ * Motivo: `concluirClipe` manda a transcrição como parâmetro vinculado, e a
+ * `.message` do `DrizzleQueryError` é montada como "Failed query: …\nparams: …"
+ * — com o texto da nota clínica dentro. Ecoar essa mensagem no corpo levava a
+ * nota inteira até a linha de log do `scripts/disparo-asr-transcrever.mjs`, num
+ * painel Easypanel servido em HTTP puro. Um rótulo de conjunto fechado não tem
+ * como carregar PII: não existe caminho de dado do erro para a string.
+ *
+ * Os três primeiros valores são exatamente os de `AsrClassificacaoErro` (T05) —
+ * a rota não reinterpreta status HTTP, só repassa o que o provider classificou.
+ * `erro_interno` cobre tudo que não veio do provider (storage, banco, bug
+ * nosso): é justamente o balde onde a mensagem crua seria mais perigosa.
+ */
+type CategoriaErro = AsrClassificacaoErro | "erro_interno";
+
 type ResultadoClipe = {
   id: string;
   desfecho: Desfecho;
-  erro?: string;
+  categoria?: CategoriaErro;
 };
 
-/** `Error.message` quando há, senão o valor cru — nunca afirma causa única. */
-function mensagemDoErro(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+/** Classificação do provider quando existe; qualquer outra origem é interna. */
+function categoriaDoErro(err: unknown): CategoriaErro {
+  return err instanceof AsrProviderError ? err.classificacao : "erro_interno";
+}
+
+/**
+ * Diagnóstico para o log da APP — nome do erro + SQLSTATE, nunca `.message`.
+ *
+ * A regra do repo é que o log de servidor pode ser mais detalhado que a
+ * resposta, mas aqui a mediana de risco é alta: o log do container é lido pelo
+ * painel do Easypanel, servido em HTTP puro (memória
+ * `easypanel-ambiente-expoe-segredos`). `err.name` + `codigoPg` mantêm o poder
+ * de diagnóstico real ("22001 no concluir" já localiza o defeito) sem que a
+ * nota ditada possa entrar na string.
+ */
+function diagnosticoDoErro(err: unknown): string {
+  const nome = err instanceof Error ? err.name : typeof err;
+  const codigo = codigoPg(err);
+  return codigo ? `${nome} (SQLSTATE ${codigo})` : nome;
 }
 
 /**
@@ -146,7 +185,7 @@ async function processarClipe(clipe: LinhaReservada): Promise<ResultadoClipe> {
       return {
         id: clipe.id,
         desfecho: reverter ? "revertido" : "falhou",
-        erro: mensagemDoErro(err),
+        categoria: categoriaDoErro(err),
       };
     }
   } finally {
@@ -165,7 +204,7 @@ async function processarClipe(clipe: LinhaReservada): Promise<ResultadoClipe> {
     } catch (err) {
       console.error(
         `[asr-transcrever] falha ao apagar objeto efêmero (${clipe.objeto_ref})`,
-        mensagemDoErro(err),
+        diagnosticoDoErro(err),
       );
     }
   }
@@ -196,9 +235,14 @@ export async function POST(request: Request): Promise<Response> {
       resultados,
     });
   } catch (err) {
-    console.error("[asr-transcrever] falha no tick do worker", err);
+    // `err` inteiro NÃO entra aqui: a `.message` do `DrizzleQueryError` traz os
+    // params da query — e uma delas carrega a transcrição.
+    console.error(
+      "[asr-transcrever] falha no tick do worker",
+      diagnosticoDoErro(err),
+    );
     return Response.json(
-      { ok: false, error: mensagemDoErro(err) },
+      { ok: false, categoria: categoriaDoErro(err) },
       { status: 500 },
     );
   }
