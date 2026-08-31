@@ -388,7 +388,6 @@ export function DitadoVoz({
                 {formatarDuracao(c.duracaoSegundos * 1000)}
               </span>
               {c.url ? (
-                 
                 <audio src={c.url} controls className="min-w-0 flex-1" />
               ) : null}
               {/* R27 — clipe já enviado não oferece descartar/regravar: essas
@@ -462,8 +461,24 @@ export function DitadoVoz({
         <Alert severidade="info" titulo="A transcrição está demorando">
           <p>
             Passaram-se 10 minutos e parei de consultar. O lote pode seguir
-            processando no servidor — recarregue a página para verificar de
-            novo.
+            processando no servidor — isto não é uma falha, é o tempo acabando
+            de esperar.
+          </p>
+          <p className="mt-2">
+            <Button
+              type="button"
+              variante="neutra"
+              tamanho="sm"
+              onClick={() => {
+                // Reabre a janela de polling em vez de mandar o terapeuta
+                // recarregar a página: um F5 no meio do diário custa o que ele
+                // digitou e ainda não salvou.
+                inicioPollingRef.current = 0;
+                setFase("acompanhando");
+              }}
+            >
+              Verificar de novo
+            </Button>
           </p>
         </Alert>
       ) : null}
