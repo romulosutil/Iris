@@ -47,6 +47,15 @@ function buildClient(): { client: S3Client; bucket: string } {
     region,
     forcePathStyle: true, // obrigatório para MinIO self-hosted
     credentials: { accessKeyId, secretAccessKey },
+    // Versões recentes do SDK v3 passaram a anexar checksum (CRC32) por
+    // padrão em mais operações — MinIO (medido: RELEASE.2025-09-07) devolve
+    // `400 InvalidRequest` para o `ListObjectsV2` resultante (visto em
+    // produção ao provisionar #500). `WHEN_REQUIRED` volta ao comportamento
+    // anterior: só manda checksum quando a operação exige. Sem isso o
+    // sweeper (mesma config em scripts/asr-sweeper-orfaos.mjs) fica cego
+    // para tudo que está no bucket e nunca varre nada.
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   });
 
   return { client, bucket };

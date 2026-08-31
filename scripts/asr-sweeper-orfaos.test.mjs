@@ -522,6 +522,19 @@ describe("main — a fiação da checagem de estado chega até varrer", () => {
     expect(espiao.apagados).toEqual(["lote:orfao"]);
   });
 
+  test("S3Client desliga checksum automático — MinIO devolve 400 InvalidRequest no ListObjectsV2 com o default do SDK", async () => {
+    // Achado em produção ao provisionar #500: `mc ls` funcionava com as
+    // MESMAS credenciais; só o SDK Node quebrava. Versões recentes de
+    // @aws-sdk/client-s3 anexam checksum por padrão em mais operações, e o
+    // MinIO medido (RELEASE.2025-09-07) rejeita o ListObjectsV2 resultante.
+    // Sem isto o sweeper nunca lista o bucket — falha em TODO tick, exit 1,
+    // nenhum objeto órfão é varrido.
+    await main(["--once"]);
+
+    expect(espiao.configS3.requestChecksumCalculation).toBe("WHEN_REQUIRED");
+    expect(espiao.configS3.responseChecksumValidation).toBe("WHEN_REQUIRED");
+  });
+
   test("main() consulta o BANCO de verdade: uma consulta por página, com as chaves vencidas", async () => {
     // Complemento do caso acima pelo outro lado: mesmo quando nada está em
     // uso (e o desfecho de apagar seria idêntico ao da mutação), a pergunta
