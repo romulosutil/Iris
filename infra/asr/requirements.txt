@@ -1,2 +1,13 @@
 faster-whisper==1.0.3
 ctranslate2==4.4.0
+# `faster_whisper.utils` importa `requests` diretamente (usado no caminho de
+# download do HuggingFace Hub, mesmo com HF_HUB_OFFLINE=1 depois — o import
+# acontece no carregamento do módulo). Nunca listado aqui de propósito: até
+# 31/08/2026 vinha como dependência transitiva de `huggingface_hub`. Uma
+# resolução de pip mais recente trouxe uma versão de `huggingface_hub` que
+# não puxa mais `requests`, e o build de `infra/asr/Dockerfile:46` (RUN
+# python -c "from faster_whisper import WhisperModel; ...") passou a falhar
+# com `ModuleNotFoundError: No module named 'requests'` — medido no log real
+# de build do Easypanel, não deduzido. Pinado explícito para não depender de
+# novo do grafo transitivo de outro pacote.
+requests==2.32.3
