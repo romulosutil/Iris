@@ -40,7 +40,9 @@ oficial. Digitação (Modo 1) nunca deixa de funcionar.
 
 - **R17** — O texto transcrito entra no editor como **rascunho com indicador visual de IA**. Nunca grava `session_note` direto.
 - **R18** — Salvar a nota oficial continua sendo ato explícito do terapeuta, pelo caminho que já existe hoje.
-- **R19** — A transcrição é dado clínico: entra no expurgo LGPD por paciente e na exportação integral do acervo pelos wirings já existentes de `audio_capture`.
+- **R19** — A transcrição é dado clínico e **efêmera no servidor**, pela mesma régua do áudio bruto (R11): assim que o terapeuta aceita o texto no rascunho da nota, `audio_capture.transcricao_texto` é **limpa**. O registro que sobrevive é a `session_note`, que já entra na exportação integral do acervo. Enquanto a transcrição existe (janela entre transcrever e aceitar), ela entra no expurgo LGPD por paciente pelo wiring já existente de `audio_capture` (`0128`), e **não** entra na exportação — `audio_capture` está em `TABELAS_NEGADAS` (`src/lib/export/acervo/coletor.ts`) e continua lá de propósito.
+
+  > **Decisão do Rômulo, 31/08/2026 (opção C da #494, Parte 4).** A redação anterior deste requisito afirmava que a transcrição entrava na exportação do acervo — era falso: `audio_capture` sempre esteve em `TABELAS_NEGADAS`, com teste travando em `coletor.test.ts`. O que decidiu a escolha foi a medição de que **nenhum caminho de produção limpava `transcricao_texto`**: o "rascunho intermediário" era permanente, e um dado clínico guardado indefinidamente sem ser devolvido no pedido de portabilidade (LGPD Art. 18) não se sustenta. As alternativas descartadas foram (A) exportar o texto bruto — entrega à paciente a versão que a máquina ouviu errado ao lado da corrigida — e (B) manter guardado e não exportar, assumindo o risco. A limpeza depende da UI (T11/T12) e é implementada junto com ela.
 
 ### Gate e limites
 
@@ -77,7 +79,7 @@ oficial. Digitação (Modo 1) nunca deixa de funcionar.
 | R14                | T05, T06      |
 | R15, R16           | T02, T03      |
 | R17, R18           | T12           |
-| R19                | T01, T16      |
+| R19                | T01, T12, T16 |
 | R21, R22           | T13, T05      |
 | R23                | T16           |
 | R24                | T09, T11      |
