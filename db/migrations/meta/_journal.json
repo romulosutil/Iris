@@ -974,6 +974,27 @@
       "when": 1788142884450,
       "tag": "0138_asr_objetos_em_uso",
       "breakpoints": true
+    },
+    {
+      "idx": 139,
+      "version": "7",
+      "when": 1788190222804,
+      "tag": "0139_quick_professor_monster",
+      "breakpoints": true
+    },
+    {
+      "idx": 140,
+      "version": "7",
+      "when": 1788190223804,
+      "tag": "0140_asr_worker_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 141,
+      "version": "7",
+      "when": 1788190224804,
+      "tag": "0141_asr_teto_reversoes_e_backstop",
+      "breakpoints": true
     }
   ]
 }

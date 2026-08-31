@@ -105,7 +105,10 @@ export async function executarDisparo(
       status: resposta.status,
       corpo,
       falha: "status",
-      erro: `HTTP ${resposta.status} — corpo recebido: ${corpo}`,
+      // O corpo NÃO entra na mensagem (#494, T16): esta string vai para o log
+      // do Easypanel, e um corpo de erro vindo da rota de transcrição pode
+      // carregar texto clínico. O status já distingue a reação do operador.
+      erro: `HTTP ${resposta.status} — ver o log da app para o diagnóstico`,
     };
   }
 
@@ -119,7 +122,7 @@ export async function executarDisparo(
  * falhas, revertidos, resultados }`.
  *
  * Nunca lança: corpo não-JSON (um HTML de proxy, por exemplo) volta com tudo
- * `null`, e a string crua continua no campo `corpo`.
+ * `null` / lista vazia — e nada do corpo cru é promovido para a linha de log.
  */
 export function resumoDoCorpo(corpo) {
   const vazio = {
@@ -127,6 +130,7 @@ export function resumoDoCorpo(corpo) {
     transcritos: null,
     falhas: null,
     revertidos: null,
+    categorias: [],
   };
   if (typeof corpo !== "string") return vazio;
   let dados;
@@ -143,7 +147,36 @@ export function resumoDoCorpo(corpo) {
       typeof dados.transcritos === "number" ? dados.transcritos : null,
     falhas: typeof dados.falhas === "number" ? dados.falhas : null,
     revertidos: typeof dados.revertidos === "number" ? dados.revertidos : null,
+    categorias: categoriasDe(dados),
   };
+}
+
+// Conjunto fechado aceito de `CategoriaErro` (route.ts). O filtro é o ponto:
+// mesmo que a rota volte um dia a mandar string livre neste campo, nada fora
+// desta lista chega ao log — o script não confia no formato do corpo.
+const CATEGORIAS_CONHECIDAS = [
+  "saturacao",
+  "definitiva",
+  "transitoria",
+  "erro_interno",
+];
+
+/**
+ * Categorias distintas presentes em `resultados[]`, em ordem estável.
+ *
+ * Só o RÓTULO, nunca o id do clipe: o par (categoria, id) já basta para
+ * correlacionar com o log da app, e o id não muda a reação do operador —
+ * "houve `erro_interno` neste tick" muda.
+ */
+function categoriasDe(dados) {
+  if (!Array.isArray(dados.resultados)) return [];
+  const vistas = [];
+  for (const item of dados.resultados) {
+    const categoria = item?.categoria;
+    if (!CATEGORIAS_CONHECIDAS.includes(categoria)) continue;
+    if (!vistas.includes(categoria)) vistas.push(categoria);
+  }
+  return vistas;
 }
 
 async function main() {
@@ -180,7 +213,12 @@ async function main() {
       transcritos: resumo.transcritos,
       falhas: resumo.falhas,
       revertidos: resumo.revertidos,
-      corpo: resultado.corpo ?? null,
+      // `corpo` cru NÃO entra na linha (#494, T16): quem responde é uma rota
+      // que manipula texto clínico ditado, e um corpo inesperado (erro de
+      // proxy, stack de framework) poderia trazer a nota junto. Só os campos
+      // NOMEADOS acima, mais as categorias fechadas por clipe — nunca spread
+      // do corpo, nunca string livre.
+      categorias: resumo.categorias,
     }),
   );
 

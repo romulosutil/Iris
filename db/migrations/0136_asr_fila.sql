@@ -139,9 +139,11 @@ GRANT EXECUTE ON FUNCTION public.app_asr_concluir(uuid, text) TO app_role;
 --    (`400`/`413` definitivos, `408`/`500` transitórios). No teto, `falhou`
 --    definitivo; abaixo dele, volta a `na_fila` PRESERVANDO `tentativas` (o
 --    incremento já foi cobrado na reserva; somar de novo faria cada falha valer
---    duas). O objeto é zerado só no desfecho definitivo — no retorno à fila ele
---    também já foi apagado pelo `finally` do worker, mas quem reescreve
---    `objeto_ref` naquele caminho é o reenvio, não esta função.
+--    duas). O objeto é zerado só no desfecho definitivo — no retorno à fila
+--    `objeto_ref` também é PRESERVADO (comportamento corrigido pela 0138: o
+--    `finally` do worker consulta `app_asr_objetos_em_uso` antes de apagar e
+--    NÃO apaga quando a linha volta a `na_fila`/`transcrevendo` — apagar aqui
+--    condenava o clipe a queimar as tentativas restantes por objeto ausente).
 --
 -- Guard de estado igual ao de `app_asr_concluir`: só age sobre `transcrevendo`.
 CREATE OR REPLACE FUNCTION public.app_asr_falhar(

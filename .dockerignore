@@ -28,6 +28,11 @@ tests
 .idea
 .DS_Store
 
+# --- Python (infra/asr, T23/#494) ---
+__pycache__
+**/__pycache__
+*.pyc
+
 # --- Version Control ---
 .git
 .github

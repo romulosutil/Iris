@@ -284,6 +284,57 @@ const enviarLoteAsrSchema = z.object({
   clipes: z.array(clipeAsrSchema).min(1),
 });
 
+type LinhaDeLoteAsr = Pick<
+  typeof audioCapture.$inferSelect,
+  "ordem" | "asrStatus"
+>;
+
+/**
+ * Ordens do lote que AINDA NÃO tiveram o upload confirmado (#494/T20).
+ *
+ * `nao_solicitado` é o estado em que a linha NASCE — antes do `guardar()` e
+ * antes da promoção a `na_fila`. Ele não é um desfecho: é o meio do caminho.
+ * Todos os outros (`na_fila`, `transcrevendo`, `transcrito`, `falhou`) só
+ * existem porque alguém já decidiu o destino daquele clipe, e reprocessá-los
+ * seria re-subir blob e reescrever estado por cima de trabalho concluído.
+ *
+ * Puro de propósito: é o predicado que decide entre "devolver idempotente" e
+ * "retomar", e precisa ser testável sem banco.
+ */
+export function ordensPendentesDeUpload(
+  linhas: ReadonlyArray<LinhaDeLoteAsr>,
+): number[] {
+  return linhas
+    .filter((l) => l.asrStatus === "nao_solicitado")
+    .map((l) => l.ordem)
+    .filter((o): o is number => o !== null);
+}
+
+/**
+ * O lote está resolvido? Só quando EXISTE linha e NENHUMA delas ficou para
+ * trás em `nao_solicitado` (#494/T20).
+ *
+ * O critério antigo era "existe qualquer linha com este lote_id". Mas a
+ * inserção não conclui nada: o INSERT commita FORA da fila e o que de fato
+ * entrega o clipe ao worker é o par upload + promoção a `na_fila`. Se a
+ * conexão da terapeuta caísse entre os dois, o reenvio com o mesmo `loteId`
+ * (o retry que R24 prescreve) devolvia `{ loteId }` na hora sem subir nada, e
+ * as linhas ficavam `nao_solicitado` PARA SEMPRE — nunca reserváveis
+ * (`app_asr_reservar` exige `na_fila` + `objeto_ref`), nunca varridas (o
+ * objeto não existe), mas ainda reportadas como pendentes pelo polling da UI
+ * até estourar o teto de 10 min.
+ */
+export function loteJaResolvido(
+  linhas: ReadonlyArray<LinhaDeLoteAsr>,
+): boolean {
+  // Testa o STATUS direto, e não `ordensPendentesDeUpload(...).length`: aquela
+  // função descarta `ordem` nula (não dá para casar com clipe nenhum do
+  // payload), e uma linha assim ainda pendente daria o lote por resolvido.
+  return (
+    linhas.length > 0 && linhas.every((l) => l.asrStatus !== "nao_solicitado")
+  );
+}
+
 /**
  * Envia um lote de clipes de ditado de voz (#72, T09): insere N linhas em
  * `audio_capture` (mesmo `lote_id`, `ordem` preservada) FORA da fila, sobe
@@ -305,6 +356,13 @@ async function enviarLoteAsrCore(
 ): Promise<{
   error?: string;
   loteId?: string;
+  // Quantos clipes NÃO chegaram a `na_fila` nesta chamada (#494/T20). Zero
+  // (campo ausente) é o caminho feliz. Presente, o lote foi aceito mas está
+  // incompleto — a UI precisa distinguir isso de "tudo enviado", já que o
+  // polling nunca vai ver esses clipes transcreverem. É uma CONTAGEM, e não a
+  // mensagem do erro, de propósito: mensagem crua de driver/storage pode
+  // carregar valor de linha, e este retorno chega ao cliente.
+  clipesComFalha?: number;
   bloqueioConta?: BloqueioConta;
 }> {
   requireRole(ctx, "terapeuta");
@@ -320,10 +378,12 @@ async function enviarLoteAsrCore(
 
   try {
     // R24: reenvio do MESMO loteId (retry de rede do cliente) não duplica —
-    // se já existe QUALQUER linha com esse lote_id NESTA sessão (RLS via
-    // withTenant já isola por clínica; `sessionId` reduz falso-positivo
-    // cross-sessão do mesmo `loteId`), devolve sucesso idempotente sem
-    // inserir de novo nem re-subir os blobs.
+    // as linhas existentes desta sessão (RLS via withTenant já isola por
+    // clínica; `sessionId` reduz falso-positivo cross-sessão do mesmo
+    // `loteId`) decidem entre devolver idempotente e RETOMAR o que ficou pelo
+    // caminho — ver `loteJaResolvido`. Lê `ordem` + `asrStatus` de TODAS as
+    // linhas, sem `limit(1)`: o critério é sobre o conjunto, não sobre
+    // existência.
     //
     // Este SELECT-antes-do-INSERT NÃO é atômico sozinho: duas chamadas
     // concorrentes (duplo clique, duas abas) podem passar aqui juntas antes
@@ -334,17 +394,35 @@ async function enviarLoteAsrCore(
     // (sequencial) sem precisar tentar o INSERT primeiro.
     const existentes = await withTenant(ctx, (tx) =>
       tx
-        .select({ id: audioCapture.id })
+        .select({
+          ordem: audioCapture.ordem,
+          asrStatus: audioCapture.asrStatus,
+        })
         .from(audioCapture)
         .where(
           and(
             eq(audioCapture.loteId, loteId),
             eq(audioCapture.sessionId, sessionId),
           ),
-        )
-        .limit(1),
+        ),
     );
-    if (existentes.length > 0) return { loteId };
+    if (loteJaResolvido(existentes)) return { loteId };
+
+    // Retomada: as linhas já existem (não inserir de novo — o INSERT bateria
+    // no `uq_audio_capture_lote_ordem`), mas há `nao_solicitado` pendente.
+    // Sobe só o que falta; quem já está `na_fila`/`transcrito`/`falhou` fica
+    // intocado, senão um retry ressuscitaria clipe já concluído.
+    const retomando = existentes.length > 0;
+    const pendentes = new Set(ordensPendentesDeUpload(existentes));
+    const clipesASubir = retomando
+      ? clipes.filter((c) => pendentes.has(c.ordem))
+      : clipes;
+    // Pendente sem blob correspondente no payload: o cliente reenviou o lote
+    // sem os dados daquele clipe, então não há o que subir e a linha vai
+    // continuar fora da fila. Entra na contagem devolvida, não em silêncio.
+    const pendentesSemBlob = retomando
+      ? pendentes.size - clipesASubir.length
+      : 0;
 
     // A linha NASCE FORA DA FILA (`nao_solicitado`, `objeto_ref` nulo) e só é
     // promovida a `na_fila` depois que o upload daquele clipe confirmou —
@@ -364,22 +442,23 @@ async function enviarLoteAsrCore(
     }));
 
     try {
-      await withTenant(ctx, async (tx) => {
-        await tx.insert(audioCapture).values(linhas);
+      if (!retomando)
+        await withTenant(ctx, async (tx) => {
+          await tx.insert(audioCapture).values(linhas);
 
-        const [sess] = await tx
-          .select({ patientId: session.patientId })
-          .from(session)
-          .where(eq(session.id, sessionId));
-        if (sess) {
-          await desarquivarPacienteSeArquivado(
-            tx,
-            ctx,
-            sess.patientId,
-            "audio_local",
-          );
-        }
-      });
+          const [sess] = await tx
+            .select({ patientId: session.patientId })
+            .from(session)
+            .where(eq(session.id, sessionId));
+          if (sess) {
+            await desarquivarPacienteSeArquivado(
+              tx,
+              ctx,
+              sess.patientId,
+              "audio_local",
+            );
+          }
+        });
     } catch (err) {
       // Backstop de R24: a outra chamada concorrente venceu a corrida e já
       // inseriu as N linhas deste loteId — `uq_audio_capture_lote_ordem`
@@ -411,8 +490,21 @@ async function enviarLoteAsrCore(
     // a linha fica `nao_solicitado` (nunca reservável) e o objeto órfão é
     // recolhido pelo sweeper (T15) — perde-se a transcrição daquele clipe,
     // nunca se gasta tentativa contra um objeto ausente.
-    const errosUpload: string[] = [];
-    for (const c of clipes) {
+    //
+    // TODO UPDATE ABAIXO É COMPARE-AND-SWAP em `nao_solicitado` (#494/T20).
+    // POR QUÊ: fora de transação, este laço corre em paralelo com QUALQUER
+    // outro escritor da mesma linha — a segunda chamada concorrente do mesmo
+    // `loteId` (duplo clique/duas abas), o worker que já reservou o clipe, o
+    // sweeper. Sem o predicado de estado, um `UPDATE ... SET 'na_fila'`
+    // chegando atrasado REVERTE um clipe já `transcrevendo`/`transcrito`/
+    // `falhou` para a fila: ele seria transcrito duas vezes, e a versão nova
+    // sobrescreveria a que a terapeuta já tem na tela. O CAS torna esse
+    // UPDATE atrasado um no-op (0 linhas) em vez de uma regressão de estado —
+    // é ele que garante que o perdedor da corrida NUNCA ressuscita trabalho
+    // concluído, e é o que permite que o upload duplicado do perdedor seja
+    // inofensivo (mesma chave determinística `loteId:ordem`, mesmo objeto).
+    const ordensComFalha: number[] = [];
+    for (const c of clipesASubir) {
       try {
         const chave = chaveClipe(loteId, c.ordem);
         await guardar(chave, c.dados, c.contentType);
@@ -424,17 +516,22 @@ async function enviarLoteAsrCore(
               and(
                 eq(audioCapture.loteId, loteId),
                 eq(audioCapture.ordem, c.ordem),
+                eq(audioCapture.asrStatus, "nao_solicitado"),
               ),
             ),
         );
-      } catch (err) {
-        const detalhe = err instanceof Error ? err.message : String(err);
-        errosUpload.push(`clipe ${c.ordem}: ${detalhe}`);
+      } catch {
+        ordensComFalha.push(c.ordem);
         // `falhou` (e não o `nao_solicitado` em que a linha já está): estado
         // TERMINAL e visível — o terapeuta precisa distinguir "este clipe não
         // vai ser transcrito" de "ainda não pedi transcrição". `objeto_ref`
         // continua nulo, então a linha nunca entra na fila. Um erro AQUI
         // também não pode derrubar os clipes seguintes do lote.
+        //
+        // Mesmo CAS da promoção: MEU upload falhou, mas se a linha já saiu de
+        // `nao_solicitado` foi porque OUTRA chamada do mesmo lote subiu aquele
+        // clipe com sucesso. Carimbar `falhou` por cima diria à terapeuta que
+        // um clipe que está na fila (ou já transcrito) se perdeu.
         try {
           await withTenant(ctx, (tx) =>
             tx
@@ -444,25 +541,30 @@ async function enviarLoteAsrCore(
                 and(
                   eq(audioCapture.loteId, loteId),
                   eq(audioCapture.ordem, c.ordem),
+                  eq(audioCapture.asrStatus, "nao_solicitado"),
                 ),
               ),
           );
-        } catch (errMarcacao) {
-          errosUpload.push(
-            `clipe ${c.ordem}: falha ao marcar 'falhou': ${
-              errMarcacao instanceof Error
-                ? errMarcacao.message
-                : String(errMarcacao)
-            }`,
-          );
+        } catch {
+          // A linha fica em `nao_solicitado`. Já está contada em
+          // `ordensComFalha` — o clipe não subiu de qualquer forma, e o
+          // desfecho para o terapeuta é o mesmo.
         }
       }
     }
-    if (errosUpload.length > 0) {
+
+    const clipesComFalha = ordensComFalha.length + pendentesSemBlob;
+    if (clipesComFalha > 0) {
+      // Só ordem e contagem no log: a mensagem crua de storage/driver pode
+      // embutir valor de linha (memória `campo-livre-de-terceiro-carrega-pii`)
+      // e `audio_capture` é dado de paciente. `loteId` é opaco e já é a chave
+      // de correlação com o objeto no bucket.
       console.error(
-        "enviarLoteAsr: falha ao subir clipe(s):",
-        errosUpload.join("; "),
+        `enviarLoteAsr: lote ${loteId} incompleto — ${clipesComFalha} clipe(s) fora da fila (ordens com falha: ${
+          ordensComFalha.join(",") || "nenhuma"
+        }; pendentes sem blob no reenvio: ${pendentesSemBlob})`,
       );
+      return { loteId, clipesComFalha };
     }
 
     return { loteId };
@@ -868,8 +970,7 @@ export const consolidarSessao = comEscrita(consolidarSessaoCore);
 // a resposta daqui para "falhou". O servidor sempre devolve o estado real
 // (inclusive "ainda na_fila/processando" depois do teto); é a UI quem decide
 // parar de exibir um spinner e oferecer outra ação ao terapeuta.
-export const POLLING_INTERVALO_MS = 3000;
-export const POLLING_TETO_MS = 600_000;
+export { POLLING_INTERVALO_MS, POLLING_TETO_MS } from "@/lib/asr/polling";
 
 export type EstadoClipeAsr = {
   ordem: number;
@@ -947,3 +1048,54 @@ async function obterLoteMaisRecenteCore(
 }
 
 export const obterLoteMaisRecente = obterLoteMaisRecenteCore;
+
+// ─── #72 T25 — a transcrição é efêmera (R19, decisão C de 31/08/2026) ─────
+//
+// Aceitar o texto no rascunho da nota é o gesto que apaga `transcricao_texto`
+// do servidor: a `session_note` passa a ser o único registro que sobrevive, e
+// é ela que já entra na exportação do acervo. Sem isto, `audio_capture` —
+// que está em `TABELAS_NEGADAS` do coletor de propósito — guardaria texto
+// clínico que a paciente nunca conseguiria portar (LGPD Art. 18).
+//
+// Ler e apagar acontecem no MESMO statement, e só volta o que o UPDATE de
+// fato tocou: se a RLS barrar a escrita ela afeta 0 linhas em silêncio, e
+// devolver o texto nesse caso entregaria uma transcrição que continua no
+// banco. O JOIN com `upd` é o que torna isso impossível.
+export type AceitarTranscricaoResultado = {
+  paragrafos?: string[];
+  error?: string;
+  bloqueioConta?: BloqueioConta;
+};
+
+async function aceitarTranscricaoLoteCore(
+  ctx: TenantContext,
+  loteId: string,
+): Promise<AceitarTranscricaoResultado> {
+  requireRole(ctx, "terapeuta");
+  const parsed = z.string().uuid().safeParse(loteId);
+  if (!parsed.success) return { error: "Lote inválido." };
+
+  const linhas = await withTenant(ctx, async (tx) => {
+    const r = await tx.execute(sql`
+      WITH antes AS (
+        SELECT id, ordem, transcricao_texto
+        FROM audio_capture
+        WHERE lote_id = ${parsed.data} AND transcricao_texto IS NOT NULL
+      ), upd AS (
+        UPDATE audio_capture a
+        SET transcricao_texto = NULL
+        FROM antes
+        WHERE a.id = antes.id
+        RETURNING a.id
+      )
+      SELECT antes.ordem AS ordem, antes.transcricao_texto AS texto
+      FROM antes JOIN upd ON upd.id = antes.id
+      ORDER BY antes.ordem
+    `);
+    return r as unknown as Array<{ ordem: number | null; texto: string }>;
+  });
+
+  return { paragrafos: linhas.map((l) => l.texto) };
+}
+
+export const aceitarTranscricaoLote = comEscrita(aceitarTranscricaoLoteCore);

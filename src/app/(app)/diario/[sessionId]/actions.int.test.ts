@@ -745,14 +745,76 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       expect(r2.loteId).toBe(loteId);
 
       const rows =
-        await owner`SELECT ordem FROM audio_capture WHERE lote_id = ${loteId} ORDER BY ordem`;
+        await owner`SELECT ordem, asr_status::text AS asr_status, objeto_ref
+                      FROM audio_capture WHERE lote_id = ${loteId} ORDER BY ordem`;
       // só 1 conjunto de N linhas — não 2N — mesmo com as duas chamadas
       // tendo passado pela checagem de idempotência ao mesmo tempo.
       expect(rows.length).toBe(2);
       expect(rows.map((r) => r.ordem)).toEqual([0, 1]);
-      // só quem venceu a corrida sobe os blobs; quem perdeu (23505) não
-      // re-tenta o upload.
-      expect(guardarMock).toHaveBeenCalledTimes(2);
+      // e o lote termina INTEIRO na fila, com objeto: nenhuma linha ficou
+      // presa em `nao_solicitado` nem foi carimbada `falhou` pelo perdedor.
+      expect(rows.map((r) => r.asr_status)).toEqual(["na_fila", "na_fila"]);
+      expect(rows.map((r) => r.objeto_ref)).toEqual([
+        `${loteId}:0`,
+        `${loteId}:1`,
+      ]);
+
+      // POR QUE A CONTAGEM DE UPLOADS NÃO É MAIS O ORÁCULO (#494/T20):
+      // desde que o predicado de idempotência virou `loteJaResolvido` ("nenhuma
+      // linha em `nao_solicitado`", para que um reenvio pós-queda RETOME o que
+      // ficou pelo caminho), o perdedor que chega DEPOIS do commit do vencedor
+      // e ANTES da promoção a `na_fila` lê o lote como "não resolvido" e re-sobe
+      // os blobs. Não dá para distinguir "outra chamada está subindo agora" de
+      // "a chamada anterior morreu no meio" sem serializar o laço de upload
+      // dentro de uma transação — e o upload é de propósito FORA dela (não
+      // segurar conexão do Postgres durante rede; mesmo princípio da Fase B de
+      // `consolidarSessao`). Um `pg_advisory_xact_lock` no SELECT de
+      // idempotência NÃO fecharia a janela: ele solta no commit do INSERT, com
+      // o vencedor ainda uploadando.
+      // O re-upload é INOFENSIVO e isso é medido, não presumido:
+      //  - mesma chave: `chaveClipe` é pura (`loteId:ordem`) — asserção de
+      //    `objeto_ref` acima e do conjunto de chaves abaixo;
+      //  - escrita idempotente: `guardar` é um PutObject por chave (overwrite
+      //    total, nunca merge parcial);
+      //  - nenhum clipe terminal revertido: os UPDATEs de promoção e de
+      //    `falhou` são CAS em `nao_solicitado` — coberto deterministicamente
+      //    pelo teste "clipe promovido por outra chamada NÃO é revertido".
+      // Sobrou o que de fato importa: nenhuma chave FORA do lote foi escrita.
+      const chaves = guardarMock.mock.calls.map((c) => c[0]).sort();
+      expect(new Set(chaves)).toEqual(new Set([`${loteId}:0`, `${loteId}:1`]));
+      expect(guardarMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+
+    // Guarda do CAS de estado (#494/T20). Sem `AND asr_status =
+    // 'nao_solicitado'` nos UPDATEs, o upload atrasado de uma chamada
+    // concorrente (ou de um retry) reverte para `na_fila` um clipe que o worker
+    // já reservou/transcreveu — transcrição duplicada e sobrescrita da nota que
+    // a terapeuta já tem na tela. Aqui a corrida é FORÇADA: o dublê de
+    // `guardar` promove a linha a `transcrito` durante o upload, exatamente na
+    // janela entre o `guardar` e o UPDATE.
+    test("clipe promovido por outra chamada NÃO é revertido pela promoção atrasada (CAS)", async () => {
+      await limpar();
+      guardarMock.mockClear();
+      const loteId = "00000000-0000-0000-0000-0000000a0009";
+      guardarMock.mockImplementationOnce(async () => {
+        await owner`UPDATE audio_capture
+                       SET asr_status = 'transcrito', objeto_ref = ${`${loteId}:0`}
+                     WHERE lote_id = ${loteId} AND ordem = 0`;
+        return undefined;
+      });
+
+      const r = await enviarLoteAsr(ctxT1, {
+        sessionId: SESS,
+        loteId,
+        clipes: [clipe(0)],
+      });
+      expect(r.error).toBeUndefined();
+
+      const rows =
+        await owner`SELECT asr_status::text AS asr_status FROM audio_capture
+                      WHERE lote_id = ${loteId} AND ordem = 0`;
+      expect(rows.length).toBe(1);
+      expect(rows[0]!.asr_status).toBe("transcrito");
     });
 
     // O teste de `Promise.all` acima é timing-dependent: se a segunda chamada
@@ -879,6 +941,122 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       expect(typeof rows[0]!.objeto_ref).toBe("string");
       expect(typeof rows[2]!.objeto_ref).toBe("string");
     });
+
+    // ─── #494 / T20 ─────────────────────────────────────────────────────────
+    // A idempotência tratava "inserido" como "concluído": bastava existir UMA
+    // linha com aquele `lote_id` para devolver `{ loteId }` sem subir nada.
+    // O critério real é upload + promoção a `na_fila`.
+    test("reenvio retoma o lote cujo INSERT commitou mas o upload não rodou (T20)", async () => {
+      await limpar();
+      guardarMock.mockClear();
+      const loteId = "00000000-0000-0000-0000-0000000a0008";
+      // Estado exato de uma queda de conexão logo depois do INSERT: linhas
+      // commitadas, fora da fila, sem objeto.
+      await owner`INSERT INTO audio_capture (clinic_id, session_id, lote_id, ordem, asr_status) VALUES
+        (${CLINIC_A}, ${SESS}, ${loteId}, 0, 'nao_solicitado'),
+        (${CLINIC_A}, ${SESS}, ${loteId}, 1, 'nao_solicitado')`;
+
+      const r = await enviarLoteAsr(ctxT1, {
+        sessionId: SESS,
+        loteId,
+        clipes: [clipe(0, "um"), clipe(1, "dois")],
+      });
+      expect(r.error).toBeUndefined();
+      expect(r.loteId).toBe(loteId);
+      expect(r.clipesComFalha).toBeUndefined();
+      // Retomou: subiu os DOIS blobs que nunca tinham subido.
+      expect(guardarMock).toHaveBeenCalledTimes(2);
+
+      const rows = (await owner`
+        SELECT ordem, asr_status::text AS asr_status, objeto_ref
+          FROM audio_capture WHERE lote_id = ${loteId} ORDER BY ordem`) as unknown as Array<{
+        ordem: number;
+        asr_status: string;
+        objeto_ref: string | null;
+      }>;
+      // Sem duplicar linha (o `UNIQUE(lote_id, ordem)` nem chega a ser tocado:
+      // a retomada pula o INSERT) e agora reserváveis pelo worker.
+      expect(rows.length).toBe(2);
+      expect(rows.map((l) => l.asr_status)).toEqual(["na_fila", "na_fila"]);
+      expect(rows.every((l) => typeof l.objeto_ref === "string")).toBe(true);
+    });
+
+    test("reenvio parcial sobe SÓ o clipe que ficou para trás (T20)", async () => {
+      await limpar();
+      guardarMock.mockClear();
+      const loteId = "00000000-0000-0000-0000-0000000a0009";
+      await owner`INSERT INTO audio_capture (clinic_id, session_id, lote_id, ordem, asr_status, objeto_ref) VALUES
+        (${CLINIC_A}, ${SESS}, ${loteId}, 0, 'na_fila', ${`asr/${loteId}:0`}),
+        (${CLINIC_A}, ${SESS}, ${loteId}, 1, 'transcrito', NULL),
+        (${CLINIC_A}, ${SESS}, ${loteId}, 2, 'nao_solicitado', NULL)`;
+
+      const r = await enviarLoteAsr(ctxT1, {
+        sessionId: SESS,
+        loteId,
+        clipes: [clipe(0, "um"), clipe(1, "dois"), clipe(2, "tres")],
+      });
+      expect(r.error).toBeUndefined();
+      expect(r.clipesComFalha).toBeUndefined();
+      // Só a ordem 2. `transcrito` não pode ser ressuscitado por retry, e
+      // `na_fila` já tem objeto no bucket.
+      expect(guardarMock).toHaveBeenCalledTimes(1);
+      expect(guardarMock.mock.calls[0]![0]).toContain(":2");
+
+      const rows = (await owner`
+        SELECT ordem, asr_status::text AS asr_status
+          FROM audio_capture WHERE lote_id = ${loteId} ORDER BY ordem`) as unknown as Array<{
+        ordem: number;
+        asr_status: string;
+      }>;
+      expect(rows.map((l) => l.asr_status)).toEqual([
+        "na_fila",
+        "transcrito",
+        "na_fila",
+      ]);
+    });
+
+    // O menor achado do T20: falha de upload só ia para `console.error` e o
+    // retorno era indistinguível do sucesso total.
+    test("falha de upload é reportada como contagem no retorno, sem detalhe de driver (T20)", async () => {
+      await limpar();
+      guardarMock.mockClear();
+      const loteId = "00000000-0000-0000-0000-0000000a000a";
+      guardarMock.mockImplementation(async (chave: string) => {
+        if (chave.endsWith(":1")) throw new Error("MinIO fora do ar");
+        return undefined;
+      });
+
+      const r = await enviarLoteAsr(ctxT1, {
+        sessionId: SESS,
+        loteId,
+        clipes: [clipe(0, "um"), clipe(1, "dois")],
+      });
+      guardarMock.mockImplementation(async () => undefined);
+
+      // Aceito (R12: um clipe não derruba o lote), mas NÃO silencioso.
+      expect(r.error).toBeUndefined();
+      expect(r.loteId).toBe(loteId);
+      expect(r.clipesComFalha).toBe(1);
+    });
+
+    test("reenvio sem o blob do clipe pendente devolve a contagem em vez de fingir sucesso (T20)", async () => {
+      await limpar();
+      guardarMock.mockClear();
+      const loteId = "00000000-0000-0000-0000-0000000a000b";
+      await owner`INSERT INTO audio_capture (clinic_id, session_id, lote_id, ordem, asr_status) VALUES
+        (${CLINIC_A}, ${SESS}, ${loteId}, 0, 'nao_solicitado'),
+        (${CLINIC_A}, ${SESS}, ${loteId}, 1, 'nao_solicitado')`;
+
+      // O cliente reenviou o lote sem os dados da ordem 1.
+      const r = await enviarLoteAsr(ctxT1, {
+        sessionId: SESS,
+        loteId,
+        clipes: [clipe(0, "um")],
+      });
+      expect(r.error).toBeUndefined();
+      expect(guardarMock).toHaveBeenCalledTimes(1);
+      expect(r.clipesComFalha).toBe(1);
+    });
   });
 
   // ─── #72 T10 — obterEstadoLote / obterLoteMaisRecente ──────────────────────
@@ -982,6 +1160,149 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       const { obterLoteMaisRecente } = await import("./logic");
       const encontrado = await obterLoteMaisRecente(ctxT1, SESS);
       expect(encontrado).toBeNull();
+    });
+  });
+
+  // ─── #72 T25 / cenário 9 — a transcrição é efêmera (R19, decisão C) ────────
+  //
+  // Metade 1 das duas exigidas pelo cenário 9: aceitar o texto no rascunho
+  // APAGA `transcricao_texto` do servidor. A metade 2 (a linha de
+  // `audio_capture` sai junto no expurgo por paciente da 0128) vive em
+  // `db/tests/asr-transcricao-efemera-expurgo.int.test.ts`, porque exige
+  // `app_purgar_paciente` e um paciente elegível — arranjo que já tem
+  // convenção própria em `db/tests/fase6-expurgo-paciente.int.test.ts`.
+  //
+  // Por que isso importa: `audio_capture` está em `TABELAS_NEGADAS` do
+  // coletor do acervo (`src/lib/export/acervo/coletor.ts`), então a
+  // transcrição nunca entrou no ZIP de portabilidade. Ou ela morre na
+  // aceitação (a `session_note` passa a ser o único registro, e essa SIM é
+  // exportável), ou fica texto clínico não-portável parado no banco.
+  describe("aceitarTranscricaoLote (#72, T25 · cenário 9)", () => {
+    const limpar = () =>
+      owner`DELETE FROM audio_capture WHERE session_id = ${SESS}`;
+
+    afterAll(async () => {
+      await limpar();
+    });
+
+    const semearLote = async (loteId: string, textos: string[]) => {
+      await limpar();
+      for (const [i, texto] of textos.entries()) {
+        await owner`INSERT INTO audio_capture
+          (session_id, clinic_id, lote_id, ordem, asr_status, transcricao_texto, transcrito_em)
+          VALUES (${SESS}, ${CLINIC_A}, ${loteId}, ${i}, 'transcrito', ${texto}, now())`;
+      }
+    };
+
+    const textosNoBanco = (loteId: string) =>
+      owner`SELECT ordem, transcricao_texto FROM audio_capture
+             WHERE lote_id = ${loteId} ORDER BY ordem` as unknown as Promise<
+        Array<{ ordem: number; transcricao_texto: string | null }>
+      >;
+
+    test("aceitar devolve os parágrafos NA ORDEM e zera transcricao_texto de TODAS as linhas do lote", async () => {
+      const loteId = "00000000-0000-0000-0000-0000000c0001";
+      await semearLote(loteId, ["primeiro", "segundo", "terceiro"]);
+
+      const { aceitarTranscricaoLote } = await import("./logic");
+      const r = await aceitarTranscricaoLote(ctxT1, loteId);
+      expect(r.error).toBeUndefined();
+      expect(r.paragrafos).toEqual(["primeiro", "segundo", "terceiro"]);
+
+      // O cheque que a mutação tem que derrubar: o texto NÃO sobrevive à
+      // aceitação. As linhas continuam existindo (o áudio/objeto e a trilha
+      // de estado seguem), mas sem o texto clínico.
+      const depois = await textosNoBanco(loteId);
+      expect(depois.length).toBe(3);
+      expect(depois.map((l) => l.transcricao_texto)).toEqual([
+        null,
+        null,
+        null,
+      ]);
+    });
+
+    test("aceitar duas vezes não duplica nem quebra — a 2ª volta vazia", async () => {
+      const loteId = "00000000-0000-0000-0000-0000000c0002";
+      await semearLote(loteId, ["um", "dois"]);
+
+      const { aceitarTranscricaoLote } = await import("./logic");
+      const r1 = await aceitarTranscricaoLote(ctxT1, loteId);
+      expect(r1.paragrafos).toEqual(["um", "dois"]);
+
+      // Duplo clique / reload: não há mais nada a entregar, e isso não é erro.
+      const r2 = await aceitarTranscricaoLote(ctxT1, loteId);
+      expect(r2.error).toBeUndefined();
+      expect(r2.paragrafos).toEqual([]);
+
+      const depois = await textosNoBanco(loteId);
+      expect(depois.length).toBe(2);
+      expect(depois.every((l) => l.transcricao_texto === null)).toBe(true);
+    });
+
+    test("lote de outro tenant: nada é devolvido e o texto do dono continua intacto", async () => {
+      const loteId = "00000000-0000-0000-0000-0000000c0003";
+      await semearLote(loteId, ["texto do dono"]);
+
+      const ctxOutraClinica = {
+        clinicId: "00000000-0000-0000-0000-0000000000ff",
+        userId: U_T1,
+        role: "terapeuta",
+      } as const;
+      const { aceitarTranscricaoLote } = await import("./logic");
+      const r = await aceitarTranscricaoLote(ctxOutraClinica, loteId);
+      expect(r.paragrafos ?? []).toEqual([]);
+
+      // Ler e apagar no MESMO statement: se a RLS barra a escrita, também não
+      // pode devolver o texto — devolver aqui entregaria uma transcrição que
+      // continua no banco.
+      const depois = await textosNoBanco(loteId);
+      expect(depois.map((l) => l.transcricao_texto)).toEqual(["texto do dono"]);
+    });
+
+    // O caso que o JOIN com `upd` existe para fechar, e o único em que ler e
+    // escrever divergem de verdade: `audio_select` é visível para a CLÍNICA
+    // (0085/0123), enquanto `audio_update` exige ser o terapeuta DA SESSÃO
+    // (0053). Um colega enxerga a transcrição mas não consegue apagá-la — se
+    // o SELECT final lesse `antes` sem o JOIN, ele receberia o texto de volta
+    // enquanto o texto continua no banco. Devolver aqui é entregar uma
+    // transcrição que não morreu.
+    test("colega que LÊ mas não pode ESCREVER não recebe o texto (e nada é apagado)", async () => {
+      const loteId = "00000000-0000-0000-0000-0000000c0005";
+      await owner`DELETE FROM audio_capture WHERE session_id = ${SESS_COBERTURA}`;
+      await owner`INSERT INTO audio_capture
+        (session_id, clinic_id, lote_id, ordem, asr_status, transcricao_texto, transcrito_em)
+        VALUES (${SESS_COBERTURA}, ${CLINIC_A}, ${loteId}, 0, 'transcrito', 'texto do colega', now())`;
+
+      const { aceitarTranscricaoLote } = await import("./logic");
+      // ctxT1 é terapeuta da mesma clínica, mas SESS_COBERTURA é de
+      // U_COBERTURA — a leitura passa, a escrita não.
+      const r = await aceitarTranscricaoLote(ctxT1, loteId);
+      expect(r.paragrafos ?? []).toEqual([]);
+
+      const depois = await textosNoBanco(loteId);
+      expect(depois.map((l) => l.transcricao_texto)).toEqual([
+        "texto do colega",
+      ]);
+
+      // O dono da sessão, esse sim, aceita e apaga.
+      const rDono = await aceitarTranscricaoLote(ctxCobertura, loteId);
+      expect(rDono.paragrafos).toEqual(["texto do colega"]);
+      const final = await textosNoBanco(loteId);
+      expect(final.map((l) => l.transcricao_texto)).toEqual([null]);
+      await owner`DELETE FROM audio_capture WHERE session_id = ${SESS_COBERTURA}`;
+    });
+
+    test("loteId inválido é recusado sem tocar o banco", async () => {
+      const loteId = "00000000-0000-0000-0000-0000000c0004";
+      await semearLote(loteId, ["intocado"]);
+
+      const { aceitarTranscricaoLote } = await import("./logic");
+      const r = await aceitarTranscricaoLote(ctxT1, "nao-e-uuid");
+      expect(r.error).toBeTruthy();
+      expect(r.paragrafos).toBeUndefined();
+
+      const depois = await textosNoBanco(loteId);
+      expect(depois.map((l) => l.transcricao_texto)).toEqual(["intocado"]);
     });
   });
 });

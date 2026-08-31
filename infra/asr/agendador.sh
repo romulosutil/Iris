@@ -50,6 +50,31 @@
 # fila (SELECT ... FOR UPDATE SKIP LOCKED, mesma família de app_billing_*).
 # Rodar dois ticks sobrepostos não duplica transcrição: o segundo tick reserva
 # só o que o primeiro não pegou.
+#
+# ⚠️ SOBREPOSIÇÃO DE TICKS É REAL — E O LOCKFILE ABAIXO **NÃO** É O QUE A
+# RESOLVE (#494/T19). Registrado aqui porque o comentário da migração
+# `0136:130-134` afirmava o contrário ("com o teto de concorrência do serviço >=
+# o teto do agendador, 503 é anomalia") e essa afirmação não se sustenta:
+#
+#   1. Este laço É serial dentro do container — ele espera o `node --once`
+#      terminar antes de dormir. Até aí, sem sobreposição.
+#   2. Mas o cliente do disparo aborta em 120s (`timeoutMs` em
+#      `scripts/disparo-asr-transcrever.mjs`) e um tick CHEIO do lado do
+#      servidor pode levar ~215s (5 clipes × ~43s medidos, §2 do runbook). O
+#      `AbortSignal` derruba a conexão do CLIENTE; a rota do Next segue
+#      processando. O laço dorme 20s e dispara de novo contra um tick vivo.
+#   3. Logo, sob fila cheia, `503` do `iris-asr` (teto `ASR_MAX_CONCORRENTES`)
+#      é o REGIME NORMAL, não anomalia.
+#
+# Nenhum lockfile deste script alcança (2): quando o guard é liberado, o
+# processo local já morreu — o que continua vivo é o tick do OUTRO lado do HTTP.
+# O que fecha o laço é do lado do banco (migração 0141): teto de reversões por
+# clipe em `app_asr_falhar(id, true)` + backstop de idade da linha
+# (`app_asr_expirar_presos`, chamado no início de cada tick pela rota). O guard
+# abaixo cobre só o que ele consegue cobrir de fato: um SEGUNDO agendador dentro
+# do mesmo container (`docker exec` manual durante uma investigação, campo
+# Comando duplicado no painel) — barato, e sem ele um operador consegue dobrar a
+# carga sobre o serviço ASR sem perceber.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -84,7 +109,41 @@ fi
 
 mkdir -p -- "${HEARTBEAT_DIR}"
 
-log "ativo. intervalo=${INTERVALO_S}s · heartbeat=${HEARTBEAT_DIR}/.ultimo-disparo-asr"
+# ─── Guarda de instância única (ver bloco ⚠️ no topo sobre o que ela NÃO cobre) ─
+#
+# `mkdir` e não `flock`: `mkdir` é atômico em qualquer filesystem e é builtin do
+# coreutils/busybox que a imagem já tem garantidamente. `flock` é applet
+# opcional do busybox nesta alpine — depender dele seria a mesma classe de bug
+# das memórias `imagem-escalonamento-nao-herda-app` e `carga-nao-cobre-import-
+# dinamico`: falta silenciosa numa imagem que sobe verde.
+#
+# Lock ENVELHECIDO é recuperado, não respeitado: um container morto por OOM
+# deixa o diretório para trás, e um guard que respeita lock de dono morto
+# desliga a transcrição para sempre — que é exatamente o modo de falha que este
+# laço inteiro existe para evitar. Por isso o PID é gravado e conferido.
+readonly LOCK_DIR="${HEARTBEAT_DIR}/.agendador-asr.lock"
+
+if ! mkdir -- "${LOCK_DIR}" 2>/dev/null; then
+	dono="$(cat -- "${LOCK_DIR}/pid" 2>/dev/null || true)"
+	if [[ -n "${dono}" ]] && kill -0 "${dono}" 2>/dev/null; then
+		log "ERRO: já existe um agendador de ASR vivo neste container (pid ${dono}). Não subindo um segundo — dois laços dobrariam a carga sobre o serviço iris-asr sem aparecer em lugar nenhum."
+		exit 1
+	fi
+	log "ATENÇÃO: lock órfão em ${LOCK_DIR} (dono='${dono:-desconhecido}' não está vivo) — provável container morto no meio de um tick. Retomando."
+	rm -rf -- "${LOCK_DIR}"
+	mkdir -- "${LOCK_DIR}"
+fi
+printf '%s\n' "$$" >"${LOCK_DIR}/pid"
+
+# `INT TERM` explícitos além de `EXIT`: bash NÃO roda o trap de EXIT quando o
+# processo morre por sinal não capturado, e `docker stop` manda SIGTERM. Sem
+# eles todo restart do serviço deixaria lock órfão e todo boot pagaria o caminho
+# de recuperação acima. `exit 143` = 128+SIGTERM, o código que o supervisor
+# espera de uma parada limpa.
+trap 'rm -rf -- "${LOCK_DIR}"' EXIT
+trap 'rm -rf -- "${LOCK_DIR}"; exit 143' INT TERM
+
+log "ativo. intervalo=${INTERVALO_S}s · heartbeat=${HEARTBEAT_DIR}/.ultimo-disparo-asr · lock=${LOCK_DIR}"
 
 falhas_seguidas=0
 

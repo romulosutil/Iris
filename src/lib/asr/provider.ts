@@ -19,14 +19,22 @@ export interface AsrProvider {
  * Classificação da recusa do serviço ASR — tabela canônica em
  * `infra/asr/runbook.md` §0.
  *
- * - `saturacao` (503): o serviço atingiu `ASR_MAX_CONCORRENTES`. Não é falha
- *   do clipe — quem consome (T07/worker) devolve para `na_fila` **revertendo**
- *   a tentativa (`app_asr_falhar(..., p_reverter_tentativa = true)`).
+ * - `saturacao` — **não é culpa do clipe**: quem consome (T07/worker) devolve
+ *   para `na_fila` **revertendo** a tentativa (`app_asr_falhar(...,
+ *   p_reverter_tentativa = true)`). Cobre o 503 (teto de
+ *   `ASR_MAX_CONCORRENTES`) e, desde T14 (#494), toda recusa de
+ *   INFRAESTRUTURA: 401/403 (token divergente), 404 (`ASR_SERVICE_URL`
+ *   errada), 502/504 (proxy do Easypanel), abort por timeout e falha de rede.
+ *   O nome é histórico — nasceu do 503 — e foi mantido de propósito: o worker
+ *   (`api/internal/jobs/asr-transcrever/route.ts`) discrimina por este valor
+ *   literal, e renomear o union sem tocar a rota trocaria um bug por outro.
+ *   Leia-o como "devolve para a fila sem gastar tentativa".
  * - `definitiva` (400/413): corpo ausente/malformado/truncado ou acima do
  *   teto (`ASR_MAX_BYTES`). Reenviar o MESMO áudio dá o mesmo erro — o worker
  *   marca o clipe como falho sem gastar nova tentativa em retry.
- * - `transitoria` (408/500): falha momentânea do serviço ou timeout de
- *   conexão. Conta tentativa; pode reenviar depois.
+ * - `transitoria` (408/500, 200 sem `texto`): erro da APLICAÇÃO — a
+ *   transcrição em si falhou, ou o corpo não chegou inteiro. Conta tentativa;
+ *   pode reenviar depois, e o teto de 3 existe para esta categoria.
  */
 export type AsrClassificacaoErro = "saturacao" | "definitiva" | "transitoria";
 

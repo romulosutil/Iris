@@ -1173,6 +1173,14 @@ export const audioCapture = pgTable(
     transcritoEm: timestamp("transcrito_em", { withTimezone: true }),
     // Incrementado na reserva, não na conclusão: worker morto no meio conta tentativa.
     tentativas: integer("tentativas").notNull().default(0),
+    // Quantas vezes `app_asr_falhar(id, true)` já devolveu este clipe à fila
+    // DEVOLVENDO a tentativa (503/saturação do serviço ASR). Contador separado
+    // de `tentativas` justamente porque a reversão NÃO cobra tentativa: sem um
+    // segundo contador, saturação sustentada é um laço infinito — o clipe volta
+    // a `na_fila` para sempre, `app_asr_objetos_em_uso` o conta como "em uso" e
+    // o sweeper preserva o áudio indefinidamente, violando R11 sem limite
+    // (#494/T19). Este contador é o teto que fecha o laço.
+    reversoes: integer("reversoes").notNull().default(0),
   },
   (t) => [
     index("idx_audio_capture_session").on(t.sessionId),
@@ -1181,6 +1189,16 @@ export const audioCapture = pgTable(
       .on(t.asrStatus, t.criadoEm)
       .where(sql`${t.asrStatus} = 'na_fila'`),
     index("idx_audio_capture_lote").on(t.loteId),
+    // `app_asr_objetos_em_uso` (0138) resolve `objeto_ref = ANY($1)` — sem
+    // índice isso é seq scan em `audio_capture`, tabela que só cresce e que
+    // agora carrega `transcricao_texto` (linha larga, scan caro). A consulta
+    // roda 1x por clipe no `finally` do worker e 1x por página de 1000 objetos
+    // do sweeper (#494/T21). PARCIAL porque a esmagadora maioria das linhas
+    // tem `objeto_ref IS NULL` (áudio já apagado, desfecho terminal) e nunca
+    // casa com chave nenhuma: mantê-las fora do índice o deixa pequeno.
+    index("idx_audio_capture_objeto_ref")
+      .on(t.objetoRef)
+      .where(sql`${t.objetoRef} IS NOT NULL`),
     // Backstop de R24 (#72 T09, review pós-PR): a checagem de idempotência
     // em `enviarLoteAsr` (SELECT antes do INSERT) não é atômica sozinha —
     // duas chamadas concorrentes com o MESMO lote_id (duplo clique, duas

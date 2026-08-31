@@ -1,8 +1,13 @@
 import { timingSafeEqual } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { db } from "@/db/client";
+import { asrWorkerDb } from "@/db/client";
 import { ler, apagar } from "@/lib/asr/storage";
-import { getAsrProvider, AsrProviderError } from "@/lib/asr/provider";
+import {
+  getAsrProvider,
+  AsrProviderError,
+  type AsrClassificacaoErro,
+} from "@/lib/asr/provider";
+import { codigoPg } from "@/db/pg-error";
 
 /**
  * Rota interna do worker de transcrição (#72, T07).
@@ -15,12 +20,13 @@ import { getAsrProvider, AsrProviderError } from "@/lib/asr/provider";
  * — env ausente recusa tudo, nunca "libera porque não configurou".
  *
  * Chama `app_asr_reservar`/`app_asr_concluir`/`app_asr_falhar`
- * (`db/migrations/0136_asr_fila.sql`, T02) pela conexão `db` (`DATABASE_URL`,
- * role `iris_app`, membro de `app_role` — é a essa role que as três funções
- * concedem `EXECUTE`; `authDb`/`iris_auth` não tem o grant). As funções são
- * `SECURITY DEFINER` cross-tenant por desenho — não há `withTenant` aqui
- * porque não existe clínica nenhuma para resolver: o worker vê a fila
- * inteira, de todas as clínicas, no mesmo tick.
+ * (`db/migrations/0136_asr_fila.sql`, T02) e `app_asr_expirar_presos`
+ * (`0141`, T19) pela conexão `asrWorkerDb` (`ASR_WORKER_DATABASE_URL`, papel
+ * membro de `iris_asr_worker`). NÃO pelo pool `db` da app: essas funções são
+ * `SECURITY DEFINER` cross-tenant e devolvem/escrevem dado de outras clínicas,
+ * então o `EXECUTE` saiu de `app_role` na `0140` (#494/T18). Não há
+ * `withTenant` aqui porque não existe clínica nenhuma para resolver: o worker
+ * vê a fila inteira, de todas as clínicas, no mesmo tick.
  */
 
 export const runtime = "nodejs";
@@ -41,6 +47,16 @@ const LOTE_PADRAO = 5;
 // dado ser persistido em uma task futura.
 const ASR_MIME_PADRAO = "audio/webm";
 
+// Idade a partir da qual uma linha presa em `na_fila`/`transcrevendo` é dada
+// como perdida (#494/T19). 6h é DELIBERADAMENTE a mesma régua do sweeper de
+// órfãos (`ASR_SWEEPER_LIMITE_HORAS`, default 6): passada a janela, o objeto
+// seria apagado do bucket efêmero de qualquer forma se estivesse ocioso — uma
+// linha que continua esperando por ele está esperando por um áudio condenado.
+// Enquanto a linha existir reivindicando a chave, `app_asr_objetos_em_uso`
+// responde "em uso" e o sweeper PRESERVA o áudio: é a linha que isenta o
+// objeto, e por isso o backstop de idade tinha que existir para os dois.
+const ASR_BACKSTOP_HORAS = 6;
+
 type LinhaReservada = {
   id: string;
   clinic_id: string;
@@ -51,15 +67,49 @@ type LinhaReservada = {
 
 type Desfecho = "transcrito" | "falhou" | "revertido";
 
+/**
+ * Categoria fechada do desfecho de erro — o ÚNICO vocabulário de falha que
+ * atravessa a fronteira HTTP desta rota (#494, T16).
+ *
+ * Motivo: `concluirClipe` manda a transcrição como parâmetro vinculado, e a
+ * `.message` do `DrizzleQueryError` é montada como "Failed query: …\nparams: …"
+ * — com o texto da nota clínica dentro. Ecoar essa mensagem no corpo levava a
+ * nota inteira até a linha de log do `scripts/disparo-asr-transcrever.mjs`, num
+ * painel Easypanel servido em HTTP puro. Um rótulo de conjunto fechado não tem
+ * como carregar PII: não existe caminho de dado do erro para a string.
+ *
+ * Os três primeiros valores são exatamente os de `AsrClassificacaoErro` (T05) —
+ * a rota não reinterpreta status HTTP, só repassa o que o provider classificou.
+ * `erro_interno` cobre tudo que não veio do provider (storage, banco, bug
+ * nosso): é justamente o balde onde a mensagem crua seria mais perigosa.
+ */
+type CategoriaErro = AsrClassificacaoErro | "erro_interno";
+
 type ResultadoClipe = {
   id: string;
   desfecho: Desfecho;
-  erro?: string;
+  categoria?: CategoriaErro;
 };
 
-/** `Error.message` quando há, senão o valor cru — nunca afirma causa única. */
-function mensagemDoErro(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+/** Classificação do provider quando existe; qualquer outra origem é interna. */
+function categoriaDoErro(err: unknown): CategoriaErro {
+  return err instanceof AsrProviderError ? err.classificacao : "erro_interno";
+}
+
+/**
+ * Diagnóstico para o log da APP — nome do erro + SQLSTATE, nunca `.message`.
+ *
+ * A regra do repo é que o log de servidor pode ser mais detalhado que a
+ * resposta, mas aqui a mediana de risco é alta: o log do container é lido pelo
+ * painel do Easypanel, servido em HTTP puro (memória
+ * `easypanel-ambiente-expoe-segredos`). `err.name` + `codigoPg` mantêm o poder
+ * de diagnóstico real ("22001 no concluir" já localiza o defeito) sem que a
+ * nota ditada possa entrar na string.
+ */
+function diagnosticoDoErro(err: unknown): string {
+  const nome = err instanceof Error ? err.name : typeof err;
+  const codigo = codigoPg(err);
+  return codigo ? `${nome} (SQLSTATE ${codigo})` : nome;
 }
 
 /**
@@ -79,23 +129,45 @@ function autorizado(header: string | null): boolean {
 }
 
 async function reservarLote(limite: number): Promise<LinhaReservada[]> {
-  const linhas = await db.execute(
+  const linhas = await asrWorkerDb.execute(
     sql`SELECT * FROM app_asr_reservar(${limite})`,
   );
   return linhas as unknown as LinhaReservada[];
 }
 
 async function concluirClipe(id: string, texto: string): Promise<void> {
-  await db.execute(sql`SELECT app_asr_concluir(${id}::uuid, ${texto})`);
+  await asrWorkerDb.execute(
+    sql`SELECT app_asr_concluir(${id}::uuid, ${texto})`,
+  );
 }
 
 async function falharClipe(
   id: string,
   reverterTentativa: boolean,
 ): Promise<void> {
-  await db.execute(
+  await asrWorkerDb.execute(
     sql`SELECT app_asr_falhar(${id}::uuid, ${reverterTentativa})`,
   );
+}
+
+/**
+ * Backstop de idade da LINHA — roda ANTES da reserva de cada tick (#494/T19).
+ *
+ * POR QUE ANTES: expirar primeiro solta o `objeto_ref` das linhas condenadas na
+ * mesma passada em que a fila é lida, então o sweeper já encontra o objeto
+ * liberado no próximo ciclo dele. Rodar depois adiaria a liberação em um tick
+ * inteiro sem ganho nenhum.
+ *
+ * POR QUE AQUI E NÃO NO SWEEPER: o sweeper (T15) varre o BUCKET; ele nem
+ * enumera linhas de `audio_capture`. Quem já tem a fila em mãos a cada tick é
+ * esta rota.
+ */
+async function expirarPresos(): Promise<number> {
+  const linhas = await asrWorkerDb.execute(
+    sql`SELECT app_asr_expirar_presos(${`${ASR_BACKSTOP_HORAS} hours`}::interval) AS expirados`,
+  );
+  const primeira = (linhas as unknown as { expirados: number }[])[0];
+  return primeira?.expirados ?? 0;
 }
 
 /**
@@ -106,7 +178,7 @@ async function falharClipe(
  * resultante.
  */
 async function objetoEmUso(ref: string): Promise<boolean> {
-  const linhas = await db.execute(
+  const linhas = await asrWorkerDb.execute(
     sql`SELECT ref FROM app_asr_objetos_em_uso(ARRAY[${ref}]::text[])`,
   );
   return (linhas as unknown as unknown[]).length > 0;
@@ -146,7 +218,7 @@ async function processarClipe(clipe: LinhaReservada): Promise<ResultadoClipe> {
       return {
         id: clipe.id,
         desfecho: reverter ? "revertido" : "falhou",
-        erro: mensagemDoErro(err),
+        categoria: categoriaDoErro(err),
       };
     }
   } finally {
@@ -165,7 +237,7 @@ async function processarClipe(clipe: LinhaReservada): Promise<ResultadoClipe> {
     } catch (err) {
       console.error(
         `[asr-transcrever] falha ao apagar objeto efêmero (${clipe.objeto_ref})`,
-        mensagemDoErro(err),
+        diagnosticoDoErro(err),
       );
     }
   }
@@ -177,6 +249,25 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
+    // Falha do backstop NÃO aborta o tick: ele é a rede embaixo da rede, e
+    // deixar de transcrever a fila inteira porque a limpeza falhou trocaria um
+    // vazamento lento por uma parada total. Mas é logado — um backstop que
+    // falha em silêncio é indistinguível de um backstop que não existe.
+    let expirados: number | null = null;
+    try {
+      expirados = await expirarPresos();
+      if (expirados > 0) {
+        console.warn(
+          `[asr-transcrever] backstop de idade expirou ${expirados} clipe(s) preso(s) há mais de ${ASR_BACKSTOP_HORAS}h — objeto liberado para o sweeper`,
+        );
+      }
+    } catch (err) {
+      console.error(
+        "[asr-transcrever] backstop de idade FALHOU (o tick segue)",
+        diagnosticoDoErro(err),
+      );
+    }
+
     const reservados = await reservarLote(LOTE_PADRAO);
 
     // R12 — falha de UM clipe não aborta os demais do tick: cada clipe roda
@@ -189,6 +280,9 @@ export async function POST(request: Request): Promise<Response> {
 
     return Response.json({
       ok: true,
+      // `null` quando o backstop falhou — distinto de `0` ("rodou, nada a
+      // expirar"). Um número só vira contagem depois que a chamada deu certo.
+      expirados,
       processados: resultados.length,
       transcritos: resultados.filter((r) => r.desfecho === "transcrito").length,
       falhas: resultados.filter((r) => r.desfecho === "falhou").length,
@@ -196,9 +290,14 @@ export async function POST(request: Request): Promise<Response> {
       resultados,
     });
   } catch (err) {
-    console.error("[asr-transcrever] falha no tick do worker", err);
+    // `err` inteiro NÃO entra aqui: a `.message` do `DrizzleQueryError` traz os
+    // params da query — e uma delas carrega a transcrição.
+    console.error(
+      "[asr-transcrever] falha no tick do worker",
+      diagnosticoDoErro(err),
+    );
     return Response.json(
-      { ok: false, error: mensagemDoErro(err) },
+      { ok: false, categoria: categoriaDoErro(err) },
       { status: 500 },
     );
   }

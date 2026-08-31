@@ -8,9 +8,12 @@ import {
   listarClipesDoLote,
   purgarLote,
   purgarTudo,
+  purgarVencidos,
   registrarFlushOnline,
   salvarAudioLocal,
 } from "./local-store";
+
+const CHAVE_CARIMBOS = "iris-audio-carimbos";
 
 describe("audio local store (IndexedDB)", () => {
   test("salvar → ler → apagar um blob", async () => {
@@ -75,6 +78,46 @@ describe("audio local store (IndexedDB)", () => {
     }) as typeof indexedDB.open;
     await expect(listarClipesDoLote("lote-x")).resolves.toEqual([]);
     indexedDB.open = original;
+  });
+});
+
+describe("purgarVencidos — TTL sem chamador explícito de logout (T23/#494)", () => {
+  test("apaga clipe com carimbo mais velho que o TTL informado", async () => {
+    await salvarAudioLocal("cap-velho", new Blob(["a"]));
+    const carimbos = JSON.parse(localStorage.getItem(CHAVE_CARIMBOS) ?? "{}");
+    // Força o carimbo para 25h atrás — além do TTL de 24h usado no teste.
+    carimbos["cap-velho"] = Date.now() - 25 * 60 * 60 * 1000;
+    localStorage.setItem(CHAVE_CARIMBOS, JSON.stringify(carimbos));
+
+    await purgarVencidos(24);
+
+    expect(await lerAudioLocal("cap-velho")).toBeNull();
+  });
+
+  test("preserva clipe com carimbo dentro do TTL", async () => {
+    await salvarAudioLocal("cap-novo", new Blob(["a"]));
+
+    await purgarVencidos(24);
+
+    expect(await lerAudioLocal("cap-novo")).not.toBeNull();
+    await apagarAudioLocal("cap-novo");
+  });
+
+  test("não lança quando localStorage está indisponível (degradação R23)", async () => {
+    const original = globalThis.localStorage;
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      get() {
+        throw new Error("boom");
+      },
+    });
+
+    await expect(purgarVencidos(24)).resolves.toBeUndefined();
+
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: original,
+    });
   });
 });
 
