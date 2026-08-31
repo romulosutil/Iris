@@ -745,14 +745,76 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       expect(r2.loteId).toBe(loteId);
 
       const rows =
-        await owner`SELECT ordem FROM audio_capture WHERE lote_id = ${loteId} ORDER BY ordem`;
+        await owner`SELECT ordem, asr_status::text AS asr_status, objeto_ref
+                      FROM audio_capture WHERE lote_id = ${loteId} ORDER BY ordem`;
       // só 1 conjunto de N linhas — não 2N — mesmo com as duas chamadas
       // tendo passado pela checagem de idempotência ao mesmo tempo.
       expect(rows.length).toBe(2);
       expect(rows.map((r) => r.ordem)).toEqual([0, 1]);
-      // só quem venceu a corrida sobe os blobs; quem perdeu (23505) não
-      // re-tenta o upload.
-      expect(guardarMock).toHaveBeenCalledTimes(2);
+      // e o lote termina INTEIRO na fila, com objeto: nenhuma linha ficou
+      // presa em `nao_solicitado` nem foi carimbada `falhou` pelo perdedor.
+      expect(rows.map((r) => r.asr_status)).toEqual(["na_fila", "na_fila"]);
+      expect(rows.map((r) => r.objeto_ref)).toEqual([
+        `${loteId}:0`,
+        `${loteId}:1`,
+      ]);
+
+      // POR QUE A CONTAGEM DE UPLOADS NÃO É MAIS O ORÁCULO (#494/T20):
+      // desde que o predicado de idempotência virou `loteJaResolvido` ("nenhuma
+      // linha em `nao_solicitado`", para que um reenvio pós-queda RETOME o que
+      // ficou pelo caminho), o perdedor que chega DEPOIS do commit do vencedor
+      // e ANTES da promoção a `na_fila` lê o lote como "não resolvido" e re-sobe
+      // os blobs. Não dá para distinguir "outra chamada está subindo agora" de
+      // "a chamada anterior morreu no meio" sem serializar o laço de upload
+      // dentro de uma transação — e o upload é de propósito FORA dela (não
+      // segurar conexão do Postgres durante rede; mesmo princípio da Fase B de
+      // `consolidarSessao`). Um `pg_advisory_xact_lock` no SELECT de
+      // idempotência NÃO fecharia a janela: ele solta no commit do INSERT, com
+      // o vencedor ainda uploadando.
+      // O re-upload é INOFENSIVO e isso é medido, não presumido:
+      //  - mesma chave: `chaveClipe` é pura (`loteId:ordem`) — asserção de
+      //    `objeto_ref` acima e do conjunto de chaves abaixo;
+      //  - escrita idempotente: `guardar` é um PutObject por chave (overwrite
+      //    total, nunca merge parcial);
+      //  - nenhum clipe terminal revertido: os UPDATEs de promoção e de
+      //    `falhou` são CAS em `nao_solicitado` — coberto deterministicamente
+      //    pelo teste "clipe promovido por outra chamada NÃO é revertido".
+      // Sobrou o que de fato importa: nenhuma chave FORA do lote foi escrita.
+      const chaves = guardarMock.mock.calls.map((c) => c[0]).sort();
+      expect(new Set(chaves)).toEqual(new Set([`${loteId}:0`, `${loteId}:1`]));
+      expect(guardarMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+
+    // Guarda do CAS de estado (#494/T20). Sem `AND asr_status =
+    // 'nao_solicitado'` nos UPDATEs, o upload atrasado de uma chamada
+    // concorrente (ou de um retry) reverte para `na_fila` um clipe que o worker
+    // já reservou/transcreveu — transcrição duplicada e sobrescrita da nota que
+    // a terapeuta já tem na tela. Aqui a corrida é FORÇADA: o dublê de
+    // `guardar` promove a linha a `transcrito` durante o upload, exatamente na
+    // janela entre o `guardar` e o UPDATE.
+    test("clipe promovido por outra chamada NÃO é revertido pela promoção atrasada (CAS)", async () => {
+      await limpar();
+      guardarMock.mockClear();
+      const loteId = "00000000-0000-0000-0000-0000000a0009";
+      guardarMock.mockImplementationOnce(async () => {
+        await owner`UPDATE audio_capture
+                       SET asr_status = 'transcrito', objeto_ref = ${`${loteId}:0`}
+                     WHERE lote_id = ${loteId} AND ordem = 0`;
+        return undefined;
+      });
+
+      const r = await enviarLoteAsr(ctxT1, {
+        sessionId: SESS,
+        loteId,
+        clipes: [clipe(0)],
+      });
+      expect(r.error).toBeUndefined();
+
+      const rows =
+        await owner`SELECT asr_status::text AS asr_status FROM audio_capture
+                      WHERE lote_id = ${loteId} AND ordem = 0`;
+      expect(rows.length).toBe(1);
+      expect(rows[0]!.asr_status).toBe("transcrito");
     });
 
     // O teste de `Promise.all` acima é timing-dependent: se a segunda chamada

@@ -490,6 +490,19 @@ async function enviarLoteAsrCore(
     // a linha fica `nao_solicitado` (nunca reservável) e o objeto órfão é
     // recolhido pelo sweeper (T15) — perde-se a transcrição daquele clipe,
     // nunca se gasta tentativa contra um objeto ausente.
+    //
+    // TODO UPDATE ABAIXO É COMPARE-AND-SWAP em `nao_solicitado` (#494/T20).
+    // POR QUÊ: fora de transação, este laço corre em paralelo com QUALQUER
+    // outro escritor da mesma linha — a segunda chamada concorrente do mesmo
+    // `loteId` (duplo clique/duas abas), o worker que já reservou o clipe, o
+    // sweeper. Sem o predicado de estado, um `UPDATE ... SET 'na_fila'`
+    // chegando atrasado REVERTE um clipe já `transcrevendo`/`transcrito`/
+    // `falhou` para a fila: ele seria transcrito duas vezes, e a versão nova
+    // sobrescreveria a que a terapeuta já tem na tela. O CAS torna esse
+    // UPDATE atrasado um no-op (0 linhas) em vez de uma regressão de estado —
+    // é ele que garante que o perdedor da corrida NUNCA ressuscita trabalho
+    // concluído, e é o que permite que o upload duplicado do perdedor seja
+    // inofensivo (mesma chave determinística `loteId:ordem`, mesmo objeto).
     const ordensComFalha: number[] = [];
     for (const c of clipesASubir) {
       try {
@@ -503,6 +516,7 @@ async function enviarLoteAsrCore(
               and(
                 eq(audioCapture.loteId, loteId),
                 eq(audioCapture.ordem, c.ordem),
+                eq(audioCapture.asrStatus, "nao_solicitado"),
               ),
             ),
         );
@@ -513,6 +527,11 @@ async function enviarLoteAsrCore(
         // vai ser transcrito" de "ainda não pedi transcrição". `objeto_ref`
         // continua nulo, então a linha nunca entra na fila. Um erro AQUI
         // também não pode derrubar os clipes seguintes do lote.
+        //
+        // Mesmo CAS da promoção: MEU upload falhou, mas se a linha já saiu de
+        // `nao_solicitado` foi porque OUTRA chamada do mesmo lote subiu aquele
+        // clipe com sucesso. Carimbar `falhou` por cima diria à terapeuta que
+        // um clipe que está na fila (ou já transcrito) se perdeu.
         try {
           await withTenant(ctx, (tx) =>
             tx
@@ -522,6 +541,7 @@ async function enviarLoteAsrCore(
                 and(
                   eq(audioCapture.loteId, loteId),
                   eq(audioCapture.ordem, c.ordem),
+                  eq(audioCapture.asrStatus, "nao_solicitado"),
                 ),
               ),
           );
