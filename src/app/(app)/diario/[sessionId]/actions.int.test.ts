@@ -595,8 +595,14 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     beforeAll(() => {
       process.env.FEATURE_FLAG_ASR_ENABLED = "true";
     });
-    afterAll(() => {
+    afterAll(async () => {
       delete process.env.FEATURE_FLAG_ASR_ENABLED;
+      // `app_asr_reservar` (T02) varre `audio_capture` INTEIRA, sem predicado
+      // de escopo: uma linha `na_fila` esquecida aqui entra na janela do LIMIT
+      // do worker em OUTRO arquivo de teste e desloca a ordem que ele espera
+      // (memória `int-test-vermelho-por-fixture-compartilhada`). A limpeza é
+      // por `DELETE` escopado nesta sessão, nunca `TRUNCATE`.
+      await limpar();
     });
 
     const limpar = () =>
@@ -725,6 +731,98 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       // só quem venceu a corrida sobe os blobs; quem perdeu (23505) não
       // re-tenta o upload.
       expect(guardarMock).toHaveBeenCalledTimes(2);
+    });
+
+    // ─── revisão final de integração #72 ────────────────────────────────────
+    // O INSERT gravava `na_fila` + `objeto_ref` ANTES de o upload rodar, então
+    // existia um instante em que `app_asr_reservar` (T02) podia eleger uma
+    // linha cujo blob ainda não estava no bucket: `ler()` falhava, o clipe
+    // voltava à fila com uma tentativa a menos, e o objeto que chegasse
+    // depois já não tinha dono. Os dois testes abaixo medem esse instante.
+    test("entre o INSERT e o upload confirmado a linha NÃO é reservável", async () => {
+      await limpar();
+      guardarMock.mockClear();
+      const loteId = "00000000-0000-0000-0000-0000000a0006";
+
+      // Fotografa o estado DENTRO do primeiro `guardar()` — antes de qualquer
+      // promoção a `na_fila` ter acontecido para o lote.
+      let reservadosDurante: ReadonlyArray<unknown> | null = null;
+      let linhasDurante: Array<{
+        asr_status: string;
+        objeto_ref: string | null;
+      }> = [];
+      guardarMock.mockImplementationOnce(async () => {
+        reservadosDurante = await owner`SELECT id FROM app_asr_reservar(10)`;
+        linhasDurante = (await owner`
+          SELECT asr_status::text AS asr_status, objeto_ref
+            FROM audio_capture WHERE lote_id = ${loteId}`) as unknown as Array<{
+          asr_status: string;
+          objeto_ref: string | null;
+        }>;
+        return undefined;
+      });
+
+      const r = await enviarLoteAsr(ctxT1, {
+        sessionId: SESS,
+        loteId,
+        clipes: [clipe(0, "um"), clipe(1, "dois")],
+      });
+      expect(r.error).toBeUndefined();
+
+      // A fila não tinha NADA a entregar naquele instante — nem deste lote
+      // nem de qualquer outro (o `beforeAll` limpa `audio_capture`).
+      expect(reservadosDurante).toEqual([]);
+      expect(linhasDurante.length).toBe(2);
+      expect(
+        linhasDurante.every((l) => l.asr_status === "nao_solicitado"),
+      ).toBe(true);
+      expect(linhasDurante.every((l) => l.objeto_ref === null)).toBe(true);
+
+      // …e no fim, com os dois uploads confirmados, as duas estão na fila.
+      const depois = await owner`
+        SELECT ordem, asr_status::text AS asr_status, objeto_ref
+          FROM audio_capture WHERE lote_id = ${loteId} ORDER BY ordem`;
+      expect(depois.map((l) => l.asr_status)).toEqual(["na_fila", "na_fila"]);
+      expect(depois.every((l) => typeof l.objeto_ref === "string")).toBe(true);
+    });
+
+    test("upload que falha no meio: aquela linha NÃO fica na_fila (e sem objeto_ref); as outras seguem", async () => {
+      await limpar();
+      guardarMock.mockClear();
+      const loteId = "00000000-0000-0000-0000-0000000a0007";
+      // Só o clipe de ordem 1 falha ao subir.
+      guardarMock.mockImplementation(async (chave: string) => {
+        if (chave.endsWith(":1")) throw new Error("MinIO fora do ar");
+        return undefined;
+      });
+
+      const r = await enviarLoteAsr(ctxT1, {
+        sessionId: SESS,
+        loteId,
+        clipes: [clipe(0, "um"), clipe(1, "dois"), clipe(2, "tres")],
+      });
+      guardarMock.mockImplementation(async () => undefined);
+      // O lote inteiro não cai por causa de um clipe (R12).
+      expect(r.error).toBeUndefined();
+      expect(r.loteId).toBe(loteId);
+
+      const rows = (await owner`
+        SELECT ordem, asr_status::text AS asr_status, objeto_ref
+          FROM audio_capture WHERE lote_id = ${loteId} ORDER BY ordem`) as unknown as Array<{
+        ordem: number;
+        asr_status: string;
+        objeto_ref: string | null;
+      }>;
+      expect(rows.map((l) => l.asr_status)).toEqual([
+        "na_fila",
+        "falhou",
+        "na_fila",
+      ]);
+      // O que falhou é TERMINAL e sem referência: o worker nunca vai reservá-lo
+      // para depois não achar o objeto.
+      expect(rows[1]!.objeto_ref).toBeNull();
+      expect(typeof rows[0]!.objeto_ref).toBe("string");
+      expect(typeof rows[2]!.objeto_ref).toBe("string");
     });
   });
 });

@@ -285,8 +285,9 @@ const enviarLoteAsrSchema = z.object({
 
 /**
  * Envia um lote de clipes de ditado de voz (#72, T09): insere N linhas em
- * `audio_capture` (`asr_status = 'na_fila'`, mesmo `lote_id`, `ordem`
- * preservada) e sobe cada blob para o bucket efêmero (T04). Devolve o
+ * `audio_capture` (mesmo `lote_id`, `ordem` preservada) FORA da fila, sobe
+ * cada blob para o bucket efêmero (T04) e só então promove cada linha a
+ * `asr_status = 'na_fila'` — ver a nota sobre a ordem abaixo. Devolve o
  * `loteId` IMEDIATAMENTE (R9) — a transcrição roda depois, assíncrona, via
  * fila/worker de outra task (T07).
  *
@@ -344,16 +345,21 @@ async function enviarLoteAsrCore(
     );
     if (existentes.length > 0) return { loteId };
 
-    // Chave de storage determinística (mesmo formato de `chaveClipe`, T14,
-    // usado pelo cache local em IndexedDB) — não depende do `id` gerado pelo
-    // INSERT, então grava `objeto_ref` já no insert.
+    // A linha NASCE FORA DA FILA (`nao_solicitado`, `objeto_ref` nulo) e só é
+    // promovida a `na_fila` depois que o upload daquele clipe confirmou —
+    // revisão final de integração #72. Inserir já `na_fila` com `objeto_ref`
+    // preenchido abria uma janela real: `app_asr_reservar` (que elege por
+    // `asr_status = 'na_fila' AND objeto_ref IS NOT NULL`) podia pegar a linha
+    // ANTES de o blob existir no bucket, `ler()` falhava, o clipe voltava à
+    // fila gastando tentativa — e o objeto que chegasse depois já não tinha
+    // dono. Nenhuma trava nova: o estado inicial é o próprio default da coluna.
     const linhas = clipes.map((c) => ({
       sessionId,
       clinicId: ctx.clinicId,
       loteId,
       ordem: c.ordem,
-      asrStatus: "na_fila" as const,
-      objetoRef: chaveClipe(loteId, c.ordem),
+      asrStatus: "nao_solicitado" as const,
+      objetoRef: null,
     }));
 
     try {
@@ -392,20 +398,23 @@ async function enviarLoteAsrCore(
     // Upload FORA da transação (mesmo princípio da Fase B de
     // `consolidarSessao`): não segura conexão/lock do Postgres durante a
     // chamada de rede ao storage efêmero. Falha de upload de um clipe não
-    // derruba o lote inteiro nem o `loteId` já reservado — marca só aquele
-    // clipe como `falhou`; o worker (T07) nunca vai encontrá-lo `na_fila`
-    // sem o objeto correspondente no bucket.
+    // derruba o lote inteiro nem o `loteId` já reservado.
+    //
+    // A ORDEM É O CONTRATO: sobe o blob, e SÓ ENTÃO promove aquela linha a
+    // `na_fila` com o `objeto_ref`. O worker (T07) só enxerga o clipe depois
+    // que o objeto existe. Se o processo morrer entre o `guardar` e o UPDATE,
+    // a linha fica `nao_solicitado` (nunca reservável) e o objeto órfão é
+    // recolhido pelo sweeper (T15) — perde-se a transcrição daquele clipe,
+    // nunca se gasta tentativa contra um objeto ausente.
     const errosUpload: string[] = [];
     for (const c of clipes) {
       try {
-        await guardar(chaveClipe(loteId, c.ordem), c.dados, c.contentType);
-      } catch (err) {
-        const detalhe = err instanceof Error ? err.message : String(err);
-        errosUpload.push(`clipe ${c.ordem}: ${detalhe}`);
+        const chave = chaveClipe(loteId, c.ordem);
+        await guardar(chave, c.dados, c.contentType);
         await withTenant(ctx, (tx) =>
           tx
             .update(audioCapture)
-            .set({ asrStatus: "falhou" })
+            .set({ asrStatus: "na_fila", objetoRef: chave })
             .where(
               and(
                 eq(audioCapture.loteId, loteId),
@@ -413,6 +422,35 @@ async function enviarLoteAsrCore(
               ),
             ),
         );
+      } catch (err) {
+        const detalhe = err instanceof Error ? err.message : String(err);
+        errosUpload.push(`clipe ${c.ordem}: ${detalhe}`);
+        // `falhou` (e não o `nao_solicitado` em que a linha já está): estado
+        // TERMINAL e visível — o terapeuta precisa distinguir "este clipe não
+        // vai ser transcrito" de "ainda não pedi transcrição". `objeto_ref`
+        // continua nulo, então a linha nunca entra na fila. Um erro AQUI
+        // também não pode derrubar os clipes seguintes do lote.
+        try {
+          await withTenant(ctx, (tx) =>
+            tx
+              .update(audioCapture)
+              .set({ asrStatus: "falhou" })
+              .where(
+                and(
+                  eq(audioCapture.loteId, loteId),
+                  eq(audioCapture.ordem, c.ordem),
+                ),
+              ),
+          );
+        } catch (errMarcacao) {
+          errosUpload.push(
+            `clipe ${c.ordem}: falha ao marcar 'falhou': ${
+              errMarcacao instanceof Error
+                ? errMarcacao.message
+                : String(errMarcacao)
+            }`,
+          );
+        }
       }
     }
     if (errosUpload.length > 0) {
