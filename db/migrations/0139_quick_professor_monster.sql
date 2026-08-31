@@ -1,0 +1,2 @@
+ALTER TABLE "audio_capture" ADD COLUMN "reversoes" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+CREATE INDEX "idx_audio_capture_objeto_ref" ON "audio_capture" USING btree ("objeto_ref") WHERE "audio_capture"."objeto_ref" IS NOT NULL;

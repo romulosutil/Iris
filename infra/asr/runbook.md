@@ -78,6 +78,72 @@ o abort do cliente não chega ao servidor (`servidor.py` segura o semáforo
 `ASR_MAX_CONCORRENTES` vagas ocupada por trabalho abandonado e empurra todo o
 resto para `503`.
 
+### 1.2 Papel de banco do worker (`ASR_WORKER_DATABASE_URL`, #494/T18)
+
+A rota `/api/internal/jobs/asr-transcrever` **não usa mais** a `DATABASE_URL` da
+app. Ela abre um pool próprio (`asrWorkerDb`, `src/db/client.ts`) sob uma role
+membro de `iris_asr_worker` — role `NOLOGIN` criada pela migração
+`0140_asr_worker_role.sql`.
+
+**Por quê:** `app_asr_reservar` devolve `clinic_id` + a chave do objeto de áudio
+de **outras clínicas**, e `app_asr_concluir(uuid, text)` escreve texto arbitrário
+na linha de qualquer clínica. Enquanto o `EXECUTE` estava em `app_role` (o papel
+de toda requisição web logada), a fronteira era uma promessa da camada de app.
+A `0140` revoga de `app_role` — agora quem chamar de lá recebe `42501`.
+
+Provisionar **uma vez**, conectado como dono do banco:
+
+```sql
+CREATE ROLE iris_asr_worker_login LOGIN PASSWORD '<gerar com openssl rand -hex 32>'
+  IN ROLE iris_asr_worker;
+```
+
+Depois apontar `ASR_WORKER_DATABASE_URL` para ela no ambiente da **app** (não do
+`iris-asr`) e **Implantar** (memória `easypanel-ambiente-expoe-segredos`: salvar
+env não aplica). Sem a variável a rota recusa rodar — não há fallback para
+`DATABASE_URL`.
+
+Conferir **medindo**, não lendo:
+
+```sql
+SELECT has_function_privilege('app_role','app_asr_reservar(integer)','EXECUTE');        -- esperado: f
+SELECT has_function_privilege('iris_asr_worker','app_asr_reservar(integer)','EXECUTE'); -- esperado: t
+SELECT has_function_privilege('app_role','app_asr_objetos_em_uso(text[])','EXECUTE');   -- esperado: t (o sweeper depende)
+```
+
+### 1.3 Fila que não drena e áudio retido (#494/T19)
+
+Duas travas foram acrescentadas porque `503` do `iris-asr` é o **regime normal**
+sob fila cheia, não uma anomalia — o cliente do disparo aborta em 120s e um tick
+cheio pode levar ~215s (§2), então o laço dispara de novo contra um tick vivo:
+
+- **Teto de reversões por clipe** (`audio_capture.reversoes`, migração `0141`).
+  `app_asr_falhar(id, true)` devolvia o clipe à fila ignorando o teto de
+  tentativas; sem contador próprio isso não tinha fim, e `app_asr_objetos_em_uso`
+  mantinha o áudio vivo no bucket indefinidamente (R11 violado sem limite).
+  Passadas 10 reversões, o clipe passa a gastar tentativa e termina em `falhou`.
+- **Backstop de idade da linha** (`app_asr_expirar_presos`, `0141`), chamado no
+  início de cada tick com 6h — a mesma régua do sweeper de objetos. Linha presa
+  em `na_fila`/`transcrevendo` além disso vira `falhou` e **solta o
+  `objeto_ref`**, que é o que devolve o objeto ao alcance do sweeper.
+
+Diagnóstico rápido de fila represada:
+
+```sql
+SELECT asr_status, count(*), max(reversoes), min(criado_em)
+  FROM audio_capture GROUP BY 1 ORDER BY 1;
+```
+
+`max(reversoes)` colado em 10 = o serviço ASR está saturado de forma sustentada
+(subir `ASR_MAX_CONCORRENTES` ou aumentar `INTERVALO_S` do agendador), não um
+defeito dos clipes.
+
+O laço `infra/asr/agendador.sh` também ganhou guarda de instância única
+(lockfile por `mkdir` em `${ASR_HEARTBEAT_DIR}/.agendador-asr.lock`). Ela cobre
+apenas um segundo agendador **dentro do mesmo container**; a sobreposição via
+timeout de cliente é fechada pelas duas travas de banco acima, não por ela. Lock
+órfão de container morto é recuperado sozinho (o PID é conferido com `kill -0`).
+
 ## 2. Benchmark — small vs medium (T06)
 
 > **[x] CONFIRMADO — medido de verdade no serviço `iris-asr` implantado no

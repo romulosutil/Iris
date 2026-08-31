@@ -72,6 +72,8 @@ const CLIPE_A_ANTIGO = "72a50000-0000-0000-0000-0000000000c3";
 const CLIPE_A_NOVO = "72a50000-0000-0000-0000-0000000000c4";
 const CLIPE_A_ESTOURADO = "72a50000-0000-0000-0000-0000000000c5";
 const CLIPE_A_TETO = "72a50000-0000-0000-0000-0000000000c6";
+const CLIPE_A_REVERSOES = "72a50000-0000-0000-0000-0000000000c7";
+const CLIPE_A_PRESO = "72a50000-0000-0000-0000-0000000000c8";
 
 /** Todo clipe que qualquer teste deste arquivo possa ter plantado. */
 const TODOS_OS_CLIPES = [
@@ -81,6 +83,8 @@ const TODOS_OS_CLIPES = [
   CLIPE_A_NOVO,
   CLIPE_A_ESTOURADO,
   CLIPE_A_TETO,
+  CLIPE_A_REVERSOES,
+  CLIPE_A_PRESO,
 ];
 
 type LinhaReservada = {
@@ -95,6 +99,7 @@ type EstadoClipe = {
   id: string;
   asr_status: string;
   tentativas: number;
+  reversoes: number;
   objeto_ref: string | null;
   transcricao_texto: string | null;
   transcrito_em: Date | null;
@@ -103,12 +108,33 @@ type EstadoClipe = {
 const ctx = (userId: string, clinicId: string): TenantContext =>
   ({ role: "coordenador", userId, clinicId }) as TenantContext;
 
+const LOGIN_WORKER = "iris_asr_worker_login_72asr";
+const SENHA_WORKER = "iris_asr_worker_login_teste_72asr";
+
 /**
- * Conexão sob a role de APLICAÇÃO (`iris_app`, membro de `app_role`). É ela
- * que exercita o `GRANT EXECUTE ... TO app_role` das três funções: se o grant
- * sumisse, a chamada estouraria `42501` em vez de passar despercebida.
+ * Conexão sob a role de APLICAÇÃO (`iris_app`, membro de `app_role`) — o papel
+ * de toda requisição web logada. Depois da `0140` (#494/T18) ela NÃO pode mais
+ * executar as três funções cross-tenant: é essa recusa que o teste (T18) prova.
  */
 const conexaoApp = () => postgres(process.env.DATABASE_URL!, { max: 1 });
+
+/**
+ * Conexão sob o papel DEDICADO do worker (`iris_asr_worker`, migração 0140).
+ * É por aqui que a fila é exercitada desde o T18 — a rota do worker usa
+ * `ASR_WORKER_DATABASE_URL` (`asrWorkerDb` em `src/db/client.ts`).
+ *
+ * A role de LOGIN é criada pelo `beforeAll` porque, como `iris_alarme_login`
+ * (0129) e `iris_retencao`, ela é provisionamento de AMBIENTE (tem senha), não
+ * objeto versionado — e o CI não tem outro lugar que a crie.
+ */
+const conexaoWorker = () =>
+  postgres(
+    process.env.MIGRATION_DATABASE_URL!.replace(
+      /:\/\/[^@]+@/,
+      `://${LOGIN_WORKER}:${SENHA_WORKER}@`,
+    ),
+    { max: 1 },
+  );
 
 /** Planta um clipe de `audio_capture` pela role DONA (só arranjo, nunca asserção). */
 async function plantarClipe(opts: {
@@ -121,22 +147,23 @@ async function plantarClipe(opts: {
   criadoEm: Date;
   ordem?: number;
   loteId?: string | null;
+  reversoes?: number;
 }) {
   await owner!`INSERT INTO audio_capture
       (id, session_id, clinic_id, status_upload, objeto_ref, criado_em,
-       lote_id, ordem, asr_status, tentativas)
+       lote_id, ordem, asr_status, tentativas, reversoes)
     VALUES (
       ${opts.id}, ${opts.sessionId}, ${opts.clinicId}, 'confirmado',
       ${opts.objetoRef}, ${opts.criadoEm},
       ${opts.loteId ?? null}, ${opts.ordem ?? 0},
-      ${opts.asrStatus}::asr_status, ${opts.tentativas}
+      ${opts.asrStatus}::asr_status, ${opts.tentativas}, ${opts.reversoes ?? 0}
     )`;
 }
 
 /** Lê o estado bruto de um clipe pela role dona — leitura de VERIFICAÇÃO, não de produto. */
 async function lerClipe(id: string): Promise<EstadoClipe> {
   const linhas = await owner!<EstadoClipe[]>`
-    SELECT id, asr_status::text AS asr_status, tentativas, objeto_ref,
+    SELECT id, asr_status::text AS asr_status, tentativas, reversoes, objeto_ref,
            transcricao_texto, transcrito_em
       FROM audio_capture WHERE id = ${id}`;
   if (!linhas[0]) throw new Error(`clipe ${id} sumiu do banco`);
@@ -148,6 +175,16 @@ const minutosAtras = (n: number) => new Date(agora - n * 60_000);
 
 describe.skipIf(!hasDb)("#72 · fila de ASR (0136) — RLS e reserva", () => {
   beforeAll(async () => {
+    await owner!.unsafe(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${LOGIN_WORKER}') THEN
+          CREATE ROLE ${LOGIN_WORKER} LOGIN PASSWORD '${SENHA_WORKER}' IN ROLE iris_asr_worker;
+        END IF;
+      END
+      $$;
+    `);
+
     await owner!`INSERT INTO clinic (id, nome, is_demo) VALUES
       (${CLINICA_A}, 'Clínica ASR 72asr A', false),
       (${CLINICA_B}, 'Clínica ASR 72asr B', false)`;
@@ -251,7 +288,7 @@ describe.skipIf(!hasDb)("#72 · fila de ASR (0136) — RLS e reserva", () => {
       criadoEm: minutosAtras(9),
     });
 
-    const app = conexaoApp();
+    const app = conexaoWorker();
     try {
       const reservados = await app<
         LinhaReservada[]
@@ -298,8 +335,8 @@ describe.skipIf(!hasDb)("#72 · fila de ASR (0136) — RLS e reserva", () => {
       criadoEm: minutosAtras(20),
     });
 
-    const tick1 = conexaoApp();
-    const tick2 = conexaoApp();
+    const tick1 = conexaoWorker();
+    const tick2 = conexaoWorker();
     let idsTick1: string[] = [];
     let idsTick2: string[] = [];
     try {
@@ -357,7 +394,7 @@ describe.skipIf(!hasDb)("#72 · fila de ASR (0136) — RLS e reserva", () => {
       criadoEm: minutosAtras(5),
     });
 
-    const app = conexaoApp();
+    const app = conexaoWorker();
     try {
       const reservados = await app<
         LinhaReservada[]
@@ -388,7 +425,7 @@ describe.skipIf(!hasDb)("#72 · fila de ASR (0136) — RLS e reserva", () => {
       criadoEm: minutosAtras(15),
     });
 
-    const app = conexaoApp();
+    const app = conexaoWorker();
     try {
       const [linha] = await app<
         { app_asr_falhar: number }[]
@@ -421,7 +458,7 @@ describe.skipIf(!hasDb)("#72 · fila de ASR (0136) — RLS e reserva", () => {
       criadoEm: minutosAtras(15),
     });
 
-    const app = conexaoApp();
+    const app = conexaoWorker();
     try {
       const [linha] = await app<
         { app_asr_falhar: number }[]
@@ -437,5 +474,164 @@ describe.skipIf(!hasDb)("#72 · fila de ASR (0136) — RLS e reserva", () => {
     // O objeto NÃO é zerado neste ramo: quem reescreve `objeto_ref` no retorno
     // à fila é o reenvio, não esta função.
     expect(clipe.objeto_ref).toBe("asr/72asr/teto.webm");
+  });
+  // ─────────────────────────────────────────────────────────────────────────
+  // #494 / T18 — o EXECUTE das três cross-tenant saiu de `app_role` (0140).
+  // ─────────────────────────────────────────────────────────────────────────
+  test("(T18) app_role recebe 42501 nas funções cross-tenant de mutação", async () => {
+    // ESTE É O TESTE QUE MORDE A MUTAÇÃO DE REPOR
+    // `GRANT EXECUTE ... TO app_role`. Sem ele, um `CREATE OR REPLACE` numa
+    // migração futura reabriria o furo com diff limpo — replace PRESERVA a ACL,
+    // então nada no arquivo denunciaria (memória
+    // `create-or-replace-torna-diff-enganoso`).
+    //
+    // `42501` (insufficient_privilege) e não "0 linhas": a diferença é o ponto
+    // do T18. Recusa do BANCO é fronteira; ausência de chamador é promessa da
+    // camada de app, que envelhece na primeira Server Action distraída.
+    const app = conexaoApp();
+    try {
+      await expect(
+        app`SELECT * FROM app_asr_reservar(1)`,
+      ).rejects.toMatchObject({ code: "42501" });
+      await expect(
+        app`SELECT app_asr_concluir(${CLIPE_A1}::uuid, 'texto injetado')`,
+      ).rejects.toMatchObject({ code: "42501" });
+      await expect(
+        app`SELECT app_asr_falhar(${CLIPE_A1}::uuid, true)`,
+      ).rejects.toMatchObject({ code: "42501" });
+      await expect(
+        app`SELECT app_asr_expirar_presos('6 hours'::interval)`,
+      ).rejects.toMatchObject({ code: "42501" });
+    } finally {
+      await app.end();
+    }
+  });
+
+  test("(T18) app_asr_objetos_em_uso CONTINUA executável por app_role", async () => {
+    // Contraponto obrigatório do teste acima: um `REVOKE` largo demais (varrer
+    // todas as `app_asr_*`) quebraria o sweeper (T15), cuja credencial é membro
+    // de `app_role` — e quebraria em PRODUÇÃO, não aqui, porque o sweeper roda
+    // em outro serviço. Esta função cumpre a régua do 1 bit por chave e FICA.
+    const app = conexaoApp();
+    try {
+      const linhas =
+        await app`SELECT ref FROM app_asr_objetos_em_uso(ARRAY['asr/72asr/inexistente']::text[])`;
+      expect(linhas).toHaveLength(0);
+    } finally {
+      await app.end();
+    }
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // #494 / T19 — 503 sustentado tem fim, e linha presa tem backstop de idade.
+  // ─────────────────────────────────────────────────────────────────────────
+  test("(T19a) abaixo do teto, falhar(true) reverte E conta a reversão", async () => {
+    await plantarClipe({
+      id: CLIPE_A_REVERSOES,
+      clinicId: CLINICA_A,
+      sessionId: SESSAO_A,
+      asrStatus: "transcrevendo",
+      tentativas: 1,
+      reversoes: 0,
+      objetoRef: "asr/72asr/reversoes.webm",
+      criadoEm: minutosAtras(15),
+    });
+
+    const app = conexaoWorker();
+    try {
+      await app`SELECT app_asr_falhar(${CLIPE_A_REVERSOES}::uuid, true)`;
+    } finally {
+      await app.end();
+    }
+
+    const clipe = await lerClipe(CLIPE_A_REVERSOES);
+    expect(clipe.asr_status).toBe("na_fila");
+    expect(clipe.tentativas).toBe(0);
+    // O contador é o que dá FIM ao laço: sem incrementá-lo, o teto do teste
+    // seguinte nunca seria alcançado e a reversão voltaria a ser infinita.
+    expect(clipe.reversoes).toBe(1);
+    expect(clipe.objeto_ref).toBe("asr/72asr/reversoes.webm");
+  });
+
+  test("(T19a) NO teto de reversões, falhar(true) para de reverter e cobra a tentativa", async () => {
+    // ESTE É O TESTE QUE MORDE A REMOÇÃO DO TETO. Com `reversoes = 10` e
+    // `tentativas = 3`, o comportamento anterior devolveria o clipe a `na_fila`
+    // com `tentativas = 2` — para sempre, a cada 503, mantendo o objeto vivo no
+    // bucket por `app_asr_objetos_em_uso` e violando R11 sem limite. Com o
+    // teto, o clipe cai no caminho normal e TERMINA.
+    await plantarClipe({
+      id: CLIPE_A_REVERSOES,
+      clinicId: CLINICA_A,
+      sessionId: SESSAO_A,
+      asrStatus: "transcrevendo",
+      tentativas: 3,
+      reversoes: 10,
+      objetoRef: "asr/72asr/reversoes.webm",
+      criadoEm: minutosAtras(15),
+    });
+
+    const app = conexaoWorker();
+    try {
+      const [linha] = await app<
+        { app_asr_falhar: number }[]
+      >`SELECT app_asr_falhar(${CLIPE_A_REVERSOES}::uuid, true) AS app_asr_falhar`;
+      expect(linha!.app_asr_falhar).toBe(1);
+    } finally {
+      await app.end();
+    }
+
+    const clipe = await lerClipe(CLIPE_A_REVERSOES);
+    expect(clipe.asr_status).toBe("falhou");
+    expect(clipe.tentativas).toBe(3);
+    expect(clipe.reversoes).toBe(10); // não incrementa quando não reverte
+    // E — o ponto de R11 — o objeto é SOLTO: `app_asr_objetos_em_uso` deixa de
+    // reivindicá-lo e o sweeper passa a poder apagar o áudio.
+    expect(clipe.objeto_ref).toBeNull();
+  });
+
+  test("(T19b) app_asr_expirar_presos solta o objeto de linha velha, e só dela", async () => {
+    // O backstop de idade que faltava. Havia um para o OBJETO (sweeper, 6h) e
+    // nenhum para a LINHA — e era a linha que isentava o objeto: enquanto ela
+    // dissesse `na_fila`, `app_asr_objetos_em_uso` respondia "em uso" e o
+    // sweeper PRESERVAVA o áudio indefinidamente.
+    await plantarClipe({
+      id: CLIPE_A_PRESO,
+      clinicId: CLINICA_A,
+      sessionId: SESSAO_A,
+      asrStatus: "na_fila",
+      tentativas: 1,
+      objetoRef: "asr/72asr/preso.webm",
+      criadoEm: minutosAtras(60 * 9), // 9h — fora da janela de 6h
+    });
+    await plantarClipe({
+      id: CLIPE_A_NOVO,
+      clinicId: CLINICA_A,
+      sessionId: SESSAO_A,
+      asrStatus: "na_fila",
+      tentativas: 0,
+      objetoRef: "asr/72asr/novo.webm",
+      criadoEm: minutosAtras(30), // dentro da janela — NÃO pode ser tocado
+    });
+
+    const app = conexaoWorker();
+    try {
+      const [linha] = await app<
+        { app_asr_expirar_presos: number }[]
+      >`SELECT app_asr_expirar_presos('6 hours'::interval) AS app_asr_expirar_presos`;
+      expect(linha!.app_asr_expirar_presos).toBeGreaterThanOrEqual(1);
+    } finally {
+      await app.end();
+    }
+
+    const preso = await lerClipe(CLIPE_A_PRESO);
+    expect(preso.asr_status).toBe("falhou");
+    expect(preso.objeto_ref).toBeNull();
+
+    // A metade que prova que o predicado de idade EXISTE: sem `criado_em <=
+    // now() - p_idade`, a função varreria a fila inteira e este clipe legítimo
+    // morreria junto.
+    const novo = await lerClipe(CLIPE_A_NOVO);
+    expect(novo.asr_status).toBe("na_fila");
+    expect(novo.objeto_ref).toBe("asr/72asr/novo.webm");
   });
 });

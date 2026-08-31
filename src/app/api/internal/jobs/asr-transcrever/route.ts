@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { db } from "@/db/client";
+import { asrWorkerDb } from "@/db/client";
 import { ler, apagar } from "@/lib/asr/storage";
 import {
   getAsrProvider,
@@ -20,12 +20,13 @@ import { codigoPg } from "@/db/pg-error";
  * — env ausente recusa tudo, nunca "libera porque não configurou".
  *
  * Chama `app_asr_reservar`/`app_asr_concluir`/`app_asr_falhar`
- * (`db/migrations/0136_asr_fila.sql`, T02) pela conexão `db` (`DATABASE_URL`,
- * role `iris_app`, membro de `app_role` — é a essa role que as três funções
- * concedem `EXECUTE`; `authDb`/`iris_auth` não tem o grant). As funções são
- * `SECURITY DEFINER` cross-tenant por desenho — não há `withTenant` aqui
- * porque não existe clínica nenhuma para resolver: o worker vê a fila
- * inteira, de todas as clínicas, no mesmo tick.
+ * (`db/migrations/0136_asr_fila.sql`, T02) e `app_asr_expirar_presos`
+ * (`0141`, T19) pela conexão `asrWorkerDb` (`ASR_WORKER_DATABASE_URL`, papel
+ * membro de `iris_asr_worker`). NÃO pelo pool `db` da app: essas funções são
+ * `SECURITY DEFINER` cross-tenant e devolvem/escrevem dado de outras clínicas,
+ * então o `EXECUTE` saiu de `app_role` na `0140` (#494/T18). Não há
+ * `withTenant` aqui porque não existe clínica nenhuma para resolver: o worker
+ * vê a fila inteira, de todas as clínicas, no mesmo tick.
  */
 
 export const runtime = "nodejs";
@@ -45,6 +46,16 @@ const LOTE_PADRAO = 5;
 // vindo de iOS chegaria ao serviço ASR com `Content-Type` incorreto até esse
 // dado ser persistido em uma task futura.
 const ASR_MIME_PADRAO = "audio/webm";
+
+// Idade a partir da qual uma linha presa em `na_fila`/`transcrevendo` é dada
+// como perdida (#494/T19). 6h é DELIBERADAMENTE a mesma régua do sweeper de
+// órfãos (`ASR_SWEEPER_LIMITE_HORAS`, default 6): passada a janela, o objeto
+// seria apagado do bucket efêmero de qualquer forma se estivesse ocioso — uma
+// linha que continua esperando por ele está esperando por um áudio condenado.
+// Enquanto a linha existir reivindicando a chave, `app_asr_objetos_em_uso`
+// responde "em uso" e o sweeper PRESERVA o áudio: é a linha que isenta o
+// objeto, e por isso o backstop de idade tinha que existir para os dois.
+const ASR_BACKSTOP_HORAS = 6;
 
 type LinhaReservada = {
   id: string;
@@ -118,23 +129,45 @@ function autorizado(header: string | null): boolean {
 }
 
 async function reservarLote(limite: number): Promise<LinhaReservada[]> {
-  const linhas = await db.execute(
+  const linhas = await asrWorkerDb.execute(
     sql`SELECT * FROM app_asr_reservar(${limite})`,
   );
   return linhas as unknown as LinhaReservada[];
 }
 
 async function concluirClipe(id: string, texto: string): Promise<void> {
-  await db.execute(sql`SELECT app_asr_concluir(${id}::uuid, ${texto})`);
+  await asrWorkerDb.execute(
+    sql`SELECT app_asr_concluir(${id}::uuid, ${texto})`,
+  );
 }
 
 async function falharClipe(
   id: string,
   reverterTentativa: boolean,
 ): Promise<void> {
-  await db.execute(
+  await asrWorkerDb.execute(
     sql`SELECT app_asr_falhar(${id}::uuid, ${reverterTentativa})`,
   );
+}
+
+/**
+ * Backstop de idade da LINHA — roda ANTES da reserva de cada tick (#494/T19).
+ *
+ * POR QUE ANTES: expirar primeiro solta o `objeto_ref` das linhas condenadas na
+ * mesma passada em que a fila é lida, então o sweeper já encontra o objeto
+ * liberado no próximo ciclo dele. Rodar depois adiaria a liberação em um tick
+ * inteiro sem ganho nenhum.
+ *
+ * POR QUE AQUI E NÃO NO SWEEPER: o sweeper (T15) varre o BUCKET; ele nem
+ * enumera linhas de `audio_capture`. Quem já tem a fila em mãos a cada tick é
+ * esta rota.
+ */
+async function expirarPresos(): Promise<number> {
+  const linhas = await asrWorkerDb.execute(
+    sql`SELECT app_asr_expirar_presos(${`${ASR_BACKSTOP_HORAS} hours`}::interval) AS expirados`,
+  );
+  const primeira = (linhas as unknown as { expirados: number }[])[0];
+  return primeira?.expirados ?? 0;
 }
 
 /**
@@ -145,7 +178,7 @@ async function falharClipe(
  * resultante.
  */
 async function objetoEmUso(ref: string): Promise<boolean> {
-  const linhas = await db.execute(
+  const linhas = await asrWorkerDb.execute(
     sql`SELECT ref FROM app_asr_objetos_em_uso(ARRAY[${ref}]::text[])`,
   );
   return (linhas as unknown as unknown[]).length > 0;
@@ -216,6 +249,25 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
+    // Falha do backstop NÃO aborta o tick: ele é a rede embaixo da rede, e
+    // deixar de transcrever a fila inteira porque a limpeza falhou trocaria um
+    // vazamento lento por uma parada total. Mas é logado — um backstop que
+    // falha em silêncio é indistinguível de um backstop que não existe.
+    let expirados: number | null = null;
+    try {
+      expirados = await expirarPresos();
+      if (expirados > 0) {
+        console.warn(
+          `[asr-transcrever] backstop de idade expirou ${expirados} clipe(s) preso(s) há mais de ${ASR_BACKSTOP_HORAS}h — objeto liberado para o sweeper`,
+        );
+      }
+    } catch (err) {
+      console.error(
+        "[asr-transcrever] backstop de idade FALHOU (o tick segue)",
+        diagnosticoDoErro(err),
+      );
+    }
+
     const reservados = await reservarLote(LOTE_PADRAO);
 
     // R12 — falha de UM clipe não aborta os demais do tick: cada clipe roda
@@ -228,6 +280,9 @@ export async function POST(request: Request): Promise<Response> {
 
     return Response.json({
       ok: true,
+      // `null` quando o backstop falhou — distinto de `0` ("rodou, nada a
+      // expirar"). Um número só vira contagem depois que a chamada deu certo.
+      expirados,
       processados: resultados.length,
       transcritos: resultados.filter((r) => r.desfecho === "transcrito").length,
       falhas: resultados.filter((r) => r.desfecho === "falhou").length,

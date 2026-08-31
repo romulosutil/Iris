@@ -72,4 +72,48 @@ export const authDb: Db = lazy(() =>
   drizzle(authSql, { schema, casing: "snake_case" }),
 );
 
+// ─── Conexão do WORKER de transcrição (role membro de iris_asr_worker) ───────
+// Usada SÓ por `src/app/api/internal/jobs/asr-transcrever/route.ts` (#494/T18).
+//
+// POR QUE NÃO REUSAR `db`: `app_asr_reservar`/`app_asr_concluir`/
+// `app_asr_falhar`/`app_asr_expirar_presos` são `SECURITY DEFINER`
+// CROSS-TENANT e não devolvem 1 bit — a reserva entrega `clinic_id` e a chave
+// do objeto de áudio de OUTRAS clínicas, o concluir escreve texto arbitrário na
+// linha de qualquer clínica. Enquanto o `EXECUTE` estivesse em `app_role` (o
+// papel de toda requisição web logada), essa fronteira seria uma invariante de
+// camada de app: valeria só enquanto ninguém escrevesse a chamada errada.
+// Com papel próprio, o banco recusa — `app_role` recebe `42501`.
+//
+// Mesmo idioma do sweeper (`ASR_SWEEPER_DATABASE_URL`, T15): credencial de
+// login provisionada fora das migrações, `IN ROLE iris_asr_worker` (a role
+// NOLOGIN nasce na migração 0140).
+//
+// `max: 2` e não 10: este pool serve UM job sequencial (LOTE_PADRAO clipes,
+// um de cada vez). Dimensioná-lo como o da app só reservaria conexões ociosas
+// no Postgres para ticks que nunca as usam.
+const globalForAsr = globalThis as unknown as { asrWorkerSql: Sql | undefined };
+
+export const asrWorkerSql: Sql = lazy(() => {
+  if (globalForAsr.asrWorkerSql) return globalForAsr.asrWorkerSql;
+  const url = process.env.ASR_WORKER_DATABASE_URL;
+  // Fail-closed, sem cair para `DATABASE_URL`: um fallback silencioso para a
+  // credencial da app faria o worker rodar com `app_role` — que não tem mais o
+  // grant — e o tick morreria com `42501` a cada passada, ou pior, voltaria a
+  // funcionar se alguém um dia reconcedesse o EXECUTE, desfazendo o T18 sem
+  // diff. Mesma disciplina do sweeper, que RECUSA rodar sem a env dele.
+  if (!url) {
+    throw new Error(
+      "ASR_WORKER_DATABASE_URL não definida — o worker de transcrição precisa de credencial membro de iris_asr_worker (ver .env.example e db/migrations/0140_asr_worker_role.sql)",
+    );
+  }
+  const instance = postgres(url, { max: 2 });
+  if (process.env.NODE_ENV !== "production")
+    globalForAsr.asrWorkerSql = instance;
+  return instance;
+});
+
+export const asrWorkerDb: Db = lazy(() =>
+  drizzle(asrWorkerSql, { schema, casing: "snake_case" }),
+);
+
 export type Schema = typeof schema;
