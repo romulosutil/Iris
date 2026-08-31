@@ -61,6 +61,11 @@ const owner = hasDb
   ? postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 })
   : null;
 
+// Role de login do worker para este arquivo. Sufixo próprio para não colidir
+// com a de `db/tests/asr-fila-rls.int.test.ts`, que roda na mesma suíte.
+const LOGIN_WORKER = "iris_asr_worker_login_72a7t07";
+const SENHA_WORKER = "iris_asr_worker_login_teste_72a7t07";
+
 const CLINICA = "72a70000-0000-0000-0000-0000000000a1";
 const TERAPEUTA = "72a70000-0000-0000-0000-0000000000a2";
 const PACIENTE = "72a70000-0000-0000-0000-0000000000a3";
@@ -109,6 +114,30 @@ describe.skipIf(!hasDb)(
     const idsPlantados = new Set<string>();
 
     beforeAll(async () => {
+      // A rota usa `asrWorkerDb` (#494/T18), que é FAIL-CLOSED: sem
+      // `ASR_WORKER_DATABASE_URL` ela lança e todo request vira 500. A role de
+      // LOGIN é provisionamento de AMBIENTE (tem senha), não objeto versionado
+      // — a migração `0140` cria só a role NOLOGIN `iris_asr_worker`. Ninguém
+      // mais cria esta no CI, então ela nasce aqui, como `iris_asr_worker_login`
+      // nasce em `db/tests/asr-fila-rls.int.test.ts`.
+      //
+      // O env é definido ANTES do primeiro request de propósito: o pool é lazy,
+      // então definir depois deixaria a primeira chamada com a conexão errada.
+      await owner!.unsafe(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${LOGIN_WORKER}') THEN
+            CREATE ROLE ${LOGIN_WORKER} LOGIN PASSWORD '${SENHA_WORKER}' IN ROLE iris_asr_worker;
+          END IF;
+        END
+        $$;
+      `);
+      process.env.ASR_WORKER_DATABASE_URL =
+        process.env.MIGRATION_DATABASE_URL!.replace(
+          /:\/\/[^@]+@/,
+          `://${LOGIN_WORKER}:${SENHA_WORKER}@`,
+        );
+
       await owner!`INSERT INTO clinic (id, nome, is_demo) VALUES
       (${CLINICA}, 'Clínica ASR 72a7 T07', false)`;
       await owner!`INSERT INTO app_user (id, name, email) VALUES
