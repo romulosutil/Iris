@@ -26,10 +26,12 @@ export function CapturaForm({
   sessionId,
   protocolos,
   protocolIdsPreSelecionados,
+  asrAtivo = true,
 }: {
   sessionId: string;
   protocolos: Protocolo[];
   protocolIdsPreSelecionados: string[];
+  asrAtivo?: boolean;
 }) {
   const [textoState, textoAction] = useActionState<
     CapturarDiarioState,
@@ -42,6 +44,9 @@ export function CapturaForm({
   const [selecionados, setSelecionados] = useState<string[]>(
     protocolIdsPreSelecionados,
   );
+  const [textoDraft, setTextoDraft] = useState("");
+  const [tabAtiva, setTabAtiva] = useState("texto");
+  const [origemIa, setOrigemIa] = useState(false);
   const [audioConfirmado, setAudioConfirmado] = useState(false);
 
   function alternar(protocolId: string) {
@@ -85,15 +90,21 @@ export function CapturaForm({
         </p>
       ) : null}
 
-      <Tabs defaultValue="texto">
+      <Tabs value={tabAtiva} onValueChange={setTabAtiva}>
         <TabsList>
           <TabsTrigger value="texto">Texto</TabsTrigger>
-          <TabsTrigger value="audio">Áudio</TabsTrigger>
+          {asrAtivo ? <TabsTrigger value="audio">Áudio</TabsTrigger> : null}
         </TabsList>
 
         <TabsContent value="texto">
           <form action={textoAction} className="flex flex-col gap-4">
             <input type="hidden" name="sessionId" value={sessionId} />
+            {origemIa ? (
+              <Alert severidade="info">
+                Rascunho inserido a partir do ditado de voz (IA). Revise e edite
+                antes de salvar a captura.
+              </Alert>
+            ) : null}
             <Field
               label="Anotação rápida"
               htmlFor="texto"
@@ -104,6 +115,8 @@ export function CapturaForm({
                 name="texto"
                 required
                 rows={4}
+                value={textoDraft}
+                onChange={(e) => setTextoDraft(e.target.value)}
                 aria-describedby={textoState.error ? "texto-error" : undefined}
                 className="font-body focus-visible:outline-focus min-h-24 w-full rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-4 py-2.5 text-base text-[var(--text-primary)] outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
               />
@@ -124,17 +137,24 @@ export function CapturaForm({
           </form>
         </TabsContent>
 
-        <TabsContent value="audio">
-          <Stack gap="sm">
-            <AudioLocal
-              sessionId={sessionId}
-              aoConfirmar={() => setAudioConfirmado(true)}
-            />
-            {audioConfirmado ? (
-              <Alert severidade="sucesso">Áudio registrado nesta sessão.</Alert>
-            ) : null}
-          </Stack>
-        </TabsContent>
+        {asrAtivo ? (
+          <TabsContent value="audio">
+            <Stack gap="sm">
+              <AudioLocal
+                sessionId={sessionId}
+                aoConfirmar={() => setAudioConfirmado(true)}
+                onAplicarTexto={(textoTransf) => {
+                  setTextoDraft(textoTransf);
+                  setOrigemIa(true);
+                  setTabAtiva("texto");
+                }}
+              />
+              {audioConfirmado ? (
+                <Alert severidade="sucesso">Áudio registrado nesta sessão.</Alert>
+              ) : null}
+            </Stack>
+          </TabsContent>
+        ) : null}
       </Tabs>
     </Stack>
   );

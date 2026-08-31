@@ -10,6 +10,7 @@ import {
   consolidarSessao,
   corrigirEscopoProtocolo,
   enviarLoteAsr,
+  limparTranscricaoLote,
   obterEstadoLote,
   obterLoteMaisRecente,
   registrarAudioLocal,
@@ -195,6 +196,21 @@ export async function obterLoteMaisRecenteAction(
       return { error: "Só o terapeuta da sessão acompanha a transcrição." };
     console.error("obterLoteMaisRecenteAction:", err);
     return { error: "Não foi possível consultar o lote da sessão." };
+  }
+}
+
+export async function limparTranscricaoLoteAction(
+  loteId: string,
+): Promise<{ error?: string; ok?: boolean }> {
+  const ctx = await getTenantContext();
+  try {
+    await limparTranscricaoLote(ctx, loteId);
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof RoleError)
+      return { error: "Só o terapeuta da sessão limpa a transcrição." };
+    console.error("limparTranscricaoLoteAction:", err);
+    return { error: "Não foi possível limpar a transcrição." };
   }
 }
 

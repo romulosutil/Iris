@@ -12,6 +12,7 @@ import {
 import { Stack } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { asrHabilitado } from "@/lib/flags";
 import { CapturaForm } from "./captura-form";
 import { ConsolidarForm } from "./consolidar-form";
 
@@ -105,6 +106,8 @@ export default async function DiarioPage({
     daDisciplina.length > 0 ? daDisciplina : dados.protocolos
   ).map((p) => p.id);
 
+  const asrAtivo = asrHabilitado();
+
   return (
     <Stack gap="lg">
       <PageHeader
@@ -136,6 +139,7 @@ export default async function DiarioPage({
           sessionId={sessionId}
           protocolos={dados.protocolos}
           protocolIdsPreSelecionados={preSelecionados}
+          asrAtivo={asrAtivo}
         />
       </Stack>
 

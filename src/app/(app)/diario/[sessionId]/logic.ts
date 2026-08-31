@@ -947,3 +947,27 @@ async function obterLoteMaisRecenteCore(
 }
 
 export const obterLoteMaisRecente = obterLoteMaisRecenteCore;
+
+/**
+ * R19: A transcrição é dado clínico e efêmera no servidor. Assim que o
+ * terapeuta aceita/transfere o rascunho para o diário, limpa o campo
+ * `transcricao_texto` no banco de dados.
+ */
+async function limparTranscricaoLoteCore(
+  ctx: TenantContext,
+  loteId: string,
+): Promise<{ error?: string; ok?: boolean; bloqueioConta?: BloqueioConta }> {
+  requireRole(ctx, "terapeuta");
+  const parsed = z.string().uuid().safeParse(loteId);
+  if (!parsed.success) return { ok: true };
+
+  await withTenant(ctx, (tx) =>
+    tx
+      .update(audioCapture)
+      .set({ transcricaoTexto: null })
+      .where(eq(audioCapture.loteId, parsed.data)),
+  );
+  return { ok: true };
+}
+
+export const limparTranscricaoLote = comEscrita(limparTranscricaoLoteCore);
