@@ -178,6 +178,12 @@ export async function varrer(
   let continuationToken;
   let inspecionados = 0;
   let apagados = 0;
+  // Separado de `apagados`: dry-run nunca chama DeleteObject, então contar
+  // como "apagado" mentiria no resumo (:L~250) sobre uma varredura que não
+  // tocou o bucket. Memória do repo `dry-run-por-lote-quebra-o-dedup` —
+  // mesma família de defeito, contador que representa uma ação que não
+  // aconteceu.
+  let seriamApagados = 0;
   let emUso = 0;
 
   do {
@@ -224,7 +230,7 @@ export async function varrer(
           `[dry-run] expirado (NÃO apagado): ${objeto.Key} ` +
             `(mtime=${objeto.LastModified.toISOString()})`,
         );
-        apagados += 1;
+        seriamApagados += 1;
         continue;
       }
 
@@ -241,12 +247,21 @@ export async function varrer(
   } while (continuationToken);
 
   log(
-    `varredura concluída: ${inspecionados} objeto(s) inspecionado(s), ` +
-      `${apagados} apagado(s), ${emUso} preservado(s) por ainda estar(em) em uso ` +
-      `(limite=${limiteHoras}h${dryRun ? ", dry-run" : ""}).`,
+    dryRun
+      ? `varredura concluída: ${inspecionados} objeto(s) inspecionado(s), ` +
+          `${seriamApagados} seria(m) apagado(s), ${emUso} preservado(s) por ` +
+          `ainda estar(em) em uso (limite=${limiteHoras}h, dry-run — nada foi apagado).`
+      : `varredura concluída: ${inspecionados} objeto(s) inspecionado(s), ` +
+          `${apagados} apagado(s), ${emUso} preservado(s) por ainda estar(em) em uso ` +
+          `(limite=${limiteHoras}h).`,
   );
 
-  return { inspecionados, apagados, emUso };
+  return {
+    inspecionados,
+    apagados: dryRun ? 0 : apagados,
+    seriamApagados,
+    emUso,
+  };
 }
 
 export async function main(args = process.argv.slice(2)) {

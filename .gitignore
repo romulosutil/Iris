@@ -76,6 +76,14 @@ identity*
 chave-privada*
 chave-iris*
 
+# --- Python (infra/asr, T23/#494) ---
+# Bytecode compilado localmente pelo runtime Python (__pycache__/*.pyc)
+# envelhece em silêncio contra o .py fonte se ficar rastreado — não chega na
+# imagem (o Dockerfile copia arquivos nomeados), mas polui o índice.
+__pycache__/
+**/__pycache__/
+*.pyc
+
 # --- Scratch / throwaway ---
 scratch/
 

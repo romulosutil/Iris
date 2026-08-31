@@ -91,7 +91,12 @@ describe("varrer — a varredura do bucket (#72/T15)", () => {
         limiteHoras: 6,
         refsEmUso: nenhumEmUso(),
       }),
-    ).resolves.toEqual({ inspecionados: 0, apagados: 0, emUso: 0 });
+    ).resolves.toEqual({
+      inspecionados: 0,
+      apagados: 0,
+      seriamApagados: 0,
+      emUso: 0,
+    });
     expect(client.apagados).toEqual([]);
   });
 
@@ -115,11 +120,16 @@ describe("varrer — a varredura do bucket (#72/T15)", () => {
         limiteHoras: 6,
         refsEmUso: nenhumEmUso(),
       }),
-    ).resolves.toEqual({ inspecionados: 2, apagados: 1, emUso: 0 });
+    ).resolves.toEqual({
+      inspecionados: 2,
+      apagados: 1,
+      seriamApagados: 0,
+      emUso: 0,
+    });
     expect(client.apagados).toEqual(["loteA/orfao-antigo.wav"]);
   });
 
-  test("dry-run conta os expirados mas não chama DeleteObject", async () => {
+  test("dry-run conta os expirados em `seriamApagados`, NUNCA em `apagados` (regressão: resumo mentindo)", async () => {
     const antigo = new Date(agora.getTime() - 7 * HORA_MS);
     const client = makeFakeClient({
       paginas: [{ Contents: [{ Key: "orfao.wav", LastModified: antigo }] }],
@@ -132,7 +142,12 @@ describe("varrer — a varredura do bucket (#72/T15)", () => {
         dryRun: true,
         refsEmUso: nenhumEmUso(),
       }),
-    ).resolves.toEqual({ inspecionados: 1, apagados: 1, emUso: 0 });
+    ).resolves.toEqual({
+      inspecionados: 1,
+      apagados: 0,
+      seriamApagados: 1,
+      emUso: 0,
+    });
     expect(client.apagados).toEqual([]);
   });
 
@@ -158,7 +173,12 @@ describe("varrer — a varredura do bucket (#72/T15)", () => {
         limiteHoras: 6,
         refsEmUso: nenhumEmUso(),
       }),
-    ).resolves.toEqual({ inspecionados: 2, apagados: 2, emUso: 0 });
+    ).resolves.toEqual({
+      inspecionados: 2,
+      apagados: 2,
+      seriamApagados: 0,
+      emUso: 0,
+    });
     expect(client.apagados).toEqual(["pagina1/orfao.wav", "pagina2/orfao.wav"]);
   });
 });
@@ -182,7 +202,12 @@ describe("varrer — checagem de estado antes de apagar (#72, integração)", ()
         limiteHoras: 6,
         refsEmUso: makeFakeRefsEmUso(["lote:0"]),
       }),
-    ).resolves.toEqual({ inspecionados: 1, apagados: 0, emUso: 1 });
+    ).resolves.toEqual({
+      inspecionados: 1,
+      apagados: 0,
+      seriamApagados: 0,
+      emUso: 1,
+    });
     expect(client.apagados).toEqual([]);
   });
 
@@ -209,7 +234,12 @@ describe("varrer — checagem de estado antes de apagar (#72, integração)", ()
         limiteHoras: 6,
         refsEmUso,
       }),
-    ).resolves.toEqual({ inspecionados: 3, apagados: 2, emUso: 1 });
+    ).resolves.toEqual({
+      inspecionados: 3,
+      apagados: 2,
+      seriamApagados: 0,
+      emUso: 1,
+    });
     expect(client.apagados).toEqual(["lote:semlinha", "lote:terminal"]);
   });
 
