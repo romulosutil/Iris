@@ -852,3 +852,93 @@ async function consolidarSessaoCore(
 // (Fase D) sequer acontecem — conta em somente-leitura não gasta provider nem
 // gera sinal que ninguém poderia tratar.
 export const consolidarSessao = comEscrita(consolidarSessaoCore);
+
+// ─── #72 T10 — leitura de estado do lote + limites de polling ─────────────
+//
+// R20: o CLIENTE consulta este estado periodicamente. Os limites vivem aqui,
+// nomeados, para não ficarem soltos como número mágico na UI (T11):
+// - POLLING_INTERVALO_MS: cada quantos ms o cliente deve perguntar de novo.
+// - POLLING_TETO_MS: depois de quanto tempo o cliente PARA de perguntar.
+// O teto é comportamento do cliente, não do servidor — estourá-lo nunca muda
+// a resposta daqui para "falhou". O servidor sempre devolve o estado real
+// (inclusive "ainda na_fila/processando" depois do teto); é a UI quem decide
+// parar de exibir um spinner e oferecer outra ação ao terapeuta.
+export const POLLING_INTERVALO_MS = 3000;
+export const POLLING_TETO_MS = 600_000;
+
+export type EstadoClipeAsr = {
+  ordem: number;
+  asrStatus: (typeof audioCapture.$inferSelect)["asrStatus"];
+  transcricaoTexto: string | null;
+};
+
+/**
+ * Estado atual de cada clipe de um lote, sob RLS do tenant do request. Não
+ * distingue "lote inexistente" de "lote de outra clínica" — em ambos os
+ * casos a query sob `withTenant` não enxerga a linha e o retorno é vazio
+ * (nunca um erro que vazasse a diferença entre os dois casos).
+ */
+async function obterEstadoLoteCore(
+  ctx: TenantContext,
+  loteId: string,
+): Promise<EstadoClipeAsr[]> {
+  requireRole(ctx, "terapeuta");
+  const parsed = z.string().uuid().safeParse(loteId);
+  if (!parsed.success) return [];
+
+  const rows = await withTenant(ctx, (tx) =>
+    tx
+      .select({
+        ordem: audioCapture.ordem,
+        asrStatus: audioCapture.asrStatus,
+        transcricaoTexto: audioCapture.transcricaoTexto,
+      })
+      .from(audioCapture)
+      .where(eq(audioCapture.loteId, parsed.data))
+      .orderBy(audioCapture.ordem),
+  );
+
+  return rows
+    .filter((r): r is typeof r & { ordem: number } => r.ordem !== null)
+    .map((r) => ({
+      ordem: r.ordem,
+      asrStatus: r.asrStatus,
+      transcricaoTexto: r.transcricaoTexto,
+    }));
+}
+
+export const obterEstadoLote = obterEstadoLoteCore;
+
+/**
+ * `loteId` mais recente daquela sessão, ou `null` se não houver nenhum. É a
+ * fonte de verdade no reload da página (R26): estado local de "estou fazendo
+ * polling de tal lote" se perde ao recarregar, então a página SEMPRE resolve
+ * de novo aqui — nunca a partir de um `loteId` guardado só no cliente — para
+ * decidir se há um lote em voo para retomar.
+ */
+async function obterLoteMaisRecenteCore(
+  ctx: TenantContext,
+  sessionId: string,
+): Promise<string | null> {
+  requireRole(ctx, "terapeuta");
+  const parsed = z.string().uuid().safeParse(sessionId);
+  if (!parsed.success) return null;
+
+  const [linha] = await withTenant(ctx, (tx) =>
+    tx
+      .select({ loteId: audioCapture.loteId })
+      .from(audioCapture)
+      .where(
+        and(
+          eq(audioCapture.sessionId, parsed.data),
+          isNotNull(audioCapture.loteId),
+        ),
+      )
+      .orderBy(sql`${audioCapture.criadoEm} DESC`)
+      .limit(1),
+  );
+
+  return linha?.loteId ?? null;
+}
+
+export const obterLoteMaisRecente = obterLoteMaisRecenteCore;

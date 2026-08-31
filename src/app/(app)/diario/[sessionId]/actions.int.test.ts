@@ -825,4 +825,108 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       expect(typeof rows[2]!.objeto_ref).toBe("string");
     });
   });
+
+  // ─── #72 T10 — obterEstadoLote / obterLoteMaisRecente ──────────────────────
+  describe("obterEstadoLote / obterLoteMaisRecente (#72, T10)", () => {
+    const CLINIC_B = "00000000-0000-0000-0000-0000000000b1";
+    const U_B1 = "00000000-0000-0000-0000-0000000b1ba1";
+    const PAC_B = "00000000-0000-0000-0000-00000000bac1";
+    const SESS_B = "00000000-0000-0000-0000-00000005e3a1";
+    const ctxB = {
+      clinicId: CLINIC_B,
+      userId: U_B1,
+      role: "terapeuta",
+    } as const;
+
+    beforeAll(async () => {
+      await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_B}, 'B')`;
+      await owner`INSERT INTO app_user (id, email, name) VALUES (${U_B1}, 'b1@x.com', 'B1')`;
+      await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES (${U_B1}, ${CLINIC_B}, 'terapeuta')`;
+      await owner`INSERT INTO patient (id, clinic_id, nome) VALUES (${PAC_B}, ${CLINIC_B}, 'PB')`;
+      await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, disciplina)
+        VALUES (${SESS_B}, ${CLINIC_B}, ${PAC_B}, ${U_B1}, now(), 'realizada', 'aba')`;
+    });
+    afterAll(async () => {
+      await owner`DELETE FROM audio_capture WHERE session_id = ${SESS_B}`;
+      await owner`DELETE FROM session WHERE id = ${SESS_B}`;
+      await owner`DELETE FROM patient WHERE id = ${PAC_B}`;
+      await owner`DELETE FROM user_role WHERE user_id = ${U_B1}`;
+      await owner`DELETE FROM app_user WHERE id = ${U_B1}`;
+      await owner`DELETE FROM clinic WHERE id = ${CLINIC_B}`;
+    });
+
+    const limpar = () =>
+      owner`DELETE FROM audio_capture WHERE session_id IN (${SESS}, ${SESS_B})`;
+
+    test("lote de outro tenant não é legível: obterEstadoLote devolve vazio", async () => {
+      await limpar();
+      const loteId = "00000000-0000-0000-0000-0000000b0001";
+      await owner`INSERT INTO audio_capture (session_id, clinic_id, lote_id, ordem, asr_status)
+        VALUES (${SESS_B}, ${CLINIC_B}, ${loteId}, 0, 'na_fila')`;
+
+      const { obterEstadoLote } = await import("./logic");
+      const clipes = await obterEstadoLote(ctxT1, loteId);
+      expect(clipes).toEqual([]);
+    });
+
+    test("lote de outro tenant não é legível: obterLoteMaisRecente ignora sessão de outra clínica", async () => {
+      await limpar();
+      const loteId = "00000000-0000-0000-0000-0000000b0002";
+      await owner`INSERT INTO audio_capture (session_id, clinic_id, lote_id, ordem, asr_status)
+        VALUES (${SESS_B}, ${CLINIC_B}, ${loteId}, 0, 'na_fila')`;
+
+      const { obterLoteMaisRecente } = await import("./logic");
+      // ctxT1 (clínica A) nem enxerga SESS_B (session_id de outra clínica) via
+      // RLS — o resultado é nulo, não um erro que distinguisse os dois casos.
+      const encontrado = await obterLoteMaisRecente(ctxT1, SESS_B);
+      expect(encontrado).toBeNull();
+
+      // Já pelo tenant dono, o lote aparece normalmente.
+      const proprio = await obterLoteMaisRecente(ctxB, SESS_B);
+      expect(proprio).toBe(loteId);
+    });
+
+    test("lote parcial devolve os transcritos e marca os pendentes", async () => {
+      await limpar();
+      const loteId = "00000000-0000-0000-0000-0000000a0010";
+      await owner`INSERT INTO audio_capture (session_id, clinic_id, lote_id, ordem, asr_status, transcricao_texto, transcrito_em)
+        VALUES
+          (${SESS}, ${CLINIC_A}, ${loteId}, 0, 'transcrito', 'primeiro trecho', now()),
+          (${SESS}, ${CLINIC_A}, ${loteId}, 1, 'na_fila', NULL, NULL),
+          (${SESS}, ${CLINIC_A}, ${loteId}, 2, 'falhou', NULL, NULL)`;
+
+      const { obterEstadoLote } = await import("./logic");
+      const clipes = await obterEstadoLote(ctxT1, loteId);
+      expect(clipes).toEqual([
+        {
+          ordem: 0,
+          asrStatus: "transcrito",
+          transcricaoTexto: "primeiro trecho",
+        },
+        { ordem: 1, asrStatus: "na_fila", transcricaoTexto: null },
+        { ordem: 2, asrStatus: "falhou", transcricaoTexto: null },
+      ]);
+    });
+
+    test("obterLoteMaisRecente após reload devolve o lote em na_fila corretamente", async () => {
+      await limpar();
+      const loteAntigo = "00000000-0000-0000-0000-0000000a0011";
+      const loteRecente = "00000000-0000-0000-0000-0000000a0012";
+      await owner`INSERT INTO audio_capture (session_id, clinic_id, lote_id, ordem, asr_status, criado_em)
+        VALUES (${SESS}, ${CLINIC_A}, ${loteAntigo}, 0, 'transcrito', now() - interval '1 hour')`;
+      await owner`INSERT INTO audio_capture (session_id, clinic_id, lote_id, ordem, asr_status, criado_em)
+        VALUES (${SESS}, ${CLINIC_A}, ${loteRecente}, 0, 'na_fila', now())`;
+
+      const { obterLoteMaisRecente } = await import("./logic");
+      const encontrado = await obterLoteMaisRecente(ctxT1, SESS);
+      expect(encontrado).toBe(loteRecente);
+    });
+
+    test("obterLoteMaisRecente devolve nulo quando não há lote na sessão", async () => {
+      await limpar();
+      const { obterLoteMaisRecente } = await import("./logic");
+      const encontrado = await obterLoteMaisRecente(ctxT1, SESS);
+      expect(encontrado).toBeNull();
+    });
+  });
 });

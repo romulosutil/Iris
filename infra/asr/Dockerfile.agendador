@@ -1,0 +1,61 @@
+# syntax=docker/dockerfile:1
+# Imagem dos LAÇOS de agendamento do pipeline de ASR (Iris, #72, T08).
+#
+# NÃO é o serviço `iris-asr` (faster-whisper) — aquele é `infra/asr/Dockerfile`,
+# Python, e serve HTTP em `/transcrever`. Esta imagem é Node puro, molde
+# infra/billing/Dockerfile: container magro que só dispara chamadas, nunca
+# processa áudio nem carrega modelo.
+#
+# DUAS UNIDADES DE TRABALHO NA MESMA IMAGEM, DOIS SERVIÇOS EASYPANEL:
+#   - agendador.sh      → dispara o worker de transcrição (T08, gatilho magro
+#                          por HTTP, zero dependência além do fetch nativo)
+#   - sweeper-orfaos.sh  → backstop de objetos órfãos no bucket efêmero (T15,
+#                          precisa de `postgres` e `@aws-sdk/client-s3`)
+#
+# T15 (`infra/asr/sweeper-orfaos.sh`) foi implementado ANTES de T08 existir e
+# ficou sem imagem própria de propósito — o comentário no topo daquele script
+# convida T08 a decidir se compensa fundir os dois ticks. Decisão tomada aqui:
+# NÃO fundir os laços (tiques e falhas de um não devem derrubar o outro), mas
+# COMPARTILHAR a imagem — os dois são scripts `.mjs` magros do mesmo pipeline,
+# e cada Easypanel "Aplicativo" desta imagem escolhe seu laço só pelo campo
+# Comando (`/app/agendador.sh` ou `/app/sweeper-orfaos.sh`), como dois serviços
+# separados, cada um com seu próprio Comando/env/heartbeat/réplica no painel.
+# Proposta de arquitetura — validar com Rômulo (regra do CLAUDE.md: decisão
+# nova de arquitetura marca como pendente).
+#
+# `npm install` À MÃO (sem herdar node_modules do app), pelo mesmo motivo do
+# #156 documentado em infra/billing/Dockerfile: só as duas dependências que o
+# sweeper (T15) genuinamente usa.
+FROM node:22-alpine
+
+# bash: os dois laços usam `set -Eeuo pipefail` e `[[ ]]`, que não são POSIX
+# sh. A alpine só traz `ash`. Mesma razão dos demais Dockerfiles de agendador
+# deste repo (infra/retencao/, infra/billing/, infra/escalonamento/).
+RUN apk add --no-cache bash
+
+WORKDIR /app
+
+# Só as deps do sweeper (T15) — o agendador de T08 usa só `fetch` nativo do
+# Node 22 e não precisa de nada aqui. Versões EXATAS, pinadas nas mesmas do
+# pnpm-lock.yaml do repo (postgres 3.4.9, mesma escolha de
+# infra/retencao/Dockerfile; @aws-sdk/client-s3 3.1121.0). `npm install`, não
+# `pnpm install`: instalar a partir do lockfile do repo traria o grafo inteiro
+# (Next, React, Storybook...) numa imagem cuja única necessidade são dois
+# drivers — mesma razão de infra/retencao/Dockerfile.
+RUN npm install --no-package-lock --no-audit --no-fund \
+    postgres@3.4.9 @aws-sdk/client-s3@3.1121.0
+
+COPY scripts/disparo-asr-transcrever.mjs ./scripts/disparo-asr-transcrever.mjs
+COPY scripts/asr-sweeper-orfaos.mjs ./scripts/asr-sweeper-orfaos.mjs
+
+COPY infra/asr/agendador.sh ./agendador.sh
+COPY infra/asr/sweeper-orfaos.sh ./sweeper-orfaos.sh
+RUN chmod +x agendador.sh sweeper-orfaos.sh
+
+# CMD, não ENTRYPOINT: com ENTRYPOINT em exec-form um
+# `docker compose run asr-agendador node scripts/disparo-asr-transcrever.mjs --once`
+# passaria tudo como ARGUMENTO do agendador, que ignoraria e entraria no laço
+# normal (mesma armadilha documentada em infra/billing/Dockerfile). Com CMD, o
+# argumento SUBSTITUI o comando — e é assim que o Easypanel troca entre os dois
+# laços só com o campo Comando, sem precisar de duas imagens.
+CMD ["/app/agendador.sh"]
