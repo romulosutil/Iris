@@ -133,7 +133,9 @@ export function CapturaForm({
                 value="discipline_only"
                 className="size-4 rounded border-2 border-[var(--border-brutal)] accent-[var(--action-primary)]"
               />
-              <span>Restringir visualização à minha disciplina (sigilo profissional)</span>
+              <span>
+                Restringir visualização à minha disciplina (sigilo profissional)
+              </span>
             </label>
             <Button type="submit">Salvar captura</Button>
             {textoState.id ? (
