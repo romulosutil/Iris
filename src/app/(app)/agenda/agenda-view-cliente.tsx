@@ -583,15 +583,16 @@ export function AgendaViewCliente({
                     <GerirSessao sessionId={s.id} terapeutas={terapeutas} />
                   ) : null}
                   {/* #512 · T13 (P1, issue #521, opção a) — "Repor" cria uma
-                      sessão nova (rota antiga `/agenda/semana` continua
-                      sendo o destino até T14 decidir o redirect); segue
-                      `podeCriarSessao`, não `podeGerir` (que também cobre
-                      `admin_recepcao`, sem o gesto de criação). */}
+                      sessão nova. T14 fundiu `/agenda/semana` em
+                      `/agenda?escala=semana`: aponta direto para a rota nova,
+                      sem o roundtrip do redirect. Segue `podeCriarSessao`, não
+                      `podeGerir` (que também cobre `admin_recepcao`, sem o
+                      gesto de criação). */}
                   {(s.estado === "falta_paciente" ||
                     s.estado === "falta_terapeuta") &&
                   podeCriarSessao ? (
                     <Link
-                      href={`/agenda/semana?repor=${s.id}&patientId=${s.patientId}&terapeutaId=${s.terapeutaId}&disciplina=${encodeURIComponent(s.disciplina)}`}
+                      href={`/agenda?escala=semana&repor=${s.id}&patientId=${s.patientId}&terapeutaId=${s.terapeutaId}&disciplina=${encodeURIComponent(s.disciplina)}`}
                     >
                       <Button variante="secundaria" tamanho="sm">
                         Repor
