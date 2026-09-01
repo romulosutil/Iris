@@ -14,7 +14,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Iris — Governança Clínica",
     short_name: "Iris",
     description:
-      "Prontuário e governança clínica para clínicas de terapia infantil.",
+      "Governança clínica para clínicas de terapia multidisciplinar.",
     lang: "pt-BR",
     dir: "ltr",
     // `/` e não `/app`: quem tem sessão é redirecionado para `/agenda` pela

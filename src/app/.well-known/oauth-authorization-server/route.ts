@@ -1,49 +1,18 @@
 import { NextResponse } from "next/server";
 
+/**
+ * Só descreve login humano real (Better-Auth). Sem `authorization_endpoint`,
+ * `registration_endpoint` nem escopo de dado clínico — não existe fluxo de
+ * agente autônomo nem base legal (D57) para oferecer isso hoje.
+ */
 export function GET() {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://iris.app";
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL || "https://irisclinica.ia.br";
 
   const oauthConfig = {
     issuer: baseUrl,
-    authorization_endpoint: `${baseUrl}/api/auth/authorize`,
-    token_endpoint: `${baseUrl}/api/auth/token`,
-    registration_endpoint: `${baseUrl}/api/auth/register`,
-    jwks_uri: `${baseUrl}/api/auth/jwks`,
-    scopes_supported: [
-      "read:patients",
-      "write:evaluations",
-      "read:reports",
-      "agent:interact",
-    ],
-    response_types_supported: ["code", "token"],
-    grant_types_supported: [
-      "authorization_code",
-      "client_credentials",
-      "refresh_token",
-    ],
-    token_endpoint_auth_methods_supported: [
-      "client_secret_basic",
-      "client_secret_post",
-    ],
+    scopes_supported: ["public:institutional-content"],
     service_documentation: `${baseUrl}/auth.md`,
-
-    // Auth.md draft extension for AI Agent Registration
-    agent_auth: {
-      documentation_uri: `${baseUrl}/auth.md`,
-      register_uri: `${baseUrl}/api/auth/register/agent`,
-      supported_identity_types: [
-        "ai_agent",
-        "autonomous_system",
-        "service_account",
-      ],
-      supported_credential_types: ["bearer_token", "mTLS", "jwt_assertion"],
-      scopes_supported: [
-        "read:patients",
-        "write:evaluations",
-        "read:reports",
-        "agent:interact",
-      ],
-    },
   };
 
   return NextResponse.json(oauthConfig, {

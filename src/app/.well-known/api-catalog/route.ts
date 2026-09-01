@@ -1,39 +1,22 @@
 import { NextResponse } from "next/server";
 
 export function GET() {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://iris.app";
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL || "https://irisclinica.ia.br";
 
   const catalog = {
     linkset: [
       {
-        anchor: `${baseUrl}/api/v1`,
-        "service-desc": [
-          {
-            href: `${baseUrl}/api/v1/openapi.json`,
-            type: "application/openapi+json",
-          },
-        ],
+        anchor: baseUrl,
         "service-doc": [
           {
             href: `${baseUrl}/auth.md`,
             type: "text/markdown",
           },
         ],
-        status: [
-          {
-            href: `${baseUrl}/api/health`,
-            type: "application/json",
-          },
-        ],
         "authorizing-agent": [
           {
             href: `${baseUrl}/.well-known/oauth-authorization-server`,
-            type: "application/json",
-          },
-        ],
-        "mcp-server-card": [
-          {
-            href: `${baseUrl}/.well-known/mcp/server-card.json`,
             type: "application/json",
           },
         ],

@@ -40,10 +40,9 @@ export function LandingFooter() {
             </Link>
 
             <p className="font-body max-w-sm text-sm leading-relaxed text-gray-300">
-              Prontuário para clínicas de terapia infantil que transforma o
-              diário da sessão em evidência rastreável até a frase que a
-              originou. ABA, Terapia Ocupacional e Fonoaudiologia no mesmo
-              prontuário.
+              Governança clínica que transforma o diário da sessão em
+              evidência rastreável até a frase que a originou. ABA, TCC,
+              Terapia Ocupacional e Fonoaudiologia na mesma clínica.
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">
