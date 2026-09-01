@@ -216,6 +216,52 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     expect(s[0]!.numero_sequencial_paciente).toBe(1);
   });
 
+  // Bug de 31/08/2026: o `gemini-2.5-flash` chumbado foi aposentado pelo Google
+  // (404 NOT_FOUND) e TODA extração de produção caiu no catch da Fase B. Como o
+  // catch só fazia `console.error`, a action devolvia `{ ok: true }` e a UI
+  // pintava "Sessão consolidada" em verde: falha invisível para o terapeuta.
+  test("extração que falha devolve AVISO (não passa por sucesso limpo)", async () => {
+    await owner`DELETE FROM extraction WHERE session_id = ${SESS}`;
+    const { resolveProvider } = await import("@/lib/extraction/provider");
+    vi.mocked(resolveProvider).mockReturnValueOnce({
+      extrair: async () => {
+        throw new Error("404 NOT_FOUND: modelo aposentado");
+      },
+    });
+
+    const { consolidarSessao, AVISO_EXTRACAO_FALHOU } = await import("./logic");
+    const r = await consolidarSessao(ctxT1, {
+      sessionId: SESS,
+      texto: "Nota que o LLM não conseguiu analisar.",
+    });
+
+    // A nota é registro clínico: nunca se perde por falha do provider.
+    expect(r.error).toBeUndefined();
+    expect(r.aviso).toBe(AVISO_EXTRACAO_FALHOU);
+    const notas =
+      await owner`SELECT texto FROM session_note WHERE session_id = ${SESS} AND tipo = 'nota_consolidada'`;
+    expect(notas[0]!.texto).toBe("Nota que o LLM não conseguiu analisar.");
+    const ex =
+      await owner`SELECT estado FROM extraction WHERE session_id = ${SESS}`;
+    expect(ex.length).toBe(1);
+    expect(ex[0]!.estado).toBe("pendente_reprocessamento");
+  });
+
+  test("extração bem-sucedida NÃO devolve aviso", async () => {
+    await owner`DELETE FROM extraction WHERE session_id = ${SESS}`;
+    const { resolveProvider } = await import("@/lib/extraction/provider");
+    vi.mocked(resolveProvider).mockReturnValueOnce({
+      extrair: async () => ({ drafts: [], alertaRisco: null }),
+    });
+    const { consolidarSessao } = await import("./logic");
+    const r = await consolidarSessao(ctxT1, {
+      sessionId: SESS,
+      texto: "Nota analisada com sucesso pelo provider.",
+    });
+    expect(r.error).toBeUndefined();
+    expect(r.aviso).toBeUndefined();
+  });
+
   test("clínica demo gera extrações sugeridas ao consolidar", async () => {
     await owner`UPDATE clinic SET is_demo = true WHERE id = ${CLINIC_A}`;
     const { consolidarSessao } = await import("./logic");

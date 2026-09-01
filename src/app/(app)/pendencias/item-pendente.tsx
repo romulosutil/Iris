@@ -1,16 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
 import { Split, Cluster, Stack } from "@/components/ui/layout";
-import { Button } from "@/components/ui/button";
-import { Alert } from "@/components/ui/alert";
 import { cn } from "@/lib/cn";
 import { control, surface } from "@/components/ui/primitives/surface";
-import {
-  reprocessarExtracaoAction,
-  type ReprocessarState,
-} from "../diario/[sessionId]/actions";
+import { ReprocessarExtracao } from "../diario/[sessionId]/reprocessar-extracao";
 import type { ExtracaoPendente } from "./queries";
 
 const linkClasses = cn(
@@ -32,11 +26,6 @@ const linkClasses = cn(
  * de etapa não é dado clínico, é estado de pipeline.
  */
 export function ItemPendente({ item }: { item: ExtracaoPendente }) {
-  const [state, formAction, pending] = useActionState<
-    ReprocessarState,
-    FormData
-  >(reprocessarExtracaoAction, {});
-
   return (
     <Stack
       gap="md"
@@ -62,21 +51,9 @@ export function ItemPendente({ item }: { item: ExtracaoPendente }) {
           <Link href={`/diario/${item.sessionId}`} className={linkClasses}>
             Abrir diário
           </Link>
-          <form action={formAction} className="contents">
-            <input type="hidden" name="sessionId" value={item.sessionId} />
-            <Button type="submit" disabled={pending}>
-              {pending ? "Reprocessando…" : "Reprocessar"}
-            </Button>
-          </form>
+          <ReprocessarExtracao sessionId={item.sessionId} />
         </Cluster>
       </Split>
-      {state.error ? <Alert severidade="erro">{state.error}</Alert> : null}
-      {state.ok ? (
-        <Alert severidade="sucesso">
-          Reprocessamento disparado. Se a extração vier, aparece em Sugestões da
-          IA.
-        </Alert>
-      ) : null}
     </Stack>
   );
 }

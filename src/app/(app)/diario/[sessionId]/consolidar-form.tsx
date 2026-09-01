@@ -41,12 +41,21 @@ export function ConsolidarForm({ sessionId }: { sessionId: string }) {
           value="discipline_only"
           className="size-4 rounded border-2 border-[var(--border-brutal)] accent-[var(--action-primary)]"
         />
-        <span>Restringir visualização à minha disciplina (sigilo profissional)</span>
+        <span>
+          Restringir visualização à minha disciplina (sigilo profissional)
+        </span>
       </label>
       <Button type="submit" disabled={pending}>
         {pending ? "Consolidando…" : "Consolidar sessão"}
       </Button>
-      {state.ok ? (
+      {/* Sucesso PARCIAL não pode se passar por sucesso: quando a extração da
+          IA falha, a nota foi salva mas nenhuma sugestão vai aparecer. Mostrar
+          o verde aqui faria o terapeuta esperar por uma análise que nunca vem. */}
+      {state.ok && state.aviso ? (
+        <Alert severidade="warning" titulo="Nota salva, análise pendente">
+          {state.aviso}
+        </Alert>
+      ) : state.ok ? (
         <Alert severidade="sucesso">
           {typeof state.numero === "number"
             ? `Sessão consolidada — sessão nº ${state.numero} deste paciente.`
