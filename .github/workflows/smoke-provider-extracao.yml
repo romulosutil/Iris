@@ -1,0 +1,159 @@
+# Smoke agendado do provider REAL de extração (#510).
+#
+# POR QUE AGENDADO E NÃO NO CI DE PR: a quebra que este workflow existe para
+# pegar não é causada por um commit nosso — é o Google APOSENTANDO um id de
+# modelo (31/08/2026, `gemini-2.5-flash` → 404, PR #508). Nenhum PR muda de
+# estado quando isso acontece; o repo pode ficar sem nenhum commit por dias e
+# a produção quebrada o tempo todo. Só um relógio pega isso.
+#
+# POR QUE NÃO ENTRA NO `pnpm test`: chama a API do Gemini de verdade (custo e
+# latência reais) e precisa de GOOGLE_API_KEY. Segue a convenção `*.llm.test.ts`
+# (excluída em vitest.config.ts, isolada em vitest.llm.config.ts).
+#
+# ESCOPO: roda SÓ o arquivo do smoke (`pnpm test:smoke`), nunca a suíte
+# clínica completa (`pnpm test:llm`, #395) — aquela é cara de propósito e é
+# invocação manual e consciente do Rômulo.
+#
+# SEM DADO DE PACIENTE: a nota que sai daqui para o Google é sintética, escrita
+# dentro do próprio arquivo de teste. O gate de D57 (EXTRACTION_LLM_ENABLED)
+# protege o dado real, e este workflow não pode ser a porta dos fundos dele.
+name: Smoke do provider de extração
+
+on:
+  schedule:
+    # Diário às 09:00 UTC (06:00 BRT) — antes do horário de atendimento, para
+    # que uma aposentadoria de id apareça como issue aberta ANTES de a primeira
+    # terapeuta consolidar uma sessão no dia.
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: smoke-provider-extracao
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write # abre a issue de alerta quando o smoke quebra
+
+jobs:
+  smoke:
+    name: Extração real contra a API do Gemini
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Falha ALTO se o segredo não estiver configurado, em vez de deixar o
+      # globalSetup da suíte reclamar de chave ausente com uma mensagem que
+      # parece problema de código. Sem esta checagem, "workflow vermelho" e
+      # "modelo aposentado" ficam indistinguíveis no e-mail do Actions.
+      - name: Verifica que GOOGLE_API_KEY está configurada
+        id: segredo
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: |
+          if [ -z "${GOOGLE_API_KEY}" ]; then
+            echo "::error::Segredo GOOGLE_API_KEY ausente no repositório."
+            echo "Este smoke chama a API do Gemini de verdade e não tem como"
+            echo "rodar sem a chave. Configure em Settings > Secrets and"
+            echo "variables > Actions > New repository secret."
+            exit 1
+          fi
+
+      - name: Smoke do provider de extração
+        id: smoke
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          # Espelha a variável do Easypanel: se o Rômulo trocar o modelo em
+          # produção pelo painel, o smoke tem que passar a exercitar o modelo
+          # NOVO — senão ele vira verde sobre um id que produção não usa mais.
+          # Vazia aqui = usa MODELO_EXTRACAO_PADRAO (provider.ts), que é
+          # exatamente o que produção faz sem a variável setada.
+          GOOGLE_EXTRACTION_MODEL: ${{ vars.GOOGLE_EXTRACTION_MODEL }}
+        run: pnpm test:smoke
+
+      # Workflow vermelho só notifica quem olha o Actions. Uma issue aberta
+      # entra na mesma fila que o resto do trabalho e não some no e-mail.
+      #
+      # A condição é ESCOPADA aos dois passos que dizem algo sobre o provider,
+      # nunca `if: failure()` cru: com o cru, uma queda do registry do npm em
+      # `pnpm install` abriria uma issue afirmando que a extração de produção
+      # está quebrada — diagnóstico falso, e caro justamente no dia de
+      # incidente (memória do repo `mensagem-de-erro-que-afirma-causa`). Se o
+      # job falhar antes destes passos, o workflow fica vermelho no Actions e
+      # nenhuma issue é aberta, que é a leitura honesta: não sabemos nada sobre
+      # o provider porque nem chegamos a perguntar.
+      - name: Abre issue de alerta quando o smoke quebra
+        if: >-
+          failure() &&
+          (steps.segredo.outcome == 'failure' || steps.smoke.outcome == 'failure')
+        uses: actions/github-script@v7
+        env:
+          # `steps` NÃO existe como variável JS dentro do github-script — o
+          # contexto de Actions só é interpolado em `${{ }}`. Chega por env.
+          PASSO_SEGREDO: ${{ steps.segredo.outcome }}
+        with:
+          script: |
+            const titulo = "Smoke do provider de extração falhou — extração de produção pode estar quebrada";
+            const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            // Não empilha uma issue por dia enquanto ninguém conserta: se já
+            // existe uma aberta deste alerta, só comenta nela.
+            const abertas = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "bug",
+              per_page: 100,
+            });
+            const existente = abertas.data.find((i) => i.title === titulo);
+
+            const corpo = [
+              `O smoke agendado do provider real de extração falhou em ${new Date().toISOString()}.`,
+              "",
+              `**Passo que falhou:** ${process.env.PASSO_SEGREDO === "failure" ? "checagem do segredo GOOGLE_API_KEY — o smoke NÃO chegou a rodar, isto não diz nada sobre a saúde do provider" : "a chamada real ao Gemini"}.`,
+              "",
+              `**Run:** ${url}`,
+              "",
+              "## O que isso provavelmente significa",
+              "",
+              "O caminho de produção da extração (`resolveProvider` → `LlmExtractionProvider` → `createGeminiInvoker`) não conseguiu completar uma chamada real ao Gemini. As causas mais prováveis, em ordem:",
+              "",
+              "1. **Id de modelo aposentado pelo Google** (foi o que aconteceu em 31/08/2026, PR #508). O log do run mostra `404 NOT_FOUND ... is no longer available`. Correção: setar `GOOGLE_EXTRACTION_MODEL` no Easypanel com o id novo (sem deploy de código) e atualizar `MODELO_EXTRACAO_PADRAO` em `src/lib/extraction/provider.ts`.",
+              "2. **Chave sem cota ou revogada** — `429` ou erro de autenticação no log.",
+              "3. **Contrato da ferramenta recusado** — o schema derivado de `agentOutputObjectSchema` deixou de ser aceito pela API.",
+              "",
+              "## Urgência",
+              "",
+              "Se for (1) ou (2), **toda extração de produção está caindo em `pendente_reprocessamento` agora** — a nota do diário é salva, mas nenhuma extração é gerada. Não é visível para a terapeuta como erro.",
+              "",
+              "_Issue aberta automaticamente por `.github/workflows/smoke-provider-extracao.yml` (#510)._",
+            ].join("\n");
+
+            if (existente) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existente.number,
+                body: `Smoke falhou de novo. Run: ${url}`,
+              });
+              core.notice(`Issue #${existente.number} já estava aberta — comentário adicionado.`);
+            } else {
+              const nova = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: titulo,
+                body: corpo,
+                labels: ["bug"],
+              });
+              core.notice(`Issue #${nova.data.number} aberta.`);
+            }
