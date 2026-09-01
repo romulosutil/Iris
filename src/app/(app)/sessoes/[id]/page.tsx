@@ -12,6 +12,7 @@ import { carregarSessao } from "./queries";
 import { Timeline, ROTULO_GESTO, ROTULO_MOTIVO } from "./timeline";
 import { PassoDocumentar } from "./passo-documentar";
 import { PassoRevisar } from "./passo-revisar";
+import { CorrigirNota } from "./corrigir-nota";
 
 /**
  * `/sessoes/[id]` — timeline dos 5 estados canônicos + o passo em foco
@@ -70,6 +71,20 @@ export default async function SessaoPage({
         dados={dados}
         resultado={resultado}
       />
+
+      {/* #513 — conserto de um passo já concluído, não o próximo passo: fica
+          depois do gesto primário e fechado por padrão. Só aparece com nota
+          gravada (nada a corrigir sem ela) e só para o dono (a RLS recusa a
+          escrita de qualquer outro — #514). Fora dos terminais (`gesto ===
+          null`): numa sessão de falta/cancelada não há mais trabalho clínico
+          a fazer, e reconsolidar ali reabriria a análise da IA. */}
+      {dados.ehDono && dados.notaConsolidada && resultado.gesto !== null ? (
+        <CorrigirNota
+          sessionId={sessionId}
+          texto={dados.notaConsolidada.texto}
+          visibilityLevel={dados.notaConsolidada.visibilityLevel}
+        />
+      ) : null}
     </Stack>
   );
 }
