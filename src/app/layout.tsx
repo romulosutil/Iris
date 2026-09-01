@@ -11,13 +11,13 @@ export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_APP_URL || "https://irisclinica.ia.br",
   ),
-  title: "Iris — Prontuário para clínicas de terapia infantil (TEA)",
+  title: "Iris — Governança clínica para clínicas de terapia multidisciplinar",
   description:
-    "Chegue na avaliação com o dossiê pronto. Evidências clínicas rastreáveis, decisão humana.",
+    "Diário de sessão em linguagem natural, evidência clínica rastreável e aprovação humana item a item. Para TEA, TCC, Fonoaudiologia e Terapia Ocupacional.",
   openGraph: {
-    title: "Iris — Prontuário para clínicas de terapia infantil (TEA)",
+    title: "Iris — Governança clínica para clínicas de terapia multidisciplinar",
     description:
-      "Chegue na avaliação com o dossiê pronto. Evidências clínicas rastreáveis, decisão humana.",
+      "Diário de sessão em linguagem natural, evidência clínica rastreável e aprovação humana item a item. Para TEA, TCC, Fonoaudiologia e Terapia Ocupacional.",
     url: "/",
     siteName: "Iris Governança Clínica",
     locale: "pt_BR",
@@ -27,15 +27,15 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Iris — Prontuário para clínicas de terapia infantil (TEA)",
+        alt: "Iris — Governança clínica para clínicas de terapia multidisciplinar",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Iris — Prontuário para clínicas de terapia infantil (TEA)",
+    title: "Iris — Governança clínica para clínicas de terapia multidisciplinar",
     description:
-      "Chegue na avaliação com o dossiê pronto. Evidências clínicas rastreáveis, decisão humana.",
+      "Diário de sessão em linguagem natural, evidência clínica rastreável e aprovação humana item a item. Para TEA, TCC, Fonoaudiologia e Terapia Ocupacional.",
     images: ["/og-image.png"],
   },
 };
