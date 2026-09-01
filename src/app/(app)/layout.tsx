@@ -7,6 +7,7 @@ import { FaixaTrial } from "@/components/app/faixa-trial";
 import { FaixaRecusa } from "@/components/app/faixa-recusa";
 import { estadoEstagio2 } from "./alertas-risco/queries";
 import { listarPendencias } from "./pendencias/queries";
+import { listarFilaValidacao } from "./validacao/queries";
 import { obterSituacaoConta, obterAvisoRecusa } from "./queries";
 import { SignOutButton } from "./sign-out-button";
 import { AppHeader, type NavItem } from "./app-header";
@@ -18,15 +19,19 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const ctx = await getTenantContext();
   const ehClinico = ctx.role === "coordenador" || ctx.role === "terapeuta";
 
+  const ehCoordenador = ctx.role === "coordenador";
+
   const [
     clinicas,
     pendencias,
+    filaValidacao,
     { quantidade: riscoEstagio2, protocoloInterno },
     situacaoConta,
     avisoRecusa,
   ] = await Promise.all([
     listarClinicasDoUsuario(ctx.userId),
     ehClinico ? listarPendencias(ctx) : Promise.resolve({ total: 0 }),
+    ehCoordenador ? listarFilaValidacao(ctx) : Promise.resolve({ total: 0 }),
     // #122 §4.2.1, ação 1 — estágio 2 satura a clínica inteira, não só a fila de
     // quem tem acesso ao caso. Sem nome de paciente e sem categoria aqui: quem vê
     // este banner pode não ter acesso clínico ao caso (H3 aplicado à tela).
@@ -57,6 +62,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   ]);
 
   const totalPendencias = pendencias.total;
+  const totalFilaValidacao = filaValidacao.total;
 
   let itemsNav: NavItem[] = [];
 
@@ -66,7 +72,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         href: "/validacao",
         label: "Central de Validação",
         labelCurto: "Validação",
-        badge: totalPendencias,
+        badge: totalFilaValidacao,
         // Fila alimentada pela extração da IA: violeta é o tom de "candidato
         // pendente de olhar clínico". Vermelho fica reservado a alerta de risco.
         badgeTom: "ia",
