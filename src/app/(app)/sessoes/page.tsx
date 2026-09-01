@@ -123,9 +123,10 @@ export default async function SessoesPage({
           href="/sessoes?ordenacao=tempo_travado"
           aria-current={ordenacao === "tempo_travado" ? "true" : undefined}
           className={
-            ordenacao === "tempo_travado"
-              ? "font-bold underline"
-              : "text-[var(--text-secondary)] underline"
+            "flex min-h-11 items-center underline " +
+            (ordenacao === "tempo_travado"
+              ? "font-bold"
+              : "text-[var(--text-secondary)]")
           }
         >
           Tempo travado
@@ -134,9 +135,10 @@ export default async function SessoesPage({
           href="/sessoes?ordenacao=dia"
           aria-current={ordenacao === "dia" ? "true" : undefined}
           className={
-            ordenacao === "dia"
-              ? "font-bold underline"
-              : "text-[var(--text-secondary)] underline"
+            "flex min-h-11 items-center underline " +
+            (ordenacao === "dia"
+              ? "font-bold"
+              : "text-[var(--text-secondary)]")
           }
         >
           Por dia

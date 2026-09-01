@@ -517,7 +517,7 @@ export function AgendaViewCliente({
                       onAbrir={
                         role === "coordenador" || s.terapeutaId === userId
                           ? () => {
-                              router.push(`/diario/${s.id}`);
+                              router.push(`/sessoes/${s.id}`);
                             }
                           : undefined
                       }
@@ -565,7 +565,7 @@ export function AgendaViewCliente({
               trailing={
                 <Cluster gap="sm">
                   {role === "coordenador" || s.terapeutaId === userId ? (
-                    <Link href={`/diario/${s.id}`}>
+                    <Link href={`/sessoes/${s.id}`}>
                       <Button variante="secundaria" tamanho="sm">
                         Abrir sessão
                       </Button>

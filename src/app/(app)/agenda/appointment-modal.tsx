@@ -125,7 +125,7 @@ export function AppointmentModal({
             ) : null}
             {ehCoordenador || ehPropria ? (
               <Button asChild variante="secundaria">
-                <Link href={`/diario/${sessao.id}`}>Abrir diário</Link>
+                <Link href={`/sessoes/${sessao.id}`}>Abrir diário</Link>
               </Button>
             ) : null}
             {ehFalta && podeCriarSessao ? (
