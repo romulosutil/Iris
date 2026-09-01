@@ -13,6 +13,7 @@ import { Cluster, Stack } from "@/components/ui/layout";
 import { EstadoBadge } from "./estado-badge";
 import { CheckInButton } from "./checkin-button";
 import { GerirSessao } from "./gerir-sessao";
+import { podeCriarSessaoEmAgenda } from "@/lib/agenda/gating";
 import type { SessaoDoDia } from "./actions";
 
 export interface AppointmentModalProps {
@@ -65,6 +66,11 @@ export function AppointmentModal({
   if (!sessao) return null;
 
   const ehCoordenador = role === "coordenador" || role === "admin_recepcao";
+  // #512 · T09 (P1, #521) — "Repor" cria/reagenda em `/agenda/semana`, rota
+  // coordenador-only. `ehCoordenador` acima é usado noutros gestos (abrir
+  // diário) e inclui recepção de propósito; este aqui é o mesmo gesto de
+  // criação do botão "+ Agendar" e não pode incluí-la.
+  const podeCriarSessao = podeCriarSessaoEmAgenda(role);
   const ehPropria = sessao.terapeutaId === userId;
   const ehFalta =
     sessao.estado === "falta_paciente" || sessao.estado === "falta_terapeuta";
@@ -119,13 +125,13 @@ export function AppointmentModal({
             ) : null}
             {ehCoordenador || ehPropria ? (
               <Button asChild variante="secundaria">
-                <Link href={`/diario/${sessao.id}`}>Abrir diário</Link>
+                <Link href={`/sessoes/${sessao.id}`}>Abrir diário</Link>
               </Button>
             ) : null}
-            {ehFalta && podeGerir ? (
+            {ehFalta && podeCriarSessao ? (
               <Button asChild variante="secundaria">
                 <Link
-                  href={`/agenda/semana?repor=${sessao.id}&patientId=${sessao.patientId}&terapeutaId=${sessao.terapeutaId}&disciplina=${encodeURIComponent(sessao.disciplina)}`}
+                  href={`/agenda?escala=semana&repor=${sessao.id}&patientId=${sessao.patientId}&terapeutaId=${sessao.terapeutaId}&disciplina=${encodeURIComponent(sessao.disciplina)}`}
                 >
                   Repor
                 </Link>

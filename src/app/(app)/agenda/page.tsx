@@ -6,7 +6,14 @@ import { PageHeader } from "@/components/ui/page-header";
 import { DataRow } from "@/components/ui/data-row";
 import { listarTerapeutas } from "@/app/(app)/equipe/[id]/queries";
 import { listarSessoesDoDia, type SessaoDoDia } from "./logic";
-import { pendentesDeConsolidacao, reposicoesPendentes } from "./queries";
+import {
+  carregarConfigClinica,
+  pacientePorId,
+  pendentesDeConsolidacao,
+  reposicoesPendentes,
+} from "./queries";
+import type { Prefill } from "./semana/semana-cliente";
+import { segundaDaSemana } from "@/lib/agenda/semana";
 import { EstadoBadge } from "./estado-badge";
 import { GerirSessao } from "./gerir-sessao";
 import { AgendaViewCliente } from "./agenda-view-cliente";
@@ -14,6 +21,7 @@ import { ChecklistOnboarding } from "../checklist-onboarding";
 import { obterProgressoOnboarding } from "../onboarding-queries";
 import { fusoDaClinicaAtual } from "@/lib/agenda/clinic-timezone";
 import { resolverInstante } from "@/lib/agenda/materializar";
+import { podeCriarSessaoEmAgenda } from "@/lib/agenda/gating";
 
 // Data de hoje (YYYY-MM-DD) no fuso da clínica — base da grade do dia.
 function hojeNaClinica(fuso: string): string {
@@ -78,7 +86,7 @@ export function ItemPendencia({
         ) : (
           <Button asChild variante="secundaria" tamanho="sm">
             <Link
-              href={`/agenda/semana?repor=${sessao.id}&patientId=${sessao.patientId}&terapeutaId=${sessao.terapeutaId}&disciplina=${encodeURIComponent(sessao.disciplina)}`}
+              href={`/agenda?escala=semana&repor=${sessao.id}&patientId=${sessao.patientId}&terapeutaId=${sessao.terapeutaId}&disciplina=${encodeURIComponent(sessao.disciplina)}`}
             >
               Repor
             </Link>
@@ -137,25 +145,80 @@ function diaValidoOuHoje(dia: string | undefined, fuso: string): string {
 
 const VISOES = ["matriz", "terapeuta", "horario"] as const;
 
+// #512 · T14-fix — prefill de "Repor" (Task 8 original), agora vindo de
+// `/agenda?escala=semana&repor=...` em vez do extinto `/agenda/semana`.
+// Parcial é tratado como ausente (mesma regra da página que este trecho
+// substitui).
+async function carregarPrefillReposicao(
+  ctx: Awaited<ReturnType<typeof getTenantContext>>,
+  params: {
+    repor?: string;
+    patientId?: string;
+    terapeutaId?: string;
+    disciplina?: string;
+  },
+): Promise<Prefill | undefined> {
+  const { repor, patientId, terapeutaId, disciplina } = params;
+  if (!repor || !patientId || !terapeutaId || !disciplina) return undefined;
+  const paciente = await pacientePorId(ctx, patientId);
+  if (!paciente) return undefined;
+  return {
+    repostaDe: repor,
+    patientId,
+    patientNome: paciente.nome,
+    terapeutaId,
+    disciplina,
+  };
+}
+
 export default async function AgendaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ dia?: string; visao?: string }>;
+  searchParams: Promise<{
+    dia?: string;
+    visao?: string;
+    escala?: string;
+    repor?: string;
+    patientId?: string;
+    terapeutaId?: string;
+    disciplina?: string;
+  }>;
 }) {
   const ctx = await getTenantContext();
   const params = await searchParams;
   const fuso = await fusoDaClinicaAtual(ctx);
   const dia = diaValidoOuHoje(params.dia, fuso);
-  const podeAgendar =
-    ctx.role === "coordenador" || ctx.role === "admin_recepcao";
+  const hoje = hojeNaClinica(fuso);
+  // #512 · T09 (P1, issue #521, opção a) — `requireAgendar` continua
+  // concedendo criação de sessão a `admin_recepcao` na camada de auth (não
+  // muda). O gesto de CRIAR na UI, porém, fica visível só para `coordenador`:
+  // é a decisão da #517 ("recepção não agenda") preservada na prática. Antes,
+  // `podeAgendar` incluía `admin_recepcao`, que via o botão "+ Agendar no
+  // Calendário" e caía num 403 em `/agenda/semana` (`requireRole(ctx,
+  // "coordenador")`) — um convite que a própria rota recusava.
+  const podeAgendar = podeCriarSessaoEmAgenda(ctx.role);
   const podeGerir = ctx.role === "coordenador" || ctx.role === "admin_recepcao";
-  const [sessoes, terapeutasRaw, pendentesConsolidacao, pendentesReposicao] =
-    await Promise.all([
-      listarSessoesDoDia(ctx, dia),
-      listarTerapeutas(ctx),
-      podeGerir ? pendentesDeConsolidacao(ctx) : Promise.resolve([]),
-      podeGerir ? reposicoesPendentes(ctx) : Promise.resolve([]),
-    ]);
+  const [
+    sessoes,
+    terapeutasRaw,
+    pendentesConsolidacao,
+    pendentesReposicao,
+    config,
+  ] = await Promise.all([
+    listarSessoesDoDia(ctx, dia),
+    listarTerapeutas(ctx),
+    podeGerir ? pendentesDeConsolidacao(ctx) : Promise.resolve([]),
+    // "Repor" é a mesma classe de gesto que "+ Agendar": pré-preenche a
+    // criação de sessão em `/agenda/semana`. Segue `podeAgendar`, não
+    // `podeGerir` — por isso não junta com a linha acima.
+    podeAgendar ? reposicoesPendentes(ctx) : Promise.resolve([]),
+    // #512 · T13 — a escala "Semana" (dentro de `AgendaViewCliente`) precisa
+    // de `disciplinas`/`duracaoPadrao`, os mesmos dados que `/agenda/semana`
+    // já carregava. Toda role chega a esses dados (R-29: semana é visível a
+    // todo papel clínico) — só o gesto de criar fica atrás de `podeAgendar`.
+    carregarConfigClinica(ctx),
+  ]);
+  const prefill = await carregarPrefillReposicao(ctx, params);
   const terapeutas = terapeutasRaw.map((t) => ({
     id: t.id,
     nome: t.name ?? "—",
@@ -185,7 +248,7 @@ export default async function AgendaPage({
         actions={
           podeAgendar ? (
             <Button asChild variante="primaria">
-              <Link href="/agenda/semana">+ Agendar no Calendário</Link>
+              <Link href="/agenda?escala=semana">+ Agendar no Calendário</Link>
             </Button>
           ) : undefined
         }
@@ -217,9 +280,15 @@ export default async function AgendaPage({
         podeGerir={podeGerir}
         diaExtenso={dataPorExtenso(dia, fuso)}
         diaISO={dia}
-        ehHoje={dia === hojeNaClinica(fuso)}
+        ehHoje={dia === hoje}
         visaoInicial={visaoInicial}
         fuso={fuso}
+        hojeISO={hoje}
+        semanaInicialISO={segundaDaSemana(hoje)}
+        disciplinas={config.disciplinas}
+        duracaoPadrao={config.duracaoDisciplina}
+        escalaInicial={params.escala}
+        prefill={prefill}
       />
     </Stack>
   );

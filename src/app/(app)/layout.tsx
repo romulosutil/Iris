@@ -1,16 +1,21 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { getTenantContext, listarClinicasDoUsuario } from "@/auth/tenant";
+import {
+  getTenantContext,
+  listarClinicasDoUsuario,
+  listarPapeisNaClinicaAtiva,
+} from "@/auth/tenant";
+import { papelAtivo } from "@/auth/papel-ativo";
 import { Container } from "@/components/ui/layout";
 import { Banner } from "@/components/ui/banner";
 import { FaixaTrial } from "@/components/app/faixa-trial";
 import { FaixaRecusa } from "@/components/app/faixa-recusa";
 import { estadoEstagio2 } from "./alertas-risco/queries";
-import { listarPendencias } from "./pendencias/queries";
-import { contarFilaValidacao } from "./validacao/queries";
+import { contarTravadas } from "@/lib/sessao/fila";
 import { obterSituacaoConta, obterAvisoRecusa } from "./queries";
 import { SignOutButton } from "./sign-out-button";
-import { AppHeader, type NavItem } from "./app-header";
+import { AppHeader } from "./app-header";
+import { montarNav } from "./nav";
 
 /**
  * Shell protegido com suporte responsivo a Mobile e Desktop.
@@ -19,20 +24,32 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const ctx = await getTenantContext();
   const ehClinico = ctx.role === "coordenador" || ctx.role === "terapeuta";
 
-  const ehCoordenador = ctx.role === "coordenador";
-
   const [
     clinicas,
-    pendencias,
-    filaValidacao,
+    papeisNaClinica,
+    travadas,
     { quantidade: riscoEstagio2, protocoloInterno },
     situacaoConta,
     avisoRecusa,
   ] = await Promise.all([
     listarClinicasDoUsuario(ctx.userId),
-    ehClinico ? listarPendencias(ctx) : Promise.resolve({ total: 0 }),
-    ehCoordenador
-      ? contarFilaValidacao(ctx).catch(() => ({ total: 0 }))
+    // #512 · T08 (R-24) — papéis NÃO resolvidos na clínica ativa, só para o
+    // shell decidir se há troca de papel disponível (combo disjunto, E6).
+    // Independente de `ehClinico`: `admin_recepcao` também pode ter combo.
+    listarPapeisNaClinicaAtiva(ctx.userId, ctx.clinicId),
+    // #512 · T09 (R-21) — UMA leitura de contagem para o badge de `Sessões`,
+    // igual para coordenador e terapeuta (mesma estrutura de nav, R-21). Sai
+    // do MESMO módulo/predicado da lista de sessões travadas
+    // (`src/lib/sessao/fila.ts`, T02/R-12/R-13) — não é mais o antigo
+    // contador de `listarPendencias` do terapeuta, que virou nav diferente da
+    // do coordenador (o próprio bug que o #512 fecha). `admin_recepcao` não
+    // entra aqui: `coletarTravadas` já devolve `[]` para ela sem tocar o
+    // banco (R-23), e o item `Sessões` nem existe na nav dela (`nav.ts`).
+    //
+    // O `.catch` de `a0e7563` sobrevive de propósito: falha transitória de
+    // contagem vira badge 0, nunca `error.tsx` em toda rota do app.
+    ehClinico
+      ? contarTravadas(ctx).catch(() => ({ total: 0 }))
       : Promise.resolve({ total: 0 }),
     // #122 §4.2.1, ação 1 — estágio 2 satura a clínica inteira, não só a fila de
     // quem tem acesso ao caso. Sem nome de paciente e sem categoria aqui: quem vê
@@ -63,69 +80,33 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     }),
   ]);
 
-  const totalPendencias = pendencias.total;
-  const totalFilaValidacao = filaValidacao.total;
+  const totalTravadas = travadas.total;
 
-  let itemsNav: NavItem[] = [];
+  // #512 · T08 (R-24) — só existe troca de papel quando `papelAtivo` teria
+  // pedido seleção para este conjunto (combo disjunto). Coordenador vence
+  // sozinho e nunca cai aqui.
+  const resolvidoPapel = papelAtivo(papeisNaClinica);
+  const papeisAlternativos =
+    "needsSelection" in resolvidoPapel ? resolvidoPapel.needsSelection : [];
 
-  if (ctx.role === "coordenador") {
-    itemsNav = [
-      {
-        href: "/validacao",
-        label: "Central de Validação",
-        labelCurto: "Validação",
-        badge: totalFilaValidacao,
-        // Fila alimentada pela extração da IA: violeta é o tom de "candidato
-        // pendente de olhar clínico". Vermelho fica reservado a alerta de risco.
-        badgeTom: "ia",
-      },
-      { href: "/agenda", label: "Agenda" },
-      { href: "/pacientes", label: "Pacientes" },
-      { href: "/equipe", label: "Equipe" },
-      { href: "/relatorios", label: "Relatórios" },
-      { href: "/clinica/dados", label: "Dados da Clínica" },
-      { href: "/clinica/exportacao", label: "Exportar Acervo" },
-      { href: "/duvidas", label: "Dúvidas" },
-    ];
-  } else if (ctx.role === "terapeuta") {
-    itemsNav = [
-      { href: "/agenda", label: "Agenda do Dia", labelCurto: "Agenda" },
-      {
-        href: "/pacientes",
-        label: "Pacientes & PEIs",
-        labelCurto: "Pacientes",
-      },
-      {
-        href: "/pendencias",
-        label: "Pendências",
-        badge: totalPendencias,
-        badgeTom: "ia",
-      },
-      { href: "/relatorios", label: "Relatórios" },
-      { href: "/duvidas", label: "Dúvidas" },
-    ];
-  } else {
-    itemsNav = [
-      { href: "/agenda", label: "Agenda" },
-      { href: "/pacientes", label: "Pacientes" },
-    ];
-  }
-
-  // D56 — `/perfil` vale para TODO papel autenticado, não só clínico: a
-  // declaração de e-Psi (Res. CFP 009/2024) é sobre o cadastro da própria
-  // pessoa. Fica fora do if/else de propósito, para que um papel novo não
-  // nasça sem acesso ao próprio perfil.
-  itemsNav.push({ href: "/perfil", label: "Meu Perfil" });
+  // #512 · T09 (R-21, R-22, R-23) — nav pura, função só de `role` + contagem
+  // já lida (`nav.ts`, testado isolado). `/perfil` (D56) entra por `nav.ts`
+  // em `itemsAdmin`, para TODO papel — não é mais empurrado aqui.
+  const { itemsNav, itemsAdmin } = montarNav({
+    role: ctx.role,
+    totalTravadas,
+  });
 
   return (
-    <div className="flex min-h-dvh flex-col bg-[var(--bg-app)]">
-      <AppHeader
-        clinicas={clinicas}
-        ativaId={ctx.clinicId}
-        role={ctx.role}
-        itemsNav={itemsNav}
-        signOutSlot={<SignOutButton />}
-      />
+    <AppHeader
+      clinicas={clinicas}
+      ativaId={ctx.clinicId}
+      role={ctx.role}
+      papeisAlternativos={papeisAlternativos}
+      itemsNav={itemsNav}
+      itemsAdmin={itemsAdmin}
+      signOutSlot={<SignOutButton />}
+    >
       {riscoEstagio2 > 0 ? (
         <Container largura="md" className="pt-4">
           <Banner variant="alerta" titulo="Alerta de risco sem reconhecimento">
@@ -181,6 +162,6 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       >
         {children}
       </Container>
-    </div>
+    </AppHeader>
   );
 }

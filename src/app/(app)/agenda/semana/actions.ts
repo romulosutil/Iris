@@ -67,7 +67,10 @@ export async function criarRegraAction(
   } catch (e) {
     return trata(e);
   }
-  revalidatePath("/agenda/semana");
+  // #512 · T13-fix — `/agenda/semana` virou `/agenda?escala=semana` (rota
+  // absorvida). Revalidar a antiga não invalida o cache da rota que o
+  // usuário está de fato olhando.
+  revalidatePath("/agenda");
   return { ok: true };
 }
 
@@ -123,7 +126,7 @@ export async function criarAvulsaAction(
   } catch (e) {
     return trata(e);
   }
-  revalidatePath("/agenda/semana");
+  revalidatePath("/agenda");
   return { ok: true };
 }
 
@@ -145,7 +148,7 @@ export async function estenderAction(
       regraId,
       horizontePadrao(hojeISO),
     );
-    revalidatePath("/agenda/semana");
+    revalidatePath("/agenda");
     return { ok: true, geradas, puladas: puladas.length };
   } catch (e) {
     return trata(e);
@@ -166,7 +169,7 @@ export async function encerrarRegraAction(
   } catch (e) {
     return trata(e);
   }
-  revalidatePath("/agenda/semana");
+  revalidatePath("/agenda");
   return { ok: true };
 }
 

@@ -95,6 +95,90 @@ const DIAS_PADRAO = [
   { rotulo: "Domingo", diaSemana: 0 },
 ];
 
+// R-30: grade de N colunas (uma por recurso) é ilegível em viewport estreito
+// — abaixo do breakpoint `md` (768px, convenção Tailwind do repo) a escala
+// "Dia" (`modo="daily-resources"`) troca para lista cronológica.
+const MOBILE_BREAKPOINT_PX = 768;
+
+function useEscalaDiaMobile(): boolean {
+  const [mobile, setMobile] = React.useState(false);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT_PX - 1}px)`);
+    const atualizar = () => setMobile(mql.matches);
+    atualizar();
+    mql.addEventListener("change", atualizar);
+    return () => mql.removeEventListener("change", atualizar);
+  }, []);
+
+  return mobile;
+}
+
+interface CalendarDayListProps {
+  sessoes: SessaoDoDia[];
+  passoMin: number;
+  fuso: string;
+  onEventClick?: (sessao: SessaoDoDia) => void;
+  podeGerir: boolean;
+}
+
+// Lista cronológica da escala "Dia" para mobile (R-30). Ordena por horário
+// real da sessão (não pelo slot arredondado), uma linha por sessão.
+function CalendarDayList({
+  sessoes,
+  passoMin,
+  fuso,
+  onEventClick,
+  podeGerir,
+}: CalendarDayListProps) {
+  const sessoesOrdenadas = React.useMemo(
+    () =>
+      [...sessoes].sort(
+        (a, b) =>
+          new Date(a.agendadaPara).getTime() -
+          new Date(b.agendadaPara).getTime(),
+      ),
+    [sessoes],
+  );
+
+  if (sessoesOrdenadas.length === 0) {
+    return (
+      <div
+        data-testid="calendar-day-list"
+        className="rounded-[var(--radius-control)] border-2 border-dashed border-black p-6 text-center"
+      >
+        <p className="text-text-secondary text-sm">
+          Nenhuma sessão agendada para este dia.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <ul
+      data-testid="calendar-day-list"
+      aria-label="Sessões do dia, em ordem cronológica"
+      className="flex flex-col gap-2"
+    >
+      {sessoesOrdenadas.map((s) => (
+        <li key={s.id}>
+          <CalendarEventCard
+            id={s.id}
+            pacienteNome={s.pacienteNome ?? "Paciente"}
+            disciplinaNome={s.disciplina}
+            horarioStr={obterHorarioSlot(s.agendadaPara, passoMin, fuso)}
+            estado={s.estado}
+            terapeutaNome={s.terapeutaNome ?? undefined}
+            onClick={() => onEventClick?.(s)}
+            podeGerir={podeGerir}
+          />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function CalendarGrid({
   modo,
   sessoes = [],
@@ -111,6 +195,8 @@ export function CalendarGrid({
   bloqueios = [],
   fuso = FUSO_CLINICA,
 }: CalendarGridProps) {
+  const mobileDia = useEscalaDiaMobile();
+
   const horarios = React.useMemo(
     () => gerarHorarios(abertura, fechamento, passoMin),
     [abertura, fechamento, passoMin],
@@ -164,8 +250,22 @@ export function CalendarGrid({
 
   // RENDERIZAÇÃO: Modo 1 - Diário Multi-Recurso (Vertical Hours, Horizontal Resources)
   if (modo === "daily-resources") {
+    if (mobileDia) {
+      return (
+        <CalendarDayList
+          sessoes={sessoes}
+          passoMin={passoMin}
+          fuso={fuso}
+          onEventClick={onEventClick}
+          podeGerir={podeGerir}
+        />
+      );
+    }
     return (
-      <div className="max-h-[75vh] w-full touch-pan-x touch-pan-y overflow-x-auto overflow-y-auto rounded-[var(--radius-control)] border-2 border-black bg-[var(--surface-card,#ffffff)] shadow-[var(--elevation-2)]">
+      <div
+        data-testid="calendar-day-grid"
+        className="max-h-[75vh] w-full touch-pan-x touch-pan-y overflow-x-auto overflow-y-auto rounded-[var(--radius-control)] border-2 border-black bg-[var(--surface-card,#ffffff)] shadow-[var(--elevation-2)]"
+      >
         <table
           role="grid"
           aria-label="Grade de Agenda Geral da Clínica"

@@ -222,8 +222,24 @@ membros da clínica entra nessa conta.
 
 Consequência simétrica para a fila: a fila do coordenador é "sessões da clínica
 cujo terapeuta **não** sou eu" mais "minhas sessões travadas" — não "todas, porque
-sou coordenador". Com dois coordenadores, isso continua fazendo sentido sem
-nenhuma mudança de predicado.
+sou coordenador".
+
+> **Correção (D76, decisões do Rômulo em 01/09/2026):** com dois coordenadores
+> este predicado **muda**, ao contrário do que a versão anterior deste texto
+> afirmava. Cada paciente já tem, hoje, no máximo um vínculo vigente
+> `coordenador_referencia` em `care_team_membership`
+> (`src/db/schema.ts:765-824`, constraint `ctm_unico_vigente`) — inclusive na
+> clínica solo, onde o fundador acumula `coordenador_referencia` **e**
+> `terapeuta_referencia` (regra D-C, `ctm_gestao_sem_horas`). Isso já modela
+> "1 coordenador por paciente"; o que falta é o resto do D76 (papel de sistema,
+> promoção, rebaixamento — issue #520). Quando o D76 for endereçado, a fila
+> correta é: **sessões dos pacientes onde eu sou `coordenador_referencia`
+> vigente, cujo terapeuta não sou eu** ∪ **minhas sessões travadas** — não
+> "sessões da clínica cujo terapeuta não sou eu". Sem esse JOIN, o coordenador A
+> veria na fila sessões de pacientes do coordenador B. Fora de escopo desta
+> jornada (D76 não é dependência — G4 e `podeAutoValidar` continuam corretos
+> como estão), mas registrado aqui para não se perder quando #520 abrir
+> implementação.
 
 > **Sinalização honesta:** isto remove um passo de aprovação da clínica solo. Não
 > é perda de controle porque nunca houve controle ali — não existe segunda pessoa
@@ -231,6 +247,15 @@ nenhuma mudança de predicado.
 > autor, ação e justificativa) fica idêntica. O que muda é que ela deixa de
 > registrar duas vezes o mesmo julgamento da mesma pessoa, que é justamente o que
 > falseia a métrica de "aprovação sem edição".
+
+> **Revisão pós-D78 (#522):** o colapso em um carimbo foi desenhado assumindo
+> `Reabrir revisão` como rede de proteção — "1 gesto, mas reversível". Essa rede
+> não é derivável sem migração (§3.8) e foi cortada por decisão do Rômulo. O
+> colapso ainda se sustenta: onde `coordenador = terapeuta`, hoje **não existe**
+> segunda pessoa revisando, então o carimbo único não piora nada que já não fosse
+> julgamento de uma pessoa só. O risco real (erro de clique não corrigível) é
+> aceito conscientemente, não porque "reabrir" resolveria — ele nunca existiu de
+> fato antes desta jornada, só na promessa do brief.
 
 ### 3.6 Calendário: um motor, duas escalas
 
@@ -288,9 +313,13 @@ Quatro ajustes pequenos que resolvem ambiguidades que a fila única cria:
 - **Estado nunca aparece sozinho.** `Documentada` e `Revisada` são vizinhos
   demais na palavra e distantes demais no significado. O selo diz o estado; a
   linha ao lado diz a dívida: *Documentada · 3 evidências esperando você*.
-- **Aprovação é reversível.** Com um carimbo só, "1 gesto" não pode virar "1
-  chance": a evidência aprovada oferece `Reabrir revisão`. `evidence_revision` é
-  append-only — reabrir é natural no modelo de dados, não é exceção.
+- **Sem reabertura de aprovação (D78).** `evidence_revision` é append-only e
+  `evidence` tem `UPDATE`/`DELETE` revogados de `app_role` — não existe caminho
+  de volta à fila sem valor novo de enum (migração). Medido em 01/09/2026
+  (issue #522): a promessa original de `Reabrir revisão` contradizia o "zero
+  migração" de §6. Decisão do Rômulo: cortar. O caso de uso real aqui é erro de
+  clique, não erro de julgamento clínico — esperar acontecer em produção antes
+  de desenhar reabertura, com dado real em vez de hipótese.
 
 ## 4. Estruturas de clínica e carga cognitiva
 
@@ -335,16 +364,21 @@ silêncio da fila do terapeuta.
 ### E4 — `admin_recepcao`
 
 `/agenda/semana` é `requireRole(ctx, "coordenador")` e as actions de criação de
-sessão vivem atrás dessa tela. **A recepção não pode marcar sessão e não enxerga
-a semana** — precisa manter a grade na memória de trabalho e pedir ao coordenador.
-Isso não é carga de layout: é permissão no lugar errado.
+sessão vivem atrás dessa tela. **A recepção não enxerga a semana e não tem por
+onde marcar sessão hoje** — precisa manter a grade na memória de trabalho e
+pedir ao coordenador. Isso é carga de layout: `requireAgendar`
+(`src/auth/require-role.ts:61`) já **concede** criação de sessão a
+`admin_recepcao` — o que barra é só a tela, coordenador-only. Achado registrado
+em 01/09/2026 na issue #521 (D77) ao atomizar a #512.
 
-**Decisão (Rômulo, 01/09/2026, issue #517): opção 3 — fica como está.** Agendar
-continua ato exclusivo do coordenador; `admin_recepcao` permanece papel de
-leitura. Ressalva do próprio Rômulo: essa decisão é do modelo de negócio atual,
-onde o coordenador é quem define a demanda — pode mudar se o modelo mudar. Não
-faz sentido hoje abrir escrita de agenda para a recepção. Rename do papel na UI
-(cogitado na opção 3 original) fica fora de escopo — não é necessário agora.
+**Decisão (Rômulo, 01/09/2026, issue #517, ratificada em #521): opção 3 — fica
+como está.** Agendar continua ato exclusivo do coordenador; `admin_recepcao`
+permanece papel de leitura. `requireAgendar` **não muda** — a jornada nova
+(R-29) gateia a UI de criação por papel dentro de `/agenda`, para a permissão
+inerte não virar tela por acidente de layout. Ressalva do próprio Rômulo: essa
+decisão é do modelo de negócio atual, onde o coordenador é quem define a
+demanda — pode mudar se o modelo mudar. Rename do papel na UI (cogitado na
+opção 3 original) fica fora de escopo — não é necessário agora.
 
 Decisão levanta gap adjacente: **hoje só existe um coordenador por clínica**
 efetivo na modelagem de papéis. Se o negócio crescer para clínicas com mais de

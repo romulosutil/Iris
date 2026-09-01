@@ -68,8 +68,10 @@ function ItemPendenciaClustered({
         tipo === "consolidacao" ? (
           <GerirSessao sessionId={sessao.id} terapeutas={terapeutas} />
         ) : (
+          // #512 · T14: `/agenda/semana` virou redirect para
+          // `/agenda?escala=semana` — link interno aponta para a rota nova.
           <Link
-            href={`/agenda/semana?repor=${sessao.id}&patientId=${sessao.patientId}&terapeutaId=${sessao.terapeutaId}&disciplina=${encodeURIComponent(sessao.disciplina)}`}
+            href={`/agenda?escala=semana&repor=${sessao.id}&patientId=${sessao.patientId}&terapeutaId=${sessao.terapeutaId}&disciplina=${encodeURIComponent(sessao.disciplina)}`}
           >
             <Button variante="secundaria" tamanho="sm">
               Repor

@@ -129,6 +129,7 @@ function AcaoForm({
   children,
   variante,
   disabled,
+  camposExtras,
 }: {
   action: (prev: RevisaoState, fd: FormData) => Promise<RevisaoState>;
   sessionId: string;
@@ -136,6 +137,8 @@ function AcaoForm({
   children: React.ReactNode;
   variante?: "primaria" | "neutra";
   disabled?: boolean;
+  /** Campos hidden/visíveis extras (ex.: justificativa do colapso, T07). */
+  camposExtras?: React.ReactNode;
 }) {
   const [state, formAction, pending] = useActionState<RevisaoState, FormData>(
     action,
@@ -145,6 +148,7 @@ function AcaoForm({
     <form action={formAction} className="contents">
       <input type="hidden" name="sessionId" value={sessionId} />
       <input type="hidden" name="extractionId" value={extractionId} />
+      {camposExtras}
       <Button type="submit" variante={variante} disabled={disabled || pending}>
         {pending ? "…" : children}
       </Button>
@@ -264,19 +268,36 @@ function CartaoRevisao({
   ex,
   sessionId,
   ehDono,
+  podeColapsarAprovacao,
 }: {
   ex: ExtracaoRevisavel;
   sessionId: string;
   ehDono: boolean;
+  /**
+   * T07 (R-07/R-10/R-11, §3.5): `podeAutoValidar` já vale true para esta
+   * sessão — a mesma aprovação grava o carimbo de `evidence_revision`, sem
+   * uma segunda visita a /validacao. Fricção alta continua exigindo
+   * justificativa escrita (R-10): o textarea abaixo só aparece quando os
+   * dois são verdadeiros, e o servidor recusa a aprovação inteira sem ela
+   * (não é só validação de UI).
+   */
+  podeColapsarAprovacao: boolean;
 }) {
   const info = NIVEL[ex.nivelFriccao];
   // medio/alto abrem expandidos por padrão (§3); alta confiança nasce compacto —
   // a expansão é o gate de "abrir para aprovar" (o lastro de exibição).
   const [expandido, setExpandido] = React.useState(ex.nivelFriccao !== "baixo");
   const [confirmado, setConfirmado] = React.useState(false);
+  const [justificativaColapso, setJustificativaColapso] = React.useState("");
   const detalheId = `detalhe-${ex.id}`;
 
-  const podeAprovar = ehDono && (!info.exigeConfirmacao || confirmado);
+  const exigeJustificativaColapso =
+    podeColapsarAprovacao && info.exigeConfirmacao;
+
+  const podeAprovar =
+    ehDono &&
+    (!info.exigeConfirmacao || confirmado) &&
+    (!exigeJustificativaColapso || justificativaColapso.trim() !== "");
 
   return (
     <article className="rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] shadow-[var(--ds-shadow)]">
@@ -331,6 +352,27 @@ function CartaoRevisao({
               </label>
             ) : null}
 
+            {exigeJustificativaColapso ? (
+              <label
+                className="flex flex-col gap-1 text-sm text-[var(--text-primary)]"
+                htmlFor={`justificativa-colapso-${ex.id}`}
+              >
+                <span className="font-semibold">
+                  Justificativa (obrigatória — você é a coordenadora e a
+                  terapeuta desta sessão, então esta aprovação já é o carimbo
+                  final)
+                </span>
+                <textarea
+                  id={`justificativa-colapso-${ex.id}`}
+                  value={justificativaColapso}
+                  onChange={(e) => setJustificativaColapso(e.target.value)}
+                  required
+                  rows={2}
+                  className={campoClasses}
+                />
+              </label>
+            ) : null}
+
             {ehDono ? (
               <Cluster gap="sm">
                 <AcaoForm
@@ -339,8 +381,17 @@ function CartaoRevisao({
                   extractionId={ex.id}
                   variante="primaria"
                   disabled={!podeAprovar}
+                  camposExtras={
+                    exigeJustificativaColapso ? (
+                      <input
+                        type="hidden"
+                        name="justificativaColapso"
+                        value={justificativaColapso}
+                      />
+                    ) : null
+                  }
                 >
-                  Aprovar
+                  {podeColapsarAprovacao ? "Aprovar e confirmar" : "Aprovar"}
                 </AcaoForm>
                 <DialogoEditar ex={ex} sessionId={sessionId} />
                 <AcaoForm
@@ -386,10 +437,14 @@ export function RevisaoLista({
   sessionId,
   extracoes,
   ehDono,
+  podeColapsarAprovacao = false,
 }: {
   sessionId: string;
   extracoes: ExtracaoRevisavel[];
   ehDono: boolean;
+  /** T07 — `podeAutoValidar(ctx, sessão)` (R-07). Default false preserva o
+   * fluxo de dois passos em /revisao/[sessionId] para quem não passa a prop. */
+  podeColapsarAprovacao?: boolean;
 }) {
   if (extracoes.length === 0) {
     return (
@@ -403,7 +458,12 @@ export function RevisaoLista({
     <Stack gap="md" como="ul">
       {extracoes.map((ex) => (
         <li key={ex.id}>
-          <CartaoRevisao ex={ex} sessionId={sessionId} ehDono={ehDono} />
+          <CartaoRevisao
+            ex={ex}
+            sessionId={sessionId}
+            ehDono={ehDono}
+            podeColapsarAprovacao={podeColapsarAprovacao}
+          />
         </li>
       ))}
     </Stack>

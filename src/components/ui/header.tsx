@@ -43,10 +43,24 @@ export interface NavItem {
   active?: boolean;
 }
 
+/** #512 · R-24 — combo (valor persistido no cookie, rótulo legível). */
+export interface PapelOpcao {
+  valor: string;
+  rotulo: string;
+}
+
 export interface HeaderProps extends React.HTMLAttributes<HTMLElement> {
   clinicaAtivaNome?: string;
   outrasClinicas?: { id: string; nome: string }[];
   onTrocarClinica?: (id: string) => void;
+  /** #512 · R-24 — papel ativo, sempre visível. Substitui o cookie invisível
+   * que decidia sozinho o comportamento dos botões (E6). */
+  papelAtivoRotulo?: string;
+  /** Outros papéis do usuário na MESMA clínica (combo disjunto, ex.:
+   * admin_recepcao + terapeuta). Vazio/ausente quando não há o que trocar —
+   * coordenador nunca tem alternativa (vence sozinho em `papelAtivo`). */
+  papeisAlternativos?: PapelOpcao[];
+  onTrocarPapel?: (papel: string) => void;
   itemsNav: NavItem[];
   usuarioNome?: string;
   /**
@@ -59,6 +73,10 @@ export interface HeaderProps extends React.HTMLAttributes<HTMLElement> {
   largura?: ContainerProps["largura"];
   onSignOut?: () => void;
   signOutSlot?: React.ReactNode;
+  /** #512 · T09 (R-22) — administração, fora da nav diária: aparece numa
+   * seção própria do drawer mobile (abaixo de `sm`, único acesso a esses
+   * destinos sem o rail — R-25/T08 é `lg`+). */
+  itemsAdmin?: NavItem[];
   renderLink?: (
     item: NavItem,
     children: React.ReactNode,
@@ -74,7 +92,9 @@ const badgeTomClasse: Record<NavBadgeTom, string> = {
     "border-[var(--status-error-border)] bg-[var(--status-error-bg)] text-[var(--status-error-fg)]",
 };
 
-function NavBadge({
+/** Exportado: reusado pelo `Rail` (T08/#512) para manter o mesmo visual de
+ * badge colapsado/expandido — uma única fonte de tom, não duas cópias. */
+export function NavBadge({
   valor,
   tom = "neutro",
 }: {
@@ -100,7 +120,11 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
       clinicaAtivaNome = "Clínica Iris",
       outrasClinicas = [],
       onTrocarClinica,
+      papelAtivoRotulo,
+      papeisAlternativos = [],
+      onTrocarPapel,
       itemsNav = [],
+      itemsAdmin = [],
       usuarioNome,
       largura = "md",
       onSignOut,
@@ -192,6 +216,33 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
               ))}
             </div>
 
+            {/* #512 · R-24 — papel ativo visível e trocável também no menu
+                mobile (a faixa superior some abaixo de `sm`). */}
+            {papelAtivoRotulo ? (
+              <div className="border-b border-[var(--border-brutal)]/30 pb-2">
+                <p className="mb-1 font-mono text-xs font-semibold text-[var(--text-secondary)] uppercase">
+                  Papel Ativo
+                </p>
+                <p className="font-display text-base font-bold text-[var(--text-primary)]">
+                  {papelAtivoRotulo}
+                </p>
+                {papeisAlternativos.map((p) => (
+                  <Button
+                    key={p.valor}
+                    variante="neutra"
+                    tamanho="sm"
+                    className="mt-2 w-full justify-start"
+                    onClick={() => {
+                      onTrocarPapel?.(p.valor);
+                      setDrawerOpen(false);
+                    }}
+                  >
+                    Entrar como {p.rotulo}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
+
             <nav aria-label="Navegação mobile" className="flex flex-col gap-2">
               {itemsNav.map((item) => {
                 const content = (
@@ -214,6 +265,32 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
                 );
               })}
             </nav>
+
+            {/* #512 · T09 (R-22) — administração da clínica, separada da
+                nav diária por seção própria (não some: abaixo de `sm` é o
+                único acesso a estes destinos, o rail de T08 é `lg`+). */}
+            {itemsAdmin.length > 0 ? (
+              <nav
+                aria-label="Administração"
+                className="flex flex-col gap-2 border-t border-[var(--border-brutal)]/30 pt-4"
+              >
+                <p className="font-mono text-xs font-semibold text-[var(--text-secondary)] uppercase">
+                  Administração
+                </p>
+                {itemsAdmin.map((item) => {
+                  const content = <span>{item.label}</span>;
+                  return (
+                    <div
+                      key={item.href}
+                      onClick={() => setDrawerOpen(false)}
+                      className="w-full"
+                    >
+                      {linkRenderer(item, content)}
+                    </div>
+                  );
+                })}
+              </nav>
+            ) : null}
           </div>
 
           <DrawerFooter>
@@ -286,6 +363,35 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
                       </Button>
                     ))}
                   </div>
+
+                  {/* #512 · R-24 — papel ativo, faixa superior fina (§3.7).
+                      Só aparece com botões de troca quando existe combo
+                      disjunto de fato (E6); coordenador nunca tem o que
+                      trocar e mostra só o rótulo. */}
+                  {papelAtivoRotulo ? (
+                    <div className="hidden min-w-0 items-center gap-2 lg:flex">
+                      <span
+                        aria-hidden
+                        className="h-5 w-px shrink-0 bg-[var(--border-brutal)]/20"
+                      />
+                      <span className="font-mono text-xs font-semibold text-[var(--text-secondary)] uppercase">
+                        Papel:
+                      </span>
+                      <span className="font-display truncate text-sm font-bold text-[var(--text-primary)]">
+                        {papelAtivoRotulo}
+                      </span>
+                      {papeisAlternativos.map((p) => (
+                        <Button
+                          key={p.valor}
+                          variante="neutra"
+                          tamanho="sm"
+                          onClick={() => onTrocarPapel?.(p.valor)}
+                        >
+                          Entrar como {p.rotulo}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : null}
                 </Cluster>
 
                 {/* Conta (Desktop) */}

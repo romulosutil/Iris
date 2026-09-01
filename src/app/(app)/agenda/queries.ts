@@ -667,11 +667,19 @@ export interface ConfigClinica {
 }
 
 /** Config da clínica p/ pré-preencher o popover de alocação (D2): disciplinas
- * conhecidas e duração padrão por disciplina (`clinic.duracaoDisciplina`). */
+ * conhecidas e duração padrão por disciplina (`clinic.duracaoDisciplina`).
+ *
+ * #512 · T13-fix — `/agenda` (page.tsx) chama esta função para TODA role
+ * clínica (R-29: a escala "Semana" é visível a todo papel, só o gesto de
+ * criar fica atrás de `podeAgendar`). `requireAgendar` (coordenador/
+ * admin_recepcao) barrava `terapeuta` aqui, derrubando a página inteira com
+ * 403 — os dois call-sites de escrita (`criarRegra`, `criarAvulsa`) já
+ * chamam `requireAgendar` antes de chegar aqui, então relaxar esta guarda
+ * não abre gesto de escrita novo. */
 export async function carregarConfigClinica(
   ctx: TenantContext,
 ): Promise<ConfigClinica> {
-  requireAgendar(ctx);
+  requireRole(ctx, "coordenador", "admin_recepcao", "terapeuta");
   return withTenant(ctx, async (tx) => {
     const [row] = await tx
       .select({ duracaoDisciplina: schema.clinic.duracaoDisciplina })

@@ -12,18 +12,18 @@ O funil clínico é linear (`agendar → atender → documentar → aprovar → 
 
 ## Goals
 
-- [ ] **G1** Uma sessão tem **um** estado exibido e **um** gesto primário, idênticos em toda superfície onde ela aparece.
-- [ ] **G2** A máquina de estados é função pura sobre linhas existentes — zero migração, zero coluna, zero policy nova.
-- [ ] **G3** Uma evidência exige **uma** aprovação humana consciente. A segunda só existe quando existe uma segunda pessoa.
-- [ ] **G4** A régua de colapso da aprovação é **por sessão** (`session.terapeutaId`), **nunca** por clínica.
-- [ ] **G5** Um contador só, com o mesmo predicado da lista que ele conta.
-- [ ] **G6** A nav tem a mesma estrutura para os dois papéis clínicos; só o escopo difere, e o escopo é dito por extenso.
+- [x] **G1** Uma sessão tem **um** estado exibido e **um** gesto primário, idênticos em toda superfície onde ela aparece. → T01 (`deriveEstadoSessao`), reusado literalmente por T04/T06 (`ROTULO_ESTADO`, `resultado.gesto`).
+- [x] **G2** A máquina de estados é função pura sobre linhas existentes — zero migração, zero coluna, zero policy nova. → `git diff --stat db/migrations/` vazio (T15).
+- [x] **G3** Uma evidência exige **uma** aprovação humana consciente. A segunda só existe quando existe uma segunda pessoa. → T07 (`resolverColapso`, 1 `evidence_revision` por evidência, idempotente).
+- [x] **G4** A régua de colapso da aprovação é **por sessão** (`session.terapeutaId`), **nunca** por clínica. → T05 (`podeAutoValidar`), guardado pelo teste E2 (mutação confirmada).
+- [x] **G5** Um contador só, com o mesmo predicado da lista que ele conta. → T02/T03 (`fila.ts` → `contarTravadas`/`listarTravadas` compartilham `coletarTravadas`).
+- [x] **G6** A nav tem a mesma estrutura para os dois papéis clínicos; só o escopo difere, e o escopo é dito por extenso. → T09 (`nav.ts`/`montarNav`), T03 (`escopoTexto`).
 
 ## Out of Scope
 
 | Item                                            | Razão                                                                                                                                                                  |
 | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Múltiplos coordenadores por clínica (D76, #520) | Lacuna de modelo, issue própria (#520). Esta jornada **não depende** dela: G4 já está correto nos dois cenários.                                                       |
+| Múltiplos coordenadores por clínica (D76, #520) | Lacuna de modelo, issue própria (#520). Esta jornada **não depende** dela: `podeAutoValidar` (G4/R-07) já está correto nos dois cenários. A fila (R-09) **não** está — muda com D76, ver correção em R-09. |
 | Desenho do bloco de estagnação em `/pacientes`  | O brief decide que Supervisão **sai da governança e continua empurrando** (C2); onde o bloco encosta e qual é o predicado de "estagnou" é issue separada (brief §7.3). |
 | `/alertas-risco`                                | Escopo é paciente e clínica, não sessão. Semiótica de cor exclusiva (terracota) e faixa global própria. Fica onde está.                                                |
 | Rename de `admin_recepcao` na UI                | Descartado ao decidir a #517.                                                                                                                                          |
@@ -66,7 +66,7 @@ Confirma também a derivação do brief §3.1: check-in **não** é estado (`src
 
 **O que falta não é a ação, é o posicionamento**: hoje ela vive dentro de `gerir-sessao.tsx` na agenda; o brief quer que ela caia direto na documentação, sem tela intermediária vazia.
 
-### A4 · 🟡 "Aprovação é reversível" **não** é derivável sem migração
+### A4 · ✅ "Aprovação é reversível" **não** era derivável sem migração — resolvido em P2 (opção a, cortar)
 
 O brief §3.8 afirma: _"a evidência aprovada oferece `Reabrir revisão`. `evidence_revision` é append-only — reabrir é natural no modelo de dados, não é exceção."_ Medido:
 
@@ -131,25 +131,23 @@ Nav atual por papel (`src/app/(app)/layout.tsx:69-118`), medida:
 
 `AGENTS.md` §5.2: nenhuma delas pode chegar ao executor como "a validar".
 
-### P1 · 🔴 [issue #521] A premissa de C5 (#517) está factualmente errada — retomar?
+### P1 · ✅ [issue #521] A premissa de C5 (#517) estava factualmente errada — resolvido, opção a
 
-**Fato novo (A1):** `requireAgendar` já concede criação de sessão a `admin_recepcao`. A recepção **pode** agendar hoje; o que ela não tem é tela para isso (`/agenda/semana` é coordenador-only, e é lá que a UI de criação mora).
+**Decisão (Rômulo, 01/09/2026, issue #521):** opção **a**. `requireAgendar` **não muda**. A decisão da #517 (recepção não agenda, fica como está) é **ratificada** — o erro era a premissa registrada no doc (§4 E4 dizia "recepção não pode marcar sessão"; o correto é "recepção não tem tela para marcar"), não a decisão em si. Rômulo: "foi falha minha, se o produto já dizia de uma forma, vamos mantê-la."
 
-**O que muda:** a decisão da #517 foi "fica como está — agendar segue ato exclusivo do coordenador". Se `requireAgendar` permanece como está, a jornada nova, ao trazer a semana para dentro de `/agenda` (R-29), **expõe** a criação de sessão à recepção por consequência acidental de layout — sem ninguém ter decidido isso.
+**Fato (A1):** `requireAgendar` já concede criação de sessão a `admin_recepcao` — código correto, doc que estava errada. `/agenda/semana` é coordenador-only e é lá que a UI de criação mora.
 
-**Opções (Rômulo decide):**
+**O que a jornada nova precisa fazer:** ao trazer a semana para dentro de `/agenda` (R-29), a tela de criação de sessão continua gateada por papel — só `coordenador` vê o gesto de criar. Isso preserva a decisão da #517 na prática sem mexer em `requireAgendar`.
 
-| #     | Opção                                                                   | Efeito                                                                                                                                                                       |
-| ----- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **a** | Manter `requireAgendar` e **gatear a UI** por papel dentro de `/agenda` | Preserva a decisão da #517 na prática. Custo: a permissão continua dizendo uma coisa e o produto outra.                                                                      |
-| **b** | Estreitar `requireAgendar` para coordenador-only                        | Alinha permissão e decisão. Custo: mudança de autorização — precisa de teste RLS/guard e varredura dos 10 call-sites (`queries.ts:54,76,107,331,560,674,703,897,1125,1153`). |
-| **c** | Reverter a decisão de C5 e liberar agendamento à recepção               | Contraria a #517, mas é o que a autorização já diz.                                                                                                                          |
+**Bloqueava:** T09 (nav por papel), T13 (toggle de escala). **Desbloqueadas.**
 
-**Bloqueia:** T09 (nav por papel), T13 (toggle de escala), e qualquer task que toque `requireAgendar`. **Não bloqueia** T01–T08.
+### P2 · ✅ [issue #522] `Reabrir revisão` (brief §3.8) exige mecanismo novo — resolvido, opção a
 
-### P2 · 🟡 [issue #522] `Reabrir revisão` (brief §3.8) exige mecanismo novo — qual?
+**Decisão (Rômulo, 01/09/2026, issue #522):** opção **a**. Cortar `Reabrir revisão` desta feature. Motivo: o caso de uso real é erro de clique, não erro de julgamento clínico — não justifica quebrar o zero-migração da #512 agora. Esperar erros reais acontecerem em produção antes de desenhar reabertura, com dado real em vez de hipótese.
 
-**Fato novo (A4):** não há valor `reabrir` em `evidence_revision.acao`, e `evidence` é append-only com `UPDATE`/`DELETE` revogados. Reabrir não é derivável.
+**Fato (A4):** não há valor `reabrir` em `evidence_revision.acao`, e `evidence` é append-only com `UPDATE`/`DELETE` revogados. Reabrir não é derivável sem migração.
+
+**Consequência:** brief §3.8 e §3.5 corrigidos (promessa de reabertura removida; colapso da aprovação revisitado — se sustenta sem a rede). G2 (zero migração) sobrevive intacto.
 
 **Opções:**
 
@@ -159,7 +157,7 @@ Nav atual por papel (`src/app/(app)/layout.tsx:69-118`), medida:
 | **b** | Valor novo de enum `reabrir` + migração             | Fecha o buraco. Custo: quebra o "não toca modelo de dados" do brief §6, e a feature deixa de ser reversível por `git revert` puro. |
 | **c** | Modelar reabertura como `invalidar` + nova extração | Sem migração, usa enum existente. Custo: polui a trilha com `invalidar` que não foi invalidação clínica — falseia auditoria.       |
 
-**Bloqueia:** só a parte de reabertura de T07. O resto de T07 (colapso da aprovação) segue.
+**Bloqueava:** só a parte de reabertura de T07. **Desbloqueada** — T07 passa a ser só o colapso da aprovação, sem gesto de reabrir.
 
 ### P3 · 🟢 [T01, já implementado] `Revisada` seria inalcançável pela leitura literal do §3.1
 
@@ -200,7 +198,7 @@ Rastreáveis. `→` aponta a seção do brief que os origina.
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **R-07** | `podeAutoValidar` deriva **só** de `ctx.role === "coordenador" && ctx.userId === session.terapeutaId`. Nenhuma contagem de membros da clínica entra na conta. → §3.5, §7.5       |
 | **R-08** | 🚫 Qualquer helper do tipo `ehClinicaSolo()`, `contarCoordenadores()`, ou predicado de colapso que leia mais de uma sessão é **rejeição em revisão de PR**, não sugestão. → §7.5 |
-| **R-09** | A fila do coordenador é `sessões da clínica cujo terapeuta ≠ eu` ∪ `minhas sessões travadas` — nunca "todas, porque sou coordenador". → §3.5                                     |
+| **R-09** | A fila do coordenador é `sessões da clínica cujo terapeuta ≠ eu` ∪ `minhas sessões travadas` — nunca "todas, porque sou coordenador". Vale **hoje**, 1 coordenador/clínica. Com D76 (#520) resolvido, muda para `sessões de pacientes onde eu sou coordenador_referencia vigente em care_team_membership, cujo terapeuta ≠ eu` — decisão do Rômulo em 01/09/2026, não implementar aqui. → §3.5 |
 | **R-10** | `avaliarFriccao` (A8) continua fonte única. Fricção alta exige justificativa escrita **sempre**, e nunca aprova em lote.                                                         |
 | **R-11** | `evidence_revision` continua append-only, com autor, ação e justificativa. O que muda é **não** registrar duas vezes o mesmo julgamento da mesma pessoa. → §3.5                  |
 
@@ -260,7 +258,8 @@ Rastreáveis. `→` aponta a seção do brief que os origina.
 
 - [ ] Todos os R-01..R-38 rastreados a uma task, e cada task a um teste.
 - [ ] `pnpm typecheck` · `pnpm lint` · `pnpm test` · `pnpm test:rls` verdes, com a **contagem** conferida (verde com "skipped" é vermelho disfarçado — memória `suite-rls-rodando-como-superusuario`).
-- [ ] `git diff --stat db/migrations/` **vazio** — G2 é verificável, não aspiracional. (Salvo decisão P2-b, que é mudança de escopo explícita.)
+- [ ] `git diff --stat db/migrations/` **vazio** — G2 é verificável, não aspiracional.
 - [ ] `grep -rn "ehClinicaSolo\|clinicaSolo\|contarCoordenadores" src/` devolve **zero** (R-08).
-- [ ] P1 e P2 (§4) fechadas pelo Rômulo antes das tasks que dependem delas.
+- [x] P1 (§4) fechada pelo Rômulo — issue #521, opção a.
+- [x] P2 (§4) fechada pelo Rômulo — issue #522, opção a. `Reabrir revisão` fora de escopo.
 - [ ] `npx prettier --write` nos arquivos tocados — **nunca** `pnpm format` (reformata o repo inteiro).

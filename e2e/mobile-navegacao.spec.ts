@@ -36,11 +36,18 @@ test.describe("BottomNav do coordenador", () => {
       .click();
 
     await expect(page.getByText("Menu Principal")).toBeVisible();
+    // #512 · T09 separou a nav diária (`itemsNav`) da administração
+    // (`itemsAdmin`) em dois `<nav>` distintos dentro do Drawer (R-22).
     const drawerNav = page.getByRole("navigation", {
       name: "Navegação mobile",
     });
-    // Coordenador: 8 destinos do if/else + `/perfil` acrescentado fora dele.
-    await expect(drawerNav.getByRole("link")).toHaveCount(9);
+    const drawerAdmin = page.getByRole("navigation", {
+      name: "Administração",
+    });
+    // Coordenador: Agenda/Sessões/Pacientes/Relatórios (itemsNav, 4) +
+    // Equipe/Dados/Exportação/Assinatura/Dúvidas/Perfil (itemsAdmin, 6).
+    await expect(drawerNav.getByRole("link")).toHaveCount(4);
+    await expect(drawerAdmin.getByRole("link")).toHaveCount(6);
   });
 
   test("navega pelo 2º slot da barra", async ({ page }) => {
@@ -96,10 +103,11 @@ test.describe("BottomNav do terapeuta", () => {
 
     const barra = page.getByRole("navigation", { name: "Navegação rápida" });
     await expect(barra.getByRole("link")).toHaveCount(4);
-    // `label` = "Agenda do Dia" (nome acessível), `labelCurto` = "Agenda".
-    const primeiro = barra.getByRole("link", { name: "Agenda do Dia" });
+    // #512 · T09 (R-21) — nav diária de mesma ESTRUTURA para coordenador e
+    // terapeuta: rótulo "Agenda", não mais "Agenda do Dia" (removido na
+    // unificação).
+    const primeiro = barra.getByRole("link", { name: "Agenda" });
     await expect(primeiro).toBeVisible();
-    await expect(primeiro).toHaveText("Agenda");
   });
 });
 

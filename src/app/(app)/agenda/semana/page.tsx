@@ -1,66 +1,33 @@
-import { getTenantContext } from "@/auth/tenant";
-import { requireRole } from "@/auth/require-role";
-import { listarTerapeutas } from "@/app/(app)/equipe/[id]/queries";
-import {
-  carregarConfigClinica,
-  pacientePorId,
-} from "@/app/(app)/agenda/queries";
-import { segundaDaSemana } from "@/lib/agenda/semana";
-import { fusoDaClinicaAtual } from "@/lib/agenda/clinic-timezone";
-import { SemanaCliente, type Prefill } from "./semana-cliente";
+import { redirect } from "next/navigation";
 
 interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-function primeiro(v: string | string[] | undefined): string | undefined {
-  return Array.isArray(v) ? v[0] : v;
-}
-
-/** Task 8: prefill de reposição vindo de `/agenda?...` → `gerir-sessao`
- * ("Repor" em faltas). Só monta o prefill se os 4 parâmetros estiverem
- * presentes — parcial é tratado como ausente. */
-function paramsPrefill(sp: Record<string, string | string[] | undefined>):
-  | {
-      repostaDe: string;
-      patientId: string;
-      terapeutaId: string;
-      disciplina: string;
-    }
-  | undefined {
-  const repostaDe = primeiro(sp.repor);
-  const patientId = primeiro(sp.patientId);
-  const terapeutaId = primeiro(sp.terapeutaId);
-  const disciplina = primeiro(sp.disciplina);
-  if (!repostaDe || !patientId || !terapeutaId || !disciplina) return undefined;
-  return { repostaDe, patientId, terapeutaId, disciplina };
-}
-
+/**
+ * #512 · T14 (R-34) — `/agenda/semana` foi absorvida pelo toggle "Semana" de
+ * `/agenda` (T13, `AgendaViewCliente`/`SegmentedControl`). Redirect
+ * permanente para `/agenda?escala=semana`, repassando o restante da query
+ * string (ex.: `repor`, `patientId`, `terapeutaId`, `disciplina` do gesto
+ * "Repor" em `agenda/page.tsx`/`agenda-view-cliente.tsx`) — link salvo e
+ * teste E2E por URL não podem quebrar (R-34).
+ *
+ * Fiação do prefill fechada (T14-fix): `agenda/page.tsx` lê os mesmos 4
+ * parâmetros e monta o `Prefill` server-side, repassado por
+ * `AgendaViewCliente` → `SemanaCliente`. O gesto "Repor" já linka direto para
+ * `/agenda?escala=semana&repor=...`; este redirect cobre só o link salvo.
+ */
 export default async function Page({ searchParams }: PageProps) {
-  const ctx = await getTenantContext();
-  requireRole(ctx, "coordenador");
-  const [terapeutas, config, sp, fuso] = await Promise.all([
-    listarTerapeutas(ctx),
-    carregarConfigClinica(ctx),
-    searchParams,
-    fusoDaClinicaAtual(ctx),
-  ]);
-  const hojeISO = new Date().toISOString().slice(0, 10);
-  const paramsP = paramsPrefill(sp);
-  const paciente = paramsP ? await pacientePorId(ctx, paramsP.patientId) : null;
-  const prefill: Prefill | undefined =
-    paramsP && paciente
-      ? { ...paramsP, patientNome: paciente.nome }
-      : undefined;
-  return (
-    <SemanaCliente
-      terapeutas={terapeutas.map((t) => ({ id: t.id, nome: t.name ?? "—" }))}
-      semanaInicialISO={segundaDaSemana(hojeISO)}
-      hojeISO={hojeISO}
-      disciplinas={config.disciplinas}
-      duracaoPadrao={config.duracaoDisciplina}
-      prefill={prefill}
-      fuso={fuso}
-    />
-  );
+  const sp = await searchParams;
+  const params = new URLSearchParams();
+  for (const [chave, valor] of Object.entries(sp)) {
+    if (chave === "escala") continue;
+    if (Array.isArray(valor)) {
+      for (const v of valor) params.append(chave, v);
+    } else if (valor !== undefined) {
+      params.set(chave, valor);
+    }
+  }
+  params.set("escala", "semana");
+  redirect(`/agenda?${params.toString()}`);
 }

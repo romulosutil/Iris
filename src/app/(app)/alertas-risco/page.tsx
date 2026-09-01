@@ -1,8 +1,6 @@
 import { getTenantContext } from "@/auth/tenant";
 import { Stack } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
-import { GovernancaNav } from "@/components/ui/governanca-nav";
-import { obterContadoresGovernanca } from "@/lib/governanca/contadores";
 import { listarAlertasRisco } from "./queries";
 import { FilaRisco } from "./fila-risco";
 
@@ -16,24 +14,12 @@ import { FilaRisco } from "./fila-risco";
  */
 export default async function AlertasRiscoPage() {
   const ctx = await getTenantContext();
-  const [itens, contadores] = await Promise.all([
-    listarAlertasRisco(ctx),
-    ctx.role === "coordenador"
-      ? obterContadoresGovernanca(ctx)
-      : Promise.resolve(undefined),
-  ]);
+  const itens = await listarAlertasRisco(ctx);
 
   const aguardando = itens.filter((i) => i.status === "aberto").length;
 
   return (
     <Stack gap="lg">
-      <GovernancaNav
-        contadores={
-          contadores
-            ? { ...contadores, alertasRisco: aguardando }
-            : { alertasRisco: aguardando }
-        }
-      />
       <PageHeader
         title="Alertas de risco"
         description={

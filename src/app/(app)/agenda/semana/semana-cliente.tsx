@@ -49,6 +49,15 @@ interface Props {
   duracaoPadrao: Record<string, number>;
   prefill?: Prefill;
   fuso: string;
+  /** #512 · T13 (P1, issue #521, opção a) — gesto de CRIAR/gerir regra da
+   * semana (alocar slot, estender, encerrar) fica visível só para
+   * `coordenador`, mesmo com a semana dentro de `/agenda`. Espelha
+   * `podeCriarSessaoEmAgenda` (src/lib/agenda/gating.ts): os servidores por
+   * trás de `aoAbrirRegra` (proximaSessaoAction, contarFuturasAction,
+   * encerrarRegraAction, conflitosAction) já exigem `requireRole(ctx,
+   * "coordenador")` — esta prop só evita abrir um gesto que o servidor
+   * recusaria. */
+  podeCriarSessao: boolean;
 }
 
 function recuarSemana(iso: string): string {
@@ -76,6 +85,7 @@ export function SemanaCliente({
   duracaoPadrao,
   prefill,
   fuso,
+  podeCriarSessao,
 }: Props) {
   // Task 8 (reposição): eixo é sempre "terapeuta" quando há prefill — a
   // entidade fixa no calendário é o terapeuta PREVISTO da falta (editável
@@ -253,14 +263,14 @@ export function SemanaCliente({
         blocos={dadosVisiveis.blocos}
         fuso={fuso}
         aoAlocar={(diaSemana, inicioMin) => {
-          if (passada || carregando) return;
+          if (!podeCriarSessao || passada || carregando) return;
           const dataISO = dias[diaSemana === 0 ? 6 : diaSemana - 1]!;
           setSlot({ diaSemana, inicioMin, dataISO });
         }}
-        aoAbrirRegra={abrirRegra}
+        aoAbrirRegra={podeCriarSessao ? abrirRegra : undefined}
       />
 
-      {slot && entidade && (
+      {slot && entidade && podeCriarSessao && (
         <PopoverAlocar
           aberto
           aoFechar={() => setSlot(null)}

@@ -127,3 +127,13 @@ Ao concluir uma sessão com alterações relevantes, decisões arquiteturais ou 
 2. **Resumo Claro:** Apresentar um resumo sucinto dos pontos alterados e dos comandos de verificação executados.
 3. **Salvar Checkpoint:** Se o contexto estiver elevado (~50 mensagens), registrar o status em `checkpoint.md`.
 4. **Atualizar o Grafo de Conhecimento:** Toda tarefa concluída que alterou código ou documentação exige `git commit` + `git push` + `graphify update .`, para que `graphify-out/` reflita a realidade do repositório em sessões futuras (AST-only, sem custo de API).
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

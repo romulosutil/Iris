@@ -11,7 +11,22 @@ import { consolidarSessaoAction, type ConsolidarState } from "./actions";
  * (ex.: corrigir um erro de digitação) não incrementa o número — só
  * regrava o texto e reprocessa a extração.
  */
-export function ConsolidarForm({ sessionId }: { sessionId: string }) {
+export function ConsolidarForm({
+  sessionId,
+  /**
+   * R-38: `Consolidar` só habilita quando existe captura. Default `true`
+   * preserva o comportamento anterior (usado hoje só por `/diario/[id]`, que
+   * não passa esta prop) — a página nova (`/sessoes/[id]`) é quem calcula o
+   * valor real a partir da existência de `captura_rapida`.
+   */
+  podeConsolidar = true,
+  motivoBloqueio,
+}: {
+  sessionId: string;
+  podeConsolidar?: boolean;
+  /** Texto explicando o que falta — nunca só cinza mudo (R-38). */
+  motivoBloqueio?: string;
+}) {
   const [state, formAction, pending] = useActionState<
     ConsolidarState,
     FormData
@@ -45,9 +60,16 @@ export function ConsolidarForm({ sessionId }: { sessionId: string }) {
           Restringir visualização à minha disciplina (sigilo profissional)
         </span>
       </label>
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" disabled={pending || !podeConsolidar}>
         {pending ? "Consolidando…" : "Consolidar sessão"}
       </Button>
+      {/* R-38: desabilitado explica o que falta, não fica cinza mudo. */}
+      {!podeConsolidar ? (
+        <p className="text-sm text-[var(--text-secondary)]">
+          {motivoBloqueio ??
+            "Registre uma captura (texto ou áudio) antes de consolidar."}
+        </p>
+      ) : null}
       {/* Sucesso PARCIAL não pode se passar por sucesso: quando a extração da
           IA falha, a nota foi salva mas nenhuma sugestão vai aparecer. Mostrar
           o verde aqui faria o terapeuta esperar por uma análise que nunca vem. */}

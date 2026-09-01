@@ -23,14 +23,24 @@ async function comCtx(
     ctx: TenantContext,
     extractionId: string,
     versao: number,
+    justificativaColapso: string | undefined,
   ) => Promise<ReviewResult>,
 ): Promise<RevisaoState> {
   const ctx = await getTenantContext();
   const sessionId = String(formData.get("sessionId") ?? "");
   const extractionId = String(formData.get("extractionId") ?? "");
   const versao = Number(formData.get("versao") ?? "1");
+  // T07 (R-10/R-11): campo opcional só usado quando `podeAutoValidar` colapsa
+  // a aprovação e a extração é de fricção alta — a UI (`revisao-lista.tsx`)
+  // só renderiza o textarea nesse caso. Ausente nos demais fluxos.
+  const justificativaColapsoRaw = formData.get("justificativaColapso");
+  const justificativaColapso =
+    typeof justificativaColapsoRaw === "string" &&
+    justificativaColapsoRaw.trim()
+      ? justificativaColapsoRaw
+      : undefined;
   try {
-    const r = await fn(ctx, extractionId, versao);
+    const r = await fn(ctx, extractionId, versao, justificativaColapso);
     if (r.error) {
       if (r.error === "CONCURRENCY_ERROR") {
         return { error: "CONCURRENCY_ERROR" };
@@ -38,7 +48,11 @@ async function comCtx(
       return { error: r.error };
     }
     if (!r.ok) return { error: "Extração não encontrada ou já revisada." };
-    if (sessionId) revalidatePath(`/revisao/${sessionId}`);
+    if (sessionId) {
+      revalidatePath(`/revisao/${sessionId}`);
+      revalidatePath(`/sessoes/${sessionId}`);
+      revalidatePath("/sessoes");
+    }
     return { ok: true };
   } catch (err) {
     if (err instanceof RoleError) {
@@ -53,8 +67,8 @@ export async function aprovarExtracaoAction(
   _prev: RevisaoState,
   formData: FormData,
 ): Promise<RevisaoState> {
-  return comCtx(formData, (ctx, id, versao) =>
-    aprovarExtracao(ctx, { extractionId: id, versao }),
+  return comCtx(formData, (ctx, id, versao, justificativaColapso) =>
+    aprovarExtracao(ctx, { extractionId: id, versao, justificativaColapso }),
   );
 }
 
@@ -62,6 +76,7 @@ export async function descartarExtracaoAction(
   _prev: RevisaoState,
   formData: FormData,
 ): Promise<RevisaoState> {
+  // descartar não usa justificativaColapso — não insere evidence/evidence_revision.
   return comCtx(formData, (ctx, id, versao) =>
     descartarExtracao(ctx, { extractionId: id, versao }),
   );
@@ -88,7 +103,12 @@ export async function editarExtracaoAction(
     const v = formData.get(campo);
     if (typeof v === "string" && v.trim() !== "") editado[campo] = v.trim();
   }
-  return comCtx(formData, (ctx, id, versao) =>
-    editarExtracao(ctx, { extractionId: id, payloadEditado: editado, versao }),
+  return comCtx(formData, (ctx, id, versao, justificativaColapso) =>
+    editarExtracao(ctx, {
+      extractionId: id,
+      payloadEditado: editado,
+      versao,
+      justificativaColapso,
+    }),
   );
 }

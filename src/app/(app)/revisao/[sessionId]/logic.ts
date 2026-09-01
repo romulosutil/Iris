@@ -15,6 +15,62 @@ import {
   drizzleResolverQueries,
   resolverAlvoParaFks,
 } from "@/lib/evidence/resolver";
+import { podeAutoValidar } from "@/lib/sessao/aprovacao";
+import { avaliarFriccao } from "@/lib/extraction/review-policy";
+
+// ─── Colapso da aprovação (T07, spec R-07/R-10/R-11, §3.5) ─────────────────
+// Quando `podeAutoValidar(ctx, sessão)` é true (coordenador === terapeuta da
+// sessão), a MESMA aprovação da extração já grava o carimbo de
+// `evidence_revision` que hoje só nasceria numa segunda visita a /validacao.
+// Fricção alta continua exigindo justificativa escrita (R-10) — sem ela a
+// aprovação inteira é recusada ANTES de qualquer escrita (checagem faz uma
+// leitura própria, fora da transação de mutação, para poder barrar cedo sem
+// deixar a extração transicionada e a evidência travada sem carimbo).
+type ColapsoAprovacao = {
+  colapsa: boolean;
+  friccaoExige: boolean;
+  justificativa: string | undefined;
+};
+
+async function resolverColapso(
+  ctx: TenantContext,
+  extractionId: string,
+  justificativaColapso: string | undefined,
+): Promise<{ error: string } | ColapsoAprovacao> {
+  const [row] = await withTenant(ctx, (tx) =>
+    tx
+      .select({
+        confianca: extraction.confianca,
+        inconsistenteComHistorico: extraction.inconsistenteComHistorico,
+        terapeutaId: session.terapeutaId,
+      })
+      .from(extraction)
+      .innerJoin(session, eq(session.id, extraction.sessionId))
+      .where(eq(extraction.id, extractionId)),
+  );
+  if (!row) {
+    // Extração não encontrada — segue para `transicionar`, que devolve o erro
+    // de concorrência/CAS padrão sem que a checagem de colapso precise repetir
+    // essa lógica.
+    return { colapsa: false, friccaoExige: false, justificativa: undefined };
+  }
+  const colapsa = podeAutoValidar(ctx, { terapeutaId: row.terapeutaId });
+  if (!colapsa) {
+    return { colapsa: false, friccaoExige: false, justificativa: undefined };
+  }
+  const friccao = avaliarFriccao({
+    confianca: row.confianca,
+    inconsistenteComHistorico: row.inconsistenteComHistorico,
+  });
+  const justificativa = justificativaColapso?.trim();
+  if (friccao.exigeFriccao && !justificativa) {
+    return {
+      error:
+        "Fricção alta exige justificativa escrita antes de aprovar — mesmo aprovando a própria sessão.",
+    };
+  }
+  return { colapsa: true, friccaoExige: friccao.exigeFriccao, justificativa };
+}
 
 // ─── Inserção de `evidence` on-approve (Fase 4 · §4 da spec de resolução
 // slug→UUID) ───────────────────────────────────────────────────────────────
@@ -95,6 +151,7 @@ async function inserirEvidenciasOnApprove(
   tx: Parameters<Parameters<typeof withTenant>[1]>[0],
   ctx: TenantContext,
   row: ExtracaoAprovadaRow,
+  colapso: ColapsoAprovacao,
 ): Promise<void> {
   const [sess] = await tx
     .select({
@@ -165,7 +222,7 @@ async function inserirEvidenciasOnApprove(
     // escopo desta linha) — mesmo padrão do backfill.
     const classificacaoOriginal = { ...evidenciaSemAlvos, alvo };
 
-    await tx
+    const [inserida] = await tx
       .insert(evidence)
       .values({
         extractionId: row.id,
@@ -186,7 +243,25 @@ async function inserirEvidenciasOnApprove(
       // reprocessar) não duplica.
       .onConflictDoNothing({
         target: [evidence.extractionId, evidence.alvoOrdinal],
-      });
+      })
+      .returning({ id: evidence.id });
+
+    // Colapso da aprovação (R-07/R-10/R-11, §3.5): coordenador === terapeuta
+    // da sessão → o mesmo gesto já grava o carimbo de `evidence_revision`
+    // ("confirmar") que hoje só nasceria numa segunda visita a /validacao.
+    // Só roda quando `evidence` foi de fato inserida agora (sem `inserida`,
+    // ou é reaprovação idempotente, ou a linha nem chegou a existir — nos
+    // dois casos não há evidência nova para carimbar, e carimbar de novo
+    // violaria R-11: "não registrar duas vezes o mesmo julgamento").
+    if (inserida && colapso.colapsa) {
+      await tx.execute(sql`
+        INSERT INTO evidence_revision (evidence_id, acao, classificacao_anterior, classificacao_nova, justificativa, autor_id)
+        VALUES (${inserida.id}, 'confirmar', ${JSON.stringify(classificacaoOriginal)}::jsonb, NULL, ${
+          colapso.justificativa ??
+          "Aprovado e confirmado pelo mesmo profissional (terapeuta e coordenador da sessão) — carimbo único."
+        }, ${ctx.userId}::uuid)
+      `);
+    }
   }
 
   // Materialização real (4B — segmentação/repertório em TS puro, ver
@@ -224,6 +299,11 @@ async function transicionar(
   extractionId: string,
   versaoCliente: number,
   set: Record<string, unknown>,
+  colapso: ColapsoAprovacao = {
+    colapsa: false,
+    friccaoExige: false,
+    justificativa: undefined,
+  },
 ): Promise<ReviewResult> {
   requireRole(ctx, "terapeuta", "coordenador");
   let success = false;
@@ -261,7 +341,7 @@ async function transicionar(
 
       const novoEstado = set.estado;
       if (novoEstado === "aprovada" || novoEstado === "editada") {
-        await inserirEvidenciasOnApprove(tx, ctx, updated[0]!);
+        await inserirEvidenciasOnApprove(tx, ctx, updated[0]!, colapso);
       }
       success = true;
       return updated;
@@ -303,15 +383,33 @@ async function transicionar(
 
 async function aprovarExtracaoCore(
   ctx: TenantContext,
-  input: { extractionId: string; versao: number },
+  input: {
+    extractionId: string;
+    versao: number;
+    justificativaColapso?: string;
+  },
 ): Promise<ReviewResult> {
   const p = z
-    .object({ extractionId: z.string().uuid(), versao: z.number() })
+    .object({
+      extractionId: z.string().uuid(),
+      versao: z.number(),
+      justificativaColapso: z.string().optional(),
+    })
     .safeParse(input);
   if (!p.success) return { error: p.error.issues[0]!.message };
-  return transicionar(ctx, p.data.extractionId, p.data.versao, {
-    estado: "aprovada",
-  });
+  const colapso = await resolverColapso(
+    ctx,
+    p.data.extractionId,
+    p.data.justificativaColapso,
+  );
+  if ("error" in colapso) return { error: colapso.error };
+  return transicionar(
+    ctx,
+    p.data.extractionId,
+    p.data.versao,
+    { estado: "aprovada" },
+    colapso,
+  );
 }
 
 export const aprovarExtracao = comEscrita(aprovarExtracaoCore);
@@ -337,6 +435,7 @@ const editarSchema = z.object({
   extractionId: z.string().uuid(),
   payloadEditado: z.record(z.unknown()),
   versao: z.number(),
+  justificativaColapso: z.string().optional(),
 });
 
 async function editarExtracaoCore(
@@ -345,14 +444,27 @@ async function editarExtracaoCore(
     extractionId: string;
     payloadEditado: Record<string, unknown>;
     versao: number;
+    justificativaColapso?: string;
   },
 ): Promise<ReviewResult> {
   const p = editarSchema.safeParse(input);
   if (!p.success) return { error: p.error.issues[0]!.message };
-  return transicionar(ctx, p.data.extractionId, p.data.versao, {
-    estado: "editada",
-    payloadEditado: p.data.payloadEditado,
-  });
+  const colapso = await resolverColapso(
+    ctx,
+    p.data.extractionId,
+    p.data.justificativaColapso,
+  );
+  if ("error" in colapso) return { error: colapso.error };
+  return transicionar(
+    ctx,
+    p.data.extractionId,
+    p.data.versao,
+    {
+      estado: "editada",
+      payloadEditado: p.data.payloadEditado,
+    },
+    colapso,
+  );
 }
 
 export const editarExtracao = comEscrita(editarExtracaoCore);
