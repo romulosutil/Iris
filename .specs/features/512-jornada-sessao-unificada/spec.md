@@ -131,21 +131,15 @@ Nav atual por papel (`src/app/(app)/layout.tsx:69-118`), medida:
 
 `AGENTS.md` §5.2: nenhuma delas pode chegar ao executor como "a validar".
 
-### P1 · 🔴 [issue #521] A premissa de C5 (#517) está factualmente errada — retomar?
+### P1 · ✅ [issue #521] A premissa de C5 (#517) estava factualmente errada — resolvido, opção a
 
-**Fato novo (A1):** `requireAgendar` já concede criação de sessão a `admin_recepcao`. A recepção **pode** agendar hoje; o que ela não tem é tela para isso (`/agenda/semana` é coordenador-only, e é lá que a UI de criação mora).
+**Decisão (Rômulo, 01/09/2026, issue #521):** opção **a**. `requireAgendar` **não muda**. A decisão da #517 (recepção não agenda, fica como está) é **ratificada** — o erro era a premissa registrada no doc (§4 E4 dizia "recepção não pode marcar sessão"; o correto é "recepção não tem tela para marcar"), não a decisão em si. Rômulo: "foi falha minha, se o produto já dizia de uma forma, vamos mantê-la."
 
-**O que muda:** a decisão da #517 foi "fica como está — agendar segue ato exclusivo do coordenador". Se `requireAgendar` permanece como está, a jornada nova, ao trazer a semana para dentro de `/agenda` (R-29), **expõe** a criação de sessão à recepção por consequência acidental de layout — sem ninguém ter decidido isso.
+**Fato (A1):** `requireAgendar` já concede criação de sessão a `admin_recepcao` — código correto, doc que estava errada. `/agenda/semana` é coordenador-only e é lá que a UI de criação mora.
 
-**Opções (Rômulo decide):**
+**O que a jornada nova precisa fazer:** ao trazer a semana para dentro de `/agenda` (R-29), a tela de criação de sessão continua gateada por papel — só `coordenador` vê o gesto de criar. Isso preserva a decisão da #517 na prática sem mexer em `requireAgendar`.
 
-| #     | Opção                                                                   | Efeito                                                                                                                                                                       |
-| ----- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **a** | Manter `requireAgendar` e **gatear a UI** por papel dentro de `/agenda` | Preserva a decisão da #517 na prática. Custo: a permissão continua dizendo uma coisa e o produto outra.                                                                      |
-| **b** | Estreitar `requireAgendar` para coordenador-only                        | Alinha permissão e decisão. Custo: mudança de autorização — precisa de teste RLS/guard e varredura dos 10 call-sites (`queries.ts:54,76,107,331,560,674,703,897,1125,1153`). |
-| **c** | Reverter a decisão de C5 e liberar agendamento à recepção               | Contraria a #517, mas é o que a autorização já diz.                                                                                                                          |
-
-**Bloqueia:** T09 (nav por papel), T13 (toggle de escala), e qualquer task que toque `requireAgendar`. **Não bloqueia** T01–T08.
+**Bloqueava:** T09 (nav por papel), T13 (toggle de escala). **Desbloqueadas.**
 
 ### P2 · 🟡 [issue #522] `Reabrir revisão` (brief §3.8) exige mecanismo novo — qual?
 
@@ -262,5 +256,5 @@ Rastreáveis. `→` aponta a seção do brief que os origina.
 - [ ] `pnpm typecheck` · `pnpm lint` · `pnpm test` · `pnpm test:rls` verdes, com a **contagem** conferida (verde com "skipped" é vermelho disfarçado — memória `suite-rls-rodando-como-superusuario`).
 - [ ] `git diff --stat db/migrations/` **vazio** — G2 é verificável, não aspiracional. (Salvo decisão P2-b, que é mudança de escopo explícita.)
 - [ ] `grep -rn "ehClinicaSolo\|clinicaSolo\|contarCoordenadores" src/` devolve **zero** (R-08).
-- [ ] P1 e P2 (§4) fechadas pelo Rômulo antes das tasks que dependem delas.
+- [x] P1 (§4) fechada pelo Rômulo — issue #521, opção a. P2 pendente.
 - [ ] `npx prettier --write` nos arquivos tocados — **nunca** `pnpm format` (reformata o repo inteiro).

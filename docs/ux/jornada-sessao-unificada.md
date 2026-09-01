@@ -335,16 +335,21 @@ silêncio da fila do terapeuta.
 ### E4 — `admin_recepcao`
 
 `/agenda/semana` é `requireRole(ctx, "coordenador")` e as actions de criação de
-sessão vivem atrás dessa tela. **A recepção não pode marcar sessão e não enxerga
-a semana** — precisa manter a grade na memória de trabalho e pedir ao coordenador.
-Isso não é carga de layout: é permissão no lugar errado.
+sessão vivem atrás dessa tela. **A recepção não enxerga a semana e não tem por
+onde marcar sessão hoje** — precisa manter a grade na memória de trabalho e
+pedir ao coordenador. Isso é carga de layout: `requireAgendar`
+(`src/auth/require-role.ts:61`) já **concede** criação de sessão a
+`admin_recepcao` — o que barra é só a tela, coordenador-only. Achado registrado
+em 01/09/2026 na issue #521 (D77) ao atomizar a #512.
 
-**Decisão (Rômulo, 01/09/2026, issue #517): opção 3 — fica como está.** Agendar
-continua ato exclusivo do coordenador; `admin_recepcao` permanece papel de
-leitura. Ressalva do próprio Rômulo: essa decisão é do modelo de negócio atual,
-onde o coordenador é quem define a demanda — pode mudar se o modelo mudar. Não
-faz sentido hoje abrir escrita de agenda para a recepção. Rename do papel na UI
-(cogitado na opção 3 original) fica fora de escopo — não é necessário agora.
+**Decisão (Rômulo, 01/09/2026, issue #517, ratificada em #521): opção 3 — fica
+como está.** Agendar continua ato exclusivo do coordenador; `admin_recepcao`
+permanece papel de leitura. `requireAgendar` **não muda** — a jornada nova
+(R-29) gateia a UI de criação por papel dentro de `/agenda`, para a permissão
+inerte não virar tela por acidente de layout. Ressalva do próprio Rômulo: essa
+decisão é do modelo de negócio atual, onde o coordenador é quem define a
+demanda — pode mudar se o modelo mudar. Rename do papel na UI (cogitado na
+opção 3 original) fica fora de escopo — não é necessário agora.
 
 Decisão levanta gap adjacente: **hoje só existe um coordenador por clínica**
 efetivo na modelagem de papéis. Se o negócio crescer para clínicas com mais de
