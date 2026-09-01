@@ -79,6 +79,30 @@ function chaveHistorico(r: {
   return `${r.protocol_id ?? ""}|${r.dominio_id ?? ""}`;
 }
 
+// Contagem-only: mesmo predicado da fila, sem JOIN com `patient` (não afeta
+// WHERE), sem mapear itens nem disparar a segunda query de histórico. Uso:
+// badges/navegação que só precisam do total (ex. AppLayout, a cada render).
+export async function contarFilaValidacao(
+  ctx: TenantContext,
+): Promise<{ total: number }> {
+  return withTenant(ctx, async (tx) => {
+    const rows = (await tx.execute(sql`
+      SELECT count(*)::int AS total
+      FROM evidence_current ec
+      JOIN extraction x ON x.id = ec.extraction_id
+      WHERE ec.invalidada = false
+        AND (x.confianca = 'baixa' OR x.inconsistente_com_historico = true)
+        AND NOT EXISTS (SELECT 1 FROM evidence_revision r WHERE r.evidence_id = ec.id)
+        AND NOT EXISTS (
+          SELECT 1 FROM evidence_query q
+          WHERE q.evidence_id = ec.id AND q.respondido_em IS NULL
+        )
+    `)) as unknown as { total: number }[];
+
+    return { total: rows[0]?.total ?? 0 };
+  });
+}
+
 export async function listarFilaValidacao(
   ctx: TenantContext,
 ): Promise<{ itens: ItemFila[]; total: number }> {
