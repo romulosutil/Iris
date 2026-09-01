@@ -22,6 +22,7 @@ describe("PassoDocumentar — um passo, dois momentos (R-36, R-37, R-38)", () =>
         protocolIdsPreSelecionados={[]}
         asrHabilitado={false}
         temCaptura={false}
+        ehDono={true}
       />,
     );
     expect(
@@ -43,6 +44,7 @@ describe("PassoDocumentar — um passo, dois momentos (R-36, R-37, R-38)", () =>
         protocolIdsPreSelecionados={[]}
         asrHabilitado={false}
         temCaptura={false}
+        ehDono={true}
       />,
     );
     const botao = screen.getByRole("button", {
@@ -62,6 +64,7 @@ describe("PassoDocumentar — um passo, dois momentos (R-36, R-37, R-38)", () =>
         protocolIdsPreSelecionados={[]}
         asrHabilitado={false}
         temCaptura={true}
+        ehDono={true}
       />,
     );
     const botao = screen.getByRole("button", {
@@ -81,11 +84,52 @@ describe("PassoDocumentar — um passo, dois momentos (R-36, R-37, R-38)", () =>
         protocolIdsPreSelecionados={[]}
         asrHabilitado={false}
         temCaptura={false}
+        ehDono={true}
       />,
     );
     // Duas instâncias: aba texto + aba áudio, ambas sempre montadas
     // (Tabs mantém o conteúdo no DOM), nunca um toast que aparece/some.
     const status = screen.getAllByRole("status");
     expect(status.length).toBeGreaterThanOrEqual(1);
+  });
+
+  // #514 — `podeVer` (coordenação OU dono) não é `podeEscrever` (só dono). As
+  // policies `session_note_insert`/`session_note_update`/`extraction_insert`
+  // (0006_fase2_rls.sql) exigem
+  // `app_session_terapeuta_id(session_id) = app.user_id`: um coordenador que
+  // não é o terapeuta da sessão preencheria a nota inteira e só descobriria no
+  // submit, via erro genérico de RLS, que não podia.
+  test("#514: coordenador que não é o dono não recebe formulário de escrita nenhum", () => {
+    render(
+      <PassoDocumentar
+        sessionId={SESSION_ID}
+        protocolos={[]}
+        protocolIdsPreSelecionados={[]}
+        asrHabilitado={false}
+        temCaptura={true}
+        ehDono={false}
+      />,
+    );
+
+    // Nada submetível: nem o botão de consolidar, nem o campo de captura.
+    expect(
+      screen.queryByRole("button", { name: /consolidar sessão/i }),
+    ).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(
+      screen.queryByRole("heading", { level: 3, name: "1. Capturar" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("heading", { level: 3, name: "2. Consolidar" }),
+    ).toBeNull();
+
+    // Continua sendo a tela "Documentar" — o passo é visível, só não é editável,
+    // e a tela diz POR QUE (senão vira empty-state mudo).
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Documentar" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/só o terapeuta desta sessão captura e consolida/i),
+    ).toBeTruthy();
   });
 });
