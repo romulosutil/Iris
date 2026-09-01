@@ -15,6 +15,10 @@ export type ExtracaoFalha = {
   sessionId: string;
   pacienteNome: string | null;
   terapeutaNome: string | null;
+  /** Dono da sessão. Numa clínica solo é o próprio coordenador que está vendo
+   *  esta tela — e só nesse caso a linha pode oferecer "Reprocessar" (a RLS
+   *  exige `app_session_terapeuta_id(session_id) = app.user_id` para escrever). */
+  terapeutaId: string;
   desdeEm: Date;
 };
 
@@ -44,6 +48,7 @@ export async function listarExcecoes(
         sessionId: extraction.sessionId,
         pacienteNome: patient.nome,
         terapeutaNome: appUser.name,
+        terapeutaId: session.terapeutaId,
         desdeEm: extraction.criadoEm,
       })
       .from(extraction)

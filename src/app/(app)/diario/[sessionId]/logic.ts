@@ -62,6 +62,14 @@ async function mensagemDeConsentimento(
 
 // Draft de fallback quando a extração (LLM) falha: mantém a nota salva e marca
 // pendente de reprocessamento (flow 2.4 dos wireframes) — nunca perde o diário.
+// Texto do aviso quando a Fase B (LLM) falha. É AVISO, não erro: a nota
+// consolidada FOI gravada — devolver `error` seria a segunda mentira, depois
+// de o `ok: true` silencioso já ter sido a primeira. O terapeuta precisa saber
+// que a IA não rodou, senão fica esperando sugestões que nunca vêm e o item
+// represa em /excecoes ("Extrações que falharam") sem ninguém entender por quê.
+export const AVISO_EXTRACAO_FALHOU =
+  "Nota salva, mas a análise da IA não rodou (falha no serviço). A sessão ficou marcada como pendente de reprocessamento — consolide de novo mais tarde para tentar outra vez.";
+
 const PENDENTE_DRAFT: ExtractionDraft = {
   subtipo: "pendente",
   trechoFonte: "",
@@ -603,6 +611,8 @@ async function consolidarSessaoCore(
   },
 ): Promise<{
   error?: string;
+  /** Sucesso PARCIAL: nota gravada, mas a extração da IA não rodou. */
+  aviso?: string;
   numeroSequencial?: number;
   bloqueioConta?: BloqueioConta;
 }> {
@@ -764,6 +774,7 @@ async function consolidarSessaoCore(
     const provider = resolveProvider({ isDemo: prep.isDemo });
     let drafts: ExtractionDraft[];
     let alertaRisco: AlertaRiscoAgente | null = null;
+    let avisoExtracao: string | undefined;
     try {
       const saida = await provider.extrair({
         sessionId: sid,
@@ -777,6 +788,7 @@ async function consolidarSessaoCore(
     } catch (err) {
       console.error("extração falhou (marcando pendente):", err);
       drafts = [PENDENTE_DRAFT];
+      avisoExtracao = AVISO_EXTRACAO_FALHOU;
     }
 
     // ── Fase C: regrava só sugestões/pendências; PRESERVA linhas já revisadas
@@ -944,9 +956,10 @@ async function consolidarSessaoCore(
       return {
         numeroSequencial: prep.numero ?? undefined,
         error: errosAlerta.join(" "),
+        aviso: avisoExtracao,
       };
     }
-    return { numeroSequencial: prep.numero ?? undefined };
+    return { numeroSequencial: prep.numero ?? undefined, aviso: avisoExtracao };
   } catch (err) {
     const msg = await mensagemDeConsentimento(ctx, err, { sessionId: sid });
     if (msg) return { error: msg };

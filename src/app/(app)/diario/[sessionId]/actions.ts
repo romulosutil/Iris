@@ -97,7 +97,13 @@ export async function registrarAudioLocalAction(
   }
 }
 
-export type ConsolidarState = { error?: string; ok?: boolean; numero?: number };
+export type ConsolidarState = {
+  error?: string;
+  /** Sucesso parcial: a nota foi salva, mas a extração da IA falhou. */
+  aviso?: string;
+  ok?: boolean;
+  numero?: number;
+};
 export async function consolidarSessaoAction(
   _prev: ConsolidarState,
   formData: FormData,
@@ -117,7 +123,7 @@ export async function consolidarSessaoAction(
     if (r.error) return { error: r.error };
     revalidatePath("/pendencias");
     revalidatePath(`/diario/${formData.get("sessionId")}`);
-    return { ok: true, numero: r.numeroSequencial };
+    return { ok: true, numero: r.numeroSequencial, aviso: r.aviso };
   } catch (err) {
     if (err instanceof RoleError)
       return { error: "Só o terapeuta da sessão consolida." };
@@ -237,7 +243,12 @@ export async function aceitarTranscricaoLoteAction(
 // há pendência, `deveReextrair` retorna true, então re-chama o provider e
 // PRESERVA as linhas já revisadas (mesma Fase C idempotente). Sem novo caminho
 // de escrita: reprocessar herda P0, hardening e o gate de provider.
-export type ReprocessarState = { error?: string; ok?: boolean };
+export type ReprocessarState = {
+  error?: string;
+  /** Sucesso parcial: reprocessou, mas a extração da IA falhou de novo. */
+  aviso?: string;
+  ok?: boolean;
+};
 export async function reprocessarExtracaoAction(
   _prev: ReprocessarState,
   formData: FormData,
@@ -263,7 +274,7 @@ export async function reprocessarExtracaoAction(
     if (r.error) return { error: r.error };
     revalidatePath("/pendencias");
     revalidatePath("/excecoes");
-    return { ok: true };
+    return { ok: true, aviso: r.aviso };
   } catch (err) {
     if (err instanceof RoleError) {
       return { error: "Só o terapeuta da sessão reprocessa a extração." };

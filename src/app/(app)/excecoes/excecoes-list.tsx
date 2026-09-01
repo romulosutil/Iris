@@ -3,6 +3,7 @@ import { Stack, Split, Cluster } from "@/components/ui/layout";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ReviewClinicalIllustration } from "@/components/ui/illustrations";
 import { cn } from "@/lib/cn";
+import { ReprocessarExtracao } from "../diario/[sessionId]/reprocessar-extracao";
 import type {
   ExtracaoFalha,
   ListaExcecoes,
@@ -30,7 +31,21 @@ function desde(data: Date | null, agora: number): string {
   return `há ${dias} ${dias === 1 ? "dia" : "dias"}`;
 }
 
-function LinhaFalha({ item, agora }: { item: ExtracaoFalha; agora: number }) {
+function LinhaFalha({
+  item,
+  agora,
+  userId,
+}: {
+  item: ExtracaoFalha;
+  agora: number;
+  userId: string;
+}) {
+  // Clínica de uma pessoa só: quem vê o painel de exceções É o terapeuta dono
+  // da sessão. Sem isto a única saída daqui era "Abrir diário", que abre o
+  // formulário de nota EM BRANCO — a ação de reprocessar mora em /pendencias,
+  // que a nav do coordenador nem lista. O item ficava represado para sempre.
+  const ehDono = item.terapeutaId === userId;
+
   return (
     <div className="flex flex-col gap-2 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-5 shadow-[var(--ds-shadow)]">
       <Split alinha="start">
@@ -43,9 +58,12 @@ function LinhaFalha({ item, agora }: { item: ExtracaoFalha; agora: number }) {
             {item.terapeutaNome ? ` · ${item.terapeutaNome}` : ""}
           </span>
         </Stack>
-        <Link href={`/diario/${item.sessionId}`} className={linkClasses}>
-          Abrir diário
-        </Link>
+        <Cluster gap="sm">
+          <Link href={`/diario/${item.sessionId}`} className={linkClasses}>
+            Abrir diário
+          </Link>
+          {ehDono ? <ReprocessarExtracao sessionId={item.sessionId} /> : null}
+        </Cluster>
       </Split>
     </div>
   );
@@ -88,16 +106,19 @@ function LinhaIncompleta({
 
 /**
  * Painel de exceções — presentacional. Recebe os dados prontos + o instante de
- * referência (para as idades relativas). O coordenador não revisa nem reprocessa
- * daqui (as ações são do terapeuta dono); esta tela é de VISIBILIDADE: onde a
- * cobrança está represada e há quanto tempo.
+ * referência (para as idades relativas). A tela é de VISIBILIDADE: onde a
+ * cobrança está represada e há quanto tempo. A regra "as ações são do terapeuta
+ * dono" continua valendo — o que mudou é que numa clínica solo o coordenador
+ * que abre esta tela É esse dono, e então a linha oferece a ação em vez de um
+ * beco sem saída. `userId` é quem decide isso, por linha.
  */
 export function ExcecoesList({
   extracoesFalhas,
   revisoesIncompletas,
   total,
   agora,
-}: ListaExcecoes) {
+  userId,
+}: ListaExcecoes & { userId: string }) {
   if (total === 0) {
     return (
       <EmptyState
@@ -122,7 +143,7 @@ export function ExcecoesList({
           <Stack gap="md" como="ul">
             {extracoesFalhas.map((item) => (
               <li key={item.sessionId}>
-                <LinhaFalha item={item} agora={agora} />
+                <LinhaFalha item={item} agora={agora} userId={userId} />
               </li>
             ))}
           </Stack>

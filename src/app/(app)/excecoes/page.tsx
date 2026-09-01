@@ -26,7 +26,7 @@ export default async function ExcecoesPage() {
         title="Exceções Clínicas"
         description="Acompanhamento de interrupções de fluxo e inconsistências no atendimento."
       />
-      <ExcecoesList {...excecoes} />
+      <ExcecoesList {...excecoes} userId={ctx.userId} />
     </Stack>
   );
 }
