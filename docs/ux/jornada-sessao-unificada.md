@@ -68,6 +68,10 @@ Ratificadas pelo Rômulo em 01/09/2026:
    mas ligada ao risco do item, não ao organograma.
 3. **Um motor de calendário, com escala Dia/Semana, para todos os papéis.**
 4. **Entrega desta rodada:** brief + wireframes navegáveis. Sem código de produção.
+5. **C5 (issue #517): recepção não agenda, não vê a semana.** Fica como está —
+   agendar segue ato exclusivo do coordenador no modelo de negócio atual.
+   Ressalva: revisitar se o modelo mudar. Ver §4 E4 para o gap adjacente que
+   isso expõe (só um coordenador por clínica hoje).
 
 ## 3. A jornada nova
 
@@ -305,9 +309,19 @@ sessão vivem atrás dessa tela. **A recepção não pode marcar sessão e não 
 a semana** — precisa manter a grade na memória de trabalho e pedir ao coordenador.
 Isso não é carga de layout: é permissão no lugar errado.
 
-Isso está aberto como decisão de produto na **issue #517 (C5)** e não entra no
-redesenho sem ratificação, porque mexe em permissão e em exposição de PHI na
-grade. O que a jornada nova entrega sem depender dessa decisão é **C4**.
+**Decisão (Rômulo, 01/09/2026, issue #517): opção 3 — fica como está.** Agendar
+continua ato exclusivo do coordenador; `admin_recepcao` permanece papel de
+leitura. Ressalva do próprio Rômulo: essa decisão é do modelo de negócio atual,
+onde o coordenador é quem define a demanda — pode mudar se o modelo mudar. Não
+faz sentido hoje abrir escrita de agenda para a recepção. Rename do papel na UI
+(cogitado na opção 3 original) fica fora de escopo — não é necessário agora.
+
+Decisão levanta gap adjacente: **hoje só existe um coordenador por clínica**
+efetivo na modelagem de papéis. Se o negócio crescer para clínicas com mais de
+um coordenador (ou demanda dividida entre coordenadores), falta suporte a
+**múltiplos coordenadores por clínica** — não registrado como issue ainda,
+citado aqui para não se perder. O que a jornada nova entrega sem depender da
+decisão de C5 é **C4**.
 
 ### E5 — pessoa em várias clínicas
 
@@ -330,7 +344,7 @@ Viola o princípio "a informação nunca se perde implicitamente". Resolvido por
 | **C2** | Supervisão volta a empurrar: bloco no topo de `/pacientes` | E3  | aplicada |
 | **C3** | Filtro por terapeuta persistente na fila              | E3, E4   | aplicada |
 | **C4** | `Sessões` fora da nav de `admin_recepcao`             | E4       | aplicada |
-| **C5** | Recepção agenda / vê a semana                         | E4       | **issue #517 — decisão do Rômulo** |
+| **C5** | Recepção agenda / vê a semana                         | E4       | **decidida — opção 3, fica como está (issue #517, 01/09/2026)** |
 | **C6** | Escopo do badge dito por extenso em `/sessoes`        | E5       | aplicada |
 | **C7** | Papel ativo visível e trocável no header              | E6       | aplicada |
 | **C8** | Ordenação visível e trocável, default por papel       | E3 × terapeuta | aplicada |
