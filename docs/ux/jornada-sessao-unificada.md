@@ -64,8 +64,11 @@ Ratificadas pelo Rômulo em 01/09/2026:
 
 1. **A sessão é o objeto central.** As filas viram atalhos que apontam para dentro
    da tela da sessão, não destinos autônomos.
-2. **Em clínica solo, a aprovação colapsa em um gesto só.** A fricção continua,
-   mas ligada ao risco do item, não ao organograma.
+2. **Onde o coordenador é o terapeuta da sessão, a aprovação colapsa em um gesto
+   só.** A fricção continua, mas ligada ao risco do item, não ao organograma.
+   Ratificada como "em clínica solo"; redigida aqui por **sessão** porque é essa
+   a régua que a implementação precisa seguir — a de clínica erra na E2 hoje e no
+   D76 amanhã (§3.5).
 3. **Um motor de calendário, com escala Dia/Semana, para todos os papéis.**
 4. **Entrega desta rodada:** brief + wireframes navegáveis. Sem código de produção.
 5. **C5 (issue #517): recepção não agenda, não vê a semana.** Fica como está —
@@ -185,15 +188,42 @@ Regra única, substituindo os dois gates atuais:
 - Se a clínica tem **coordenador ≠ terapeuta**, o item de fricção alta sobe para
   a fila do coordenador: aí a segunda aprovação é uma segunda pessoa, que é o
   controle que se queria desde o início.
-- Se **coordenador = terapeuta da sessão** (clínica solo), ele resolve na hora,
-  com a mesma justificativa e o mesmo registro em `evidence_revision`. Um carimbo,
-  não dois.
+- Se **coordenador = terapeuta da sessão**, ele resolve na hora, com a mesma
+  justificativa e o mesmo registro em `evidence_revision`. Um carimbo, não dois.
 
 Predicado, derivado, sem migração:
 
 ```
 mesmaPessoa = ctx.role === 'coordenador' && ctx.userId === session.terapeutaId
 ```
+
+#### A régua é por sessão, nunca por clínica (D76)
+
+Este predicado olha **uma sessão**. Nunca derive um booleano de clínica
+("é clínica solo?") para decidir o colapso da aprovação. A tentação é grande,
+porque a linguagem do produto diz "clínica solo" — mas a régua de clínica erra
+nos dois sentidos:
+
+- **Erra hoje, na E2.** Numa clínica onde o dono atende alguns pacientes e tem
+  terapeutas para os outros, a clínica **não** é solo. Um gate por clínica faria
+  o coordenador aprovar duas vezes as sessões que ele mesmo atendeu — exatamente
+  o defeito que a decisão 2 existe para eliminar, sobrevivendo no alvo comercial.
+- **Erra amanhã, com o D76.** O `BACKLOG` registra que a modelagem de papéis não
+  suporta mais de um coordenador por clínica. Quando isso for aberto, uma régua
+  de clínica passa a decidir errado para todo mundo: com dois coordenadores, "a
+  clínica não é solo" continua verdade, mas cada um deles segue sendo a única
+  pessoa que revisa as **próprias** sessões.
+
+O predicado por sessão já está correto nos dois cenários e não precisa mudar
+quando o D76 for endereçado. Isso é escopo desta jornada porque é uma decisão de
+implementação que se toma **uma vez**, no lugar errado, e depois custa caro:
+`podeAutoValidar` é derivado de `session.terapeutaId`, ponto. Nenhuma contagem de
+membros da clínica entra nessa conta.
+
+Consequência simétrica para a fila: a fila do coordenador é "sessões da clínica
+cujo terapeuta **não** sou eu" mais "minhas sessões travadas" — não "todas, porque
+sou coordenador". Com dois coordenadores, isso continua fazendo sentido sem
+nenhuma mudança de predicado.
 
 > **Sinalização honesta:** isto remove um passo de aprovação da clínica solo. Não
 > é perda de controle porque nunca houve controle ali — não existe segunda pessoa
@@ -392,12 +422,22 @@ por URL.
 2. **Migração de expectativa do usuário atual.** "Central de Validação" é o item
    primário do coordenador hoje. Sumir com o nome sem aviso é ruim; precisa de
    redirect + uma dica na primeira visita.
-3. **Supervisão dentro de `/pacientes/[id]`** ainda precisa de desenho próprio —
-   este brief só decide que ela sai da governança. Fica para uma issue separada.
+3. **O bloco de estagnação no topo de `/pacientes`** ainda precisa de desenho
+   próprio — este brief decide que ela sai da governança **e continua empurrando**
+   (C2), não onde o bloco encosta na lista nem qual é o predicado de "estagnou".
+   Fica para uma issue separada. Atenção ao redigi-la: a primeira versão deste
+   brief mandava Supervisão para dentro de `/pacientes/[id]`, o que a
+   transformaria em busca ativa ficha a ficha. Essa versão foi descartada.
 4. **Contagem do badge único.** Um badge só em "Sessões" agrega o que hoje são
    cinco contadores. Ele precisa de uma função de contagem única (`contarTravadas`),
    com o mesmo predicado da fila — divergir contador de lista é exatamente o
    defeito da issue #511.
+5. **D76 — mais de um coordenador por clínica.** Registrado no `BACKLOG` ao
+   decidir a #517. Esta jornada **não** resolve o D76 e não depende dele: a régua
+   de aprovação e a de fila são por sessão, nunca por clínica (§3.5). O risco não
+   é a lacuna em si — é alguém implementar um atalho `ehClinicaSolo()` durante a
+   execução desta jornada e chumbar a régua errada. Se isso aparecer em revisão de
+   PR, é rejeição, não sugestão.
 
 ## 8. Próximos passos
 
