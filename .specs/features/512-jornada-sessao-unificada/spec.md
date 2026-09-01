@@ -66,7 +66,7 @@ Confirma também a derivação do brief §3.1: check-in **não** é estado (`src
 
 **O que falta não é a ação, é o posicionamento**: hoje ela vive dentro de `gerir-sessao.tsx` na agenda; o brief quer que ela caia direto na documentação, sem tela intermediária vazia.
 
-### A4 · 🟡 "Aprovação é reversível" **não** é derivável sem migração
+### A4 · ✅ "Aprovação é reversível" **não** era derivável sem migração — resolvido em P2 (opção a, cortar)
 
 O brief §3.8 afirma: _"a evidência aprovada oferece `Reabrir revisão`. `evidence_revision` é append-only — reabrir é natural no modelo de dados, não é exceção."_ Medido:
 
@@ -141,9 +141,13 @@ Nav atual por papel (`src/app/(app)/layout.tsx:69-118`), medida:
 
 **Bloqueava:** T09 (nav por papel), T13 (toggle de escala). **Desbloqueadas.**
 
-### P2 · 🟡 [issue #522] `Reabrir revisão` (brief §3.8) exige mecanismo novo — qual?
+### P2 · ✅ [issue #522] `Reabrir revisão` (brief §3.8) exige mecanismo novo — resolvido, opção a
 
-**Fato novo (A4):** não há valor `reabrir` em `evidence_revision.acao`, e `evidence` é append-only com `UPDATE`/`DELETE` revogados. Reabrir não é derivável.
+**Decisão (Rômulo, 01/09/2026, issue #522):** opção **a**. Cortar `Reabrir revisão` desta feature. Motivo: o caso de uso real é erro de clique, não erro de julgamento clínico — não justifica quebrar o zero-migração da #512 agora. Esperar erros reais acontecerem em produção antes de desenhar reabertura, com dado real em vez de hipótese.
+
+**Fato (A4):** não há valor `reabrir` em `evidence_revision.acao`, e `evidence` é append-only com `UPDATE`/`DELETE` revogados. Reabrir não é derivável sem migração.
+
+**Consequência:** brief §3.8 e §3.5 corrigidos (promessa de reabertura removida; colapso da aprovação revisitado — se sustenta sem a rede). G2 (zero migração) sobrevive intacto.
 
 **Opções:**
 
@@ -153,7 +157,7 @@ Nav atual por papel (`src/app/(app)/layout.tsx:69-118`), medida:
 | **b** | Valor novo de enum `reabrir` + migração             | Fecha o buraco. Custo: quebra o "não toca modelo de dados" do brief §6, e a feature deixa de ser reversível por `git revert` puro. |
 | **c** | Modelar reabertura como `invalidar` + nova extração | Sem migração, usa enum existente. Custo: polui a trilha com `invalidar` que não foi invalidação clínica — falseia auditoria.       |
 
-**Bloqueia:** só a parte de reabertura de T07. O resto de T07 (colapso da aprovação) segue.
+**Bloqueava:** só a parte de reabertura de T07. **Desbloqueada** — T07 passa a ser só o colapso da aprovação, sem gesto de reabrir.
 
 ### P3 · 🟢 [T01, já implementado] `Revisada` seria inalcançável pela leitura literal do §3.1
 
@@ -254,7 +258,8 @@ Rastreáveis. `→` aponta a seção do brief que os origina.
 
 - [ ] Todos os R-01..R-38 rastreados a uma task, e cada task a um teste.
 - [ ] `pnpm typecheck` · `pnpm lint` · `pnpm test` · `pnpm test:rls` verdes, com a **contagem** conferida (verde com "skipped" é vermelho disfarçado — memória `suite-rls-rodando-como-superusuario`).
-- [ ] `git diff --stat db/migrations/` **vazio** — G2 é verificável, não aspiracional. (Salvo decisão P2-b, que é mudança de escopo explícita.)
+- [ ] `git diff --stat db/migrations/` **vazio** — G2 é verificável, não aspiracional.
 - [ ] `grep -rn "ehClinicaSolo\|clinicaSolo\|contarCoordenadores" src/` devolve **zero** (R-08).
-- [x] P1 (§4) fechada pelo Rômulo — issue #521, opção a. P2 pendente.
+- [x] P1 (§4) fechada pelo Rômulo — issue #521, opção a.
+- [x] P2 (§4) fechada pelo Rômulo — issue #522, opção a. `Reabrir revisão` fora de escopo.
 - [ ] `npx prettier --write` nos arquivos tocados — **nunca** `pnpm format` (reformata o repo inteiro).

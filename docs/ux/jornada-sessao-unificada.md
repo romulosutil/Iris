@@ -232,6 +232,15 @@ nenhuma mudança de predicado.
 > registrar duas vezes o mesmo julgamento da mesma pessoa, que é justamente o que
 > falseia a métrica de "aprovação sem edição".
 
+> **Revisão pós-D78 (#522):** o colapso em um carimbo foi desenhado assumindo
+> `Reabrir revisão` como rede de proteção — "1 gesto, mas reversível". Essa rede
+> não é derivável sem migração (§3.8) e foi cortada por decisão do Rômulo. O
+> colapso ainda se sustenta: onde `coordenador = terapeuta`, hoje **não existe**
+> segunda pessoa revisando, então o carimbo único não piora nada que já não fosse
+> julgamento de uma pessoa só. O risco real (erro de clique não corrigível) é
+> aceito conscientemente, não porque "reabrir" resolveria — ele nunca existiu de
+> fato antes desta jornada, só na promessa do brief.
+
 ### 3.6 Calendário: um motor, duas escalas
 
 - `ui/calendar` (já é o motor compartilhado de `schedule-grid` e
@@ -288,9 +297,13 @@ Quatro ajustes pequenos que resolvem ambiguidades que a fila única cria:
 - **Estado nunca aparece sozinho.** `Documentada` e `Revisada` são vizinhos
   demais na palavra e distantes demais no significado. O selo diz o estado; a
   linha ao lado diz a dívida: *Documentada · 3 evidências esperando você*.
-- **Aprovação é reversível.** Com um carimbo só, "1 gesto" não pode virar "1
-  chance": a evidência aprovada oferece `Reabrir revisão`. `evidence_revision` é
-  append-only — reabrir é natural no modelo de dados, não é exceção.
+- **Sem reabertura de aprovação (D78).** `evidence_revision` é append-only e
+  `evidence` tem `UPDATE`/`DELETE` revogados de `app_role` — não existe caminho
+  de volta à fila sem valor novo de enum (migração). Medido em 01/09/2026
+  (issue #522): a promessa original de `Reabrir revisão` contradizia o "zero
+  migração" de §6. Decisão do Rômulo: cortar. O caso de uso real aqui é erro de
+  clique, não erro de julgamento clínico — esperar acontecer em produção antes
+  de desenhar reabertura, com dado real em vez de hipótese.
 
 ## 4. Estruturas de clínica e carga cognitiva
 
