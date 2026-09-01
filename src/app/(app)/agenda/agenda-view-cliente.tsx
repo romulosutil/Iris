@@ -17,9 +17,11 @@ import { CheckInButton } from "./checkin-button";
 import { GerirSessao } from "./gerir-sessao";
 import { AppointmentCard } from "@/components/ui/appointment-card";
 import { CollapsibleCluster } from "@/components/ui/collapsible-cluster";
-import { AgendaCalendarGrid } from "@/components/ui/agenda-calendar-grid";
+import { Calendar } from "@/components/ui/calendar";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CareCalendarIllustration } from "@/components/ui/illustrations";
+import { podeCriarSessaoEmAgenda } from "@/lib/agenda/gating";
+import { SemanaCliente, type Prefill } from "./semana/semana-cliente";
 import type { SessaoDoDia } from "./actions";
 
 export interface AgendaViewClienteProps {
@@ -33,6 +35,18 @@ export interface AgendaViewClienteProps {
   ehHoje?: boolean;
   visaoInicial?: string;
   fuso: string;
+  /** #512 · T13 — dados da escala "Semana" (fusão de `/agenda/semana`).
+   * Opcionais para não quebrar os pontos de montagem/testes que só exercitam
+   * a escala "Dia"; a escala "Semana" some do toggle se ausentes. */
+  hojeISO?: string;
+  semanaInicialISO?: string;
+  disciplinas?: string[];
+  duracaoPadrao?: Record<string, number>;
+  /** URL inicial (`?escala=`) — mesmo padrão de `visaoInicial`. */
+  escalaInicial?: string;
+  /** #512 · T14-fix — prefill de "Repor" (Task 8), vindo de `/agenda?escala=
+   * semana&repor=...`. Repassado direto para `SemanaCliente`. */
+  prefill?: Prefill;
 }
 
 // Soma `delta` dias a uma data YYYY-MM-DD usando aritmética UTC (evita
@@ -62,9 +76,40 @@ export function AgendaViewCliente({
   ehHoje = true,
   visaoInicial,
   fuso,
+  hojeISO,
+  semanaInicialISO,
+  disciplinas,
+  duracaoPadrao,
+  escalaInicial,
+  prefill,
 }: AgendaViewClienteProps) {
   const router = useRouter();
   const isCoordenador = role === "coordenador" || role === "admin_recepcao";
+  // #512 · T13 (P1, issue #521, opção a) — fonte única de "pode criar sessão
+  // na agenda"; espelha `AppointmentModal`. NÃO confundir com `podeGerir`
+  // (que também cobre check-in/consolidação) nem com `isCoordenador` (que
+  // inclui `admin_recepcao` na visão default).
+  const podeCriarSessao = podeCriarSessaoEmAgenda(role);
+  const escalaDisponivel = Boolean(
+    hojeISO && semanaInicialISO && disciplinas && duracaoPadrao,
+  );
+
+  // Escala: Dia (grade/lista do dia, motor único) ou Semana (fusão de
+  // `/agenda/semana`, R-29). Mesmo padrão de sincronização de `modoVisao`.
+  const [escala, setEscala] = React.useState<string>(escalaInicial ?? "dia");
+  const [escalaAnterior, setEscalaAnterior] = React.useState(escalaInicial);
+  if (escalaInicial !== escalaAnterior) {
+    setEscalaAnterior(escalaInicial);
+    if (escalaInicial) setEscala(escalaInicial);
+  }
+
+  const trocarEscala = (v: string) => {
+    setEscala(v);
+    const qs = new URLSearchParams();
+    qs.set("escala", v);
+    if (diaISO) qs.set("dia", diaISO);
+    router.replace(`/agenda?${qs.toString()}`, { scroll: false });
+  };
 
   // Modo de exibição: Matriz (Geral), Terapeuta (Bento) ou Horário (Cronológico)
   const [modoVisao, setModoVisao] = React.useState<string>(
@@ -220,17 +265,59 @@ export function AgendaViewCliente({
           >
             Próximo →
           </Button>
-          <Button asChild variante="neutra" tamanho="sm" className="min-h-11">
-            <Link href="/agenda/semana">Ver semana</Link>
-          </Button>
+          {escalaDisponivel ? (
+            <Button
+              type="button"
+              variante="neutra"
+              tamanho="sm"
+              className="min-h-11"
+              onClick={() => trocarEscala("semana")}
+            >
+              Ver semana
+            </Button>
+          ) : null}
         </nav>
       ) : null}
     </div>
   ) : null;
 
+  // #512 · T13 (R-29) — escala "Semana", fusão de `/agenda/semana`. Visível
+  // para todo papel clínico (R-29); só o gesto de criar/gerir regra
+  // (`podeCriarSessao`, dentro de `SemanaCliente`) fica restrito a
+  // `coordenador` (P1, spec §4, issue #521 opção a).
+  const escalaToggle = escalaDisponivel ? (
+    <SegmentedControl
+      value={escala}
+      onValueChange={trocarEscala}
+      opcoes={[
+        { value: "dia", label: "Dia" },
+        { value: "semana", label: "Semana" },
+      ]}
+    />
+  ) : null;
+
+  if (escala === "semana" && escalaDisponivel) {
+    return (
+      <Stack gap="md">
+        {escalaToggle}
+        <SemanaCliente
+          terapeutas={terapeutas}
+          semanaInicialISO={semanaInicialISO!}
+          hojeISO={hojeISO!}
+          disciplinas={disciplinas!}
+          duracaoPadrao={duracaoPadrao!}
+          fuso={fuso}
+          podeCriarSessao={podeCriarSessao}
+          prefill={prefill}
+        />
+      </Stack>
+    );
+  }
+
   if (sessoes.length === 0) {
     return (
       <Stack gap="md">
+        {escalaToggle}
         {cabecalhoData ? (
           <div className="flex flex-col gap-3 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4 shadow-[var(--ds-shadow)] [&>*]:border-b-0 [&>*]:pb-0">
             {cabecalhoData}
@@ -258,6 +345,7 @@ export function AgendaViewCliente({
 
   return (
     <Stack gap="md">
+      {escalaToggle}
       {/* KPI Topbar & Filtros de Alta Densidade */}
       <div className="flex flex-col gap-3 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4 shadow-[var(--ds-shadow)]">
         {/* Cabeçalho com Data em Destaque + Navegação */}
@@ -351,24 +439,22 @@ export function AgendaViewCliente({
 
       {/* Visão 1: Matriz Calendário (Horário x Terapeuta) */}
       {modoVisao === "matriz" && sessoesFiltradas.length > 0 ? (
-        <AgendaCalendarGrid
+        <Calendar.Grid
+          modo="daily-resources"
           sessoes={sessoesFiltradas}
-          terapeutas={terapeutas}
+          recursos={terapeutas}
+          fuso={fuso}
+          podeGerir={podeGerir}
           onSlotClick={
-            podeGerir || isCoordenador
-              ? (terapeutaId, horario) => {
-                  router.push(
-                    `/agenda/semana?terapeutaId=${terapeutaId}&horario=${horario}`,
-                  );
-                }
+            // #512 · T13 (P1, issue #521, opção a) — clicar num slot vazio é
+            // gesto de CRIAR sessão: segue `podeCriarSessao`, não `podeGerir`
+            // nem `isCoordenador` (que incluíam `admin_recepcao` e abriam o
+            // gesto de criação para quem a #517/#521 mantêm fora dele).
+            podeCriarSessao && escalaDisponivel
+              ? () => trocarEscala("semana")
               : undefined
           }
-          onSessaoClick={(sessao) => {
-            // O item da grade não carrega patientId — resolve a sessão
-            // completa pela lista filtrada antes de abrir o modal.
-            const completa = sessoesFiltradas.find((s) => s.id === sessao.id);
-            if (completa) setSessaoSelecionada(completa);
-          }}
+          onEventClick={(sessao) => setSessaoSelecionada(sessao)}
         />
       ) : null}
 
@@ -496,9 +582,14 @@ export function AgendaViewCliente({
                   (podeGerir || s.terapeutaId === userId) ? (
                     <GerirSessao sessionId={s.id} terapeutas={terapeutas} />
                   ) : null}
+                  {/* #512 · T13 (P1, issue #521, opção a) — "Repor" cria uma
+                      sessão nova (rota antiga `/agenda/semana` continua
+                      sendo o destino até T14 decidir o redirect); segue
+                      `podeCriarSessao`, não `podeGerir` (que também cobre
+                      `admin_recepcao`, sem o gesto de criação). */}
                   {(s.estado === "falta_paciente" ||
                     s.estado === "falta_terapeuta") &&
-                  podeGerir ? (
+                  podeCriarSessao ? (
                     <Link
                       href={`/agenda/semana?repor=${s.id}&patientId=${s.patientId}&terapeutaId=${s.terapeutaId}&disciplina=${encodeURIComponent(s.disciplina)}`}
                     >

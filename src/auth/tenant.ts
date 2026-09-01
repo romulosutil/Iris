@@ -1,7 +1,7 @@
 import "server-only";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { authDb } from "@/db/client";
 import { userRole, clinic, professionalConsent } from "@/db/schema";
 import { auth } from "@/auth/auth";
@@ -147,6 +147,24 @@ export async function listarClinicasDoUsuario(
     .where(eq(userRole.userId, userId));
   const nomePorId = new Map(vinculos.map((v) => [v.clinicId, v.nome]));
   return [...nomePorId].map(([clinicId, nome]) => ({ clinicId, nome }));
+}
+
+/**
+ * #512 · T08 (R-24) — papéis do usuário NA clínica ativa, NÃO resolvidos
+ * (pode ter mais de um, ex.: `admin_recepcao` + `terapeuta`). O shell usa isto
+ * para decidir se existe troca de papel disponível: só existe algo para
+ * trocar quando `papelAtivo` devolve `needsSelection` para este conjunto —
+ * coordenador nunca tem alternativa, porque vence sozinho.
+ */
+export async function listarPapeisNaClinicaAtiva(
+  userId: string,
+  clinicId: string,
+): Promise<Papel[]> {
+  const linhas = await authDb
+    .select({ papel: userRole.papel })
+    .from(userRole)
+    .where(and(eq(userRole.userId, userId), eq(userRole.clinicId, clinicId)));
+  return [...new Set(linhas.map((l) => l.papel as Papel))];
 }
 
 /**

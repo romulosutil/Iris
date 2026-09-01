@@ -3,11 +3,16 @@ import { getTenantContext } from "@/auth/tenant";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { listarTodosPacientes } from "./queries";
+import { listarPacientesEstagnados } from "./estagnacao-queries";
 import { ListaPacientes } from "./lista-pacientes";
+import { BlocoEstagnacao } from "./bloco-estagnacao";
 
 export default async function PacientesPage() {
   const ctx = await getTenantContext();
-  const pacientes = await listarTodosPacientes(ctx);
+  const [pacientes, pacientesEstagnados] = await Promise.all([
+    listarTodosPacientes(ctx),
+    listarPacientesEstagnados(ctx),
+  ]);
 
   const podeCadastrar =
     ctx.role === "coordenador" || ctx.role === "admin_recepcao";
@@ -25,6 +30,7 @@ export default async function PacientesPage() {
           ) : undefined
         }
       />
+      <BlocoEstagnacao pacientesEstagnados={pacientesEstagnados} />
       <ListaPacientes pacientes={pacientes} />
     </main>
   );

@@ -38,6 +38,7 @@ export async function capturarDiarioAction(
     });
     if (r.error) return { error: r.error };
     revalidatePath(`/diario/${formData.get("sessionId")}`);
+    revalidatePath(`/sessoes/${formData.get("sessionId")}`);
     return { id: r.id };
   } catch (err) {
     if (err instanceof RoleError)
@@ -61,6 +62,7 @@ export async function corrigirEscopoProtocoloAction(
     });
     if (r.error) return { error: r.error };
     revalidatePath(`/diario/${formData.get("sessionId")}`);
+    revalidatePath(`/sessoes/${formData.get("sessionId")}`);
     return { ok: true };
   } catch (err) {
     if (err instanceof RoleError)
@@ -88,6 +90,7 @@ export async function registrarAudioLocalAction(
     });
     if (r.error) return { error: r.error };
     revalidatePath(`/diario/${formData.get("sessionId")}`);
+    revalidatePath(`/sessoes/${formData.get("sessionId")}`);
     return { id: r.id };
   } catch (err) {
     if (err instanceof RoleError)
@@ -123,6 +126,7 @@ export async function consolidarSessaoAction(
     if (r.error) return { error: r.error };
     revalidatePath("/pendencias");
     revalidatePath(`/diario/${formData.get("sessionId")}`);
+    revalidatePath(`/sessoes/${formData.get("sessionId")}`);
     return { ok: true, numero: r.numeroSequencial, aviso: r.aviso };
   } catch (err) {
     if (err instanceof RoleError)
@@ -274,6 +278,7 @@ export async function reprocessarExtracaoAction(
     if (r.error) return { error: r.error };
     revalidatePath("/pendencias");
     revalidatePath("/excecoes");
+    revalidatePath(`/sessoes/${sessionId}`);
     return { ok: true, aviso: r.aviso };
   } catch (err) {
     if (err instanceof RoleError) {

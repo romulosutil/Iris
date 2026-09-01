@@ -1,53 +1,12 @@
-import { notFound } from "next/navigation";
-import { getTenantContext } from "@/auth/tenant";
-import { withTenant } from "@/db/rls";
-import { Stack } from "@/components/ui/layout";
-import { PageHeader } from "@/components/ui/page-header";
-import { GovernancaNav } from "@/components/ui/governanca-nav";
-import { obterContadoresGovernanca } from "@/lib/governanca/contadores";
-import { listarFilaValidacao } from "./queries";
-import { alvosValidosDoPaciente, type AlvoValido } from "./alvos";
-import { ValidacaoFila } from "./validacao-fila";
+import { redirect } from "next/navigation";
 
 /**
- * Fila de validação do coordenador (Fase 5 · Fatia 1). Coordenador-only.
+ * #512 · T14 (R-34, R-35) — "Central de Validação" era o item primário do
+ * coordenador; virou `/sessoes` (T04). `?de=validacao` carrega o sinal para
+ * `AvisoCentralValidacao` (`../sessoes/estado-tela.tsx`) mostrar a dica de
+ * primeira visita (R-35) — sumir com o nome sem aviso é ruim, mas o redirect
+ * sozinho já resolve o link salvo/teste E2E por URL (R-34).
  */
-export default async function ValidacaoPage() {
-  const ctx = await getTenantContext();
-  if (ctx.role !== "coordenador") notFound();
-
-  const [fila, contadores] = await Promise.all([
-    listarFilaValidacao(ctx),
-    obterContadoresGovernanca(ctx),
-  ]);
-
-  const pacientesUnicos = Array.from(
-    new Set(fila.itens.map((i) => i.patientId)),
-  );
-  const alvosPorPaciente: Record<string, AlvoValido[]> = {};
-  if (pacientesUnicos.length > 0) {
-    await withTenant(ctx, async (tx) => {
-      for (const patientId of pacientesUnicos) {
-        alvosPorPaciente[patientId] = await alvosValidosDoPaciente(
-          tx,
-          patientId,
-        );
-      }
-    });
-  }
-
-  return (
-    <Stack gap="lg">
-      <GovernancaNav contadores={{ ...contadores, validacao: fila.total }} />
-      <PageHeader
-        title="Central de Validação"
-        description={
-          fila.total === 0
-            ? "Gerencie e valide evidências pendentes da equipe."
-            : `A IA anotou ${fila.total} ${fila.total === 1 ? "sugestão de sessão" : "sugestões de sessões"}. Pronto para validar com seu olhar clínico?`
-        }
-      />
-      <ValidacaoFila itens={fila.itens} alvosPorPaciente={alvosPorPaciente} />
-    </Stack>
-  );
+export default function ValidacaoPage() {
+  redirect("/sessoes?de=validacao");
 }

@@ -86,7 +86,9 @@ test.describe("ditado de voz", () => {
       .locator("visible=true")
       .first()
       .click();
-    await expect(page).toHaveURL(/\/diario\/.+/);
+    // #512 · T14 (R-34): `/diario/[id]` virou redirect permanente para
+    // `/sessoes/[id]`.
+    await expect(page).toHaveURL(/\/sessoes\/.+/);
 
     // Aba Áudio. Com a flag ligada o `AudioLocal` delega para o `DitadoVoz`, e
     // o rótulo do botão é "Gravar clipe" (o fluxo de 1 clipe diz "Gravar

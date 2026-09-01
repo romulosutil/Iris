@@ -89,9 +89,14 @@ test("cacheia asset estático e NÃO cacheia rota de app", async ({ page }) => {
     (c) =>
       c.startsWith("/api/") ||
       c.startsWith("/_next/data/") ||
-      ["/pacientes", "/agenda", "/diario", "/validacao", "/relatorios"].some(
-        (r) => c === r || c.startsWith(`${r}/`),
-      ),
+      [
+        "/pacientes",
+        "/agenda",
+        "/diario",
+        "/validacao",
+        "/sessoes",
+        "/relatorios",
+      ].some((r) => c === r || c.startsWith(`${r}/`)),
   );
   expect(
     proibidos,

@@ -164,8 +164,8 @@ Fase 1 — Navegação          Fase 2 — Calendário         Fase 3 — Fecham
 
 ### T09 · Nav por papel — 4 itens diários, admin no rodapé
 
-- **Requisitos**: R-21, R-22, R-23 · **BLOQUEADA POR P1**
-- **Agente**: **Jules** — depois de P1 fechada. Sem P1, o executor escolhe sozinho o que a recepção alcança, que é exatamente o modo de falha do §5.2.
+- **Requisitos**: R-21, R-22, R-23 · **P1 resolvida (#521, opção a) — desbloqueada**
+- **Agente**: **Jules** — `requireAgendar` não muda; só a tela de criação em `/agenda` fica gateada por papel (R-23, ver spec §4 P1).
 - **Depends on**: T02, T08
 - **Gate**: `unit` + `e2e`
 
@@ -198,8 +198,8 @@ Fase 1 — Navegação          Fase 2 — Calendário         Fase 3 — Fecham
 
 ### T13 · `/agenda/semana` vira toggle `Dia | Semana`
 
-- **Requisitos**: R-29 · **BLOQUEADA POR P1**
-- **Agente**: **Jules**, depois de P1. Trazer a semana para dentro de `/agenda` **expõe** a criação de sessão à recepção por consequência de layout (spec §4 P1) — decidir antes, não durante.
+- **Requisitos**: R-29 · **P1 resolvida (#521, opção a) — desbloqueada**
+- **Agente**: **Jules**. Gesto de criar sessão em `/agenda` fica visível só para `coordenador` (spec §4 P1) — a semana entra sem reabrir a decisão da #517.
 - **Depends on**: T12
 - **Gate**: `e2e`
 
@@ -240,18 +240,18 @@ Fase 1 — Navegação          Fase 2 — Calendário         Fase 3 — Fecham
 
 | Task | Estado                        | Executor                |
 | ---- | ----------------------------- | ----------------------- |
-| T01  | **Feito nesta PR**            | Subagente Claude/Sonnet |
-| T02  | Aberta                        | Subagente Claude/Opus   |
-| T03  | Aberta                        | Claude/Opus → Jules     |
-| T04  | Aberta                        | Jules                   |
-| T05  | Aberta                        | Subagente Claude/Opus   |
-| T06  | Aberta                        | Claude/Sonnet + a11y    |
-| T07  | Aberta · parte bloqueada (P2) | Subagente Claude/Opus   |
-| T08  | Aberta                        | `accessibility-expert`  |
-| T09  | **Bloqueada (P1)**            | Jules                   |
-| T10  | Aberta                        | Subagente Claude/Sonnet |
+| T01  | **Feito**                     | Subagente Claude/Sonnet |
+| T02  | **Feito** — 3 itens p/ ratificar, ver PR | Subagente Claude/Opus   |
+| T03  | **Feito**                     | Claude/Opus → Jules     |
+| T04  | **Feito**                     | Jules                   |
+| T05  | **Feito**                     | Subagente Claude/Opus   |
+| T06  | **Feito** — a11y self-check feito, revisão dedicada de `accessibility-expert` ainda pendente | Claude/Sonnet + a11y    |
+| T07  | **Feito** — reabertura CORTADA (P2, #522, opção a), não implementada | Subagente Claude/Opus   |
+| T08  | **Feito**                     | `accessibility-expert`  |
+| T09  | **Feito** — achou e fechou brecha real do P1 (recepção via `/agenda`) | Jules |
+| T10  | **Feito**                     | Subagente Claude/Sonnet |
 | T11  | Aberta                        | Claude → Jules          |
-| T12  | Aberta                        | Subagente Claude/Sonnet |
-| T13  | **Bloqueada (P1)**            | Jules                   |
-| T14  | Aberta                        | Subagente Claude/Sonnet |
-| T15  | Aberta                        | Sessão Claude/Opus      |
+| T12  | **Feito**                     | Subagente Claude/Sonnet |
+| T13  | **Feito** — achou e fechou 2 brechas P1 extras em `agenda-view-cliente.tsx` | Jules |
+| T14  | **Feito** — sessão fechou gap de prefill "Repor" que o redirect quebrou | Subagente Claude/Sonnet |
+| T15  | Em andamento                  | Sessão Claude/Opus      |

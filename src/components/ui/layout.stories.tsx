@@ -5,7 +5,6 @@ import { Chip } from "./chip";
 import { Button } from "./button";
 import { Header } from "./header";
 import { PageHeader } from "./page-header";
-import { GovernancaNav } from "./governanca-nav";
 import { Banner } from "./banner";
 
 const meta = {
@@ -166,16 +165,6 @@ function ShellCompleto() {
             </Button>
           }
         />
-        <GovernancaNav
-          activeHref="/validacao"
-          contadores={{
-            validacao: 3,
-            excecoes: 1,
-            supervisao: 2,
-            pendencias: 0,
-            alertasRisco: 2,
-          }}
-        />
         <Grid colunas={3} gap="md">
           {["Sessão 12/08", "Sessão 13/08", "Sessão 14/08"].map((t) => (
             <div
@@ -198,7 +187,7 @@ export const ShellDesktopGrande: Story = {
     docs: {
       description: {
         story:
-          '1440px. Marca do header, banner, PageHeader e GovernancaNav nascem todos na mesma coluna: o fundo do header sangra de ponta a ponta, mas seu conteúdo interno usa o mesmo `Container largura="md"` do shell.',
+          '1440px. Marca do header, banner e PageHeader nascem todos na mesma coluna: o fundo do header sangra de ponta a ponta, mas seu conteúdo interno usa o mesmo `Container largura="md"` do shell.',
       },
     },
   },
@@ -212,7 +201,7 @@ export const ShellDesktopUltra: Story = {
     docs: {
       description: {
         story:
-          "1920px. Mesmo alinhamento com gutter de 320px. GovernancaNav e Banner herdam a largura do container pai — nenhum dos dois carrega teto próprio, então acompanham a expansão sem ajuste.",
+          "1920px. Mesmo alinhamento com gutter de 320px. Banner herda a largura do container pai — não carrega teto próprio, então acompanha a expansão sem ajuste.",
       },
     },
   },

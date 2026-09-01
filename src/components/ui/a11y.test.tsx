@@ -8,7 +8,7 @@ import { Pill } from "./primitives/pill";
 import { ConfidenceCard } from "./patterns/confidence-card";
 import { CompareRow } from "./patterns/compare-row";
 import { BatchBar } from "./patterns/batch-bar";
-import { AgendaCalendarGrid } from "./agenda-calendar-grid";
+import { Calendar } from "./calendar";
 import {
   ProtocolProgressBarChart,
   ProtocolTrendChart,
@@ -21,6 +21,7 @@ import { InteractiveCard } from "./interactive-card";
 import { Indicator } from "./indicator";
 import { Alert } from "./alert";
 import { Header } from "./header";
+import { Rail } from "./rail";
 import { Logo } from "./logo";
 import { Input } from "./input";
 import { Field } from "./field";
@@ -389,6 +390,32 @@ test("Header — sem violações axe", async () => {
   );
 });
 
+test("Rail expandido — sem violações axe", async () => {
+  await semViolacoes(
+    <Rail
+      itemsNav={[
+        { href: "#validacao", label: "Central de Validação", badge: 3 },
+        { href: "#agenda", label: "Agenda", active: true },
+      ]}
+      signOutSlot={<button type="button">Sair</button>}
+    />,
+  );
+});
+
+test("Rail colapsado — sem violações axe (R-26: badge e alvo de toque seguem íntegros)", async () => {
+  localStorage.setItem("iris_rail_colapsado", "1");
+  await semViolacoes(
+    <Rail
+      itemsNav={[
+        { href: "#validacao", label: "Central de Validação", badge: 3 },
+        { href: "#agenda", label: "Agenda", active: true },
+      ]}
+      signOutSlot={<button type="button">Sair</button>}
+    />,
+  );
+  localStorage.clear();
+});
+
 test("Dialog aberto — sem violações axe", async () => {
   // Conteúdo do Dialog é portaled para document.body; roda o axe nele.
   render(
@@ -553,19 +580,21 @@ test("BatchBar — sem violações axe", async () => {
   );
 });
 
-test("AgendaCalendarGrid — sem violações axe", async () => {
+test("Calendar.Grid (escala Dia) — sem violações axe", async () => {
   await semViolacoes(
-    <AgendaCalendarGrid
-      terapeutas={[{ id: "t1", nome: "Dra. Beatriz", disciplina: "Fono" }]}
+    <Calendar.Grid
+      modo="daily-resources"
+      recursos={[{ id: "t1", nome: "Dra. Beatriz", subtitulo: "Fono" }]}
       sessoes={[
         {
           id: "s1",
-          terapeutaId: "t1",
+          patientId: "p1",
           pacienteNome: "Arthur",
+          terapeutaId: "t1",
+          terapeutaNome: "Dra. Beatriz",
           disciplina: "Fono",
           agendadaPara: new Date(2026, 7, 12, 8, 0),
-          duracaoMin: 50,
-          statusSemantico: "concluida",
+          estado: "realizada",
         },
       ]}
       abertura="08:00"

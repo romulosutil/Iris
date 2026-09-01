@@ -3,8 +3,9 @@ import { entrarComMfa } from "./helpers/sessao";
 
 /**
  * E2E do fluxo demo do Diário (Fase 2): login terapeuta → abrir sessão do dia
- * pela agenda → captura rápida (texto) → consolidar → conferir que a Fila de
- * Pendências (`/pendencias`) mostra as sugestões da IA aguardando revisão.
+ * pela agenda → captura rápida (texto) → consolidar → conferir que a fila de
+ * Sessões (`/pendencias` → `/sessoes`, redirect permanente #512 · T14) mostra
+ * a sessão aguardando revisão das sugestões da IA.
  *
  * Pré-requisitos (semeados pelo Plano 4):
  *   1. DB migrado: `pnpm db:migrate`
@@ -37,7 +38,11 @@ test("terapeuta demo: captura rápida → consolida → Fila mostra sugestões a
     .locator("visible=true")
     .first()
     .click();
-  await expect(page).toHaveURL(/\/diario\/.+/);
+  // #512 · T14 (R-34): `/diario/[id]` virou redirect permanente para
+  // `/sessoes/[id]` — o clique acima ainda usa o href antigo (débito de
+  // fiação interna fora do escopo de T14), então o navegador segue o
+  // redirect e a URL final já é a nova.
+  await expect(page).toHaveURL(/\/sessoes\/.+/);
 
   // Captura rápida em texto (aba "Texto" já é a padrão — mais determinístico
   // que áudio para o E2E). O rótulo do campo é "Anotação rápida".
@@ -57,12 +62,11 @@ test("terapeuta demo: captura rápida → consolida → Fila mostra sugestões a
   await page.getByRole("button", { name: /Consolidar sessão/i }).click();
   await expect(page.getByText(/Sessão consolidada/i)).toBeVisible();
 
-  // A Fila de Pendências mostra a(s) sugestão(ões) da IA aguardando revisão.
+  // A fila de Sessões (`/pendencias` → `/sessoes`, redirect permanente T14)
+  // mostra a sessão travada aguardando revisão da(s) sugestão(ões) da IA.
   await page.goto("/pendencias");
+  await expect(page).toHaveURL(/\/sessoes(\?.*)?$/);
   await expect(
-    page.getByRole("heading", { name: "Sugestões da IA (candidatas)" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: /Revisar →/ }).first(),
+    page.getByRole("link", { name: /Revisar/ }).first(),
   ).toBeVisible();
 });

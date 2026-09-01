@@ -33,7 +33,9 @@ test("terapeuta demo: revisão exige abrir o cartão antes de aprovar (lastro)",
     .locator("visible=true")
     .first()
     .click();
-  await expect(page).toHaveURL(/\/diario\/.+/);
+  // #512 · T14 (R-34): `/diario/[id]` virou redirect permanente para
+  // `/sessoes/[id]`.
+  await expect(page).toHaveURL(/\/sessoes\/.+/);
   await page
     .getByLabel(/Nota consolidada/i)
     .fill(
@@ -42,15 +44,20 @@ test("terapeuta demo: revisão exige abrir o cartão antes de aprovar (lastro)",
   await page.getByRole("button", { name: /Consolidar sessão/i }).click();
   await expect(page.getByText(/Sessão consolidada/i)).toBeVisible();
 
-  // Entra na revisão pela Fila de Pendências (o link agora aponta /revisao).
+  // Entra na revisão pela fila de Sessões (`/pendencias` → `/sessoes`,
+  // redirect permanente #512 · T14).
   await page.goto("/pendencias");
+  await expect(page).toHaveURL(/\/sessoes(\?.*)?$/);
   await page
-    .getByRole("link", { name: /Revisar →/ })
+    .getByRole("link", { name: /Revisar/ })
     .first()
     .click();
-  await expect(page).toHaveURL(/\/revisao\/.+/);
+  // `/revisao/[id]` virou redirect permanente para `/sessoes/[id]` (R-34) —
+  // o passo em foco é "Revisar evidências" (`passo-revisar.tsx`), não mais a
+  // tela standalone "Revisão de extrações".
+  await expect(page).toHaveURL(/\/sessoes\/.+/);
   await expect(
-    page.getByRole("heading", { name: "Revisão de extrações" }),
+    page.getByRole("heading", { name: "Revisar evidências" }),
   ).toBeVisible();
 
   // Cartão de alta confiança nasce COMPACTO: tem um botão "Revisar →" e NÃO

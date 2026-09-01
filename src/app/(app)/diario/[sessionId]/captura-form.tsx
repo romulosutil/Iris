@@ -6,6 +6,7 @@ import { Field } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Stack } from "@/components/ui/layout";
+import { SalvoLocalmente } from "@/components/ui/salvo-localmente";
 import {
   capturarDiarioAction,
   corrigirEscopoProtocoloAction,
@@ -138,9 +139,9 @@ export function CapturaForm({
               </span>
             </label>
             <Button type="submit">Salvar captura</Button>
-            {textoState.id ? (
-              <Alert severidade="sucesso">Captura salva.</Alert>
-            ) : null}
+            {/* R-37: componente FIXO, sempre montado — nunca some sozinho como
+                um toast. Some só quando a próxima ação muda o estado. */}
+            <SalvoLocalmente estado={textoState.id ? "salvo" : "vazio"} />
           </form>
         </TabsContent>
 
@@ -152,9 +153,12 @@ export function CapturaForm({
               asrHabilitado={asrHabilitado}
               aoAceitarTranscricao={receberTranscricao}
             />
-            {audioConfirmado ? (
-              <Alert severidade="sucesso">Áudio registrado nesta sessão.</Alert>
-            ) : null}
+            <SalvoLocalmente
+              estado={audioConfirmado ? "salvo" : "vazio"}
+              detalhe={
+                audioConfirmado ? "Áudio registrado nesta sessão." : undefined
+              }
+            />
           </Stack>
         </TabsContent>
       </Tabs>
