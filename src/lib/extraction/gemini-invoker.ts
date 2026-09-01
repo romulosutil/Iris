@@ -3,8 +3,10 @@ import { TOOL_INPUT_SCHEMA, type AgentInvoker } from "./llm-provider";
 
 /**
  * Invoker de produção da extração real (D57): `resolveProvider`
- * (src/lib/extraction/provider.ts) chama `createGeminiInvoker("gemini-2.5-flash")`
- * quando `EXTRACTION_LLM_ENABLED=true` e `GOOGLE_API_KEY` presente.
+ * (src/lib/extraction/provider.ts) chama `createGeminiInvoker(modeloDeExtracao())`
+ * quando `EXTRACTION_LLM_ENABLED=true` e `GOOGLE_API_KEY` presente. O id do
+ * modelo de produção vem de `GOOGLE_EXTRACTION_MODEL` (ver `provider.ts`), NÃO
+ * do default desta função.
  *
  * Também é usado pela suíte `#395` (`casos-clinicos.llm.test.ts`) SEM
  * argumento — decisão de produto do Rômulo (18/08/26): aquela suíte roda

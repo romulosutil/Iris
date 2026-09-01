@@ -57,6 +57,26 @@ import { NullProvider } from "./null-provider";
 import { LlmExtractionProvider } from "./llm-provider";
 import { createGeminiInvoker } from "./gemini-invoker";
 
+/**
+ * Modelo do Gemini usado pela extração de PRODUÇÃO.
+ *
+ * Fica em variável de ambiente porque o Google APOSENTA ids de modelo: o
+ * `gemini-2.5-flash` que estava chumbado aqui passou a responder
+ * `404 NOT_FOUND ... is no longer available to new users`, e toda extração em
+ * produção caiu no catch de `consolidarSessaoCore` (nota salva, extração
+ * marcada `pendente_reprocessamento`). Com a variável, a próxima aposentadoria
+ * é resolvida no painel do Easypanel, sem deploy de código.
+ *
+ * O padrão existe de propósito (em vez de fail-closed): sem ele, esquecer a
+ * variável derrubaria a extração inteira em silêncio — exatamente o modo de
+ * falha que este fix está fechando.
+ */
+export const MODELO_EXTRACAO_PADRAO = "gemini-3.6-flash";
+
+export function modeloDeExtracao(): string {
+  return process.env.GOOGLE_EXTRACTION_MODEL?.trim() || MODELO_EXTRACAO_PADRAO;
+}
+
 // Roteamento do provider de extração:
 // - clínica demo → stub determinístico (dado fictício, sem LLM).
 // - produção → LlmExtractionProvider (Gemini) real SÓ com a flag
@@ -74,6 +94,6 @@ export function resolveProvider(clinic: {
     process.env.EXTRACTION_LLM_ENABLED === "true" &&
     !!process.env.GOOGLE_API_KEY;
   return llmHabilitado
-    ? new LlmExtractionProvider(createGeminiInvoker("gemini-2.5-flash"))
+    ? new LlmExtractionProvider(createGeminiInvoker(modeloDeExtracao()))
     : new NullProvider();
 }
