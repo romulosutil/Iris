@@ -1,7 +1,7 @@
 # Jornada unificada da sessão — Tasks
 
 **Design**: [`docs/ux/jornada-sessao-unificada.md`](../../../docs/ux/jornada-sessao-unificada.md) · **Spec**: [`spec.md`](./spec.md)
-**Issue**: [#512](https://github.com/romulosutil/Iris/issues/512) · **Status**: Draft
+**Issue**: [#512](https://github.com/romulosutil/Iris/issues/512) · **Status**: Implementado (T01–T15) — commit `9d5d5095`, aguardando revisão do Rômulo / abertura de PR
 
 ---
 
@@ -254,4 +254,4 @@ Fase 1 — Navegação          Fase 2 — Calendário         Fase 3 — Fecham
 | T12  | **Feito**                     | Subagente Claude/Sonnet |
 | T13  | **Feito** — achou e fechou 2 brechas P1 extras em `agenda-view-cliente.tsx` | Jules |
 | T14  | **Feito** — sessão fechou gap de prefill "Repor" que o redirect quebrou | Subagente Claude/Sonnet |
-| T15  | Em andamento                  | Sessão Claude/Opus      |
+| T15  | **Feito** — 4 gates da DoD medidos, 1 regressão real achada e fechada (prefill "Repor") | Sessão Claude/Opus |

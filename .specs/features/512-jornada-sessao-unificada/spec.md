@@ -12,12 +12,12 @@ O funil clínico é linear (`agendar → atender → documentar → aprovar → 
 
 ## Goals
 
-- [ ] **G1** Uma sessão tem **um** estado exibido e **um** gesto primário, idênticos em toda superfície onde ela aparece.
-- [ ] **G2** A máquina de estados é função pura sobre linhas existentes — zero migração, zero coluna, zero policy nova.
-- [ ] **G3** Uma evidência exige **uma** aprovação humana consciente. A segunda só existe quando existe uma segunda pessoa.
-- [ ] **G4** A régua de colapso da aprovação é **por sessão** (`session.terapeutaId`), **nunca** por clínica.
-- [ ] **G5** Um contador só, com o mesmo predicado da lista que ele conta.
-- [ ] **G6** A nav tem a mesma estrutura para os dois papéis clínicos; só o escopo difere, e o escopo é dito por extenso.
+- [x] **G1** Uma sessão tem **um** estado exibido e **um** gesto primário, idênticos em toda superfície onde ela aparece. → T01 (`deriveEstadoSessao`), reusado literalmente por T04/T06 (`ROTULO_ESTADO`, `resultado.gesto`).
+- [x] **G2** A máquina de estados é função pura sobre linhas existentes — zero migração, zero coluna, zero policy nova. → `git diff --stat db/migrations/` vazio (T15).
+- [x] **G3** Uma evidência exige **uma** aprovação humana consciente. A segunda só existe quando existe uma segunda pessoa. → T07 (`resolverColapso`, 1 `evidence_revision` por evidência, idempotente).
+- [x] **G4** A régua de colapso da aprovação é **por sessão** (`session.terapeutaId`), **nunca** por clínica. → T05 (`podeAutoValidar`), guardado pelo teste E2 (mutação confirmada).
+- [x] **G5** Um contador só, com o mesmo predicado da lista que ele conta. → T02/T03 (`fila.ts` → `contarTravadas`/`listarTravadas` compartilham `coletarTravadas`).
+- [x] **G6** A nav tem a mesma estrutura para os dois papéis clínicos; só o escopo difere, e o escopo é dito por extenso. → T09 (`nav.ts`/`montarNav`), T03 (`escopoTexto`).
 
 ## Out of Scope
 
