@@ -124,7 +124,12 @@ export async function seedDemoClinic(
     patientId: pacienteDemo.id,
     terapeutaId,
     agendadaPara: hoje,
-    estado: "agendada",
+    // #512 · deriveEstadoSessao (estado.ts): gesto "documentar" só existe a
+    // partir de "realizada" — "agendada" resolve para "registrar_sessao" (o
+    // check-in precisa acontecer antes). `diario-demo`/`revisao` documentam
+    // direto sem passar pelo check-in, então a sessão já nasce checada.
+    estado: "realizada",
+    checkInEm: hoje,
     disciplina: "ABA",
     duracaoMin: 50,
     modalidade: "presencial",

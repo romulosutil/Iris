@@ -131,7 +131,7 @@ export function AppointmentModal({
             {ehFalta && podeCriarSessao ? (
               <Button asChild variante="secundaria">
                 <Link
-                  href={`/agenda/semana?repor=${sessao.id}&patientId=${sessao.patientId}&terapeutaId=${sessao.terapeutaId}&disciplina=${encodeURIComponent(sessao.disciplina)}`}
+                  href={`/agenda?escala=semana&repor=${sessao.id}&patientId=${sessao.patientId}&terapeutaId=${sessao.terapeutaId}&disciplina=${encodeURIComponent(sessao.disciplina)}`}
                 >
                   Repor
                 </Link>

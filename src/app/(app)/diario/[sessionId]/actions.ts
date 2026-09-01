@@ -124,7 +124,7 @@ export async function consolidarSessaoAction(
       visibilityLevel,
     });
     if (r.error) return { error: r.error };
-    revalidatePath("/pendencias");
+    revalidatePath("/sessoes");
     revalidatePath(`/diario/${formData.get("sessionId")}`);
     revalidatePath(`/sessoes/${formData.get("sessionId")}`);
     return { ok: true, numero: r.numeroSequencial, aviso: r.aviso };
@@ -276,8 +276,7 @@ export async function reprocessarExtracaoAction(
     }
     const r = await consolidarSessao(ctx, { sessionId, texto: nota.texto });
     if (r.error) return { error: r.error };
-    revalidatePath("/pendencias");
-    revalidatePath("/excecoes");
+    revalidatePath("/sessoes");
     revalidatePath(`/sessoes/${sessionId}`);
     return { ok: true, aviso: r.aviso };
   } catch (err) {

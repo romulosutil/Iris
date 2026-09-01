@@ -51,6 +51,7 @@ async function comCtx(
     if (sessionId) {
       revalidatePath(`/revisao/${sessionId}`);
       revalidatePath(`/sessoes/${sessionId}`);
+      revalidatePath("/sessoes");
     }
     return { ok: true };
   } catch (err) {
