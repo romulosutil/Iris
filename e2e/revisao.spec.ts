@@ -2,8 +2,9 @@ import { test, expect } from "@playwright/test";
 import { entrarComMfa } from "./helpers/sessao";
 
 /**
- * E2E da Tela de Revisão (Fase 3 Plano 2): terapeuta demo consolida uma sessão,
- * abre a revisão pela Fila de Pendências e exercita o INVARIANTE DE LASTRO —
+ * E2E da Tela de Revisão (Fase 3 Plano 2): terapeuta demo captura, consolida a
+ * sessão — o que já traz o passo "Revisar evidências" para foco na própria
+ * `/sessoes/[id]` (#512 · R-05) — e exercita o INVARIANTE DE LASTRO —
  * aprovar exige abrir o cartão. Num cartão de alta confiança (compacto), o botão
  * "Aprovar" não existe até clicar em "Revisar →"; só então a aprovação é
  * possível. Isso substitui a regra estatística anti-rubber-stamp (§3): não há
@@ -28,33 +29,36 @@ test("terapeuta demo: revisão exige abrir o cartão antes de aprovar (lastro)",
   // chamado "Abrir sessão" — outra visão da agenda, inexistente aqui.
   // `visible=true` descarta a variante responsiva de 0x0 que fica no DOM e que
   // faria o `.first()` esperar para sempre por algo que nunca aparece.
+  // Sessão própria deste spec (ver seed demo): consolidar tira a sessão do
+  // passo "documentar", então compartilhar a sessão com `diario-demo` deixaria
+  // este spec sem formulário para preencher. O corte é pelo horário — o nome
+  // do paciente aparece mascarado no card quando não há vínculo/consentimento.
   await page
-    .getByRole("button", { name: /^Abrir agendamento de / })
+    .getByRole("button", {
+      name: /^Abrir agendamento de .* às 10:00$/,
+    })
     .locator("visible=true")
     .first()
     .click();
   // #512 · T14 (R-34): `/diario/[id]` virou redirect permanente para
   // `/sessoes/[id]`.
   await expect(page).toHaveURL(/\/sessoes\/.+/);
+  // R-38: "Consolidar sessão" só habilita depois de existir captura salva.
+  await page
+    .getByLabel(/Anotação rápida/i)
+    .fill("Pediu água sozinho e apontou para o brinquedo preferido.");
+  await page.getByRole("button", { name: /Salvar captura/i }).click();
+  await expect(page.getByText(/Captura salva/i)).toBeVisible();
   await page
     .getByLabel(/Nota consolidada/i)
     .fill(
       "Pediu água sozinho durante o lanche. Apontou para o brinquedo preferido quando questionado. Montou a torre de blocos com dica gestual.",
     );
   await page.getByRole("button", { name: /Consolidar sessão/i }).click();
-  await expect(page.getByText(/Sessão consolidada/i)).toBeVisible();
-
-  // Entra na revisão pela fila de Sessões (`/pendencias` → `/sessoes`,
-  // redirect permanente #512 · T14).
-  await page.goto("/pendencias");
-  await expect(page).toHaveURL(/\/sessoes(\?.*)?$/);
-  await page
-    .getByRole("link", { name: /Revisar/ })
-    .first()
-    .click();
-  // `/revisao/[id]` virou redirect permanente para `/sessoes/[id]` (R-34) —
-  // o passo em foco é "Revisar evidências" (`passo-revisar.tsx`), não mais a
-  // tela standalone "Revisão de extrações".
+  // #512: consolidar revalida `/sessoes/[id]` e o passo em foco troca — o
+  // `ConsolidarForm` (e seu alerta "Sessão consolidada") desmonta. O sinal de
+  // sucesso é o passo "Revisar evidências" aparecer na própria página, sem
+  // precisar passar pela fila.
   await expect(page).toHaveURL(/\/sessoes\/.+/);
   await expect(
     page.getByRole("heading", { name: "Revisar evidências" }),
@@ -97,9 +101,10 @@ test("terapeuta demo: revisão exige abrir o cartão antes de aprovar (lastro)",
   await compacto.getByRole("button", { name: "Revisar →" }).click();
   await expect(compacto.getByRole("button", { name: "Aprovar" })).toBeVisible();
 
-  // Aprovar remove a sugestão da lista (vira `aprovada`, sai do filtro).
+  // Aprovar remove a sugestão da lista (vira `aprovada`, sai do filtro). Na
+  // página unificada as OUTRAS sugestões continuam ali — o passo "Revisar
+  // evidências" só some quando a última sai —, então o sinal é a lista encolher
+  // em um cartão, não um empty-state.
   await compacto.getByRole("button", { name: "Aprovar" }).click();
-  await expect(
-    page.getByText(/Nenhuma sugestão pendente|sua revisão/i).first(),
-  ).toBeVisible();
+  await expect(cartoes).toHaveCount(totalCartoes - 1);
 });

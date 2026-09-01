@@ -23,10 +23,7 @@ import {
   session,
 } from "@/db/schema";
 import { provisionUser } from "@/auth/provisioning";
-import {
-  FUSO_CLINICA,
-  FUSO_CLINICA_OFFSET,
-} from "@/app/(app)/agenda/fuso";
+import { FUSO_CLINICA, FUSO_CLINICA_OFFSET } from "@/app/(app)/agenda/fuso";
 
 export const TERAPEUTA_DEMO_EMAIL = "terapeuta.demo@iris.test";
 export const TERAPEUTA_DEMO_SENHA = "Senha Demo 123";
@@ -80,33 +77,21 @@ export async function seedDemoClinic(
     db: ownerDb,
   });
 
-  console.log("🧒 Cadastrando paciente demo com protocolo ativo...");
-  const [pacienteDemo] = await ownerDb
-    .insert(patient)
-    .values({
-      clinicId,
-      nome: "Paciente Demo E2E",
-      nascimento: "2020-01-01",
-      responsavelContato: "Responsável Demo (Mãe) - (11) 90000-0000",
-      clinicalModality: "protocol_driven",
-    })
-    .returning();
-  if (!pacienteDemo) throw new Error("Falha ao criar paciente demo.");
+  console.log("🧒 Cadastrando pacientes demo com protocolo ativo...");
+  // UM paciente (e uma sessão) POR SPEC. Consolidar é irreversível do ponto de
+  // vista do passo em foco: `/sessoes/[id]` sai de "documentar" assim que a
+  // nota é gravada (R-05). Com uma sessão só, o primeiro spec a consolidar
+  // deixava os seguintes esperando por um formulário que a página não
+  // renderiza mais — `revisao`/`ditado-voz` estouravam em `getByLabel(...)`.
+  // Cada spec abre a sessão do SEU paciente pelo `aria-label` do card da
+  // agenda ("Abrir agendamento de <nome> às <hora>"), nunca por `.first()`.
+  const PACIENTES_DEMO = [
+    { nome: "Paciente Demo E2E", hora: 9, spec: "diario-demo" },
+    { nome: "Paciente Revisão E2E", hora: 10, spec: "revisao" },
+    { nome: "Paciente Ditado E2E", hora: 11, spec: "ditado-voz" },
+  ] as const;
 
-  await ownerDb.insert(consent).values({
-    patientId: pacienteDemo.id,
-    tipo: "tratamento_dados_menor",
-    responsavelSignatario: "Responsável Demo",
-    versaoTermo: "termo-v1",
-  });
-
-  await ownerDb.insert(patientProtocol).values({
-    patientId: pacienteDemo.id,
-    protocolId: protocoloDemo.id,
-    ativadoPor: coordenadorId,
-  });
-
-  console.log("📅 Agendando sessão de hoje para o terapeuta demo...");
+  console.log("📅 Agendando sessões de hoje para o terapeuta demo...");
   // "Hoje" tem que ser o dia NO FUSO DA CLÍNICA, não no fuso do processo. O
   // `new Date()` + `setHours(9, …)` gravava 09:00 do fuso do runner: em CI (UTC)
   // isso vira 06:00 de America/Sao_Paulo do MESMO dia UTC, que já é o dia
@@ -118,23 +103,54 @@ export async function seedDemoClinic(
   const diaNaClinica = new Intl.DateTimeFormat("en-CA", {
     timeZone: FUSO_CLINICA,
   }).format(new Date());
-  const hoje = new Date(`${diaNaClinica}T09:00:00${FUSO_CLINICA_OFFSET}`);
-  await ownerDb.insert(session).values({
-    clinicId,
-    patientId: pacienteDemo.id,
-    terapeutaId,
-    agendadaPara: hoje,
-    // #512 · deriveEstadoSessao (estado.ts): gesto "documentar" só existe a
-    // partir de "realizada" — "agendada" resolve para "registrar_sessao" (o
-    // check-in precisa acontecer antes). `diario-demo`/`revisao` documentam
-    // direto sem passar pelo check-in, então a sessão já nasce checada.
-    estado: "realizada",
-    checkInEm: hoje,
-    disciplina: "ABA",
-    duracaoMin: 50,
-    modalidade: "presencial",
-    tipo: "terapia",
-  });
+  for (const { nome, hora, spec } of PACIENTES_DEMO) {
+    const agendadaPara = new Date(
+      `${diaNaClinica}T${String(hora).padStart(2, "0")}:00:00${FUSO_CLINICA_OFFSET}`,
+    );
+
+    const [paciente] = await ownerDb
+      .insert(patient)
+      .values({
+        clinicId,
+        nome,
+        nascimento: "2020-01-01",
+        responsavelContato: "Responsável Demo (Mãe) - (11) 90000-0000",
+        clinicalModality: "protocol_driven",
+      })
+      .returning();
+    if (!paciente) throw new Error(`Falha ao criar paciente demo "${nome}".`);
+
+    await ownerDb.insert(consent).values({
+      patientId: paciente.id,
+      tipo: "tratamento_dados_menor",
+      responsavelSignatario: "Responsável Demo",
+      versaoTermo: "termo-v1",
+    });
+
+    await ownerDb.insert(patientProtocol).values({
+      patientId: paciente.id,
+      protocolId: protocoloDemo.id,
+      ativadoPor: coordenadorId,
+    });
+
+    await ownerDb.insert(session).values({
+      clinicId,
+      patientId: paciente.id,
+      terapeutaId,
+      agendadaPara,
+      // #512 · deriveEstadoSessao (estado.ts): gesto "documentar" só existe a
+      // partir de "realizada" — "agendada" resolve para "registrar_sessao" (o
+      // check-in precisa acontecer antes). Os specs documentam direto, sem
+      // passar pelo check-in, então a sessão já nasce checada.
+      estado: "realizada",
+      checkInEm: agendadaPara,
+      disciplina: "ABA",
+      duracaoMin: 50,
+      modalidade: "presencial",
+      tipo: "terapia",
+    });
+    console.log(`   • ${nome} às ${hora}h (spec ${spec})`);
+  }
 
   console.log("✅ Clínica demo pronta.");
 }

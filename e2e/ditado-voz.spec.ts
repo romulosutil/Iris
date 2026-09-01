@@ -82,7 +82,12 @@ test.describe("ditado de voz", () => {
 
     await page.goto("/agenda");
     await page
-      .getByRole("button", { name: /^Abrir agendamento de / })
+      // Sessão própria deste spec no seed demo (11:00) — `.first()` cairia na
+      // sessão de `diario-demo`, já consolidada e sem formulário de captura.
+      // Corte pelo horário porque o nome do paciente vem mascarado no card.
+      .getByRole("button", {
+        name: /^Abrir agendamento de .* às 11:00$/,
+      })
       .locator("visible=true")
       .first()
       .click();
