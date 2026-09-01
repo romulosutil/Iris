@@ -22,6 +22,7 @@
     "test:watch": "vitest",
     "test:rls": "vitest run --config vitest.integration.config.ts",
     "test:llm": "vitest run --config vitest.llm.config.ts",
+    "test:smoke": "vitest run --config vitest.llm.config.ts src/lib/extraction/modelo-de-producao.llm.test.ts",
     "test:e2e": "playwright test",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
