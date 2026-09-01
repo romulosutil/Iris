@@ -72,6 +72,7 @@ test("PassoDocumentar — sem violações axe (sem captura, Consolidar desabilit
       protocolIdsPreSelecionados={[]}
       asrHabilitado={false}
       temCaptura={false}
+      ehDono={true}
     />,
   );
 });
@@ -84,6 +85,20 @@ test("PassoDocumentar — sem violações axe (com captura, Consolidar habilitad
       protocolIdsPreSelecionados={[]}
       asrHabilitado={false}
       temCaptura={true}
+      ehDono={true}
+    />,
+  );
+});
+
+test("PassoDocumentar — sem violações axe (#514: coordenador não-dono, somente leitura)", async () => {
+  await semViolacoes(
+    <PassoDocumentar
+      sessionId={SESSION_ID}
+      protocolos={[]}
+      protocolIdsPreSelecionados={[]}
+      asrHabilitado={false}
+      temCaptura={true}
+      ehDono={false}
     />,
   );
 });

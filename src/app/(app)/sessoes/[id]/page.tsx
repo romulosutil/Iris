@@ -117,6 +117,7 @@ async function PassoEmFoco({
           protocolIdsPreSelecionados={dados.protocolIdsPreSelecionados}
           asrHabilitado={asrHabilitado()}
           temCaptura={dados.temCaptura}
+          ehDono={dados.ehDono}
         />
       );
 
