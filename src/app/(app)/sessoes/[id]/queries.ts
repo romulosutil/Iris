@@ -32,6 +32,19 @@ export type DadosSessao = {
   resultado: ResultadoEstado;
   /** Existe `session_note` `captura_rapida` com texto não vazio (R-36/R-38). */
   temCaptura: boolean;
+  /**
+   * #513 — a `nota_consolidada` já gravada, quando existe. Alimenta a correção
+   * da nota (`CorrigirNota`): sem o texto atual em mão, "corrigir" só poderia
+   * ser redigitar tudo, e o upsert de `consolidarSessaoCore` sobrescreveria a
+   * nota salva por um texto parcial. `visibilityLevel` vem junto pelo mesmo
+   * motivo: `consolidarSessaoAction` deriva o nível do checkbox e SEMPRE grava
+   * um valor (checkbox ausente ⇒ `multidisciplinary`), então um form sem o
+   * estado atual rebaixaria o sigilo de uma nota `discipline_only` em silêncio.
+   */
+  notaConsolidada: {
+    texto: string;
+    visibilityLevel: "multidisciplinary" | "discipline_only";
+  } | null;
   protocolos: ProtocoloOpcao[];
   protocolIdsPreSelecionados: string[];
 };
@@ -69,10 +82,15 @@ export async function carregarSessao(
       .where(eq(patient.id, sess.patientId));
 
     const notas = await tx
-      .select({ tipo: sessionNote.tipo, texto: sessionNote.texto })
+      .select({
+        tipo: sessionNote.tipo,
+        texto: sessionNote.texto,
+        visibilityLevel: sessionNote.visibilityLevel,
+      })
       .from(sessionNote)
       .where(eq(sessionNote.sessionId, sessionId));
-    const temNotaConsolidada = notas.some((n) => n.tipo === "nota_consolidada");
+    const nota = notas.find((n) => n.tipo === "nota_consolidada") ?? null;
+    const temNotaConsolidada = nota !== null;
     const temCaptura = notas.some(
       (n) => n.tipo === "captura_rapida" && n.texto.trim().length > 0,
     );
@@ -159,6 +177,9 @@ export async function carregarSessao(
       }),
       resultado,
       temCaptura,
+      notaConsolidada: nota
+        ? { texto: nota.texto, visibilityLevel: nota.visibilityLevel }
+        : null,
       protocolos: protocolosAtivos,
       protocolIdsPreSelecionados,
     };

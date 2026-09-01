@@ -12,6 +12,7 @@ vi.mock("@/db/client", () => ({ db: {}, sql: {}, authDb: {}, authSql: {} }));
 
 const { Timeline } = await import("./[id]/timeline");
 const { PassoDocumentar } = await import("./[id]/passo-documentar");
+const { CorrigirNota } = await import("./[id]/corrigir-nota");
 
 afterEach(cleanup);
 
@@ -99,6 +100,16 @@ test("PassoDocumentar — sem violações axe (#514: coordenador não-dono, some
       asrHabilitado={false}
       temCaptura={true}
       ehDono={false}
+    />,
+  );
+});
+
+test("CorrigirNota — sem violações axe (#513: disclosure de correção da nota)", async () => {
+  await semViolacoes(
+    <CorrigirNota
+      sessionId={SESSION_ID}
+      texto="Nota consolidada da sessão."
+      visibilityLevel="discipline_only"
     />,
   );
 });
