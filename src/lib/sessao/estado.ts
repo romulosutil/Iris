@@ -60,6 +60,16 @@ const ESTADOS_TERMINAIS_ATENDIMENTO: ReadonlySet<SessionEstado> = new Set([
 ]);
 
 function todaExtracaoDecidida(entrada: EntradaSessao): boolean {
+  // Array vazio NÃO é "tudo decidido". `every` devolve true para `[]`, e sem
+  // esta guarda uma sessão com nota consolidada e nenhuma extração cairia em
+  // no_acervo/revisada — arquivando em silêncio algo que ninguém revisou.
+  // A janela é real e mensurável: em `diario/[sessionId]/logic.ts` a nota
+  // consolidada commita na Fase A, o provider roda FORA da transação (Fase B)
+  // e as extrações só entram na Fase C. Entre B e C a sessão existe com
+  // `extracoes: []`; uma queda de processo ali deixa esse estado permanente.
+  // Zero extração fica, então, como "documentada" (passo em aberto), coerente
+  // com `deveReextrair`, que já lê `temExtracoes: false` como "não extraído".
+  if (entrada.extracoes.length === 0) return false;
   return entrada.extracoes.every(
     (e) =>
       e.estado === "aprovada" ||

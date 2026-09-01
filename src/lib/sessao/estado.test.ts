@@ -48,6 +48,37 @@ describe("deriveEstadoSessao — tabela de derivação (§3.1)", () => {
     expect(r.gesto).toBe("revisar_evidencias");
   });
 
+  // Regressão: `[].every(...)` devolve true, então sem guarda explícita esta
+  // sessão cairia em no_acervo — arquivada sem ninguém ter revisado nada.
+  // A janela existe de fato: a nota consolidada commita antes de o provider
+  // rodar (logic.ts, Fase A → Fase B → Fase C).
+  test("documentada: nota consolidada e nenhuma extraction gerada ainda (janela Fase A→C)", () => {
+    const r = deriveEstadoSessao(
+      base({
+        estado: "realizada",
+        temNotaConsolidada: true,
+        extracoes: [],
+      }),
+      AGORA,
+    );
+    expect(r.estado).toBe("documentada");
+    expect(r.gesto).toBe("revisar_evidencias");
+  });
+
+  test("nenhuma extraction gerada não vira no_acervo mesmo com a fila vazia", () => {
+    const r = deriveEstadoSessao(
+      base({
+        estado: "realizada",
+        temNotaConsolidada: true,
+        extracoes: [],
+        itensNaFilaValidacao: 0,
+      }),
+      AGORA,
+    );
+    expect(r.estado).not.toBe("no_acervo");
+    expect(r.estado).not.toBe("revisada");
+  });
+
   test("revisada: toda extraction decidida, mas ainda pendente na fila de validação (caminho normal rumo a no_acervo)", () => {
     const r = deriveEstadoSessao(
       base({
