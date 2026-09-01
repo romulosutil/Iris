@@ -15,9 +15,11 @@
  * (`gemini-2.0-flash`): ela nunca tocou o id de produção, então também não
  * pegaria a aposentadoria.
  *
- * Este arquivo fecha exatamente esse buraco: exercita `modeloDeExtracao()` —
- * a MESMA resolução que `resolveProvider` usa em produção — através do MESMO
- * `LlmExtractionProvider` + `createGeminiInvoker`, contra a API de verdade.
+ * Este arquivo fecha exatamente esse buraco: chama `resolveProvider` — a
+ * função que produção usa para escolher provider E modelo — e extrai com o
+ * que ela devolver, contra a API de verdade. Não remonta a fiação nem escolhe
+ * modelo por conta própria: escolher o modelo no teste é precisamente o que
+ * deixou a #395 cega.
  *
  * SEM DADO DE PACIENTE: a nota abaixo é sintética, escrita para este teste.
  * Nenhum texto de prontuário real sai daqui para o Google — o gate de D57
@@ -31,12 +33,7 @@
  */
 import { describe, expect, test } from "vitest";
 import { LlmExtractionProvider } from "./llm-provider";
-import { createGeminiInvoker } from "./gemini-invoker";
-import {
-  MODELO_EXTRACAO_PADRAO,
-  modeloDeExtracao,
-  type ExtractionContext,
-} from "./provider";
+import { resolveProvider, type ExtractionContext } from "./provider";
 
 // Nota SINTÉTICA — inventada para este teste, sem PHI. Curta de propósito: o
 // oráculo aqui é o contrato de produção responder, não a qualidade clínica da
@@ -57,23 +54,42 @@ const NOTA_SINTETICA = [
 
 describe("smoke: provider de extração de PRODUÇÃO contra a API real (#510)", () => {
   /**
-   * Guarda contra a deriva que cegou a suíte #395: se alguém trocar este teste
-   * para `createGeminiInvoker()` sem argumento, ele passa a exercitar o modelo
-   * barato e deixa de cobrir o id de produção — verde, e cego de novo. Este
-   * teste não custa chamada: fixa que a resolução usada abaixo é a MESMA de
-   * `resolveProvider`.
+   * A FIAÇÃO É A DE PRODUÇÃO, não uma remontagem parecida.
+   *
+   * `resolveProvider` é quem escolhe o provider e o modelo em produção. Se
+   * este smoke montasse o `LlmExtractionProvider` à mão — mesmo passando
+   * `modeloDeExtracao()` explicitamente — ele testaria a MINHA cópia da
+   * decisão, não a decisão. Foi exatamente assim que a suíte #395 ficou cega:
+   * ela chama o Gemini de verdade, mas escolhe o modelo por conta própria
+   * (`createGeminiInvoker()` sem argumento → default barato), então nunca
+   * tocou o id que produção usa.
+   *
+   * Chamando `resolveProvider`, não existe modelo a derivar: quem decide é o
+   * código de produção. Uma troca de modelo no painel passa a valer aqui de
+   * graça, e não há asserção sobre QUAL id é o certo — que seria tautologia
+   * (restatar `modeloDeExtracao()`) e daria falso vermelho no dia em que
+   * produção legitimamente adotasse o mesmo id que a suíte #395 usa.
+   *
+   * `EXTRACTION_LLM_ENABLED` é setada aqui, e só aqui: é o gate de D57, que em
+   * produção protege PROTUÁRIO REAL de sair para o Google. O que sai deste
+   * arquivo é a nota sintética acima. O gate segue desligado em `pnpm test` —
+   * este arquivo não entra lá (convenção `*.llm.test.ts`).
    */
-  test("o modelo exercitado é o de produção, não o default barato do invoker", () => {
-    const modelo = modeloDeExtracao();
-    expect(modelo).toBe(
-      process.env.GOOGLE_EXTRACTION_MODEL?.trim() || MODELO_EXTRACAO_PADRAO,
-    );
-    // O default do `createGeminiInvoker` (sem argumento) é o modelo BARATO da
-    // suíte #395. Se os dois convergirem, este smoke perdeu o propósito.
-    expect(modelo).not.toBe(
-      process.env.GEMINI_TEST_MODEL || "gemini-2.0-flash",
-    );
-  });
+  function providerDeProducao(): LlmExtractionProvider {
+    const anterior = process.env.EXTRACTION_LLM_ENABLED;
+    process.env.EXTRACTION_LLM_ENABLED = "true";
+    try {
+      const provider = resolveProvider({ isDemo: false });
+      // Se cair em NullProvider/DemoStubProvider, o smoke não chamaria a API e
+      // passaria verde sem provar nada — o modo de falha original da #510.
+      // Falha alto em vez de virar smoke de mentira.
+      expect(provider).toBeInstanceOf(LlmExtractionProvider);
+      return provider as LlmExtractionProvider;
+    } finally {
+      if (anterior === undefined) delete process.env.EXTRACTION_LLM_ENABLED;
+      else process.env.EXTRACTION_LLM_ENABLED = anterior;
+    }
+  }
 
   /**
    * O ORÁCULO É "NÃO LANÇA".
@@ -93,9 +109,7 @@ describe("smoke: provider de extração de PRODUÇÃO contra a API real (#510)",
    * um smoke que dá falso vermelho é desligado, e aí volta o ponto cego.
    */
   test("extração real ponta a ponta responde dentro do contrato", async () => {
-    const provider = new LlmExtractionProvider(
-      createGeminiInvoker(modeloDeExtracao()),
-    );
+    const provider = providerDeProducao();
     const ctx: ExtractionContext = {
       sessionId: "smoke-510",
       clinicId: "smoke-510-clinic",

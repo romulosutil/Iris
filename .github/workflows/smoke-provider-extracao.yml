@@ -57,6 +57,7 @@ jobs:
       # parece problema de código. Sem esta checagem, "workflow vermelho" e
       # "modelo aposentado" ficam indistinguíveis no e-mail do Actions.
       - name: Verifica que GOOGLE_API_KEY está configurada
+        id: segredo
         env:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: |
@@ -69,6 +70,7 @@ jobs:
           fi
 
       - name: Smoke do provider de extração
+        id: smoke
         env:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           # Espelha a variável do Easypanel: se o Rômulo trocar o modelo em
@@ -81,10 +83,24 @@ jobs:
 
       # Workflow vermelho só notifica quem olha o Actions. Uma issue aberta
       # entra na mesma fila que o resto do trabalho e não some no e-mail.
-      # `if: failure()` cobre o smoke E a checagem do segredo acima.
+      #
+      # A condição é ESCOPADA aos dois passos que dizem algo sobre o provider,
+      # nunca `if: failure()` cru: com o cru, uma queda do registry do npm em
+      # `pnpm install` abriria uma issue afirmando que a extração de produção
+      # está quebrada — diagnóstico falso, e caro justamente no dia de
+      # incidente (memória do repo `mensagem-de-erro-que-afirma-causa`). Se o
+      # job falhar antes destes passos, o workflow fica vermelho no Actions e
+      # nenhuma issue é aberta, que é a leitura honesta: não sabemos nada sobre
+      # o provider porque nem chegamos a perguntar.
       - name: Abre issue de alerta quando o smoke quebra
-        if: failure()
+        if: >-
+          failure() &&
+          (steps.segredo.outcome == 'failure' || steps.smoke.outcome == 'failure')
         uses: actions/github-script@v7
+        env:
+          # `steps` NÃO existe como variável JS dentro do github-script — o
+          # contexto de Actions só é interpolado em `${{ }}`. Chega por env.
+          PASSO_SEGREDO: ${{ steps.segredo.outcome }}
         with:
           script: |
             const titulo = "Smoke do provider de extração falhou — extração de produção pode estar quebrada";
@@ -103,6 +119,8 @@ jobs:
 
             const corpo = [
               `O smoke agendado do provider real de extração falhou em ${new Date().toISOString()}.`,
+              "",
+              `**Passo que falhou:** ${process.env.PASSO_SEGREDO === "failure" ? "checagem do segredo GOOGLE_API_KEY — o smoke NÃO chegou a rodar, isto não diz nada sobre a saúde do provider" : "a chamada real ao Gemini"}.`,
               "",
               `**Run:** ${url}`,
               "",
