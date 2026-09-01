@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, test } from "vitest";
-import { resolveProvider } from "./provider";
+import {
+  MODELO_EXTRACAO_PADRAO,
+  modeloDeExtracao,
+  resolveProvider,
+} from "./provider";
 import { LlmExtractionProvider } from "./llm-provider";
 import { DemoStubProvider } from "./demo-stub-provider";
 import { NullProvider } from "./null-provider";
@@ -40,6 +44,33 @@ describe("resolveProvider", () => {
     delete process.env.GOOGLE_API_KEY;
     expect(resolveProvider({ isDemo: false })).toBeInstanceOf(NullProvider);
     if (keySalva) process.env.GOOGLE_API_KEY = keySalva;
+  });
+});
+
+describe("modeloDeExtracao", () => {
+  afterEach(() => {
+    delete process.env.GOOGLE_EXTRACTION_MODEL;
+  });
+
+  test("sem a variável usa o padrão", () => {
+    delete process.env.GOOGLE_EXTRACTION_MODEL;
+    expect(modeloDeExtracao()).toBe(MODELO_EXTRACAO_PADRAO);
+  });
+
+  test("a variável sobrepõe o padrão (aposentadoria de id sem deploy)", () => {
+    process.env.GOOGLE_EXTRACTION_MODEL = "gemini-4.0-flash";
+    expect(modeloDeExtracao()).toBe("gemini-4.0-flash");
+  });
+
+  test("variável vazia/só espaço cai no padrão, não em id inválido", () => {
+    process.env.GOOGLE_EXTRACTION_MODEL = "   ";
+    expect(modeloDeExtracao()).toBe(MODELO_EXTRACAO_PADRAO);
+  });
+
+  // Trava de regressão do 404 de 31/08/2026: o id aposentado nunca mais pode
+  // voltar a ser o padrão do código.
+  test("o padrão não é o id aposentado gemini-2.5-flash", () => {
+    expect(MODELO_EXTRACAO_PADRAO).not.toBe("gemini-2.5-flash");
   });
 });
 
