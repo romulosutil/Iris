@@ -23,7 +23,7 @@ O funil clínico é linear (`agendar → atender → documentar → aprovar → 
 
 | Item                                            | Razão                                                                                                                                                                  |
 | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Múltiplos coordenadores por clínica (D76, #520) | Lacuna de modelo, issue própria (#520). Esta jornada **não depende** dela: G4 já está correto nos dois cenários.                                                       |
+| Múltiplos coordenadores por clínica (D76, #520) | Lacuna de modelo, issue própria (#520). Esta jornada **não depende** dela: `podeAutoValidar` (G4/R-07) já está correto nos dois cenários. A fila (R-09) **não** está — muda com D76, ver correção em R-09. |
 | Desenho do bloco de estagnação em `/pacientes`  | O brief decide que Supervisão **sai da governança e continua empurrando** (C2); onde o bloco encosta e qual é o predicado de "estagnou" é issue separada (brief §7.3). |
 | `/alertas-risco`                                | Escopo é paciente e clínica, não sessão. Semiótica de cor exclusiva (terracota) e faixa global própria. Fica onde está.                                                |
 | Rename de `admin_recepcao` na UI                | Descartado ao decidir a #517.                                                                                                                                          |
@@ -198,7 +198,7 @@ Rastreáveis. `→` aponta a seção do brief que os origina.
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **R-07** | `podeAutoValidar` deriva **só** de `ctx.role === "coordenador" && ctx.userId === session.terapeutaId`. Nenhuma contagem de membros da clínica entra na conta. → §3.5, §7.5       |
 | **R-08** | 🚫 Qualquer helper do tipo `ehClinicaSolo()`, `contarCoordenadores()`, ou predicado de colapso que leia mais de uma sessão é **rejeição em revisão de PR**, não sugestão. → §7.5 |
-| **R-09** | A fila do coordenador é `sessões da clínica cujo terapeuta ≠ eu` ∪ `minhas sessões travadas` — nunca "todas, porque sou coordenador". → §3.5                                     |
+| **R-09** | A fila do coordenador é `sessões da clínica cujo terapeuta ≠ eu` ∪ `minhas sessões travadas` — nunca "todas, porque sou coordenador". Vale **hoje**, 1 coordenador/clínica. Com D76 (#520) resolvido, muda para `sessões de pacientes onde eu sou coordenador_referencia vigente em care_team_membership, cujo terapeuta ≠ eu` — decisão do Rômulo em 01/09/2026, não implementar aqui. → §3.5 |
 | **R-10** | `avaliarFriccao` (A8) continua fonte única. Fricção alta exige justificativa escrita **sempre**, e nunca aprova em lote.                                                         |
 | **R-11** | `evidence_revision` continua append-only, com autor, ação e justificativa. O que muda é **não** registrar duas vezes o mesmo julgamento da mesma pessoa. → §3.5                  |
 

@@ -222,8 +222,24 @@ membros da clínica entra nessa conta.
 
 Consequência simétrica para a fila: a fila do coordenador é "sessões da clínica
 cujo terapeuta **não** sou eu" mais "minhas sessões travadas" — não "todas, porque
-sou coordenador". Com dois coordenadores, isso continua fazendo sentido sem
-nenhuma mudança de predicado.
+sou coordenador".
+
+> **Correção (D76, decisões do Rômulo em 01/09/2026):** com dois coordenadores
+> este predicado **muda**, ao contrário do que a versão anterior deste texto
+> afirmava. Cada paciente já tem, hoje, no máximo um vínculo vigente
+> `coordenador_referencia` em `care_team_membership`
+> (`src/db/schema.ts:765-824`, constraint `ctm_unico_vigente`) — inclusive na
+> clínica solo, onde o fundador acumula `coordenador_referencia` **e**
+> `terapeuta_referencia` (regra D-C, `ctm_gestao_sem_horas`). Isso já modela
+> "1 coordenador por paciente"; o que falta é o resto do D76 (papel de sistema,
+> promoção, rebaixamento — issue #520). Quando o D76 for endereçado, a fila
+> correta é: **sessões dos pacientes onde eu sou `coordenador_referencia`
+> vigente, cujo terapeuta não sou eu** ∪ **minhas sessões travadas** — não
+> "sessões da clínica cujo terapeuta não sou eu". Sem esse JOIN, o coordenador A
+> veria na fila sessões de pacientes do coordenador B. Fora de escopo desta
+> jornada (D76 não é dependência — G4 e `podeAutoValidar` continuam corretos
+> como estão), mas registrado aqui para não se perder quando #520 abrir
+> implementação.
 
 > **Sinalização honesta:** isto remove um passo de aprovação da clínica solo. Não
 > é perda de controle porque nunca houve controle ali — não existe segunda pessoa
