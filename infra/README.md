@@ -2284,7 +2284,7 @@ nem parcialmente, nem em URL, nem em log commitado. Produção não foi tocada.
 `sandbox` **ou** se a chave não começar com `$aact_hmlg_`. O guard passou nas
 três execuções.
 **Objetos criados no sandbox:** um `customer` de teste
-(`cus_000008723016`), três autorizações de Pix Automático
+(`cus_…`, id no runbook privado — `S-09`), três autorizações de Pix Automático
 (`f9a60bba-…` com `minLimitValue`, `1d8580c4-…` com o campo inventado
 `maxLimitValue`, `2daa4bfc-…` com `retryPolicy` permissiva) e seis cobranças
 PIX avulsas. As duas transferências pendentes geradas nas sondagens foram
@@ -2364,7 +2364,7 @@ diferentes?
   "frequency": "MONTHLY",
   "contractId": "M321msuhbqnsA",
   "startDate": "2026-08-15",
-  "customerId": "cus_000008723016",
+  "customerId": "cus_…",
   "description": "Iris — medicao 321 minLimit",
   "paymentCreationMode": "MANUAL",
   "retryPolicy": "NOT_ALLOWED",
@@ -2517,7 +2517,7 @@ nenhuma emissão do Iris envia `discount`. O piso vale para o `POST /payments` e
 **Pergunta:** o que a cobrança de ativação (QR imediato de R$ 0,01) traz em
 `externalReference`?
 
-**Request/resposta:** `GET /payments?customer=cus_000008723016&limit=100` —
+**Request/resposta:** `GET /payments?customer=cus_…&limit=100` —
 **HTTP 200**, `"totalCount":4`, e as quatro são exatamente as cobranças que
 **eu** criei. Isso **depois** de já existirem **três** autorizações criadas,
 todas com `immediateQrCode.originalValue: 0.01`. **Nenhuma cobrança de

@@ -49,9 +49,15 @@ import {
 import { assertSeedAllowed } from "./lib/guardrail-seed";
 
 async function main() {
-  const targetEmail = (process.argv[2] || "sutil.romulo@gmail.com")
-    .toLowerCase()
-    .trim();
+  // E-mail é argumento obrigatório: sem default pessoal versionado
+  // (auditoria 360, S-09). Uso: pnpm seed:custom <email-do-coordenador>
+  const emailArg = process.argv[2]?.trim();
+  if (!emailArg) {
+    throw new Error(
+      "Informe o e-mail do coordenador alvo: pnpm seed:custom <email>",
+    );
+  }
+  const targetEmail = emailArg.toLowerCase();
   const senhaPadrao = "SenhaLocal123!";
 
   const migrationUrl =

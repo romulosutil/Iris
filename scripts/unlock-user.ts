@@ -12,9 +12,14 @@ if (!migrationUrl) {
 const sql = postgres(migrationUrl, { max: 1 });
 
 async function main() {
-  const email = (process.argv[2] || "sutil.romulo@gmail.com")
-    .toLowerCase()
-    .trim();
+  // E-mail é argumento obrigatório: sem default pessoal versionado
+  // (auditoria 360, S-09). Uso: pnpm unlock:user <email>
+  const emailArg = process.argv[2]?.trim();
+  if (!emailArg) {
+    console.error("Informe o e-mail do usuário: pnpm unlock:user <email>");
+    process.exit(1);
+  }
+  const email = emailArg.toLowerCase();
   console.log(`🔍 Buscando usuário com e-mail: ${email}...`);
 
   const users = await sql<
