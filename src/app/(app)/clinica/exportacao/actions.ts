@@ -4,7 +4,26 @@ import { getTenantContext } from "@/auth/tenant";
 import {
   solicitarExportacao,
   gerarLinkDownload,
+  ExportacaoEmAndamentoError,
+  NaoAutorizadoExportacaoError,
 } from "@/lib/export/acervo/motor";
+import { mensagemDeExcecao } from "@/lib/copy/erros";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+
+/**
+ * S-10 (#531): as duas classes do motor têm message que É copy; qualquer
+ * outra exceção (driver, storage) vira dicionário + código de correlação —
+ * `err.message` de `DrizzleQueryError` carrega SQL + params.
+ */
+function erroParaTela(rotulo: string, err: unknown): string {
+  if (
+    err instanceof ExportacaoEmAndamentoError ||
+    err instanceof NaoAutorizadoExportacaoError
+  ) {
+    return err.message;
+  }
+  return mensagemDeExcecao(err, logarErroSemPII(rotulo, err));
+}
 
 export type ResultadoSolicitacao =
   | {
@@ -26,11 +45,8 @@ export async function solicitarExportacaoAction(): Promise<ResultadoSolicitacao>
     const ctx = await getTenantContext();
     const res = await solicitarExportacao(ctx.clinicId, ctx.userId, ctx.role);
     return { ok: true, bundleId: res.bundleId, status: res.status };
-  } catch (err: any) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-    };
+  } catch (err: unknown) {
+    return { ok: false, error: erroParaTela("solicitarExportacao:", err) };
   }
 }
 
@@ -56,9 +72,6 @@ export async function gerarLinkDownloadAction(
     );
     return { ok: true, url };
   } catch (err: unknown) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-    };
+    return { ok: false, error: erroParaTela("gerarLinkDownload:", err) };
   }
 }

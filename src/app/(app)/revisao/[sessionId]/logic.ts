@@ -17,6 +17,11 @@ import {
 } from "@/lib/evidence/resolver";
 import { podeAutoValidar } from "@/lib/sessao/aprovacao";
 import { avaliarFriccao } from "@/lib/extraction/review-policy";
+import {
+  descreverErroSemPII,
+  logarErroSemPII,
+} from "@/lib/observabilidade/logar-erro";
+import { textoErroInterno } from "@/lib/copy/erros";
 
 // ─── Colapso da aprovação (T07, spec R-07/R-10/R-11, §3.5) ─────────────────
 // Quando `podeAutoValidar(ctx, sessão)` é true (coordenador === terapeuta da
@@ -351,9 +356,12 @@ async function transicionar(
       return { ok: false, error: "CONCURRENCY_ERROR" };
     }
     return { ok: true };
-  } catch (err: any) {
-    console.error("Erro na transição da extração:", err);
-    errorMsg = err instanceof Error ? err.message : String(err);
+  } catch (err: unknown) {
+    // S-10 (#531): nem no `payload_editado` nem na tela entra `err.message` —
+    // é aqui que o `DrizzleQueryError` carrega o INSERT de `evidence` com o
+    // conteúdo clínico nos params. Fica nome + SQLSTATE + correlação.
+    const correlacaoId = logarErroSemPII("Erro na transição da extração:", err);
+    errorMsg = descreverErroSemPII(err, correlacaoId);
 
     // DLQ / Dead-Letter State: Se o pipeline quebrar, movemos a extração para 'erro_validacao' de forma autônoma
     try {
@@ -368,10 +376,10 @@ async function transicionar(
           .where(eq(extraction.id, extractionId));
       });
     } catch (dbErr) {
-      console.error("Falha ao persistir erro de validação (DLQ):", dbErr);
+      logarErroSemPII("Falha ao persistir erro de validação (DLQ):", dbErr);
     }
 
-    return { error: `Erro de validação clínica: ${errorMsg}` };
+    return { error: textoErroInterno(correlacaoId) };
   }
 }
 

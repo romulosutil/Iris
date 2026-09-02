@@ -22,6 +22,7 @@ import {
   editarExtracaoAction,
   type RevisaoState,
 } from "./actions";
+import { mensagemDeErro } from "@/lib/copy/erros";
 
 const dataFmt = new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium" });
 
@@ -154,7 +155,7 @@ function AcaoForm({
       </Button>
       {state.error ? (
         <Alert severidade="erro" className="w-full">
-          {state.error}
+          {mensagemDeErro(state.error)}
         </Alert>
       ) : null}
     </form>
@@ -226,7 +227,9 @@ function DialogoEditar({
               className={campoClasses}
             />
           </label>
-          {state.error ? <Alert severidade="erro">{state.error}</Alert> : null}
+          {state.error ? (
+            <Alert severidade="erro">{mensagemDeErro(state.error)}</Alert>
+          ) : null}
           <Button type="submit" disabled={pending}>
             {pending ? "Salvando…" : "Salvar correção"}
           </Button>

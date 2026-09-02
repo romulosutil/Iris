@@ -1,5 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
 import { processarProximo, expirarVencidos } from "@/lib/export/acervo/motor";
+import {
+  descreverErroSemPII,
+  logarErroSemPII,
+} from "@/lib/observabilidade/logar-erro";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,13 +59,15 @@ export async function POST(request: Request): Promise<Response> {
       totalProcessados: processados.length,
       expirados,
     });
-  } catch (err: any) {
-    console.error("[job-exportacao-integral] falha no processamento", err);
+  } catch (err: unknown) {
+    // O corpo desta resposta é logado pelo script de disparo (Easypanel, HTTP
+    // puro): nome + SQLSTATE + correlação, nunca `err.message` (#531).
+    const correlacaoId = logarErroSemPII(
+      "[job-exportacao-integral] falha no processamento",
+      err,
+    );
     return Response.json(
-      {
-        ok: false,
-        error: err instanceof Error ? err.message : String(err),
-      },
+      { ok: false, error: descreverErroSemPII(err, correlacaoId) },
       { status: 500 },
     );
   }
