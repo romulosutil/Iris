@@ -1016,6 +1016,13 @@
       "when": 1788190227804,
       "tag": "0144_erro_validacao_detalhe",
       "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1788190228804,
+      "tag": "0142_expurgo_audit_log_por_finalidade",
+      "breakpoints": true
     }
   ]
 }
