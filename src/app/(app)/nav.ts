@@ -9,6 +9,12 @@ export type MontarNavInput = {
   /** Badge de `Sessões` — mesmo predicado/contagem de `contarTravadas`
    * (T02, R-12/R-13). Ignorado para `admin_recepcao` (R-23). */
   totalTravadas: number;
+  /** #533 (`PR-01`) — badge de `Validação`: mesmo predicado da fila
+   * (`contarFilaValidacao`). Só o coordenador tem o item; os demais ignoram. */
+  totalValidacao: number;
+  /** #533 (`PR-02`) — badge de `Alertas de risco`: alertas `aberto`
+   * (`contarAlertasAbertos`, mesmo número do cabeçalho de `/alertas-risco`). */
+  totalAlertasAbertos: number;
 };
 
 export type NavPorPapel = {
@@ -27,10 +33,20 @@ export type NavPorPapel = {
  * R-23 — `admin_recepcao` não recebe `Sessões`: um badge que ela nunca zera é
  * ansiedade permanente (§3.2 do doc de UX). A nav dela é só `Agenda ·
  * Pacientes` — nada de fila clínica.
+ *
+ * #533 (`PR-01`/`PR-02`, auditoria 360) — a #512 tirou da nav as três
+ * superfícies de governança do coordenador (Validação, Alertas de risco,
+ * Supervisão) e a fila de validação por evidência ficou sem porta nenhuma.
+ * Elas voltam em `itemsAdmin` (menu do usuário), NÃO no menu diário: R-21
+ * continua valendo — o dia a dia do coordenador é igual ao do terapeuta; a
+ * governança é o que o distingue, e mora com o resto da administração.
+ * `src/app/(app)/alcance-de-rotas.test.ts` (Q-04) trava esta decisão.
  */
 export function montarNav({
   role,
   totalTravadas,
+  totalValidacao,
+  totalAlertasAbertos,
 }: MontarNavInput): NavPorPapel {
   if (role === "coordenador" || role === "terapeuta") {
     return {
@@ -54,6 +70,21 @@ export function montarNav({
       itemsAdmin:
         role === "coordenador"
           ? [
+              // Governança primeiro (#533): é o que o coordenador vem fazer
+              // aqui; a administração de cadastro vem depois.
+              {
+                href: "/validacao",
+                label: "Validação",
+                badge: totalValidacao,
+                badgeTom: "ia",
+              },
+              {
+                href: "/alertas-risco",
+                label: "Alertas de risco",
+                badge: totalAlertasAbertos,
+                badgeTom: "risco",
+              },
+              { href: "/supervisao", label: "Supervisão" },
               { href: "/equipe", label: "Equipe" },
               { href: "/clinica/dados", label: "Dados da Clínica" },
               { href: "/clinica/exportacao", label: "Exportar Acervo" },

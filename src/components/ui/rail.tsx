@@ -171,7 +171,16 @@ function MenuUsuario({
       {aberto ? (
         <div className="absolute bottom-full left-0 z-40 mb-1 flex min-w-[13rem] flex-col gap-1 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-1 shadow-[var(--ds-shadow)]">
           {itemsAdmin.map((item) => {
-            const conteudo = <span className="truncate">{item.label}</span>;
+            // #533 — Validação e Alertas de risco moram aqui com badge; sem
+            // isto o número que a nav promete ficaria só no menu diário.
+            const conteudo = (
+              <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                <span className="truncate">{item.label}</span>
+                {item.badge !== undefined && item.badge > 0 ? (
+                  <NavBadge valor={item.badge} tom={item.badgeTom} />
+                ) : null}
+              </span>
+            );
             if (renderAdminLink) {
               return (
                 <React.Fragment key={item.href}>
