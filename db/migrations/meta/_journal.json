@@ -1030,6 +1030,13 @@
       "when": 1788190229804,
       "tag": "0146_job_heartbeat",
       "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1788356043495,
+      "tag": "0143_extraction_rastreio_ia",
+      "breakpoints": true
     }
   ]
 }

@@ -1248,6 +1248,18 @@ export const extraction = pgTable(
     // `payload_editado`, que é conteúdo clínico efetivo. Zerada ao sair de
     // `erro_validacao`.
     erroValidacaoDetalhe: jsonb("erro_validacao_detalhe"),
+    // Rastreio da chamada de IA (#535, DA-02): sem isto nao ha como medir
+    // "aprovacao sem edicao por modelo/prompt" nem custo/latencia por clinica.
+    // Todas nullable: linhas anteriores a migracao e providers sem modelo
+    // (NullProvider) ficam NULL. `modelo` e o id do modelo chamado ('stub' na
+    // clinica demo); `prompt_versao` e o sha256 curto do system prompt usado;
+    // `latencia_ms` e o tempo de parede de `provider.extrair()` (inclui retry)
+    // e e gravado TAMBEM na linha `pendente_reprocessamento` de falha.
+    modelo: text("modelo"),
+    promptVersao: text("prompt_versao"),
+    latenciaMs: integer("latencia_ms"),
+    tokensEntrada: integer("tokens_entrada"),
+    tokensSaida: integer("tokens_saida"),
   },
   (t) => [index("idx_extraction_session").on(t.sessionId)],
 );
