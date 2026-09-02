@@ -27,6 +27,8 @@ RUN npm install --no-package-lock --no-audit --no-fund postgres@3.4.9 resend@6.1
 # `.ts` de seed que não têm nada que fazer nesta imagem.
 COPY scripts/alarme-jobs.mjs ./scripts/alarme-jobs.mjs
 COPY scripts/lib/resend-alarme.mjs ./scripts/lib/resend-alarme.mjs
+# #536 — alarme-jobs.mjs importa `detalheDoErro` daqui.
+COPY scripts/lib/heartbeat.mjs ./scripts/lib/heartbeat.mjs
 COPY infra/alarme/agendador.sh ./agendador.sh
 RUN chmod +x agendador.sh
 

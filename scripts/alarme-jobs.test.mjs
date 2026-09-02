@@ -664,16 +664,61 @@ describe("alarme-jobs.mjs — heartbeats dos jobs (#536)", () => {
     expect(porMotivo).not.toHaveProperty("job-que-ninguem-monitora");
   });
 
-  test("verificarHeartbeats: banco lança → TODOS indeterminado, nenhum ok, detalhe com a mensagem", async () => {
-    const sql = sqlDubleQueLanca(
-      "permission denied for function app_alarme_job_heartbeats",
+  test("verificarHeartbeats: banco lança → TODOS indeterminado, detalhe com name+code e NUNCA a message", async () => {
+    const err = Object.assign(
+      new Error(
+        "permission denied for function app_alarme_job_heartbeats -- params: Fulano",
+      ),
+      { name: "PostgresError", code: "42501" },
     );
+    const sql = () => Promise.reject(err);
     const resultados = await verificarHeartbeats(sql, AGORA);
     expect(resultados).toHaveLength(Object.keys(LIMITES_HEARTBEAT).length);
     for (const r of resultados) {
       expect(r.estado).toBe("indeterminado");
-      expect(r.detalhe).toContain("permission denied");
+      expect(r.detalhe).toContain("erro=PostgresError code=42501");
+      expect(r.detalhe).not.toContain("Fulano");
+      expect(r.detalhe).not.toContain("permission denied");
     }
+  });
+
+  test("avaliarHeartbeat aceita `Date` (forma real do postgres.js) e ISO string igualmente", () => {
+    const comDate = avaliarHeartbeat(
+      "retencao",
+      {
+        job: "retencao",
+        ultimo_ok: new Date(AGORA - 40 * H),
+        ultimo_erro: null,
+        detalhe: "",
+      },
+      AGORA,
+    );
+    const comIso = avaliarHeartbeat(
+      "retencao",
+      {
+        job: "retencao",
+        ultimo_ok: new Date(AGORA - 40 * H).toISOString(),
+        ultimo_erro: null,
+        detalhe: "",
+      },
+      AGORA,
+    );
+    expect(comDate.estado).toBe("problema");
+    expect(comDate.detalhe).toContain("40.0h");
+    expect(comIso).toEqual(comDate);
+    // `Date` de erro mais recente que o ok também é comparado como instante.
+    const erroDate = avaliarHeartbeat(
+      "asr",
+      {
+        job: "asr",
+        ultimo_ok: new Date(AGORA - H),
+        ultimo_erro: new Date(AGORA - H / 2),
+        detalhe: "erro=X",
+      },
+      AGORA,
+    );
+    expect(erroDate.estado).toBe("problema");
+    expect(erroDate.detalhe).toContain("falhou");
   });
 
   test("heartbeats NÃO entram no escalonamento de detector cego (só billing/escalonamento)", async () => {

@@ -31,12 +31,27 @@ REVOKE ALL ON "job_heartbeat" FROM PUBLIC;
 -- `ultimo_erro`. O outro carimbo fica como está — é a comparação entre os dois
 -- que diz ao detector se a última passada deu certo.
 --
--- `p_job` validado por regex: nome de job é identificador de infra, não texto
--- livre. Um chamador que mande lixo aqui estoura P0001 em vez de poluir a
--- tabela com uma linha que nenhum detector vai olhar.
+-- MAPA job -> role DENTRO da função (revisão pós-PR #551): EXECUTE sozinho
+-- deixaria qualquer role com o grant carimbar o heartbeat de QUALQUER job —
+-- `app_role` (isto é, um SQL injection no app) gravaria `retencao` ok e
+-- silenciaria o alarme do job de retenção. O chamador só grava o job da SUA
+-- role; fora do mapa é P0001. Um job novo entra aqui (é migração, de
+-- propósito: quem grava o quê é fronteira do banco, não configuração).
+--
+-- `session_user`, não `current_user`: dentro de SECURITY DEFINER o
+-- `current_user` é a DONA da função (`iris`), e `pg_has_role` responderia
+-- sim para tudo. `session_user` é quem fez login — a role de job (membro de
+-- `iris_retencao`, `iris_arquivamento`, …) ou `iris_app` (membro de
+-- `app_role`). Superusuário é membro implícito de toda role, então a dona
+-- continua podendo chamar à mão para diagnóstico.
+--
+-- `p_job` ainda passa pela regex antes do mapa: o erro de nome fora do padrão
+-- é diferente do erro "job válido, role errada", e os dois aparecem no log.
 CREATE OR REPLACE FUNCTION public.app_job_heartbeat_gravar(p_job text, p_ok boolean, p_detalhe text)
 RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_role_exigida text;
 BEGIN
   IF p_job IS NULL OR p_job !~ '^[a-z][a-z0-9-]{0,39}$' THEN
     RAISE EXCEPTION 'job_heartbeat: nome de job inválido (esperado ^[a-z][a-z0-9-]{0,39}$)'
@@ -44,6 +59,30 @@ BEGIN
   END IF;
   IF p_ok IS NULL THEN
     RAISE EXCEPTION 'job_heartbeat: p_ok não pode ser NULL' USING ERRCODE = 'P0001';
+  END IF;
+
+  v_role_exigida := CASE p_job
+    WHEN 'retencao'          THEN 'iris_retencao'
+    WHEN 'arquivamento'      THEN 'iris_arquivamento'
+    WHEN 'escalonamento'     THEN 'iris_escalonamento'
+    WHEN 'expurgo-audit-log' THEN 'iris_expurgo_audit_log'
+    -- Rotas internas do app (billing, conciliar, exportacao-integral,
+    -- asr-transcrever) e o asr-sweeper (ASR_SWEEPER_DATABASE_URL é membro
+    -- de app_role).
+    WHEN 'billing'           THEN 'app_role'
+    WHEN 'conciliacao'       THEN 'app_role'
+    WHEN 'exportacao'        THEN 'app_role'
+    WHEN 'asr'               THEN 'app_role'
+    WHEN 'asr-sweeper'       THEN 'app_role'
+    ELSE NULL
+  END;
+  IF v_role_exigida IS NULL THEN
+    RAISE EXCEPTION 'job_heartbeat: job "%" não está no mapa job->role da 0143', p_job
+      USING ERRCODE = 'P0001';
+  END IF;
+  IF NOT pg_has_role(session_user, v_role_exigida, 'MEMBER') THEN
+    RAISE EXCEPTION 'job_heartbeat: a role da sessão não pode gravar o heartbeat de "%" (exige membro de %)', p_job, v_role_exigida
+      USING ERRCODE = 'P0001';
   END IF;
 
   INSERT INTO job_heartbeat (job, ultimo_ok, ultimo_erro, detalhe)

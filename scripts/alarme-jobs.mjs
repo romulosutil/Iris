@@ -24,6 +24,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import postgres from "postgres";
+import { detalheDoErro } from "./lib/heartbeat.mjs";
 import { enviarEmailAlarme } from "./lib/resend-alarme.mjs";
 
 const execFileP = promisify(execFile);
@@ -210,11 +211,20 @@ export const LIMITES_HEARTBEAT = Object.freeze({
  * `iris-expurgo-audit-log` existe em produção). `indeterminado` fica reservado
  * para "não consegui ler".
  */
+function instante(valor) {
+  if (valor === null || valor === undefined || valor === "") return null;
+  const t = new Date(valor).getTime();
+  return Number.isFinite(t) ? t : null;
+}
+
 export function avaliarHeartbeat(job, linha, agora = Date.now()) {
   const regra = LIMITES_HEARTBEAT[job];
   const ok = { estado: "ok", motivo: job, detalhe: "" };
-  const okEm = linha?.ultimo_ok ? Date.parse(linha.ultimo_ok) : null;
-  const erroEm = linha?.ultimo_erro ? Date.parse(linha.ultimo_erro) : null;
+  // `new Date(x).getTime()`, não `Date.parse(x)`: o postgres.js devolve
+  // `timestamptz` como objeto `Date`, e `Date.parse` só o aceita por coerção
+  // para string (revisão pós-PR #551). Aceita `Date` e ISO igualmente.
+  const okEm = instante(linha?.ultimo_ok);
+  const erroEm = instante(linha?.ultimo_erro);
 
   // Última passada falhou depois do último sucesso (ou nunca houve sucesso):
   // vale para todo job, inclusive os sob demanda.
@@ -255,7 +265,11 @@ export async function verificarHeartbeats(sql, agora = Date.now()) {
   try {
     linhas = await sql`SELECT * FROM app_alarme_job_heartbeats()`;
   } catch (err) {
-    const detalhe = `não foi possível checar: ${err instanceof Error ? err.message : String(err)}`;
+    // `name`+`code`, nunca `message` (revisão pós-PR #551): o `detalhe` vai
+    // para log e pode ir para e-mail, e a message de erro de driver carrega a
+    // query. billing/escalonamento ainda carregam a message — são função sem
+    // parâmetro clínico e ficam como estão (fora do escopo desta PR).
+    const detalhe = `não foi possível checar: ${detalheDoErro(err)}`;
     return jobs.map((job) => ({
       estado: "indeterminado",
       motivo: job,
