@@ -53,7 +53,8 @@ const PADROES_DE_CONEXAO = [
   /\bdrizzle\s*\(/,
 ];
 
-const PADRAO_DE_GUARD = /\b(assertSeedAllowed|assertScriptRemotoPermitido)\s*\(/;
+const PADRAO_DE_GUARD =
+  /\b(assertSeedAllowed|assertScriptRemotoPermitido)\s*\(/;
 
 const PADRAO_DE_IMPORT_DO_GUARD =
   /import\s*\{[^}]*\b(assertSeedAllowed|assertScriptRemotoPermitido)\b[^}]*\}\s*from\s*["'](\.\/lib\/guardrail-seed|\.\/lib\/guardrail-conexao\.mjs|\.\/guardrail-seed|\.\/guardrail-conexao\.mjs)["']/;
