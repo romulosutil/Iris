@@ -1023,6 +1023,13 @@
       "when": 1788190228804,
       "tag": "0142_expurgo_audit_log_por_finalidade",
       "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1788329880566,
+      "tag": "0143_job_heartbeat",
+      "breakpoints": true
     }
   ]
 }
