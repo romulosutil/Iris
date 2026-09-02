@@ -299,7 +299,7 @@ export async function listarSupervisao(
 
 // ─── DA-01 (#535): "Saúde da IA" ─────────────────────────────────────────────
 
-/** Uma linha da view `metricas_extracao_por_clinica_semana` (migração 0144):
+/** Uma linha da view `metricas_extracao_por_clinica_semana` (migração 0148):
  * semana ISO × modelo × versão do prompt. Sem PII por construção. */
 export type SaudeIaLinha = {
   /** Segunda-feira da semana ISO, `YYYY-MM-DD`. */

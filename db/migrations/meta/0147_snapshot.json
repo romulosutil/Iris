@@ -1,6 +1,6 @@
 {
-  "id": "3531a1a8-61c1-4ded-b18d-e53070a64eb9",
-  "prevId": "a96d5094-823f-4a60-8420-f093521aef13",
+  "id": "16a21748-1044-466c-b67e-04e88cab0606",
+  "prevId": "92c6c1b9-05a9-4e56-939a-28c4e7302761",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -4762,6 +4762,43 @@
           "value": "\"janela_trabalho\".\"hora_fim\" > \"janela_trabalho\".\"hora_inicio\""
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.job_heartbeat": {
+      "name": "job_heartbeat",
+      "schema": "",
+      "columns": {
+        "job": {
+          "name": "job",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "ultimo_ok": {
+          "name": "ultimo_ok",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ultimo_erro": {
+          "name": "ultimo_erro",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "detalhe": {
+          "name": "detalhe",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.milestone": {

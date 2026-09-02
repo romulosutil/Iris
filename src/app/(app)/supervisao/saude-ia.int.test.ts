@@ -5,7 +5,7 @@ import postgres from "postgres";
 import { hasDb } from "@tests/integration-env";
 
 /**
- * DA-01 (#535): view `metricas_extracao_por_clinica_semana` (migração 0144)
+ * DA-01 (#535): view `metricas_extracao_por_clinica_semana` (migração 0148)
  * lida pelo bloco "Saúde da IA" do /supervisao.
  *
  * O que se prova aqui, medindo no banco (não lendo o .sql):

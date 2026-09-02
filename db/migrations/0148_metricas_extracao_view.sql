@@ -4,7 +4,7 @@
 -- "≥70% de aprovação sem edição" (PRODUCT.md:34, modelo-de-negocio.md:279) não
 -- era medido em lugar nenhum. Esta view agrega `extraction` (sem PII: nenhuma
 -- coluna de texto clínico, nenhum id de paciente/sessão) por semana ISO,
--- modelo e versão do prompt (colunas da 0143), com:
+-- modelo e versão do prompt (colunas da 0147), com:
 --   total_sugeridas          linhas que a IA produziu (todo estado exceto
 --                            `pendente_reprocessamento`, que é ausência de
 --                            sugestão, não sugestão)

@@ -1032,17 +1032,17 @@
       "breakpoints": true
     },
     {
-      "idx": 143,
+      "idx": 147,
       "version": "7",
-      "when": 1788356043495,
-      "tag": "0143_extraction_rastreio_ia",
+      "when": 1788190230804,
+      "tag": "0147_extraction_rastreio_ia",
       "breakpoints": true
     },
     {
-      "idx": 144,
+      "idx": 148,
       "version": "7",
-      "when": 1788356044495,
-      "tag": "0144_metricas_extracao_view",
+      "when": 1788190231804,
+      "tag": "0148_metricas_extracao_view",
       "breakpoints": true
     }
   ]
