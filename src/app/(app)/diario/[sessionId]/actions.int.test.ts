@@ -331,7 +331,15 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     expect(ex).toHaveLength(1);
     expect(ex[0]!.estado).toBe("pendente_reprocessamento");
     expect(ex[0]!.modelo).toBe("gemini-fake");
-    expect(ex[0]!.latencia_ms).toBeGreaterThanOrEqual(30);
+    // O que este teste prova é que a latência é REGISTRADA no caminho de
+    // falha — não quanto tempo o `setTimeout` do dublê dormiu. Amarrar o piso
+    // aos 30ms do timer mede o relógio, não a feature: `setTimeout(30)` e o
+    // relógio da latência são fontes diferentes, e o CI já observou 29
+    // (`expected 29 to be greater than or equal to 30`, run 33695343538),
+    // avermelhando uma PR que não tocava em extração. `> 0` continua matando
+    // o mutante que interessa: a linha `pendente_reprocessamento` gravada sem
+    // latência nenhuma.
+    expect(ex[0]!.latencia_ms).toBeGreaterThan(0);
     // não houve resposta: sem prompt/tokens — `null`, não zero
     expect(ex[0]!.prompt_versao).toBeNull();
     expect(ex[0]!.tokens_entrada).toBeNull();
