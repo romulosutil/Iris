@@ -1967,6 +1967,24 @@ casos que a spec §6 passou a exigir e que nenhuma task acima cria sozinha:
   negativo cross-tenant em `db/tests/`. Se não criou nenhum, escrever isso na
   descrição da PR — ausência declarada, não presumida.
 
+_(auditoria 02/09, R-5)_ — prova por papel e por alcance, que a matriz da
+função pura **não** substitui:
+
+- **Alcance de rota (rodar primeiro)**: `src/lib/patient/prontidao-rotas.test.ts`
+  — para cada `DegrauId`, `DEFINICOES[id].rota("p1")` é `null` ou um caminho
+  que existe em `src/app/(app)/**/page.tsx` e **não** é um `redirect()`.
+  `/diario/[id]` e `/revisao/[id]` viraram redirect na #512; um `href` para lá
+  é botão morto com teste de componente verde.
+- **Página por papel**: `src/app/(app)/pacientes/[id]/layout.test.tsx` e
+  `src/app/(app)/sessoes/[id]/page.test.tsx` montam a página com o `ctx` de
+  cada um dos 4 papéis (`coordenador`, `terapeuta` na equipe, `terapeuta` fora,
+  `admin_recepcao`) e afirmam **qual** gesto primário aparece — ou que nenhum
+  aparece e o texto é "Aguardando coordenação". Quatro casos por superfície,
+  sem exceção: é o teste que faltou na #512.
+- **Caminho feliz e2e**: `e2e/prontidao-do-prontuario.spec.ts` — coordenador
+  prescreve → ativa meta → cartão some → terapeuta (na equipe) documenta.
+  Um cenário; o que interessa é a costura entre as três superfícies.
+
 - [ ] **Step 1: Suíte completa**
 
 ```bash
