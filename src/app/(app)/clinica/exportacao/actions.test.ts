@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { solicitarExportacaoAction } from "./actions";
+import { gerarLinkDownloadAction, solicitarExportacaoAction } from "./actions";
+import { ErroComCopy } from "@/lib/copy/erros";
 import * as tenant from "@/auth/tenant";
 import * as motor from "@/lib/export/acervo/motor";
 
@@ -13,7 +14,7 @@ vi.mock("@/auth/tenant", () => ({
 vi.mock("@/lib/export/acervo/motor", async (importOriginal) => {
   const real =
     await importOriginal<typeof import("@/lib/export/acervo/motor")>();
-  return { ...real, solicitarExportacao: vi.fn() };
+  return { ...real, solicitarExportacao: vi.fn(), gerarLinkDownload: vi.fn() };
 });
 
 const CTX = {
@@ -59,6 +60,24 @@ describe("solicitarExportacaoAction (Task T7)", () => {
     if (!res.ok) {
       expect(res.error).toBe(
         "Já existe uma exportação em andamento para esta clínica.",
+      );
+    }
+    expect(silencio).not.toHaveBeenCalled();
+  });
+
+  it("copy lançada pelo motor no download (ErroComCopy) chega à tela como está (revisão #546)", async () => {
+    vi.mocked(tenant.getTenantContext).mockResolvedValueOnce(CTX);
+    vi.mocked(motor.gerarLinkDownload).mockRejectedValueOnce(
+      new ErroComCopy(
+        "Esta exportação não está mais disponível para download. Solicite uma nova.",
+      ),
+    );
+
+    const res = await gerarLinkDownloadAction("bundle-1");
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error).toBe(
+        "Esta exportação não está mais disponível para download. Solicite uma nova.",
       );
     }
     expect(silencio).not.toHaveBeenCalled();

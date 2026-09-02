@@ -24,6 +24,13 @@ import { codigoPg, constraintPg } from "@/db/pg-error";
  *
  * O que NUNCA entra: `message`, `stack`, o objeto do erro, `params`.
  *
+ * `extra` é responsabilidade do CHAMADOR. O helper garante que só primitivos
+ * passam (objeto é descartado em runtime), mas não inspeciona o conteúdo de
+ * uma string: um e-mail, um CPF ou o corpo serializado de um gateway
+ * entrariam como estão. Regra: `extra` leva identificadores opacos (ids,
+ * contagens, códigos de conjunto fechado como `errors[].code`), nunca texto
+ * livre nem corpo de terceiro — reduza antes de passar.
+ *
  * Sem `server-only` de propósito: componentes client também logam erro de
  * `fetch`/action, e o helper não depende de nada de Node (o sha256 é puro JS
  * porque `node:crypto` não existe no browser e `crypto.subtle` é assíncrono).
@@ -120,12 +127,10 @@ export function descreverErroSemPII(
   return `${cabeca} correlacao=${r.correlacaoId}`;
 }
 
-/**
- * Substitui `console.error(rotulo, err)`. Devolve o `correlacaoId` para o
- * chamador colocar na mensagem ao usuário (`textoErroInterno` em
- * `@/lib/copy/erros`).
- */
-export function logarErroSemPII(
+type Nivel = "error" | "warn";
+
+function emitir(
+  nivel: Nivel,
   rotulo: string,
   err: unknown,
   extra?: ExtraLog,
@@ -149,8 +154,35 @@ export function logarErroSemPII(
       }
     }
   }
-  console.error(rotulo, seguro);
+  if (nivel === "warn") console.warn(rotulo, seguro);
+  else console.error(rotulo, seguro);
   return resumo.correlacaoId;
+}
+
+/**
+ * Substitui `console.error(rotulo, err)`. Devolve o `correlacaoId` para o
+ * chamador colocar na mensagem ao usuário (`textoErroInterno` em
+ * `@/lib/copy/erros`).
+ */
+export function logarErroSemPII(
+  rotulo: string,
+  err: unknown,
+  extra?: ExtraLog,
+): string {
+  return emitir("error", rotulo, err, extra);
+}
+
+/**
+ * Mesmo resumo, em nível `warn` — para falha que degrada (uma faixa
+ * informativa que não carregou) e não quebra o fluxo. O nível é sinal para
+ * quem lê o log; o conteúdo obedece à mesma regra: nunca a `message`.
+ */
+export function logarAvisoSemPII(
+  rotulo: string,
+  err: unknown,
+  extra?: ExtraLog,
+): string {
+  return emitir("warn", rotulo, err, extra);
 }
 
 // ─── sha256 puro (8 hex) ─────────────────────────────────────────────────────

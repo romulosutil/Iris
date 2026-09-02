@@ -4,24 +4,20 @@ import { getTenantContext } from "@/auth/tenant";
 import {
   solicitarExportacao,
   gerarLinkDownload,
-  ExportacaoEmAndamentoError,
-  NaoAutorizadoExportacaoError,
 } from "@/lib/export/acervo/motor";
-import { mensagemDeExcecao } from "@/lib/copy/erros";
+import { ErroComCopy, mensagemDeExcecao } from "@/lib/copy/erros";
 import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 /**
- * S-10 (#531): as duas classes do motor têm message que É copy; qualquer
- * outra exceção (driver, storage) vira dicionário + código de correlação —
- * `err.message` de `DrizzleQueryError` carrega SQL + params.
+ * S-10 (#531): só `ErroComCopy` (as recusas do motor e o "não está mais
+ * disponível" do download estendem essa classe) chega à tela com a própria
+ * message; qualquer outra exceção (driver, storage) vira dicionário + código
+ * de correlação — `err.message` de `DrizzleQueryError` carrega SQL + params.
+ * Uma lista de classes aqui seria o defeito da revisão #546 de novo: a
+ * classe nova que ninguém lembra de acrescentar.
  */
 function erroParaTela(rotulo: string, err: unknown): string {
-  if (
-    err instanceof ExportacaoEmAndamentoError ||
-    err instanceof NaoAutorizadoExportacaoError
-  ) {
-    return err.message;
-  }
+  if (err instanceof ErroComCopy) return err.message;
   return mensagemDeExcecao(err, logarErroSemPII(rotulo, err));
 }
 

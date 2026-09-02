@@ -16,7 +16,7 @@ import { obterSituacaoConta, obterAvisoRecusa } from "./queries";
 import { SignOutButton } from "./sign-out-button";
 import { AppHeader } from "./app-header";
 import { montarNav } from "./nav";
-import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+import { logarAvisoSemPII } from "@/lib/observabilidade/logar-erro";
 
 /**
  * Shell protegido com suporte responsivo a Mobile e Desktop.
@@ -74,7 +74,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       // Sem PII: nada de nome de clínica nem dado de paciente. `clinicId` é
       // aceitável — é o suficiente para localizar o caso sem expor conteúdo.
       // Nem `erro.message` (#531): erro de driver carrega os params da query.
-      logarErroSemPII("[faixa-recusa] falha ao ler aviso de recusa", erro, {
+      logarAvisoSemPII("[faixa-recusa] falha ao ler aviso de recusa", erro, {
         clinicId: ctx.clinicId,
       });
       return null;

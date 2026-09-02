@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   descreverErroSemPII,
   hashCurto,
+  logarAvisoSemPII,
   logarErroSemPII,
   resumirErro,
 } from "./logar-erro";
@@ -150,6 +151,42 @@ describe("resumirErro / descreverErroSemPII", () => {
     expect(descreverErroSemPII(undefined, "abcd1234")).toBe(
       "undefined correlacao=abcd1234",
     );
+  });
+});
+
+describe("extra é responsabilidade do chamador (limite documentado)", () => {
+  it("string passa como está — o helper não inspeciona conteúdo; reduza antes", () => {
+    const espiao = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      logarErroSemPII("x", new Error("y"), { quem: "alguem@exemplo.com" });
+      const [, resumo] = espiao.mock.calls[0]! as [string, { quem: string }];
+      // Não é uma garantia desejável — é o LIMITE do helper, fixado aqui para
+      // que ninguém presuma o contrário: `extra` leva id/código, nunca texto.
+      expect(resumo.quem).toBe("alguem@exemplo.com");
+    } finally {
+      espiao.mockRestore();
+    }
+  });
+});
+
+describe("logarAvisoSemPII", () => {
+  it("vai para console.warn com o mesmo resumo fechado, nunca a message", () => {
+    const erroSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const id = logarAvisoSemPII("[faixa] falhou", erroDeDriver(), {
+        clinicId: "c-1",
+      });
+      expect(erroSpy).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      const [rotulo, resumo] = warnSpy.mock.calls[0]! as [string, unknown];
+      expect(rotulo).toBe("[faixa] falhou");
+      expect(JSON.stringify(resumo)).not.toContain(TEXTO_CLINICO);
+      expect(resumo).toMatchObject({ correlacaoId: id, clinicId: "c-1" });
+    } finally {
+      erroSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
   });
 });
 

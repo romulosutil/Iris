@@ -100,6 +100,33 @@ describe("higienizarEventoSentry", () => {
     expect(JSON.stringify(saida)).not.toContain(TEXTO_CLINICO);
   });
 
+  it("extra e contexts: 'params:' some em qualquer profundidade; o resto fica", () => {
+    const evento = {
+      extra: {
+        erro: { message: MENSAGEM_DRIZZLE, code: "23505", tentativas: 3 },
+        lista: [`a params: ${TEXTO_CLINICO}`, 42, null],
+      },
+      contexts: {
+        query: { sql: `select 1 params: ${TEXTO_CLINICO}`, ok: true },
+        runtime: { name: "node", version: "22" },
+      },
+    };
+    const saida = higienizarEventoSentry(evento, undefined)!;
+    expect(JSON.stringify(saida)).not.toContain(TEXTO_CLINICO);
+    expect(saida.extra.erro).toEqual({
+      message:
+        'Failed query: insert into "session_note" ("texto") values ($1)\nparams: [redigido]',
+      code: "23505",
+      tentativas: 3,
+    });
+    expect(saida.extra.lista).toEqual(["a params: [redigido]", 42, null]);
+    expect(saida.contexts.query).toEqual({
+      sql: "select 1 params: [redigido]",
+      ok: true,
+    });
+    expect(saida.contexts.runtime).toEqual({ name: "node", version: "22" });
+  });
+
   it("nunca descarta o evento (devolve o mesmo objeto)", () => {
     const evento = {};
     expect(higienizarEventoSentry(evento, undefined)).toBe(evento);

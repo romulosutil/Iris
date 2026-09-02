@@ -37,6 +37,13 @@ const config = [
     // stdout do container, e no diário os params são a nota clínica. O
     // helper `logarErroSemPII` registra só nome + SQLSTATE + hash. Testes e
     // stories ficam fora: lá o "erro" é dublê.
+    //
+    // Limite da regra (sintática, não de fluxo de dados): ela casa o
+    // IDENTIFICADOR do erro como argumento direto ou como propriedade de
+    // objeto literal. `console.error(rotulo, err.message)`,
+    // `console.error(String(err))`, um alias (`const falha = err`) ou o erro
+    // dentro de template string passam. A revisão de PR cobre esse resto; a
+    // regra existe para o padrão que estava em 85 lugares.
     files: ["src/app/**/*.{ts,tsx}", "src/lib/**/*.{ts,tsx}"],
     ignores: ["**/*.test.{ts,tsx}", "**/*.stories.{ts,tsx}"],
     rules: {
