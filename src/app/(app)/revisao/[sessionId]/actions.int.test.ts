@@ -48,8 +48,12 @@ describe.skipIf(!hasDb)("revisão de extrações", () => {
     await owner`INSERT INTO app_user (id, email, name) VALUES (${U_T1},'t1@b.com','T1'),(${U_T2},'t2@b.com','T2')`;
     await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES (${U_T1},${CLINIC},'terapeuta'),(${U_T2},${CLINIC},'terapeuta')`;
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES (${PAC}, ${CLINIC}, 'P')`;
-    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, disciplina) VALUES
-      (${SESS}, ${CLINIC}, ${PAC}, ${U_T1}, now(), 'realizada', 'desconhecida')`;
+    // Sessão JÁ consolidada (numero_sequencial_paciente): desde #532 (Q-03)
+    // aprovar/editar antes da consolidação é recusado com SESSAO_SEM_NUMERO —
+    // este arquivo prova a máquina de estados, não essa pré-condição (coberta
+    // em evidence-on-approve / reinforcer-profile-on-approve).
+    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, disciplina, numero_sequencial_paciente) VALUES
+      (${SESS}, ${CLINIC}, ${PAC}, ${U_T1}, now(), 'realizada', 'desconhecida', 1)`;
   });
   afterAll(async () => {
     await owner?.end();
