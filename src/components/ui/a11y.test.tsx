@@ -26,7 +26,7 @@ import { Logo } from "./logo";
 import { Input } from "./input";
 import { Field } from "./field";
 import { Form } from "./form";
-import { StatusBadge, StatusDot } from "./status-badge";
+import { StatusBadge, StatusDot } from "./patterns/status-badge";
 import { Chip, ChipGroup } from "./chip";
 import { Stack, Cluster, Split } from "./layout";
 import {

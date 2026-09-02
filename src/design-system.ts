@@ -42,7 +42,7 @@ export * from "./components/ui/segmented-control";
 export * from "./components/ui/select";
 export * from "./components/ui/slider";
 export * from "./components/ui/stat";
-export * from "./components/ui/status-badge";
+export * from "./components/ui/patterns/status-badge";
 export * from "./components/ui/supervisao-card";
 export * from "./components/ui/table";
 export * from "./components/ui/tabs";

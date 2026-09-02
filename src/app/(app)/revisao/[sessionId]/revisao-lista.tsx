@@ -5,7 +5,7 @@ import { useActionState } from "react";
 import { Stack, Cluster, Split } from "@/components/ui/layout";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { StatusBadge } from "@/components/ui/patterns/status-badge";
 import { ClinicalQuote } from "@/components/ui/clinical-quote";
 import {
   Dialog,

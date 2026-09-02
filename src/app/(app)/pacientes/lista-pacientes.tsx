@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { StatusBadge } from "@/components/ui/patterns/status-badge";
 import { DetalhesExpansiveis } from "@/components/ui/detalhes-expansivel";
 import type { PacienteListItem } from "./queries";
 
