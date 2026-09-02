@@ -62,7 +62,12 @@ vi.mock("@/lib/evidence/materializar", async (importOriginal) => {
     ) => {
       if (falha.ativa) {
         if (falha.antesDeLancar) await falha.antesDeLancar();
-        throw Object.assign(new Error(MENSAGEM_CRUA), { code: "P0001" });
+        // Como o Drizzle embrulha de verdade: SQLSTATE em `cause`, não na
+        // raiz — `detalheDoErro` tem que ler pelos dois caminhos (`codigoPg`).
+        throw Object.assign(new Error(MENSAGEM_CRUA), {
+          name: "DrizzleQueryError",
+          cause: Object.assign(new Error(MENSAGEM_CRUA), { code: "P0001" }),
+        });
       }
       return mod.materializarSnapshot(...args);
     },
@@ -178,6 +183,10 @@ describe.skipIf(!hasDb)("DLQ da revisão — Q-01 (#532)", () => {
     expect(r1.error).toBeTruthy();
     // a mensagem crua (que pode carregar SQL + params) não volta para a UI
     expect(r1.error).not.toContain("SELECT segredo");
+    // o código do driver fica no log, não na tela; só a referência (hash)
+    expect(r1.error).not.toContain("P0001");
+    expect(r1.error).not.toContain("DrizzleQueryError");
+    expect(r1.error).toMatch(/ref [0-9a-f]{12}/);
 
     const [dlq] =
       await owner`SELECT estado, versao, payload_editado FROM extraction WHERE id = ${EX_OK}`;

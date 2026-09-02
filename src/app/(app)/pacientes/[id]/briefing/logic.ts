@@ -71,12 +71,27 @@ type ExtracaoAbcRow = {
  * `payload_editado` (#532, Q-01), ou qualquer lixo — é ignorado, e vale o
  * `payload` da IA; nunca vira "sem severidade" em silêncio.
  */
+const CHAVES_ABC = Object.keys(registroAbcSchema.shape);
+
+/**
+ * `payloadEditado` é rejeitado quando (a) traz a chave `error` — assinatura
+ * do DLQ antigo — ou (b) não tem NENHUMA chave conhecida do registro ABC
+ * (lixo). Fora isso, parse NÃO-strict: uma edição humana legítima com um
+ * campo extra continua vencendo o payload da IA (`.strict()` a descartaria
+ * em silêncio — achado da revisão pós-PR de #532). O schema tem todos os
+ * campos opcionais, por isso a checagem de chaves vem ANTES do parse: sem
+ * ela `{error: msg}` passaria como `{}` e apagaria a severidade.
+ */
+function editadoAbcAceitavel(editado: unknown): boolean {
+  if (typeof editado !== "object" || editado === null) return false;
+  const chaves = Object.keys(editado);
+  if (chaves.includes("error")) return false;
+  return chaves.some((k) => CHAVES_ABC.includes(k));
+}
+
 function conteudoAbcEfetivo(r: ExtracaoAbcRow): RegistroAbcPayload {
-  if (r.payloadEditado != null) {
-    // `.strict()`: o schema do agente tem todos os campos opcionais e o Zod
-    // descarta chaves desconhecidas — sem strict, `{error: msg}` "passaria"
-    // como `{}` e apagaria a severidade em silêncio.
-    const editado = registroAbcSchema.strict().safeParse(r.payloadEditado);
+  if (r.payloadEditado != null && editadoAbcAceitavel(r.payloadEditado)) {
+    const editado = registroAbcSchema.safeParse(r.payloadEditado);
     if (editado.success) return editado.data;
   }
   return (r.payload ?? {}) as RegistroAbcPayload;

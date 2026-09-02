@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireRole, RoleError } from "@/auth/require-role";
+import { codigoPg } from "@/db/pg-error";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { evidence, extraction, reinforcerProfile, session } from "@/db/schema";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
@@ -488,8 +489,10 @@ async function transicionar(
       );
     }
 
+    // Só a referência (hash) chega à tela: o SQLSTATE fica no log — o
+    // terapeuta não tem o que fazer com um código do driver.
     return {
-      error: `Erro de validação clínica (${detalhe.codigo} · ref ${detalhe.hash}). A extração foi marcada como erro de validação; a equipe pode reaprovar depois de corrigida a causa.`,
+      error: `Erro de validação clínica (ref ${detalhe.hash}). A extração foi marcada como erro de validação; a equipe pode reaprovar depois de corrigida a causa.`,
     };
   }
 }
@@ -505,13 +508,14 @@ function detalheDoErro(err: unknown): {
   hash: string;
   quando: string;
 } {
-  const e = err as { code?: unknown; name?: unknown; message?: unknown };
+  // `codigoPg` lê `.code` na raiz OU em `.cause`: o Drizzle embrulha o
+  // `PostgresError` em `DrizzleQueryError` e o SQLSTATE fica em `cause` —
+  // ler só a raiz gravaria "DrizzleQueryError" em toda falha de produção
+  // (achado da revisão pós-PR de #532).
+  const e = err as { name?: unknown; message?: unknown };
   const codigo =
-    typeof e?.code === "string" && e.code
-      ? e.code
-      : typeof e?.name === "string" && e.name
-        ? e.name
-        : "ERRO_DESCONHECIDO";
+    codigoPg(err) ??
+    (typeof e?.name === "string" && e.name ? e.name : "ERRO_DESCONHECIDO");
   const message =
     typeof e?.message === "string" ? e.message : String(err ?? "");
   const hash = createHash("sha256").update(message).digest("hex").slice(0, 12);

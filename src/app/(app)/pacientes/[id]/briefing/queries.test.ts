@@ -101,6 +101,37 @@ describe("alertasGraveDe", () => {
     expect(r[1]?.comportamento).toBe("mordeu");
   });
 
+  // Revisão pós-PR #532: `.strict()` descartaria uma edição humana legítima
+  // com campo extra — a edição tem que continuar vencendo o payload da IA.
+  test("edição humana com campo extra (fora do schema) é preservada — vence o payload da IA", () => {
+    const r = alertasGraveDe([
+      {
+        id: "e1",
+        estado: "editada",
+        payload: { severidade: "grave", comportamento: "sugestão da IA" },
+        payloadEditado: {
+          severidade: "grave",
+          comportamento: "corrigido pelo terapeuta",
+          observacao_livre: "campo que o schema não conhece",
+        },
+        sessionNumero: 46,
+        revisadoEm: null,
+      },
+      {
+        // `error` junto de chave conhecida continua sendo assinatura do DLQ
+        id: "e2",
+        estado: "aprovada",
+        payload: { severidade: "grave", comportamento: "mordeu" },
+        payloadEditado: { error: "x", severidade: "leve" },
+        sessionNumero: 45,
+        revisadoEm: null,
+      },
+    ]);
+    expect(r.map((x) => x.extractionId)).toEqual(["e1", "e2"]);
+    expect(r[0]?.comportamento).toBe("corrigido pelo terapeuta");
+    expect(r[1]?.comportamento).toBe("mordeu");
+  });
+
   test("payloadEditado (edição humana) vence payload original da IA", () => {
     const r = alertasGraveDe([
       {
