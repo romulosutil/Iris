@@ -51,6 +51,7 @@ export function variaveisLidasNoCodigo(raiz = RAIZ): Map<string, string[]> {
       const conteudo = readFileSync(arquivo, "utf8");
       for (const m of conteudo.matchAll(/process\.env\.([A-Z][A-Z0-9_]*)/g)) {
         const nome = m[1];
+        if (!nome) continue;
         const lista = usos.get(nome) ?? [];
         const rel = path.relative(raiz, arquivo).replaceAll("\\", "/");
         if (!lista.includes(rel)) lista.push(rel);
@@ -66,7 +67,7 @@ export function chavesDoEnvExample(raiz = RAIZ): Set<string> {
   const conteudo = readFileSync(path.join(raiz, ".env.example"), "utf8");
   const chaves = new Set<string>();
   for (const m of conteudo.matchAll(/^#?[ \t]*([A-Z][A-Z0-9_]*)=/gm)) {
-    chaves.add(m[1]);
+    if (m[1]) chaves.add(m[1]);
   }
   return chaves;
 }
