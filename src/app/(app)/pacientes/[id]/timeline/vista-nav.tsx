@@ -51,10 +51,10 @@ export function VistaNav({
           cima de `--surface-card`), mas com `<Link>` em vez de `<button>`: a
           vista precisa ter `href` de verdade — clique do meio, abrir em nova
           aba e "voltar" do navegador têm que funcionar. */}
-      <ul
-        role="group"
-        className="inline-flex max-w-full gap-1 overflow-x-auto rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-1 shadow-[var(--ds-shadow)]"
-      >
+      {/* Sem `role="group"` no <ul>: trocar o papel de lista quebra o par
+          <ul>/<li> (axe `listitem`, achado do gate de AC-03). O agrupamento já
+          vem do <nav> rotulado acima. */}
+      <ul className="inline-flex max-w-full gap-1 overflow-x-auto rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-1 shadow-[var(--ds-shadow)]">
         {OPCOES.map(({ vista, rotulo }) => {
           const ativo = vista === vistaAtual;
           return (

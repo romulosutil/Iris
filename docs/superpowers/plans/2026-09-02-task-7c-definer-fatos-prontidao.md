@@ -29,16 +29,16 @@ A Task 7b contornou isso na **fixture** de teste (uma linha de
 
 ## 2. Decisões
 
-| # | Decisão | Racional |
-| - | ------- | -------- |
-| **D-A10** | Um `SECURITY DEFINER` que lê os fatos, com guard interno copiando o predicado de leitura + o recorte de cobertura da `0092`. | É o único caminho que devolve fato VERDADEIRO ao terapeuta legítimo sem afrouxar `goal_select` para todo mundo. |
-| **D-A11** | O guard **NÃO** autoriza `admin_recepcao`, divergindo da `0092` de propósito. | A `0092` escreve `arquivado_em` (dado administrativo, e a recepção arquiva). Esta função devolve estado clínico, que D-A9 proíbe à recepção. Copiar a `0092` inteira aqui reintroduziria o vazamento que D-A9 fechou. |
-| **D-A12** | Assinatura recebe `uuid[]` e devolve `SETOF`, não um paciente por chamada. | A lista `/pacientes` precisa dos mesmos fatos para N pacientes. Uma função escalar viraria N+1, ou obrigaria a lista a manter uma cópia dos seis `EXISTS` — uma terceira semântica de visibilidade, divergente das outras duas no primeiro terapeuta de cobertura. |
-| **D-A13** | Guard reprovado **levanta exceção**, não devolve tudo `false`. | `false` silencioso é exatamente o defeito que este adendo conserta. Erro nomeado é diagnosticável. |
+| #         | Decisão                                                                                                                      | Racional                                                                                                                                                                                                                                                           |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **D-A10** | Um `SECURITY DEFINER` que lê os fatos, com guard interno copiando o predicado de leitura + o recorte de cobertura da `0092`. | É o único caminho que devolve fato VERDADEIRO ao terapeuta legítimo sem afrouxar `goal_select` para todo mundo.                                                                                                                                                    |
+| **D-A11** | O guard **NÃO** autoriza `admin_recepcao`, divergindo da `0092` de propósito.                                                | A `0092` escreve `arquivado_em` (dado administrativo, e a recepção arquiva). Esta função devolve estado clínico, que D-A9 proíbe à recepção. Copiar a `0092` inteira aqui reintroduziria o vazamento que D-A9 fechou.                                              |
+| **D-A12** | Assinatura recebe `uuid[]` e devolve `SETOF`, não um paciente por chamada.                                                   | A lista `/pacientes` precisa dos mesmos fatos para N pacientes. Uma função escalar viraria N+1, ou obrigaria a lista a manter uma cópia dos seis `EXISTS` — uma terceira semântica de visibilidade, divergente das outras duas no primeiro terapeuta de cobertura. |
+| **D-A13** | Guard reprovado **levanta exceção**, não devolve tudo `false`.                                                               | `false` silencioso é exatamente o defeito que este adendo conserta. Erro nomeado é diagnosticável.                                                                                                                                                                 |
 
 ## 3. A migração
 
-`db/migrations/0144_fatos_prontidao_definer.sql`. Entrada manual no
+`db/migrations/0149_fatos_prontidao_definer.sql`. Entrada manual no
 `_journal.json`: `idx: 142`, `when: 1788190225804` (= `1788190224804` da `0141`
 **+ 1000**). `when` menor ou igual ao máximo faz o Drizzle **pular o arquivo em
 silêncio** — foi o que aconteceu com a `0055` em produção (#165).
@@ -117,17 +117,17 @@ GRANT EXECUTE ON FUNCTION app_fatos_prontidao(uuid[]) TO app_role;
 
 ## 5. Prova
 
-| Alvo | Critério |
-| ---- | -------- |
-| cobertura | terapeuta com `session.terapeuta_id = self`, FORA da equipe, lê `tem_meta_ativa = true` |
-| cobertura por `atendido_por_id` | idem, pelo segundo campo que a `0092` reconhece |
-| fora de tudo | terapeuta sem equipe e sem sessão → **exceção**, não `false` |
-| recepção | `admin_recepcao` → **exceção** (D-A11), nunca fatos |
-| cross-tenant | paciente de outra clínica → exceção de isolamento |
-| lote | array com um paciente autorizado e um de outra clínica → exceção, nenhuma linha |
-| guard D16 | `app_clinic_id_exigido()`, nunca `current_setting` cru |
-| guard D23 | `app_fatos_prontidao` entra em `FUNCOES_COM_HELPER` (`db/tests/clinic-id-helper-rls.int.test.ts:273`); a asserção de tamanho passa de 21 para 22 |
-| migração aplicada | conferir em `pg_proc` que a função existe e que `prosecdef` é `true` — `git log` não prova execução |
+| Alvo                            | Critério                                                                                                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| cobertura                       | terapeuta com `session.terapeuta_id = self`, FORA da equipe, lê `tem_meta_ativa = true`                                                          |
+| cobertura por `atendido_por_id` | idem, pelo segundo campo que a `0092` reconhece                                                                                                  |
+| fora de tudo                    | terapeuta sem equipe e sem sessão → **exceção**, não `false`                                                                                     |
+| recepção                        | `admin_recepcao` → **exceção** (D-A11), nunca fatos                                                                                              |
+| cross-tenant                    | paciente de outra clínica → exceção de isolamento                                                                                                |
+| lote                            | array com um paciente autorizado e um de outra clínica → exceção, nenhuma linha                                                                  |
+| guard D16                       | `app_clinic_id_exigido()`, nunca `current_setting` cru                                                                                           |
+| guard D23                       | `app_fatos_prontidao` entra em `FUNCOES_COM_HELPER` (`db/tests/clinic-id-helper-rls.int.test.ts:273`); a asserção de tamanho passa de 21 para 22 |
+| migração aplicada               | conferir em `pg_proc` que a função existe e que `prosecdef` é `true` — `git log` não prova execução                                              |
 
 ## 6. Anti-padrões
 
@@ -158,10 +158,10 @@ modalidade ausente. O fluxo D8/regra 6 estava quebrado em produção pela 7b.
 **Decisão.** A `0144` ganha uma 8ª coluna de retorno, `modalidade
 clinical_modality`. Mesma porta, mesmo guard, nenhuma policy tocada.
 
-| Alternativa | Por que não |
-| ----------- | ----------- |
-| Alargar `patient_select` com o recorte de cobertura | expõe a linha `patient` inteira (PII) a quem precisa de um enum; muda a leitura de paciente para toda a aplicação |
-| Manter o `care_team_membership` na fixture e registrar a lacuna | deixa o fluxo D8/regra 6 quebrado em produção, com teste verde |
+| Alternativa                                                     | Por que não                                                                                                       |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Alargar `patient_select` com o recorte de cobertura             | expõe a linha `patient` inteira (PII) a quem precisa de um enum; muda a leitura de paciente para toda a aplicação |
+| Manter o `care_team_membership` na fixture e registrar a lacuna | deixa o fluxo D8/regra 6 quebrado em produção, com teste verde                                                    |
 
 **Divergências que a decisão assume, nomeadas.** O §7 da spec manda que o guard
 de um definer copie o predicado EXATO da policy de leitura correspondente. Para
@@ -204,7 +204,7 @@ mesmo `when`. Quem acusou foi `src/db/migrations-vs-main.test.ts`, comparando
 com `origin/main`: migração nova com `when` ≤ o maior de `main` fica pulável
 em silêncio pelo próximo hand-migration (#165, #305, #306).
 
-A branch integrou `main` e a nossa virou `0144_fatos_prontidao_definer`, com
+A branch integrou `main` e a nossa virou `0149_fatos_prontidao_definer`, com
 `when` = 1788190227804 (o maior de `main` + 1000). Renumerar foi seguro só
 porque esta migração nunca saiu da máquina de desenvolvimento — editar a tag
 de uma migração já aplicada em produção não reexecuta nada, porque o Drizzle
@@ -230,4 +230,4 @@ aplica por tag.
   onde ela ficava antes da T07b. A T07b a ADIANTOU para antes da primeira
   escrita, porque a régua tem de correr na mesma transação e antes do upsert.
   A resolução mantém a leitura adiantada e o `app_session_definir_numero_
-  sequencial` de `main` — manter as duas seria redeclarar `sess`.
+sequencial` de `main` — manter as duas seria redeclarar `sess`.

@@ -8,7 +8,7 @@ import { Pill } from "./primitives/pill";
 import { ConfidenceCard } from "./patterns/confidence-card";
 import { CompareRow } from "./patterns/compare-row";
 import { BatchBar } from "./patterns/batch-bar";
-import { Calendar } from "./calendar";
+import { CalendarGrid } from "./calendar/calendar-grid";
 import {
   ProtocolProgressBarChart,
   ProtocolTrendChart,
@@ -26,7 +26,7 @@ import { Logo } from "./logo";
 import { Input } from "./input";
 import { Field } from "./field";
 import { Form } from "./form";
-import { StatusBadge, StatusDot } from "./status-badge";
+import { StatusBadge, StatusDot } from "./patterns/status-badge";
 import { Chip, ChipGroup } from "./chip";
 import { Stack, Cluster, Split } from "./layout";
 import {
@@ -55,6 +55,8 @@ import { Progress } from "./progress";
 import { Avatar, AvatarFallback, AvatarGroup } from "./avatar";
 import { Stat } from "./stat";
 import { CopyButton } from "./patterns/copy-button";
+import { MarcoStatus } from "./patterns/marco-status";
+import { BarraProgressoEpistemica } from "./patterns/barra-progresso-epistemica";
 
 afterEach(cleanup);
 
@@ -580,9 +582,9 @@ test("BatchBar — sem violações axe", async () => {
   );
 });
 
-test("Calendar.Grid (escala Dia) — sem violações axe", async () => {
+test("CalendarGrid (escala Dia) — sem violações axe", async () => {
   await semViolacoes(
-    <Calendar.Grid
+    <CalendarGrid
       modo="daily-resources"
       recursos={[{ id: "t1", nome: "Dra. Beatriz", subtitulo: "Fono" }]}
       sessoes={[
@@ -600,6 +602,7 @@ test("Calendar.Grid (escala Dia) — sem violações axe", async () => {
       abertura="08:00"
       fechamento="10:00"
       passoMin={60}
+      fuso="America/Sao_Paulo"
     />,
   );
 });
@@ -646,5 +649,43 @@ test("MicroConquistaBadge — sem violações axe", async () => {
     <MicroConquistaBadge icon="sparkle">
       Marco VB-MAPP Conquistado!
     </MicroConquistaBadge>,
+  );
+});
+
+test("MarcoStatus — 3 estados (glifo nomeado) sem violações axe", async () => {
+  await semViolacoes(
+    <ul>
+      <li>
+        <MarcoStatus
+          estado="conquistado"
+          nome="Pede item preferido"
+          nivel="1"
+        />
+      </li>
+      <li>
+        <MarcoStatus
+          estado="candidato"
+          nome="Pede com duas palavras"
+          nivel="2"
+        />
+      </li>
+      <li>
+        <MarcoStatus estado="nao_atingido" nome="Pede informação" />
+      </li>
+      <li>
+        <MarcoStatus estado="candidato" nome="Imita gesto" rotuloVisivel />
+      </li>
+    </ul>,
+  );
+});
+
+test("BarraProgressoEpistemica — sem violações axe", async () => {
+  await semViolacoes(
+    <BarraProgressoEpistemica
+      rotulo="Domínio mando"
+      total={6}
+      conquistados={3}
+      candidatos={1}
+    />,
   );
 });

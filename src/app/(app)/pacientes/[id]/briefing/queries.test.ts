@@ -74,6 +74,64 @@ describe("alertasGraveDe", () => {
     expect(r).toEqual([]);
   });
 
+  // #532 (Q-01): o DLQ antigo gravava `{error: msg}` em `payload_editado`.
+  // Um objeto fora do formato de registro ABC NÃO pode mascarar o alerta
+  // grave que a IA sugeriu — é ignorado e vale o `payload`.
+  test("payloadEditado fora do formato (ex.: {error} legado do DLQ) é ignorado — vale o payload original", () => {
+    const r = alertasGraveDe([
+      {
+        id: "e1",
+        estado: "aprovada",
+        payload: { severidade: "grave", comportamento: "bateu a cabeça" },
+        payloadEditado: { error: "insert into evidence ... params" },
+        sessionNumero: 46,
+        revisadoEm: null,
+      },
+      {
+        id: "e2",
+        estado: "editada",
+        payload: { severidade: "grave", comportamento: "mordeu" },
+        payloadEditado: { severidade: "GRAVE" }, // enum inválido → fora do formato
+        sessionNumero: 45,
+        revisadoEm: null,
+      },
+    ]);
+    expect(r.map((x) => x.extractionId)).toEqual(["e1", "e2"]);
+    expect(r[0]?.comportamento).toBe("bateu a cabeça");
+    expect(r[1]?.comportamento).toBe("mordeu");
+  });
+
+  // Revisão pós-PR #532: `.strict()` descartaria uma edição humana legítima
+  // com campo extra — a edição tem que continuar vencendo o payload da IA.
+  test("edição humana com campo extra (fora do schema) é preservada — vence o payload da IA", () => {
+    const r = alertasGraveDe([
+      {
+        id: "e1",
+        estado: "editada",
+        payload: { severidade: "grave", comportamento: "sugestão da IA" },
+        payloadEditado: {
+          severidade: "grave",
+          comportamento: "corrigido pelo terapeuta",
+          observacao_livre: "campo que o schema não conhece",
+        },
+        sessionNumero: 46,
+        revisadoEm: null,
+      },
+      {
+        // `error` junto de chave conhecida continua sendo assinatura do DLQ
+        id: "e2",
+        estado: "aprovada",
+        payload: { severidade: "grave", comportamento: "mordeu" },
+        payloadEditado: { error: "x", severidade: "leve" },
+        sessionNumero: 45,
+        revisadoEm: null,
+      },
+    ]);
+    expect(r.map((x) => x.extractionId)).toEqual(["e1", "e2"]);
+    expect(r[0]?.comportamento).toBe("corrigido pelo terapeuta");
+    expect(r[1]?.comportamento).toBe("mordeu");
+  });
+
   test("payloadEditado (edição humana) vence payload original da IA", () => {
     const r = alertasGraveDe([
       {

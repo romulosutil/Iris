@@ -280,6 +280,80 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     expect(r.aviso).toBeUndefined();
   });
 
+  // ── DA-02 (#535): rastreio da chamada de IA chega ao banco ──────────────
+  test("DA-02 · consolidar grava modelo, prompt_versao, latencia_ms e tokens do provider", async () => {
+    await owner`DELETE FROM extraction WHERE session_id = ${SESS}`;
+    const { resolveProvider } = await import("@/lib/extraction/provider");
+    vi.mocked(resolveProvider).mockReturnValueOnce({
+      modelo: "gemini-fake",
+      extrair: async () => ({
+        drafts: [
+          {
+            subtipo: "evidencia",
+            trechoFonte: "Pediu água apontando",
+            confianca: "alta",
+            inconsistenteComHistorico: false,
+            parContrasteId: null,
+            payload: { alvos: [], polaridade: "positiva" },
+            estado: "sugerida",
+          },
+        ],
+        alertaRisco: null,
+        meta: {
+          modelo: "gemini-fake",
+          promptVersao: "abc123def456",
+          latenciaMs: 1234,
+          tokensEntrada: 500,
+          tokensSaida: 40,
+        },
+      }),
+    });
+    const { consolidarSessao } = await import("./logic");
+    const r = await consolidarSessao(ctxT1, {
+      sessionId: SESS,
+      texto: "Pediu água apontando. Rastreio DA-02.",
+    });
+    expect(r.error).toBeUndefined();
+    const ex =
+      await owner`SELECT estado, modelo, prompt_versao, latencia_ms, tokens_entrada, tokens_saida FROM extraction WHERE session_id = ${SESS}`;
+    expect(ex).toHaveLength(1);
+    expect(ex[0]).toMatchObject({
+      estado: "sugerida",
+      modelo: "gemini-fake",
+      prompt_versao: "abc123def456",
+      latencia_ms: 1234,
+      tokens_entrada: 500,
+      tokens_saida: 40,
+    });
+  });
+
+  test("DA-02/A-03 · provider que falha grava latencia_ms e modelo na linha pendente_reprocessamento", async () => {
+    await owner`DELETE FROM extraction WHERE session_id = ${SESS}`;
+    const { resolveProvider } = await import("@/lib/extraction/provider");
+    vi.mocked(resolveProvider).mockReturnValueOnce({
+      modelo: "gemini-fake",
+      extrair: async () => {
+        await new Promise((r) => setTimeout(r, 30));
+        throw Object.assign(new Error("503 overloaded"), { status: 503 });
+      },
+    });
+    const { consolidarSessao, AVISO_EXTRACAO_FALHOU } = await import("./logic");
+    const r = await consolidarSessao(ctxT1, {
+      sessionId: SESS,
+      texto: "Nota cuja extração falhou — latência ainda assim medida.",
+    });
+    expect(r.aviso).toBe(AVISO_EXTRACAO_FALHOU);
+    const ex =
+      await owner`SELECT estado, modelo, prompt_versao, latencia_ms, tokens_entrada FROM extraction WHERE session_id = ${SESS}`;
+    expect(ex).toHaveLength(1);
+    expect(ex[0]!.estado).toBe("pendente_reprocessamento");
+    expect(ex[0]!.modelo).toBe("gemini-fake");
+    expect(ex[0]!.latencia_ms).toBeGreaterThanOrEqual(30);
+    // não houve resposta: sem prompt/tokens — `null`, não zero
+    expect(ex[0]!.prompt_versao).toBeNull();
+    expect(ex[0]!.tokens_entrada).toBeNull();
+  });
+
   test("clínica demo gera extrações sugeridas ao consolidar", async () => {
     await owner`UPDATE clinic SET is_demo = true WHERE id = ${CLINIC_A}`;
     const { consolidarSessao } = await import("./logic");
@@ -288,9 +362,12 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       texto: "Pediu água. Falou 'á' sozinho. Não respondeu depois.",
     });
     const ex =
-      await owner`SELECT estado FROM extraction WHERE session_id = ${SESS}`;
+      await owner`SELECT estado, modelo, latencia_ms FROM extraction WHERE session_id = ${SESS}`;
     expect(ex.length).toBeGreaterThanOrEqual(1);
     expect(ex.every((e) => e.estado === "sugerida")).toBe(true);
+    // DA-02: dado de demonstração nunca se confunde com modelo real
+    expect(ex.every((e) => e.modelo === "stub")).toBe(true);
+    expect(ex.every((e) => typeof e.latencia_ms === "number")).toBe(true);
     await owner`UPDATE clinic SET is_demo = false WHERE id = ${CLINIC_A}`;
   });
 

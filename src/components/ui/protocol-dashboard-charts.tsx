@@ -92,7 +92,7 @@ export function ProtocolProgressBarChart({
             title={`${metasDominadas} metas dominadas (${pctDominadas}%)`}
           >
             {pctDominadas >= 12 && (
-              <span className="truncate px-1 font-mono text-[10px] font-bold">
+              <span className="truncate px-1 font-mono text-xs font-bold">
                 {metasDominadas}
               </span>
             )}
@@ -110,7 +110,7 @@ export function ProtocolProgressBarChart({
             title={`${metasSugeridasIA} sugestões IA candidatas a domínio (${pctSugeridas}%)`}
           >
             {pctSugeridas >= 12 && (
-              <span className="bg-surface-card/90 text-status-ia-fg truncate rounded px-1 font-mono text-[10px] font-bold">
+              <span className="bg-surface-card/90 text-status-ia-fg truncate rounded px-1 font-mono text-xs font-bold">
                 +{metasSugeridasIA}
               </span>
             )}
@@ -369,7 +369,7 @@ export function ProtocolTrendChart({
                   x={x}
                   y={height - 10}
                   textAnchor="middle"
-                  className="text-text-secondary fill-current font-mono text-[10px]"
+                  className="text-text-secondary fill-current font-mono text-xs"
                 >
                   S{ponto.sessaoNumero}
                 </text>

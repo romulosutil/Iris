@@ -142,7 +142,7 @@ export default async function SuperAdminClinicasPage({
                         </span>
                         {c.status === "trial" &&
                           c.diasTrialRestantes !== null && (
-                            <span className="font-mono text-[10px] text-amber-400">
+                            <span className="font-mono text-xs text-amber-400">
                               {c.diasTrialRestantes} dias rest.
                             </span>
                           )}

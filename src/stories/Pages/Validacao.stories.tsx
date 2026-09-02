@@ -2,7 +2,7 @@ import type { Meta } from "@storybook/nextjs-vite";
 import { Header } from "@/components/ui/header";
 import { Container, Stack, Cluster } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { StatusBadge } from "@/components/ui/patterns/status-badge";
 import { Button } from "@/components/ui/button";
 
 const meta = {

@@ -5,6 +5,7 @@ import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import type { PdfRenderer } from "@/lib/report/renderer";
 import { exportReport } from "@/lib/report/export";
+import { erroDeActionSeRenderOcupado } from "@/lib/report/render-lock";
 import { buildConvenioBrutoPayload } from "@/lib/report/convenio-bruto/build-payload";
 import { buildConvenioBrutoHtml } from "@/lib/report/convenio-bruto/build-html";
 import type { PayloadConvenioBruto } from "@/lib/report/convenio-bruto/types";
@@ -34,25 +35,33 @@ export async function exportarConvenioBruto(
   }
   const { patientId, nomePaciente, periodoInicio, periodoFim } = parsed.data;
 
-  return withTenant(ctx, async (tx) => {
-    const payload = await buildConvenioBrutoPayload(tx, {
-      patientId,
-      nomePaciente,
-      periodoInicio,
-      periodoFim,
-    });
-    const rows = (await tx.execute(sql`
+  try {
+    return await withTenant(ctx, async (tx) => {
+      const payload = await buildConvenioBrutoPayload(tx, {
+        patientId,
+        nomePaciente,
+        periodoInicio,
+        periodoFim,
+      });
+      const rows = (await tx.execute(sql`
       INSERT INTO report (clinic_id, patient_id, tipo, periodo_inicio, periodo_fim, status, payload, gerado_por_ia)
       VALUES (${ctx.clinicId}::uuid, ${patientId}::uuid, 'convenio_bruto', ${periodoInicio}::date, ${periodoFim}::date, 'rascunho', ${JSON.stringify(payload)}::jsonb, false)
       RETURNING id
     `)) as unknown as Array<{ id: string }>;
-    const reportId = rows[0]!.id;
-    const { hash } = await exportReport(tx, {
-      reportId,
-      atorId: ctx.userId,
-      buildHtml: (pl) => buildConvenioBrutoHtml(pl as PayloadConvenioBruto),
-      renderer,
+      const reportId = rows[0]!.id;
+      const { hash } = await exportReport(tx, {
+        reportId,
+        atorId: ctx.userId,
+        buildHtml: (pl) => buildConvenioBrutoHtml(pl as PayloadConvenioBruto),
+        renderer,
+      });
+      return { reportId, hash };
     });
-    return { reportId, hash };
-  });
+  } catch (err) {
+    // PF-02 (#538): semáforo do PDF estourou o teto de espera → contrato de
+    // erro da action com a copy amigável, em vez de 500.
+    const ocupado = erroDeActionSeRenderOcupado(err);
+    if (ocupado) return ocupado;
+    throw err;
+  }
 }

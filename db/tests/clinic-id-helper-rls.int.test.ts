@@ -430,6 +430,8 @@ const DEFINERS_GLOBAIS_JUSTIFICADOS: Record<string, string> = {
     "RETURNS void: levanta P0001 se algum destinatário de notificação não pertence ao tenant informado (0105, regra de ouro §4.2.1). Guard de escrita chamado com o clinic_id da própria linha do alerta; não devolve dado, só bloqueia.",
   app_destinatarios_fora_do_tenant:
     "Devolve, dos uuids de usuário que o chamador JÁ passou, quais NÃO têm user_role no clinic_id passado (0105). 1 bit de membership por uuid conhecido, sem nome/e-mail/PHI. É o predicado de app_assert_destinatarios_no_tenant.",
+  app_job_heartbeat_gravar:
+    "RETURNS void: UPSERT em job_heartbeat (0146, #536) — tabela sem clinic_id e sem PHI (só job, dois timestamptz e detalhe truncado a 200, que os helpers preenchem só com contagens/name+code). Valida por dentro o mapa job→role com pg_has_role(session_user, …): app_role só grava billing/conciliacao/exportacao/asr/asr-sweeper; retencao/arquivamento/escalonamento/expurgo-audit-log exigem a role de job; fora do mapa é P0001. Provado em db/tests/job-heartbeat-rls.int.test.ts (casos 5, 6, 7 e 10).",
   app_materializar_snapshot:
     "DEPRECATED (#392): corpo é só RAISE NOTICE, não lê nem escreve tabela alguma. Mantida por compatibilidade de assinatura; remover a função é migração própria, fora do #529.",
   app_session_sob_sigilo:
@@ -690,7 +692,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
         20,
       );
     }
-    expect(Object.keys(DEFINERS_GLOBAIS_JUSTIFICADOS).length).toBe(5);
+    expect(Object.keys(DEFINERS_GLOBAIS_JUSTIFICADOS).length).toBe(6);
   });
 
   // ─── 2c. D23: guards de papel e identidade (0093) ──────────────────────────

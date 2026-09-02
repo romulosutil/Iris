@@ -44,6 +44,7 @@
  * Uso:  pnpm backfill:evidence
  */
 import postgres from "postgres";
+import { assertScriptRemotoPermitido } from "./lib/guardrail-conexao.mjs";
 import {
   type Alvo,
   postgresResolverQueries,
@@ -77,6 +78,9 @@ async function main() {
   if (!url) throw new Error("MIGRATION_DATABASE_URL não definida");
   // Conexão owner (bypassa RLS) — backfill é operação administrativa
   // cross-clinic, mesmo padrão de acesso usado pelas migrations/seed do owner.
+  // Por isso mesmo, fail-closed fora de localhost: banco remoto só com
+  // ALLOW_SEED_REMOTE=true explícito (#534).
+  assertScriptRemotoPermitido(url, { rotulo: "backfill-evidence" });
   const sql = postgres(url, { max: 1 });
 
   const extracoes = await sql<ExtractionRow[]>`

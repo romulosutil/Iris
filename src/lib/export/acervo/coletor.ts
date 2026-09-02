@@ -72,6 +72,9 @@ export const TABELAS_EXPORTADAS_BINARIAS = ["report_pdf"] as const;
  * Verificada por teste que varre o ZIP montado.
  */
 export const TABELAS_NEGADAS = [
+  // #536 — sinal de vida dos jobs de infra: sem clinic_id, sem dado de
+  // titular; não é acervo de ninguém.
+  "job_heartbeat",
   "auth_account",
   "auth_session",
   "auth_verification",

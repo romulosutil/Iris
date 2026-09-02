@@ -33,9 +33,11 @@ describe("resolveProvider", () => {
   test("produção COM flag + chave habilitada usa o LlmExtractionProvider real", () => {
     process.env.EXTRACTION_LLM_ENABLED = "true";
     process.env.GOOGLE_API_KEY = "AIza-test";
-    expect(resolveProvider({ isDemo: false })).toBeInstanceOf(
-      LlmExtractionProvider,
-    );
+    const provider = resolveProvider({ isDemo: false });
+    expect(provider).toBeInstanceOf(LlmExtractionProvider);
+    // DA-02: o provider sabe qual modelo chama — é o que a linha
+    // `pendente_reprocessamento` grava quando a chamada falha.
+    expect(provider.modelo).toBe(modeloDeExtracao());
   });
 
   test("flag ligada mas SEM chave cai no NullProvider (não chama LLM sem credencial)", () => {
@@ -76,10 +78,13 @@ describe("modeloDeExtracao", () => {
 
 describe("NullProvider", () => {
   test("não gera sugestão; marca a extração como pendente de reprocessamento", async () => {
-    const { drafts } = await new NullProvider().extrair(ctx);
+    const { drafts, meta } = await new NullProvider().extrair(ctx);
     expect(drafts).toHaveLength(1);
     expect(drafts[0]!.estado).toBe("pendente_reprocessamento");
     expect(drafts[0]!.subtipo).toBe("pendente");
+    // DA-02: nenhum modelo foi chamado — `null` é honesto, não "0 tokens".
+    expect(meta?.modelo).toBeNull();
+    expect(meta?.tokensEntrada).toBeNull();
   });
 });
 
@@ -93,5 +98,12 @@ describe("DemoStubProvider", () => {
     expect(again.length).toBe(drafts.length);
     // trecho_fonte vem do texto da nota (fatia real, não inventada)
     expect(ctx.notaConsolidada).toContain(drafts[0]!.trechoFonte);
+  });
+
+  test("DA-02: meta identifica o stub como modelo ('stub'), sem tokens", async () => {
+    const { meta } = await new DemoStubProvider().extrair(ctx);
+    expect(meta?.modelo).toBe("stub");
+    expect(meta?.tokensEntrada).toBeNull();
+    expect(meta?.tokensSaida).toBeNull();
   });
 });

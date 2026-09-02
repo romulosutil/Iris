@@ -1014,7 +1014,42 @@
       "idx": 144,
       "version": "7",
       "when": 1788190227804,
-      "tag": "0144_fatos_prontidao_definer",
+      "tag": "0144_erro_validacao_detalhe",
+      "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1788190228804,
+      "tag": "0145_expurgo_audit_log_por_finalidade",
+      "breakpoints": true
+    },
+    {
+      "idx": 146,
+      "version": "7",
+      "when": 1788190229804,
+      "tag": "0146_job_heartbeat",
+      "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "7",
+      "when": 1788190230804,
+      "tag": "0147_extraction_rastreio_ia",
+      "breakpoints": true
+    },
+    {
+      "idx": 148,
+      "version": "7",
+      "when": 1788190231804,
+      "tag": "0148_metricas_extracao_view",
+      "breakpoints": true
+    },
+    {
+      "idx": 149,
+      "version": "7",
+      "when": 1788190232804,
+      "tag": "0149_fatos_prontidao_definer",
       "breakpoints": true
     }
   ]

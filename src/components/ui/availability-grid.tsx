@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
+import { CalendarGrid } from "@/components/ui/calendar/calendar-grid";
 
 export type AvailabilityGridProps = {
   passoMin?: number;
@@ -13,6 +13,8 @@ export type AvailabilityGridProps = {
   onCelulasChange?: (celulas: Set<string>) => void;
   onSalvar?: () => void;
   salvando?: boolean;
+  /** Fuso IANA da clínica — repassado à CalendarGrid, que o exige (#538). */
+  fuso: string;
 };
 
 export function AvailabilityGrid({
@@ -24,6 +26,7 @@ export function AvailabilityGrid({
   onCelulasChange,
   onSalvar,
   salvando = false,
+  fuso,
 }: AvailabilityGridProps) {
   const [interno, setInterno] = React.useState<Set<string>>(
     () => celulasProps ?? celulasIniciais ?? new Set<string>(),
@@ -98,8 +101,9 @@ export function AvailabilityGrid({
       </div>
 
       {/* Grade de Matriz de Disponibilidade */}
-      <Calendar.Grid
+      <CalendarGrid
         modo="availability-matrix"
+        fuso={fuso}
         abertura={abertura}
         fechamento={fechamento}
         passoMin={passoMin}

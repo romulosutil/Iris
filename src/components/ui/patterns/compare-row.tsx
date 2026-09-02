@@ -70,7 +70,7 @@ export function CompareRow({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {/* Dado anterior */}
         <div className="bg-surface-elevated/40 flex flex-col gap-1 rounded p-2.5">
-          <span className="text-text-secondary text-[11px] font-medium">
+          <span className="text-text-secondary text-xs font-medium">
             Histórico Anterior {dataAnterior ? `(${dataAnterior})` : ""}
           </span>
           <div className="text-text-primary text-sm font-medium">
@@ -87,7 +87,7 @@ export function CompareRow({
               : "bg-surface-elevated/40",
           )}
         >
-          <span className="text-text-secondary text-[11px] font-medium">
+          <span className="text-text-secondary text-xs font-medium">
             Nova Sugestão {dataSugerida ? `(${dataSugerida})` : ""}
           </span>
           <div className="text-text-primary text-sm font-semibold">

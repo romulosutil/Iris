@@ -18,8 +18,12 @@ import {
   assertPodeDocumentar,
   ProntuarioIncompletoError,
 } from "@/lib/patient/assert-pode-documentar";
-import { resolveProvider } from "@/lib/extraction/provider";
-import type { ExtractionDraft } from "@/lib/extraction/provider";
+import { META_SEM_MODELO, resolveProvider } from "@/lib/extraction/provider";
+import type {
+  ExtractionDraft,
+  ExtractionMeta,
+} from "@/lib/extraction/provider";
+import { statusHttpDoErro } from "@/lib/extraction/resiliencia";
 import type { AlertaRiscoAgente } from "@/lib/extraction/agent-output-schema";
 import {
   registrarAlertaRisco,
@@ -809,10 +813,21 @@ async function consolidarSessaoCore(
 
     // ── Fase B: chama o provider (LLM) FORA da transação — não segura conexão
     //    nem locks durante a chamada de vários segundos.
+    //    A-03 (#535): timeout de 45 s + 1 retry vivem DENTRO do provider real
+    //    (LlmExtractionProvider → resiliencia.ts); aqui só se mede o tempo de
+    //    parede e se grava o resultado — inclusive na falha.
     const provider = resolveProvider({ isDemo: prep.isDemo });
     let drafts: ExtractionDraft[];
     let alertaRisco: AlertaRiscoAgente | null = null;
     let avisoExtracao: string | undefined;
+    // DA-02 (#535): meta da chamada. Começa com o que se sabe ANTES de chamar
+    // (o modelo que o provider usa) para a linha `pendente_reprocessamento`
+    // da falha também dizer qual modelo falhou e quanto tempo levou.
+    let metaExtracao: ExtractionMeta = {
+      ...META_SEM_MODELO,
+      modelo: provider.modelo ?? null,
+    };
+    const inicioExtracao = Date.now();
     try {
       const saida = await provider.extrair({
         sessionId: sid,
@@ -823,8 +838,23 @@ async function consolidarSessaoCore(
       });
       drafts = saida.drafts;
       alertaRisco = saida.alertaRisco;
+      metaExtracao = {
+        ...metaExtracao,
+        ...saida.meta,
+        latenciaMs: saida.meta?.latenciaMs ?? Date.now() - inicioExtracao,
+      };
     } catch (err) {
-      console.error("extração falhou (marcando pendente):", err);
+      metaExtracao.latenciaMs = Date.now() - inicioExtracao;
+      // Só nome/status/código: a message de um erro de driver carrega SQL +
+      // params (PHI) e a de um SDK pode carregar o corpo da requisição.
+      const e = err as { name?: unknown; code?: unknown } | null;
+      console.error("extração falhou (marcando pendente):", {
+        name: typeof e?.name === "string" ? e.name : typeof err,
+        status: statusHttpDoErro(err),
+        code: typeof e?.code === "string" ? e.code : null,
+        modelo: metaExtracao.modelo,
+        latenciaMs: metaExtracao.latenciaMs,
+      });
       drafts = [PENDENTE_DRAFT];
       avisoExtracao = AVISO_EXTRACAO_FALHOU;
     }
@@ -861,6 +891,14 @@ async function consolidarSessaoCore(
             inconsistenteComHistorico: d.inconsistenteComHistorico,
             parContrasteId: d.parContrasteId,
             payload: d.payload as object,
+            // DA-02 (#535): mesma meta para todas as linhas da chamada — a
+            // chamada é uma só; a linha de falha (pendente) leva modelo +
+            // latência e fica sem prompt/tokens (não houve resposta).
+            modelo: metaExtracao.modelo,
+            promptVersao: metaExtracao.promptVersao,
+            latenciaMs: metaExtracao.latenciaMs,
+            tokensEntrada: metaExtracao.tokensEntrada,
+            tokensSaida: metaExtracao.tokensSaida,
           })),
         )
         .returning({ id: extraction.id });

@@ -5,72 +5,23 @@
  * padrão contra bancos de dados remotos (staging / produção), exigindo que o host
  * seja local (localhost / 127.0.0.1 / ::1) ou que a flag explícita
  * ALLOW_SEED_REMOTE=true esteja configurada.
+ *
+ * A lógica de host mora em `guardrail-conexao.mjs` (#534) — o guard genérico
+ * `assertScriptRemotoPermitido` cobre qualquer script com role privilegiada,
+ * inclusive os `.mjs` que rodam com `node` puro. Este módulo mantém a API e
+ * as mensagens do D52 por cima dela.
  */
 
-const LOCAL_HOSTNAMES = new Set([
-  "localhost",
-  "127.0.0.1",
-  "::1",
-  "0.0.0.0",
-  "localhost.localdomain",
-]);
+import {
+  extractDatabaseHost,
+  isLocalDatabaseHost,
+} from "./guardrail-conexao.mjs";
 
-/**
- * Extrai o hostname normalizado (em minúsculas, sem colchetes IPv6) de uma connection string Postgres.
- */
-export function extractDatabaseHost(connectionString: string): string {
-  if (!connectionString || typeof connectionString !== "string") {
-    throw new Error(
-      "Connection string de banco de dados não informada ou inválida.",
-    );
-  }
-
-  const trimmed = connectionString.trim();
-
-  // 1. Tentar parsear como URL padrão (postgres:// ou postgresql://)
-  try {
-    const parsed = new URL(trimmed);
-    let host = parsed.hostname.toLowerCase();
-    if (host.startsWith("[") && host.endsWith("]")) {
-      host = host.slice(1, -1);
-    }
-    if (host) return host;
-  } catch {
-    // 2. Fallback para formato libpq key-value (ex: "host=localhost port=5432 dbname=iris")
-    const match = /(?:^|\s)host=([^\s]+)/i.exec(trimmed);
-    if (match && match[1]) {
-      let host = match[1].toLowerCase();
-      if (host.startsWith("[") && host.endsWith("]")) {
-        host = host.slice(1, -1);
-      }
-      return host;
-    }
-  }
-
-  throw new Error(
-    `Não foi possível determinar o host a partir da connection string: "${connectionString}"`,
-  );
-}
-
-/**
- * Verifica se um hostname corresponde a uma interface local / loopback.
- */
-export function isLocalDatabaseHost(host: string): boolean {
-  if (!host || typeof host !== "string") return false;
-  const normalized = host
-    .toLowerCase()
-    .trim()
-    .replace(/^\[|\]$/g, "");
-  return LOCAL_HOSTNAMES.has(normalized);
-}
-
-/**
- * Verifica se a connection string aponta para um banco de dados local.
- */
-export function isLocalDatabase(connectionString: string): boolean {
-  const host = extractDatabaseHost(connectionString);
-  return isLocalDatabaseHost(host);
-}
+export {
+  extractDatabaseHost,
+  isLocalDatabase,
+  isLocalDatabaseHost,
+} from "./guardrail-conexao.mjs";
 
 /**
  * Valida o guardrail de ambiente para scripts de seed.

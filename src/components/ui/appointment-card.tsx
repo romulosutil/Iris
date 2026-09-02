@@ -6,7 +6,7 @@ import {
   StatusBadge,
   type BadgesVariantes,
   type EstadoDado,
-} from "@/components/ui/status-badge";
+} from "@/components/ui/patterns/status-badge";
 import { Button } from "@/components/ui/button";
 
 export interface AppointmentCardProps extends React.HTMLAttributes<HTMLDivElement> {

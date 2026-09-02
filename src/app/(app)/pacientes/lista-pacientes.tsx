@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { StatusBadge } from "@/components/ui/patterns/status-badge";
 import { DetalhesExpansiveis } from "@/components/ui/detalhes-expansivel";
 import type { PacienteListItem } from "./queries";
 
@@ -41,7 +41,7 @@ export function ListaPacientes({
                       incompleto não fique invisível para quem cadastrou e saiu
                       da tela — o texto carrega o estado, a cor só reforça. */}
                   {p.temPrescricao ? null : (
-                    <span className="rounded-[var(--radius-pill)] border border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] px-2 py-0.5 font-mono text-[10px] font-semibold text-[var(--status-warning-fg)] uppercase">
+                    <span className="rounded-[var(--radius-pill)] border border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] px-2 py-0.5 font-mono text-xs font-semibold text-[var(--status-warning-fg)] uppercase">
                       Sem prescrição
                     </span>
                   )}
@@ -55,7 +55,7 @@ export function ListaPacientes({
                   {p.proximoPasso ? (
                     <span
                       data-testid="pill-prontidao"
-                      className="rounded-[var(--radius-pill)] border border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] px-2 py-0.5 font-mono text-[10px] font-semibold text-[var(--status-warning-fg)] uppercase"
+                      className="rounded-[var(--radius-pill)] border border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] px-2 py-0.5 font-mono text-xs font-semibold text-[var(--status-warning-fg)] uppercase"
                     >
                       {p.proximoPasso}
                     </span>

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { Stack, Cluster, Split, Grid, Container } from "./layout";
-import { StatusBadge } from "./status-badge";
+import { StatusBadge } from "./patterns/status-badge";
 import { Chip } from "./chip";
 import { Button } from "./button";
 import { Header } from "./header";
