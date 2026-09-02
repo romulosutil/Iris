@@ -23,16 +23,16 @@ tela ad hoc (`U-03`), não como afirmação falsa; a spec enxergou melhor ali.
 
 O que existe é **sobreposição de família**, não de achado:
 
-| Achado | Relação com a spec | Status após reavaliação |
-| --- | --- | --- |
-| `Q-01` DLQ grava `{error}` em `payload_editado` e reaprova sem evidência | Mesma família de `erro-renderizado-como-empty-state` (§4 da spec): falha vira conteúdo clínico. A spec aplica o princípio ao cartão novo e **não toca** `revisao/[sessionId]/logic.ts`. | NOVO / P1 — inalterado |
-| `PR-06` `mapa-jornadas-gaps.md` defasado | A spec §1.2 confirma que a **jornada** de admissão está incompleta (D1–D3), refinando a frase "admissão implementada" do relatório: a entidade existe, a escada não. A spec não atualiza o mapa. | NOVO / P3 — inalterado, texto anotado |
-| `U-03` linha do tempo ad hoc | A spec §5 troca o estado vazio de `pacientes/[id]/page.tsx` pelo cartão; `timeline-client.tsx` (972 linhas, paleta crua, `title=`) continua como está. | NOVO / P2 — inalterado |
-| `A-02` regra em rota, rota importa rota | A spec põe `prontidao-queries.ts` em `pacientes/[id]/` e o plano o importa de `sessoes/[id]/queries.ts` (`../../pacientes/[id]/prontidao-queries`). Acrescenta um caso ao achado. | NOVO / P3 — inalterado |
-| `Q-04` sem teste de alcance / e2e por papel | Três superfícies novas; "6. Prova" não tem e2e por papel nem alcance. | NOVO / P2 — inalterado |
-| `PR-05` sessão substituta / "quem é o terapeuta" | **Agravado** (ver 1(c) e R-1). | PARCIALMENTE MAPEADO / P1 — inalterado, risco anotado |
-| `PR-01`, `PR-08` | Risco de recorrência do mecanismo (ver 1(c)). | inalterados, risco anotado |
-| `S-03` PHI em `console.error` | O plano nasce com `console.warn(..., erro.message)` no layout do prontuário (Task 5). | NOVO / P1 — inalterado, risco anotado |
+| Achado                                                                   | Relação com a spec                                                                                                                                                                               | Status após reavaliação                               |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| `Q-01` DLQ grava `{error}` em `payload_editado` e reaprova sem evidência | Mesma família de `erro-renderizado-como-empty-state` (§4 da spec): falha vira conteúdo clínico. A spec aplica o princípio ao cartão novo e **não toca** `revisao/[sessionId]/logic.ts`.          | NOVO / P1 — inalterado                                |
+| `PR-06` `mapa-jornadas-gaps.md` defasado                                 | A spec §1.2 confirma que a **jornada** de admissão está incompleta (D1–D3), refinando a frase "admissão implementada" do relatório: a entidade existe, a escada não. A spec não atualiza o mapa. | NOVO / P3 — inalterado, texto anotado                 |
+| `U-03` linha do tempo ad hoc                                             | A spec §5 troca o estado vazio de `pacientes/[id]/page.tsx` pelo cartão; `timeline-client.tsx` (972 linhas, paleta crua, `title=`) continua como está.                                           | NOVO / P2 — inalterado                                |
+| `A-02` regra em rota, rota importa rota                                  | A spec põe `prontidao-queries.ts` em `pacientes/[id]/` e o plano o importa de `sessoes/[id]/queries.ts` (`../../pacientes/[id]/prontidao-queries`). Acrescenta um caso ao achado.                | NOVO / P3 — inalterado                                |
+| `Q-04` sem teste de alcance / e2e por papel                              | Três superfícies novas; "6. Prova" não tem e2e por papel nem alcance.                                                                                                                            | NOVO / P2 — inalterado                                |
+| `PR-05` sessão substituta / "quem é o terapeuta"                         | **Agravado** (ver 1(c) e R-1).                                                                                                                                                                   | PARCIALMENTE MAPEADO / P1 — inalterado, risco anotado |
+| `PR-01`, `PR-08`                                                         | Risco de recorrência do mecanismo (ver 1(c)).                                                                                                                                                    | inalterados, risco anotado                            |
+| `S-03` PHI em `console.error`                                            | O plano nasce com `console.warn(..., erro.message)` no layout do prontuário (Task 5).                                                                                                            | NOVO / P1 — inalterado, risco anotado                 |
 
 Conclusão de 1(a): **zero mudanças de status**. Nove notas de reavaliação
 inline no relatório (`PR-01`, `PR-08`, `PR-05`, `PR-06`, `Q-01`, `S-03`, `A-02`,

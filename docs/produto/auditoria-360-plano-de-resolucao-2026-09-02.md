@@ -9,34 +9,34 @@
 
 ## Decisões tomadas nesta sessão (propostas pendentes de validação com o Rômulo)
 
-| Id | Decisão | Achado |
-| --- | --- | --- |
+| Id      | Decisão                                                                                                                                                                                                                    | Achado  |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
 | D-AUD-1 | `/validacao` volta a ser rota da fila por evidência (opção **b** do relatório), com item de nav admin do coordenador. Remontar dentro de `/sessoes/[id]` (opção a) fica para depois da decisão de multi-coordenador (D76). | `PR-01` |
-| D-AUD-2 | Clarity e GA saem do root layout e ficam **só** nas rotas públicas (landing/institucional/sobre). Nomear operadores em `docs/legal/` exige confirmação — fica pendente. | `S-01` |
-| D-AUD-3 | Sessão Better-Auth: `expiresIn` 12h, `updateAge` 1h. | `S-07` |
-| D-AUD-4 | Expurgo de `audit_log` passa a apagar **só** ações de acesso (allowlist explícita); trilha clínica é preservada. | `S-05` |
-| D-AUD-5 | `PRODUCT.md` passa a descrever a regra real de lote (só confiança alta e consistente, com trilha própria). | `PR-03` |
-| D-AUD-6 | `WebMCPProvider` sai do app autenticado e da raiz; se ficar, só na landing e só com `get_iris_overview`. | `S-08` |
-| D-AUD-7 | "Profissional responsável pela sessão" = titular **ou** substituto (`atendido_por_id`), numa função única consumida por RLS, `ehDono` e fila. | `PR-05` |
-| D-AUD-8 | DLQ da revisão grava em coluna própria `erro_validacao_detalhe`; reaprovar a partir de `erro_validacao` usa o `payload` original. | `Q-01` |
-| D-AUD-9 | Memo R-1..R-8 é aplicado **na spec e nos planos** (branch `feat/prontidao-do-prontuario`), não em código — o código dessa feature é da outra sessão. | memo |
+| D-AUD-2 | Clarity e GA saem do root layout e ficam **só** nas rotas públicas (landing/institucional/sobre). Nomear operadores em `docs/legal/` exige confirmação — fica pendente.                                                    | `S-01`  |
+| D-AUD-3 | Sessão Better-Auth: `expiresIn` 12h, `updateAge` 1h.                                                                                                                                                                       | `S-07`  |
+| D-AUD-4 | Expurgo de `audit_log` passa a apagar **só** ações de acesso (allowlist explícita); trilha clínica é preservada.                                                                                                           | `S-05`  |
+| D-AUD-5 | `PRODUCT.md` passa a descrever a regra real de lote (só confiança alta e consistente, com trilha própria).                                                                                                                 | `PR-03` |
+| D-AUD-6 | `WebMCPProvider` sai do app autenticado e da raiz; se ficar, só na landing e só com `get_iris_overview`.                                                                                                                   | `S-08`  |
+| D-AUD-7 | "Profissional responsável pela sessão" = titular **ou** substituto (`atendido_por_id`), numa função única consumida por RLS, `ehDono` e fila.                                                                              | `PR-05` |
+| D-AUD-8 | DLQ da revisão grava em coluna própria `erro_validacao_detalhe`; reaprovar a partir de `erro_validacao` usa o `payload` original.                                                                                          | `Q-01`  |
+| D-AUD-9 | Memo R-1..R-8 é aplicado **na spec e nos planos** (branch `feat/prontidao-do-prontuario`), não em código — o código dessa feature é da outra sessão.                                                                       | memo    |
 
 ## Workstreams (cada um = issue + PR)
 
-| # | Branch | Achados | Toca DB/RLS? |
-| --- | --- | --- | --- |
-| W1 | `fix/aud-definer-guard-oraculo` | `S-02`, `Q-05` | sim (migração à mão + teste) |
-| W2 | `fix/aud-superficie-http-terceiros` | `S-01`, `S-06`, `S-07`, `S-08`, `A-05`, `Q-07` | não |
-| W3 | `fix/aud-log-sem-pii-copy-erro` | `S-03`, `S-10`, `U-01` | não |
-| W4 | `fix/aud-q01-dlq-revisao` | `Q-01`, `Q-02`, `Q-03` | sim (coluna via `db:generate` + GRANT) |
-| W5 | `fix/aud-fila-coordenador-alcance` | `PR-01`, `PR-02`, `Q-04` | não |
-| W6 | `fix/aud-scripts-guardrail` | `S-04`, `Q-08` | não |
-| W7 | `feat/aud-rastreio-ia-metricas` | `DA-02`, `DA-01`, `A-03` | sim (colunas + view) |
-| W8 | `fix/aud-expurgo-audit-log-heartbeat` | `S-05`, `DA-03` | sim (função + tabela heartbeat) |
-| W9 | `docs/aud-documentacao-dx` | docs da auditoria, `PR-03`, `PR-06`, `PR-07`, `PR-08`, `DX-01..04`, `A-04`, `Q-06`, `S-09` | não |
-| W10 | `fix/aud-ds-timeline-a11y` | `U-02`, `U-03`, `U-04`, `AC-01..03`, `DS-02..05`, `A-01`, `A-06`, `PF-01`, `PF-02`, `DS-01` | não |
-| W11 | `fix/aud-pr05-profissional-responsavel` | `PR-05` | sim (função + policies) |
-| W12 | `docs/aud-memo-spec-admissao` → alvo `feat/prontidao-do-prontuario` | R-1..R-8 | não |
+| #   | Branch                                                              | Achados                                                                                     | Toca DB/RLS?                           |
+| --- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------- |
+| W1  | `fix/aud-definer-guard-oraculo`                                     | `S-02`, `Q-05`                                                                              | sim (migração à mão + teste)           |
+| W2  | `fix/aud-superficie-http-terceiros`                                 | `S-01`, `S-06`, `S-07`, `S-08`, `A-05`, `Q-07`                                              | não                                    |
+| W3  | `fix/aud-log-sem-pii-copy-erro`                                     | `S-03`, `S-10`, `U-01`                                                                      | não                                    |
+| W4  | `fix/aud-q01-dlq-revisao`                                           | `Q-01`, `Q-02`, `Q-03`                                                                      | sim (coluna via `db:generate` + GRANT) |
+| W5  | `fix/aud-fila-coordenador-alcance`                                  | `PR-01`, `PR-02`, `Q-04`                                                                    | não                                    |
+| W6  | `fix/aud-scripts-guardrail`                                         | `S-04`, `Q-08`                                                                              | não                                    |
+| W7  | `feat/aud-rastreio-ia-metricas`                                     | `DA-02`, `DA-01`, `A-03`                                                                    | sim (colunas + view)                   |
+| W8  | `fix/aud-expurgo-audit-log-heartbeat`                               | `S-05`, `DA-03`                                                                             | sim (função + tabela heartbeat)        |
+| W9  | `docs/aud-documentacao-dx`                                          | docs da auditoria, `PR-03`, `PR-06`, `PR-07`, `PR-08`, `DX-01..04`, `A-04`, `Q-06`, `S-09`  | não                                    |
+| W10 | `fix/aud-ds-timeline-a11y`                                          | `U-02`, `U-03`, `U-04`, `AC-01..03`, `DS-02..05`, `A-01`, `A-06`, `PF-01`, `PF-02`, `DS-01` | não                                    |
+| W11 | `fix/aud-pr05-profissional-responsavel`                             | `PR-05`                                                                                     | sim (função + policies)                |
+| W12 | `docs/aud-memo-spec-admissao` → alvo `feat/prontidao-do-prontuario` | R-1..R-8                                                                                    | não                                    |
 
 Fora de escopo desta rodada (registrado, não feito): `PR-04` (cadeia por etapa — spec própria via `/tlc-spec-driven`), `A-02` (estrutural, L), `DA-04` (logger estruturado, M — `S-03` entrega o helper que vira a semente).
 
