@@ -3,6 +3,11 @@
 > Spec de design. Ratificada por Rômulo em 01/09/2026.
 > Escala para o objeto **paciente** o padrão que a #512 estabeleceu para o objeto
 > **sessão**: o objeto sabe o próprio estado e nomeia o gesto seguinte.
+>
+> **Revisão 02/09/2026** — memo da auditoria 360 aplicado (R-1..R-8; fonte:
+> `docs/produto/auditoria-360-revisao-admissao-2026-09-02.md`, issue #540).
+> Cada edição está marcada `(auditoria 02/09, R-n)`. **D-A8, D-A9 e D-A10
+> entraram depois da ratificação e estão pendentes de validação com o Rômulo.**
 
 ## 1. O problema
 
@@ -48,7 +53,8 @@ sessão: o sistema sabe o que falta e não diz.
 | **D-A6**   | Para `cognitive_behavioral`, o degrau bloqueante é **≥1 aplicação de instrumento padronizado** (marco zero). | Análogo clínico da meta no ABA. `EvolucaoTcc` lê `obterInstrumentoAplicacoes`; sem baseline o gráfico nasce com um ponto só.                                                                    |
 | **D-A7**   | `conventional` **não tem degrau bloqueante**.                                                               | Acompanhamento narrativo, sem gráfico, por decisão de produto de 20/08/2026 (`modalidade.ts`). Inventar régua onde não há métrica seria certeza fabricada.                                      |
 | **D-A8**   | A régua morde na **action**, não só na página. A UI apenas antecipa o que a action vai recusar.             | Gate que só existe no render não é gate: `capturarDiario` e `consolidarSessao` são server actions alcançáveis sem passar pela tela. Ver `ctx-forjavel-use-server`.                              |
-| **D-A9**   | Os fatos só são lidos para `coordenador` e `terapeuta`. `admin_recepcao` nunca recebe escada nem selo.       | `goal_select` (`0006_fase2_rls.sql:207`) exige `coordenador` OR `app_is_on_team`. Sob a RLS da recepção, `EXISTS` devolve `false` para linhas que existem — a escada afirmaria "falta meta" sobre um prontuário que ela nem pode ler. Ver §4a. |
+| **D-A9**   | Os fatos só são lidos para `coordenador` e `terapeuta`. `admin_recepcao` nunca recebe escada nem selo. **⚠️ Pendente de validação com o Rômulo** _(auditoria 02/09, R-1)_. | `goal_select` (`0006_fase2_rls.sql:207`) exige `coordenador` OR `app_is_on_team`. Sob a RLS da recepção, `EXISTS` devolve `false` para linhas que existem — a escada afirmaria "falta meta" sobre um prontuário que ela nem pode ler. Ver §4a. |
+| **D-A10**  | **Proposta** _(auditoria 02/09, R-1)_ — régua de visibilidade do terapeuta: **"é o profissional responsável pela sessão"**, não "está na equipe de cuidado". **⚠️ Pendente de validação com o Rômulo.** Enquanto não validada, vale o interino fail-closed da §4a: fato não visível → `null` → "Aguardando coordenação", nunca "Falta meta". | Terapeuta de cobertura fora da equipe é cenário suportado e testado (`diario/[sessionId]/actions.int.test.ts:321`); a agenda só valida `user_role` (`agenda/queries.ts:301-320`). Sob a régua "está na equipe", ele veria o passo Documentar **bloqueado** num prontuário que o coordenador vê pronto — bloqueio funcional novo, gerado por regra que não é sobre esse papel (mecanismo do `PR-01`; ver também `PR-05`, "quem é o terapeuta"). As duas saídas possíveis: (a) a agenda passa a **exigir equipe** ao agendar — e a régua "está na equipe" fica verdadeira por construção; (b) `obterFatosProntidao` ganha visibilidade para o terapeuta **da sessão** (`session.therapist_id = app_user_id()`), o que a RLS atual não dá e exigiria policy nova ou definer guardado (§7). A proposta é (b); a escolha é do Rômulo. |
 
 ## 3. A jornada nova
 
@@ -67,8 +73,8 @@ sessão: o sistema sabe o que falta e não diz.
 
 | Módulo                                                | Responsabilidade                                                                                                       | Depende de           |
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| `src/lib/patient/prontidao.ts`                        | **Puro.** `montarProntidao({ modalidade, fatos, role })` → `{ degraus[], proximo, podeDocumentar, quemResolve }`. Zero I/O. | `modalidade.ts`      |
-| `src/app/(app)/pacientes/[id]/prontidao-queries.ts`   | Lê os fatos numa transação `withTenant` só, em bloco de `EXISTS`.                                                       | `db/rls`             |
+| `src/lib/patient/prontidao.ts`                        | **Puro.** `montarProntidao({ modalidade, fatos, role })` → `{ degraus[], proximo, podeDocumentar, quemResolve }`. Zero I/O. `fatos: null` (não visível) cai no ramo de `admin_recepcao` _(auditoria 02/09, R-1)_. | `modalidade.ts`      |
+| `src/app/(app)/pacientes/[id]/prontidao-queries.ts`   | Lê os fatos numa transação `withTenant` só, em bloco de `EXISTS`. Devolve `FatosProntidao \| null` — `null` quando o paciente não existe/não é do tenant ou quando o papel não enxerga o prontuário clínico (§4a) _(auditoria 02/09, R-1)_. | `db/rls`             |
 | `src/app/(app)/pacientes/[id]/modalidade.ts`          | Ganha `degrausProntidao` e `degrausBloqueantes` em `CapacidadesDaModalidade`.                                           | —                    |
 | `src/components/app/cartao-prontidao.tsx`             | Um componente, três pontos de uso (§3.3).                                                                              | `prontidao.ts` (tipos) |
 
@@ -131,7 +137,9 @@ com o mesmo peso é a carga cognitiva que este redesenho existe para remover.
 | Modalidade não resolvida              | Primeiro degrau é `Definir modalidade`                                     |
 | Conta em somente-leitura              | Escada visível, gestos desabilitados pela razão que `layout.tsx` já exibe   |
 | Evolução sem snapshot                 | Renderiza a **escada**, não mais `Agendar Primeira Sessão`                  |
-| Falha de leitura dos fatos            | Cartão não renderiza; nunca derruba o prontuário — mas **não** finge "pronto" |
+| Falha de leitura dos fatos            | Cartão não renderiza; nunca derruba o prontuário — mas **não** finge "pronto" **nem finge "bloqueado"** _(auditoria 02/09, R-1)_ |
+| Fatos **não visíveis** para o papel (recepção; terapeuta fora da equipe até D-A10) | `obterFatosProntidao` devolve `null` → escada vazia, sem degrau clínico nomeado; no Documentar, "Aguardando coordenação" fixo _(auditoria 02/09, R-1)_ |
+| Paciente inexistente ou de outra clínica | `obterFatosProntidao` devolve `null`, **não** uma escada de `false`s _(auditoria 02/09, R-1)_ |
 
 O último caso é a memória `erro-renderizado-como-empty-state`: `catch` que vira
 estado vazio transforma falha de leitura em afirmação clínica falsa. Aqui o
@@ -157,9 +165,27 @@ Para `admin_recepcao`, `montarProntidao` devolve escada vazia,
 `podeDocumentar: false` e `quemResolve: "Coordenação"` — sem nenhum degrau
 clínico nomeado. Na lista `/pacientes`, ela não vê selo de prontidão.
 
-Prova obrigatória, três contextos: `ctxCoordenador`, `ctxTerapeutaNaEquipe`,
-`ctxTerapeutaForaDaEquipe`. O terceiro é o que revela se a régua da equipe é a
-certa — hoje a agenda não exige equipe para agendar.
+**Regra simétrica _(auditoria 02/09, R-1)_: "não visível" ≠ "não existe".**
+`obterFatosProntidao` devolve `FatosProntidao | null`. Na mesma transação dos
+seis `EXISTS`, ela lê dois fatos de **visibilidade**, não de prontidão:
+
+- `existe` — `EXISTS (SELECT 1 FROM patient WHERE id = $patientId)` sob a RLS
+  do tenant. `false` cobre paciente inexistente **e** paciente de outra
+  clínica: os dois devolvem `null`, nunca uma escada de `false`s.
+- `visivel` — `user_role = 'coordenador' OR app_is_on_team($patientId)`, o
+  predicado literal de `goal_select`. `false` devolve `null`.
+
+`montarProntidao({ fatos: null })` cai no mesmo ramo de `admin_recepcao`:
+escada vazia, `podeDocumentar: false`, `quemResolve: "Coordenação"`. O cartão
+do prontuário some; o passo Documentar mostra "Aguardando coordenação" fixo,
+sem nomear degrau clínico. É fail-closed **sem afirmação falsa** — e é o que
+torna a regra "nunca finge bloqueado" verificável independentemente do
+desfecho de D-A10.
+
+Prova obrigatória, quatro contextos: `ctxCoordenador`, `ctxTerapeutaNaEquipe`,
+`ctxTerapeutaForaDaEquipe`, `ctxRecepcao`, mais o caso "paciente inexistente
+devolve `null`". O terceiro é o que revela se a régua da equipe é a certa —
+hoje a agenda não exige equipe para agendar (D-A10).
 
 ## 5. O que muda fora da escada
 
@@ -192,8 +218,15 @@ lista seis formas de um teste passar contra o código pré-fix.
 - ❌ Gate só no render, com a server action aceitando a escrita (D-A8).
 - ❌ Nomear degrau clínico para `admin_recepcao` (D-A9).
 - ❌ `SECURITY DEFINER` para ler fatos acima da RLS. Se algum dia for
-  inevitável, o guard interno copia o predicado EXATO da policy de leitura
-  correspondente e entra na varredura de `FUNCOES_COM_HELPER`.
+  inevitável (ex.: D-A10 opção b), o guard interno copia o predicado EXATO da
+  policy de leitura correspondente, exige `clinic_id = app_clinic_id_exigido()`
+  **e** `app_patient_in_clinic(p_patient)`, entra na varredura de
+  `FUNCOES_COM_HELPER` (`db/tests/clinic-id-helper-rls.int.test.ts`) e tem
+  **caso negativo cross-tenant** próprio — a allowlist positiva não acusa a
+  falta de guard sozinha (`Q-05`). Lembrete anti-`S-02`: o defeito daquele
+  definer era abrir demais com parâmetro nulo; aqui o risco é o inverso
+  (fechar demais), e a tentação de "resolver" com um definer que enxerga tudo
+  recriaria o primeiro _(auditoria 02/09, R-1)_.
 - ❌ Logar `err.message` de erro de driver: em `DrizzleQueryError` a `message`
   é o SQL inteiro com os `params`. Logar `name` + código do Postgres.
 

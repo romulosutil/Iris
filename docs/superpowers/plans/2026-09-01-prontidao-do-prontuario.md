@@ -338,6 +338,23 @@ describe("montarProntidao", () => {
     expect(p.quemResolve).toBe("Coordenação");
   });
 
+  // (auditoria 02/09, R-1) — "não visível" vem do banco como `null` e tem de
+  // produzir a MESMA saída da recepção: sem degrau clínico nomeado. Um
+  // terapeuta fora da equipe nunca pode ler "Falta meta" num prontuário que
+  // o coordenador vê pronto.
+  it("fatos null (não visível) não nomeia degrau clínico nem libera documentar", () => {
+    const p = montarProntidao({
+      modalidade: "protocol_driven",
+      fatos: null,
+      role: "terapeuta",
+      patientId: "p1",
+    });
+    expect(p.degraus).toEqual([]);
+    expect(p.proximo).toBeNull();
+    expect(p.podeDocumentar).toBe(false);
+    expect(p.quemResolve).toBe("Coordenação");
+  });
+
   it("admissao nasce concluída — o paciente existe", () => {
     const p = montarProntidao({
       modalidade: "conventional",
@@ -501,7 +518,8 @@ const DEFINICOES: Record<DegrauId, DefinicaoDegrau> = {
 
 export interface MontarProntidaoInput {
   modalidade: ModalidadeClinica | null | undefined;
-  fatos: FatosProntidao;
+  /** `null` = fatos não visíveis para este papel/paciente (§4a; R-1). */
+  fatos: FatosProntidao | null;
   role: string;
   patientId: string;
 }
@@ -521,7 +539,11 @@ export function montarProntidao({
   // sobre um prontuário completo, e afirmaria isso ao papel que a política
   // proíbe de ler dado clínico. Fingir bloqueado é tão errado quanto fingir
   // pronto — só erra para o lado seguro.
-  if (!PAPEIS_COM_LEITURA_CLINICA.has(role)) {
+  //
+  // (auditoria 02/09, R-1) — `fatos === null` é o mesmo caso vindo do banco:
+  // paciente não visível para este papel (terapeuta fora da equipe até D-A10),
+  // inexistente ou de outro tenant. Mesma saída, pelo mesmo motivo.
+  if (!PAPEIS_COM_LEITURA_CLINICA.has(role) || fatos === null) {
     return {
       degraus: [],
       proximo: null,
@@ -567,7 +589,7 @@ export function montarProntidao({
 - [ ] **Step 4: Rodar e confirmar verde**
 
 Run: `pnpm test src/lib/patient/prontidao.test.ts`
-Expected: PASS, 10 testes.
+Expected: PASS, 11 testes.
 
 - [ ] **Step 5: Commit**
 
@@ -594,38 +616,51 @@ direto, `hasDb`, `vi.mock("server-only")`), trocando o corpo dos testes por:
 
 ```ts
 describe("obterFatosProntidao", () => {
+  // `fatos` é `FatosProntidao | null` (R-1): para o coordenador do tenant, com
+  // paciente existente, o contrato é "nunca null" — por isso `toBeNull` seria
+  // errado aqui e `?.` não mascara nada.
   test("reflete o estado real: sem protocolo e sem meta, ambos false", async () => {
     const fatos = await obterFatosProntidao(ctxCoord, PAC);
-    expect(fatos.temProtocoloAtivo).toBe(false);
-    expect(fatos.temMetaAtiva).toBe(false);
+    expect(fatos).not.toBeNull();
+    expect(fatos?.temProtocoloAtivo).toBe(false);
+    expect(fatos?.temMetaAtiva).toBe(false);
   });
 
   test("meta em rascunho NÃO conta como meta ativa", async () => {
     await inserirMeta(PAC, "rascunho");
     const fatos = await obterFatosProntidao(ctxCoord, PAC);
-    expect(fatos.temMetaAtiva).toBe(false);
+    expect(fatos?.temMetaAtiva).toBe(false);
   });
 
   test("meta ativa conta", async () => {
     await inserirMeta(PAC, "ativa");
     const fatos = await obterFatosProntidao(ctxCoord, PAC);
-    expect(fatos.temMetaAtiva).toBe(true);
+    expect(fatos?.temMetaAtiva).toBe(true);
   });
 
   test("protocolo desativado NÃO conta", async () => {
     await inserirProtocolo(PAC, { desativado: true });
     const fatos = await obterFatosProntidao(ctxCoord, PAC);
-    expect(fatos.temProtocoloAtivo).toBe(false);
+    expect(fatos?.temProtocoloAtivo).toBe(false);
   });
 
   // O caro: a RLS é que isola, não um `WHERE clinic_id`. Um paciente de outra
   // clínica não pode devolver fatos verdadeiros — devolveria uma escada
   // "pronta" para um prontuário que este usuário nem enxerga.
-  test("cross-tenant: paciente de outra clínica devolve tudo false", async () => {
+  //
+  // (auditoria 02/09, R-1) — e também não pode devolver fatos FALSOS: "tudo
+  // false" fixaria a semântica "invisível = inexistente", que é o defeito de
+  // R-1. Invisível é `null`: sem escada, sem afirmação.
+  test("cross-tenant: paciente de outra clínica devolve null, não escada", async () => {
     await inserirMeta(PAC_CLINICA_B, "ativa");
     const fatos = await obterFatosProntidao(ctxCoord, PAC_CLINICA_B);
-    expect(fatos.temMetaAtiva).toBe(false);
-    expect(fatos.temFichaClinica).toBe(false);
+    expect(fatos).toBeNull();
+  });
+
+  // (auditoria 02/09, R-1)
+  test("paciente inexistente devolve null, não escada", async () => {
+    const fatos = await obterFatosProntidao(ctxCoord, randomUUID());
+    expect(fatos).toBeNull();
   });
 });
 
@@ -647,21 +682,31 @@ describe("obterFatosProntidao — leitura por papel", () => {
 
   test("coordenador enxerga a meta que existe", async () => {
     const fatos = await obterFatosProntidao(ctxCoord, PAC);
-    expect(fatos.temMetaAtiva).toBe(true);
+    expect(fatos?.temMetaAtiva).toBe(true);
   });
 
   test("terapeuta NA equipe enxerga a meta que existe", async () => {
     const fatos = await obterFatosProntidao(ctxTerapeutaNaEquipe, PAC);
-    expect(fatos.temMetaAtiva).toBe(true);
+    expect(fatos?.temMetaAtiva).toBe(true);
   });
 
-  // Documenta o comportamento REAL da policy, seja ele qual for. Se este
-  // teste ficar vermelho, a régua de equipe da feature está errada — não
-  // "conserte" afrouxando a policy nem criando um SECURITY DEFINER que
-  // enxergue tudo; leve o achado ao Rômulo.
-  test("terapeuta FORA da equipe não enxerga — e é por isso que a recepção nunca chega aqui", async () => {
+  // (auditoria 02/09, R-1) — "não vejo" chega como `null`, NUNCA como
+  // `temMetaAtiva: false`. Documenta o comportamento REAL da policy: se um
+  // dia este teste ficar vermelho porque `fatos` deixou de ser `null`, a régua
+  // de visibilidade mudou (D-A10) — não "conserte" afrouxando a policy nem
+  // criando um SECURITY DEFINER que enxergue tudo; leve o achado ao Rômulo.
+  test("terapeuta FORA da equipe recebe null — não uma escada de 'falta meta'", async () => {
     const fatos = await obterFatosProntidao(ctxTerapeutaForaDaEquipe, PAC);
-    expect(fatos.temMetaAtiva).toBe(false);
+    expect(fatos).toBeNull();
+  });
+
+  // (auditoria 02/09, R-1) — a recepção nunca deveria chegar aqui (D-A9,
+  // o chamador filtra por papel), mas se chegar, a resposta é a mesma: `null`.
+  // Sem isso, um chamador novo que esqueça o filtro produziria "Falta meta"
+  // para quem não pode ler dado clínico.
+  test("admin_recepcao recebe null, mesmo com a meta existindo", async () => {
+    const fatos = await obterFatosProntidao(ctxRecepcao, PAC);
+    expect(fatos).toBeNull();
   });
 });
 ```
@@ -670,7 +715,7 @@ describe("obterFatosProntidao — leitura por papel", () => {
 
 Run: `pnpm test:rls src/app/(app)/pacientes/[id]/prontidao.int.test.ts`
 Expected: FAIL — módulo inexistente. **Conferir a contagem de testes coletados
-(8).** Zero coletado significa config errada, não sucesso.
+(10).** Zero coletado significa config errada, não sucesso.
 
 - [ ] **Step 3: Implementar**
 
@@ -700,14 +745,31 @@ import type { FatosProntidao } from "@/lib/patient/prontidao";
  * Os subselects NÃO repetem filtro por clínica — quem filtra é a policy.
  * Acrescentá-lo aqui mascararia uma policy quebrada (mesma decisão, com a
  * mesma justificativa, de `onboarding-queries.ts`).
+ *
+ * (auditoria 02/09, R-1) — mas a policy das cinco tabelas clínicas NÃO é só
+ * de clínica: `goal_select`, `pcp_read`, `anamnese_select`,
+ * `instrumento_aplicacao_select` e `session_snapshot_select` exigem
+ * `coordenador` OR `app_is_on_team`. Sob outro papel, `EXISTS` devolve `false`
+ * para linhas que EXISTEM. Por isso a função devolve `null` — "não visível" —
+ * em vez de uma escada de `false`s, e lê a visibilidade na MESMA transação:
+ *   - `existe`: o paciente é deste tenant (cobre inexistente e cross-tenant);
+ *   - `visivel`: o predicado literal de `goal_select` para o usuário atual.
+ * `null` nunca vira "Falta meta"; vira "Aguardando coordenação" (§4a).
  */
 export async function obterFatosProntidao(
   ctx: TenantContext,
   patientId: string,
-): Promise<FatosProntidao> {
+): Promise<FatosProntidao | null> {
   return withTenant(ctx, async (tx) => {
     const [linha] = await tx
       .select({
+        // (auditoria 02/09, R-1) — visibilidade, não prontidão.
+        existe: sql<boolean>`EXISTS (
+          SELECT 1 FROM ${patient} WHERE ${patient.id} = ${patientId}
+        )`,
+        // Metade SQL do predicado de `goal_select`; a outra metade
+        // (`user_role = 'coordenador'`) é `ctx.role`, já no processo.
+        naEquipe: sql<boolean>`app_is_on_team(${patientId})`,
         temFichaClinica: sql<boolean>`EXISTS (
           SELECT 1 FROM ${patientClinicalProfile}
           WHERE ${patientClinicalProfile.patientId} = ${patientId}
@@ -743,6 +805,13 @@ export async function obterFatosProntidao(
       })
       .from(sql`(SELECT 1) AS uma_linha`);
 
+    // (auditoria 02/09, R-1) — invisível ≠ inexistente ≠ pendente. Os dois
+    // primeiros saem daqui como `null`; só o terceiro vira escada. O predicado
+    // é o LITERAL de `goal_select` (`0006_fase2_rls.sql:207`): mudar um sem o
+    // outro reabre o defeito.
+    const visivel = ctx.role === "coordenador" || Boolean(linha?.naEquipe);
+    if (!linha?.existe || !visivel) return null;
+
     return {
       temFichaClinica: Boolean(linha?.temFichaClinica),
       temAnamnese: Boolean(linha?.temAnamnese),
@@ -757,10 +826,19 @@ export async function obterFatosProntidao(
 
 `sessionSnapshot.patientId` existe e é `notNull` (`src/db/schema.ts:1494`).
 
+(auditoria 02/09, R-1) — `app_is_on_team(uuid)` está em
+`db/migrations/0001_rls.sql:37` e já tem `GRANT EXECUTE` para o role da app
+(`:71`). A policy lê o papel de `current_setting('app.user_role')`, que é o
+mesmo valor que `withTenant` seta a partir de `ctx.role` — por isso a metade
+"coordenador" pode ficar no processo. Acrescentar `patient` ao import de
+`@/db/schema`. Se `ctxRecepcao`/`ctxTerapeutaForaDaEquipe` **não** vierem
+`null`, a policy mudou e a régua de visibilidade precisa ser revista (D-A10) —
+nunca "consertar" o teste.
+
 - [ ] **Step 4: Rodar e confirmar verde**
 
 Run: `pnpm test:rls src/app/(app)/pacientes/[id]/prontidao.int.test.ts`
-Expected: PASS, 8 testes coletados.
+Expected: PASS, 10 testes coletados.
 
 - [ ] **Step 5: Commit**
 
@@ -1231,13 +1309,26 @@ describe("bloqueio do passo Documentar", () => {
     const dados = await carregarSessao(ctxTerapeuta, SESSAO_CONVENCIONAL, agora);
     expect(dados?.prontidao.podeDocumentar).toBe(true);
   });
+
+  // (auditoria 02/09, R-1) — terapeuta de cobertura, fora da equipe: os fatos
+  // não são visíveis (D-A10 pendente). Bloqueia, mas SEM nomear degrau: uma
+  // escada com "falta meta" aqui seria afirmação falsa sobre um prontuário
+  // que o coordenador vê pronto.
+  test("terapeuta fora da equipe: bloqueado sem degrau clínico nomeado", async () => {
+    await inserirProtocolo(PAC, { desativado: false });
+    await inserirMeta(PAC, "ativa");
+    const dados = await carregarSessao(ctxTerapeutaForaDaEquipe, SESSAO_SEM_PREPARO, agora);
+    expect(dados?.prontidao.podeDocumentar).toBe(false);
+    expect(dados?.prontidao.degraus).toEqual([]);
+    expect(dados?.prontidao.quemResolve).toBe("Coordenação");
+  });
 });
 ```
 
 - [ ] **Step 2: Rodar e confirmar que falha**
 
 Run: `pnpm test:rls src/app/(app)/sessoes/[id]/bloqueio-documentar.int.test.ts`
-Expected: FAIL — `prontidao` não existe no retorno. **Conferir 4 testes
+Expected: FAIL — `prontidao` não existe no retorno. **Conferir 5 testes
 coletados.**
 
 - [ ] **Step 3: Implementar**
@@ -1262,6 +1353,12 @@ const prontidao = montarProntidao({
 Sem `.catch` aqui, ao contrário do layout do prontuário: se a leitura falhar, a
 sessão não pode assumir que está liberada para documentar. Fail-closed.
 
+(auditoria 02/09, R-1) — `fatos` pode vir `null` (terapeuta fora da equipe,
+até D-A10). `montarProntidao` devolve então `podeDocumentar: false` com
+`proximo: null` — e `CartaoProntidao` renderiza **nada** para `proximo: null`
+(é o contrato do "prontuário pronto"). Esse par precisa de uma saída própria
+no `case "documentar"`, senão o terapeuta vê uma tela em branco.
+
 Em `page.tsx`, no `case "documentar"`:
 
 ```tsx
@@ -1271,6 +1368,18 @@ Em `page.tsx`, no `case "documentar"`:
       // evidência — o terapeuta gastaria a sessão inteira preenchendo um
       // formulário cujo resultado nunca chega à evolução.
       if (!dados.prontidao.podeDocumentar) {
+        // (auditoria 02/09, R-1) — bloqueado SEM escada visível: os fatos não
+        // são legíveis por este papel (§4a). Não nomear degrau clínico; não
+        // fingir "falta meta". Só quem resolve.
+        if (dados.prontidao.proximo === null) {
+          return (
+            <Alert severidade="info" titulo="Esta sessão ainda não pode ser documentada">
+              Aguardando {dados.prontidao.quemResolve ?? "coordenação"}: o
+              prontuário deste paciente ainda não está liberado para você
+              documentar.
+            </Alert>
+          );
+        }
         return (
           <CartaoProntidao
             prontidao={dados.prontidao}
@@ -1293,7 +1402,7 @@ Em `page.tsx`, no `case "documentar"`:
 - [ ] **Step 4: Rodar e confirmar verde**
 
 Run: `pnpm test:rls src/app/(app)/sessoes/[id]/bloqueio-documentar.int.test.ts`
-Expected: PASS, 4 testes.
+Expected: PASS, 5 testes.
 
 - [ ] **Step 5: Provar a mutação**
 
@@ -1550,6 +1659,20 @@ describe("listarTodosPacientes — recepção", () => {
     expect(p.proximo?.rotulo ?? null).toBeNull();
   });
 });
+
+// (auditoria 02/09, R-1) — terapeuta fora da equipe: `fatos: null` não pode
+// virar selo. Trava o `visivel` do mapeamento da Task 8.
+describe("listarTodosPacientes — terapeuta fora da equipe", () => {
+  it("nunca produz proximoPasso para paciente cujos fatos não enxerga", () => {
+    const p = montarProntidao({
+      modalidade: "protocol_driven",
+      fatos: null,
+      role: "terapeuta",
+      patientId: "p1",
+    });
+    expect(p.proximo?.rotulo ?? null).toBeNull();
+  });
+});
 ```
 
 - [ ] **Step 2: Rodar e confirmar que falha**
@@ -1575,8 +1698,17 @@ No `select`, acrescentar a modalidade e os quatro `EXISTS` correlacionados. Um
 `EXISTS` por fato, **nunca** uma chamada de `obterFatosProntidao` por linha:
 a lista de uma clínica com 80 pacientes viraria 80 transações.
 
+(auditoria 02/09, R-1) — a lista lê sob a RLS do usuário atual, e um terapeuta
+vê na lista pacientes de que **não** faz parte da equipe. Para esses, os
+`EXISTS` clínicos devolvem `false` para linhas que existem, e o selo diria
+"Falta meta" num prontuário pronto. Mesma resposta da Task 3: ler a
+visibilidade na mesma consulta e mandar `fatos: null` para quem não enxerga.
+Selo nenhum é melhor que selo falso.
+
 ```ts
         clinicalModality: schema.patient.clinicalModality,
+        // (auditoria 02/09, R-1) — metade SQL do predicado de `goal_select`.
+        naEquipe: sql<boolean>`app_is_on_team(${schema.patient.id})`.mapWith(Boolean),
         temFichaClinica: exists(
           tx
             .select({ um: sql`1` })
@@ -1632,17 +1764,22 @@ a lista de uma clínica com 80 pacientes viraria 80 transações.
 E mapear as linhas depois do `withTenant`, fora da transação (é cálculo puro):
 
 ```ts
-  return linhas.map(({ clinicalModality, ...resto }) => {
+  return linhas.map(({ clinicalModality, naEquipe, ...resto }) => {
+    // (auditoria 02/09, R-1) — o mesmo predicado da Task 3; divergir aqui
+    // reabre o selo falso para o terapeuta fora da equipe.
+    const visivel = ctx.role === "coordenador" || naEquipe;
     const prontidao = montarProntidao({
       modalidade: clinicalModality,
-      fatos: {
-        temFichaClinica: resto.temFichaClinica,
-        temAnamnese: resto.temAnamnese,
-        temProtocoloAtivo: resto.temProtocoloAtivo,
-        temMetaAtiva: resto.temMetaAtiva,
-        temInstrumentoAplicado: resto.temInstrumentoAplicado,
-        temSessaoConsolidada: resto.temSessaoConsolidada,
-      },
+      fatos: visivel
+        ? {
+            temFichaClinica: resto.temFichaClinica,
+            temAnamnese: resto.temAnamnese,
+            temProtocoloAtivo: resto.temProtocoloAtivo,
+            temMetaAtiva: resto.temMetaAtiva,
+            temInstrumentoAplicado: resto.temInstrumentoAplicado,
+            temSessaoConsolidada: resto.temSessaoConsolidada,
+          }
+        : null,
       role: ctx.role,
       patientId: resto.id,
     });
