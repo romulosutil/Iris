@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { motivoExpurgoSchema, pacienteIdSchema } from "./schemas";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 /**
  * #352 — fila de retenção e expurgo de prontuário expirado.
@@ -160,7 +161,7 @@ export async function purgarPacienteCore(
       return { ok: true };
     });
   } catch (err) {
-    console.error("purgarPaciente:", err);
+    logarErroSemPII("purgarPaciente:", err);
     return {
       error:
         "Não foi possível expurgar este prontuário. Verifique se o prazo de guarda já venceu.",

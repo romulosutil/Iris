@@ -47,6 +47,7 @@ import {
   type TipoEventoNormalizado,
 } from "./provider";
 import { vencimentoCobrancaDeCiclo } from "./vencimento";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 /**
  * Estado da assinatura e do ciclo de faturamento (#36, revisto em #163).
@@ -430,7 +431,7 @@ export async function aplicarStatusProvider(
     try {
       await notificarCancelamentoAssinatura(linha.clinicId, linha.id);
     } catch (err) {
-      console.error(
+      logarErroSemPII(
         "[billing-cancelamento] falha ao despachar aviso por e-mail:",
         err,
       );
@@ -1294,7 +1295,7 @@ async function revogarECortarAssinatura(
         assinatura.subscriptionId,
       );
     } catch (err) {
-      console.error(
+      logarErroSemPII(
         "[billing-cancelamento] falha ao despachar aviso por e-mail no corte por carência/backstop:",
         err,
       );

@@ -10,6 +10,7 @@ import {
   type CobrancaDoDebito,
 } from "@/lib/billing/debito";
 import { BillingProviderError } from "@/lib/billing/provider";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 import type {
   AutorizacaoPendente,
   MetodoPagamento,
@@ -233,9 +234,8 @@ export async function iniciarAtivacaoAssinatura(
       };
     }
   } catch (e) {
-    console.error("[assinatura] falha no gate de débito de reativação", {
+    logarErroSemPII("[assinatura] falha no gate de débito de reativação", e, {
       clinicId: ctx.clinicId,
-      err: e,
       corpoGateway:
         e instanceof BillingProviderError ? serializar(e.corpo) : undefined,
     });
@@ -271,9 +271,10 @@ export async function iniciarAtivacaoAssinatura(
     // imprime `{ errors: [Array] }` (o `depth` default do Node), que é
     // exatamente onde mora a mensagem do Asaas/MP. Um 400 logado assim não
     // diagnostica nada — foi o que custou uma sessão inteira de investigação.
-    console.error("[assinatura] falha ao iniciar ativação", {
+    // O erro em si entra só como nome + code (#531): a `message` de um erro
+    // de driver carrega params.
+    logarErroSemPII("[assinatura] falha ao iniciar ativação", e, {
       clinicId: ctx.clinicId,
-      err: e,
       corpoGateway:
         e instanceof BillingProviderError ? serializar(e.corpo) : undefined,
     });

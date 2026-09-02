@@ -30,7 +30,7 @@ function erroDeDriver(): Error {
 
 /** Tudo que o `console.error` recebeu, achatado numa string só. */
 function tudoQueFoiLogado(espiao: ReturnType<typeof vi.spyOn>): string {
-  return espiao.mock.calls
+  return (espiao.mock.calls as unknown[][])
     .map((args) =>
       args
         .map((a) =>

@@ -9,6 +9,7 @@ import {
   type ResultadoComandoRetentativa,
   type ResultadoCortePorCarencia,
 } from "@/lib/billing/subscription";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 /**
  * Gatilho interno do fechamento de ciclo (#36).
@@ -96,7 +97,7 @@ export async function POST(request: Request): Promise<Response> {
       retentativas = await comandarRetentativasPendentes({ dryRun });
     } catch (err) {
       retentativaAbortada = mensagemDoErro(err);
-      console.error("[billing-fechamento] etapa de retentativa abortou", err);
+      logarErroSemPII("[billing-fechamento] etapa de retentativa abortou", err);
     }
     const retentativasComErro = retentativas.filter((r) => r.erro);
 
@@ -120,7 +121,7 @@ export async function POST(request: Request): Promise<Response> {
       cortes = await cancelarAssinaturasComCarenciaVencida({ dryRun });
     } catch (err) {
       carenciaAbortada = mensagemDoErro(err);
-      console.error("[billing-fechamento] etapa de carência abortou", err);
+      logarErroSemPII("[billing-fechamento] etapa de carência abortou", err);
     }
     const cortesComErro = cortes.filter((c) => c.erro);
 
@@ -153,7 +154,7 @@ export async function POST(request: Request): Promise<Response> {
       backstop = await aplicarBackstopDePrazo({ dryRun });
     } catch (err) {
       backstopAbortado = mensagemDoErro(err);
-      console.error("[billing-fechamento] etapa de backstop abortou", err);
+      logarErroSemPII("[billing-fechamento] etapa de backstop abortou", err);
     }
     const backstopComErro = backstop.filter((b) => b.erro);
 
@@ -295,7 +296,7 @@ export async function POST(request: Request): Promise<Response> {
     //
     // O texto real do erro vai no corpo: uma mensagem genérica aqui
     // transformaria o diagnóstico de faturamento parado numa caçada às cegas.
-    console.error("[billing-fechamento] falha na varredura", err);
+    logarErroSemPII("[billing-fechamento] falha na varredura", err);
     return Response.json(
       {
         ok: false,

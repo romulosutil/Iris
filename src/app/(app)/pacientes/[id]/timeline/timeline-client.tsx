@@ -24,6 +24,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 type DeltaMeta = { id: string; descricao: string; disciplina: string | null };
 type DeltaMilestone = { id: string; nome: string; dominioId: string };
@@ -193,7 +194,7 @@ export function TimelineClient({
       setDrilldownEvidencias(res);
     } catch (err) {
       setErroEvidencias(true);
-      console.error("Erro ao buscar evidências por trecho:", err);
+      logarErroSemPII("Erro ao buscar evidências por trecho:", err);
     } finally {
       setCarregandoEvidencias(false);
     }
@@ -343,7 +344,7 @@ export function TimelineClient({
         // diz "Nenhuma alteração clínica registrada nesta sessão" — um fato
         // clínico inventado a partir de uma falha de rede.
         setErroDelta(true);
-        console.error("Erro ao carregar delta da sessão:", err);
+        logarErroSemPII("Erro ao carregar delta da sessão:", err);
       } finally {
         if (active) {
           setCarregandoDelta(false);
@@ -391,7 +392,7 @@ export function TimelineClient({
         if (!active) return;
         setComparacaoData(null);
         setErroComparacao(true);
-        console.error("Erro ao carregar comparação:", err);
+        logarErroSemPII("Erro ao carregar comparação:", err);
       } finally {
         if (active) setCarregandoComparacao(false);
       }

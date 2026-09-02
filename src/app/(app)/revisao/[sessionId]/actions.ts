@@ -9,6 +9,7 @@ import {
   editarExtracao,
   type ReviewResult,
 } from "./logic";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 // ─── Wrappers para `useActionState` (resolvem o tenant do request) ────────────
 // O CORE acima recebe `ctx` (testável); estes wrappers re-derivam o tenant do
@@ -58,7 +59,7 @@ async function comCtx(
     if (err instanceof RoleError) {
       return { error: "Só o terapeuta da sessão revisa as extrações." };
     }
-    console.error("wrapper revisão:", err);
+    logarErroSemPII("wrapper revisão:", err);
     return { error: "Não foi possível registrar a revisão." };
   }
 }

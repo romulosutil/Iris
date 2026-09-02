@@ -9,6 +9,7 @@ import { randomBytes } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { authDb } from "@/db/client";
 import { codigoPg, constraintPg } from "@/db/pg-error";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 import { withTenant, type Tx } from "@/db/rls";
 import { sha256Hex } from "@/lib/report/hash";
 import { coletarAcervo } from "./coletor";
@@ -280,10 +281,10 @@ export async function processarProximo(): Promise<{
       ? (err.message as string)
       : "erro_interno";
     if (motivo === "erro_interno") {
-      console.error(
+      logarErroSemPII(
         "[exportacao-integral] falha não categorizada no bundle",
-        bundle.id,
         err,
+        { bundleId: bundle.id },
       );
     }
 

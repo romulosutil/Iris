@@ -7,6 +7,7 @@ import {
   type ResultadoConciliacaoVinculos,
 } from "@/lib/billing/conciliacao";
 import { listarCobrancasDeCicloNaoConciliadas } from "@/lib/billing/erro-aplicacao";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 /**
  * Conciliação manual de billing (#375).
@@ -58,10 +59,7 @@ async function lerCorpo(request: Request): Promise<CorpoConciliacao> {
   }
 }
 
-function inteiroNaoNegativo(
-  valor: number | undefined,
-  padrao: number,
-): number {
+function inteiroNaoNegativo(valor: number | undefined, padrao: number): number {
   return typeof valor === "number" && Number.isInteger(valor) && valor >= 0
     ? valor
     : padrao;
@@ -121,7 +119,7 @@ export async function POST(request: Request): Promise<Response> {
     });
   } catch (err) {
     ciclosAbortado = mensagemDoErro(err);
-    console.error("[billing-conciliacao] varredura de ciclos abortou", err);
+    logarErroSemPII("[billing-conciliacao] varredura de ciclos abortou", err);
   }
 
   let vinculos = vazioVinculos;
@@ -133,7 +131,7 @@ export async function POST(request: Request): Promise<Response> {
     });
   } catch (err) {
     vinculosAbortado = mensagemDoErro(err);
-    console.error("[billing-conciliacao] varredura de vínculos abortou", err);
+    logarErroSemPII("[billing-conciliacao] varredura de vínculos abortou", err);
   }
 
   /**
@@ -176,7 +174,10 @@ export async function POST(request: Request): Promise<Response> {
     }
   } catch (err) {
     cobrancasSemCicloAbortado = mensagemDoErro(err);
-    console.error("[billing-conciliacao] fila de eventos órfãos abortou", err);
+    logarErroSemPII(
+      "[billing-conciliacao] fila de eventos órfãos abortou",
+      err,
+    );
   }
 
   const totalDivergencias =

@@ -6,6 +6,7 @@ import { RoleError, requireRole } from "@/auth/require-role";
 import { withTenant } from "@/db/rls";
 import { bloqueio } from "@/db/schema";
 import { validarBloqueio } from "@/lib/agenda/bloqueio";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 export type BloqueioState = { error?: string; ok?: boolean };
 
@@ -34,7 +35,7 @@ export async function criarBloqueioAction(
   } catch (err) {
     if (err instanceof RoleError)
       return { error: "Você não tem permissão para registrar bloqueios." };
-    console.error("criarBloqueioAction:", err);
+    logarErroSemPII("criarBloqueioAction:", err);
     return { error: "Não foi possível registrar o bloqueio. Tente novamente." };
   }
 }
@@ -58,7 +59,7 @@ export async function removerBloqueioAction(
   } catch (err) {
     if (err instanceof RoleError)
       return { error: "Você não tem permissão para remover bloqueios." };
-    console.error("removerBloqueioAction:", err);
+    logarErroSemPII("removerBloqueioAction:", err);
     return { error: "Não foi possível remover. Tente novamente." };
   }
 }
