@@ -193,10 +193,18 @@ async function inserirEvidenciasOnApprove(
 
   if (row.subtipo !== "evidencia") return;
 
-  const conteudo = (row.payloadEditado ?? row.payload) as {
-    evidencia?: EvidenciaConteudo | null;
-  };
-  const evidenciaObj = conteudo?.evidencia;
+  const conteudo = (row.payloadEditado ?? row.payload) as
+    (EvidenciaConteudo & { evidencia?: EvidenciaConteudo | null }) | null;
+  // #533 — duas formas de payload convivem no banco: `{ evidencia: { alvos } }`
+  // (backfill, fixtures dos int-tests, provider pré-D57) e `{ alvos, … }` na
+  // RAIZ, que é o que `LlmExtractionProvider.payloadDoSubtipo` grava desde a
+  // troca para o Gemini (`payload = e.evidencia`) e o que `resumo.ts` e o
+  // `DemoStubProvider` leem/escrevem. Lendo só a forma aninhada, aprovar uma
+  // extração real saía sem `evidence` nenhuma — em silêncio — e a fila de
+  // `/validacao` nunca recebia item. Aceitar as duas é idempotente e não
+  // retroage: só muda o que uma aprovação NOVA grava.
+  const evidenciaObj: EvidenciaConteudo | null | undefined =
+    conteudo?.evidencia ?? (Array.isArray(conteudo?.alvos) ? conteudo : null);
   const alvos = Array.isArray(evidenciaObj?.alvos) ? evidenciaObj!.alvos! : [];
   if (alvos.length === 0) return;
 
