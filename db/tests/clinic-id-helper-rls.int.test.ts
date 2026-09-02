@@ -259,7 +259,7 @@ async function comoDono(tx: postgres.TransactionSql) {
  * `clinic`, `clinic_id = ...` puro, com papel, e com FK de paciente).
  */
 /**
- * As 22 funções que resolvem o tenant pelo helper (`0087`, resíduo do D16).
+ * As 25 funções que resolvem o tenant pelo helper (`0087`, resíduo do D16; `0142` #529; `0143` #539; `0144` T07c).
  *
  * Todas são `SECURITY DEFINER` menos nenhuma — e é justamente por isso que elas
  * importam: uma função DEFINER roda com os direitos do dono, ou seja, IGNORA a
@@ -272,6 +272,11 @@ async function comoDono(tx: postgres.TransactionSql) {
  */
 const FUNCOES_COM_HELPER = [
   "app_alerta_risco_visivel",
+  // #529 (0142, auditoria 360 S-02) — devolve `trecho_fonte` do alerta. DEFINER
+  // porque a coluna tem SELECT revogado de app_role (0125); o guard interno
+  // espelha o predicado de `alerta_risco_scope`. Antes da 0142 o ramo sem
+  // sessão devolvia o trecho para qualquer tenant que conhecesse o UUID.
+  "app_alerta_trecho_fonte",
   // #407/T03 — guard interno da RLS de anamnese_alvo (INSERT/UPDATE/DELETE).
   "app_anamnese_em_rascunho",
   "app_cpf_hash_usado_em_outro_trial",
@@ -284,7 +289,7 @@ const FUNCOES_COM_HELPER = [
   // #374 — cunha o token de download do bundle de exportação. É chamada por
   // `app_role`, então o guard interno copia o predicado da policy de leitura.
   "app_export_bundle_token_definir",
-  // Task 7c (0142) — lê os seis fatos de prontidão em lote (`uuid[]`).
+  // Task 7c (0144) — lê os seis fatos de prontidão em lote (`uuid[]`).
   // DEFINER porque `goal_select`/`pp_read` não reconhecem cobertura
   // (`session.terapeuta_id`/`atendido_por_id`); o guard interno espelha
   // `goal_select` MAIS o recorte de cobertura da `0092` (D8/#174), SEM
@@ -305,6 +310,16 @@ const FUNCOES_COM_HELPER = [
   // #262 (0095) — grava dados cadastrais/fiscais da clínica (página Dados).
   "app_salvar_dados_clinica",
   "app_session_clinica_visivel",
+  // #539 (0143, revisão pós-PR) — DEFINER que grava o número sequencial da
+  // sessão para titular OU substituto; guard interno = tenant +
+  // app_session_profissional_responsavel. Substitui o UPDATE direto em
+  // `session` sem estender `session_update` ao substituto.
+  "app_session_definir_numero_sequencial",
+  // #539 (0143, D-AUD-7) — régua única de "profissional responsável":
+  // `terapeuta_id OU atendido_por_id`. SECURITY INVOKER (lê `session` sob a
+  // RLS de quem chama); o guard de tenant é redundante com a RLS e está lá
+  // por disciplina D16.
+  "app_session_profissional_responsavel",
   "app_session_terapeuta_id",
   "app_user_in_clinic",
   // #407/T05 — definer de validação da anamnese: resolve tenant por
@@ -313,15 +328,17 @@ const FUNCOES_COM_HELPER = [
 ];
 
 /**
- * As 16 funções que chamam app_user_role_exigido() (0093 + 0094, D23, 0128 #352).
+ * As 17 funções que chamam app_user_role_exigido() (0093 + 0094, D23, 0128 #352, 0142 #529, 0144 T07c).
  */
 const FUNCOES_COM_USER_ROLE_HELPER = [
   "app_alerta_risco_visivel",
+  // #529 (0142) — mesmo predicado de papel de `alerta_risco_scope`.
+  "app_alerta_trecho_fonte",
   "app_alerta_visivel",
   "app_aplicar_candidatura",
   "app_aplicar_snapshot",
   "app_desarquivar_paciente",
-  // Task 7c (0142) — guard `coordenador OR app_is_on_team OR cobertura`.
+  // Task 7c (0144) — guard `coordenador OR app_is_on_team OR cobertura`.
   // Segue o padrão pós-D23: helper, não `current_setting('app.user_role')`
   // cru (o texto original da `0092`, já superado pela `0093` nela mesma).
   "app_fatos_prontidao",
@@ -343,16 +360,19 @@ const FUNCOES_COM_USER_ROLE_HELPER = [
 ];
 
 /**
- * As 10 funções que chamam app_user_id_exigido() (0093 + 0094, D23, 0112 #392, 0114 #393, 0115 #407, 0121 #119).
+ * As 12 funções que chamam app_user_id_exigido() (0093 + 0094, D23, 0112 #392, 0114 #393, 0115 #407, 0121 #119, 0142 #529, 0143 #539, 0144 T07c).
  */
 const FUNCOES_COM_USER_ID_EXIGIDO_HELPER = [
   "app_alerta_risco_visivel",
+  // #529 (0142) — `app_session_terapeuta_id(session_id) = app_user_id_exigido()`,
+  // o terceiro ramo do predicado de `alerta_risco_scope`.
+  "app_alerta_trecho_fonte",
   // D56 (0133) — o alvo da declaração NUNCA entra por parâmetro: é sempre
   // `app_user_id_exigido()`. Não existe assinatura capaz de declarar e-Psi no
   // registro de outra pessoa.
   "app_declarar_e_psi",
   "app_desarquivar_paciente",
-  // Task 7c (0142) — `session.terapeuta_id`/`atendido_por_id` comparados
+  // Task 7c (0144) — `session.terapeuta_id`/`atendido_por_id` comparados
   // contra `app_user_id_exigido()`, mesmo padrão pós-D23 da `0092`.
   "app_fatos_prontidao",
   "app_is_on_team",
@@ -363,6 +383,8 @@ const FUNCOES_COM_USER_ID_EXIGIDO_HELPER = [
   "app_session_clinica_visivel",
   // #119 (0121) — valida autor ou mesma disciplina na equipe ativa.
   "app_session_disciplina_liberada",
+  // #539 (0143) — `app_user_id_exigido() IN (terapeuta_id, atendido_por_id)`.
+  "app_session_profissional_responsavel",
   // #407/T05 — `validada_por = app_user_id_exigido()` na transição de estado.
   "app_validar_anamnese",
 ];
@@ -375,6 +397,44 @@ const FUNCOES_COM_USER_ID_ATUAL_HELPER = [
   "app_salvar_config_emergencia",
   "app_user_id_exigido",
 ];
+
+/**
+ * Q-05 (#529) — helpers PRIMITIVOS de tenant/identidade. Uma função DEFINER
+ * está "coberta" se chama um destes, ou chama uma função coberta (fecho
+ * transitivo medido em `prosrc`). `app_user_role_exigido()` fica de fora de
+ * propósito: papel sem tenant não limita nada.
+ */
+const HELPERS_DE_TENANT_E_IDENTIDADE = [
+  "app_clinic_id_exigido",
+  "app_user_id_exigido",
+  "app_patient_in_clinic",
+  "app_user_in_clinic",
+  "app_is_on_team",
+];
+
+/**
+ * Q-05 (#529) — DEFINERs chamáveis por app_role, com argumento, SEM guard de
+ * tenant/identidade, e por que isso é aceitável. Regra de admissão (memória
+ * `definer-cross-tenant-so-devolve-boolean`): a função não devolve PHI nem
+ * linha de tabela — no máximo 1 bit por identificador que o chamador JÁ
+ * possui. Qualquer função que devolva texto clínico, nome, ou linha inteira
+ * NÃO entra aqui: ganha guard interno (0142 é o precedente).
+ *
+ * A justificativa é obrigatória por tipo (Record<string, string>) e medida
+ * pelo teste: string curta falha.
+ */
+const DEFINERS_GLOBAIS_JUSTIFICADOS: Record<string, string> = {
+  app_asr_objetos_em_uso:
+    "Recebe refs de objeto do MinIO (chaves opacas, sem PHI) e devolve o subconjunto que ainda está na fila de ASR (0138, #429). 1 bit por ref que o chamador já tem; lê só audio_capture.objeto_ref/asr_status. Usada pelo expurgo off-site, que roda sem tenant.",
+  app_assert_destinatarios_no_tenant:
+    "RETURNS void: levanta P0001 se algum destinatário de notificação não pertence ao tenant informado (0105, regra de ouro §4.2.1). Guard de escrita chamado com o clinic_id da própria linha do alerta; não devolve dado, só bloqueia.",
+  app_destinatarios_fora_do_tenant:
+    "Devolve, dos uuids de usuário que o chamador JÁ passou, quais NÃO têm user_role no clinic_id passado (0105). 1 bit de membership por uuid conhecido, sem nome/e-mail/PHI. É o predicado de app_assert_destinatarios_no_tenant.",
+  app_materializar_snapshot:
+    "DEPRECATED (#392): corpo é só RAISE NOTICE, não lê nem escreve tabela alguma. Mantida por compatibilidade de assinatura; remover a função é migração própria, fora do #529.",
+  app_session_sob_sigilo:
+    "Devolve boolean 'esta sessão tem nota discipline_only' (0122, #119). 1 bit por uuid de sessão, sem conteúdo. Só é lida dentro de app_session_conteudo_visivel, que a coloca em AND com app_session_clinica_visivel (guard de tenant). Candidata a ganhar guard próprio — proposta registrada na PR do #529.",
+};
 
 const TABELAS_COM_DADO = [
   { tabela: "clinic", idA: CLINICA_A, idB: CLINICA_B },
@@ -482,7 +542,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.relname)).toEqual([]);
   });
 
-  test("as 21 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
+  test("as 24 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
     // Mesmo raciocínio do literal de policies: o oráculo é escrito à mão para
     // que uma função NOVA que entre no regime (ou uma que saia) precise de uma
     // linha aqui, no diff, e não passe por osmose.
@@ -495,7 +555,142 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_HELPER);
-    expect(FUNCOES_COM_HELPER.length).toBe(22);
+    expect(FUNCOES_COM_HELPER.length).toBe(25);
+  });
+
+  // ─── 2d. Q-05 (#529): oráculo SISTÊMICO de definers ───────────────────────
+  //
+  // O caso acima é uma allowlist POSITIVA: "estas 22 funções usam o helper".
+  // Ele acusa quem SAI do regime, mas não quem nunca entrou — um DEFINER novo
+  // sem guard nenhum não aparece em lista nenhuma e passa limpo. Foi assim que
+  // `app_alerta_trecho_fonte` (0122, S-02) e o PR #422 atravessaram o CI.
+  //
+  // Este caso inverte a pergunta. Universo: TODA função `SECURITY DEFINER` do
+  // schema public com EXECUTE para `app_role` e >= 1 argumento — isto é, tudo o
+  // que a app consegue chamar com um alvo escolhido por ela, e que ao rodar
+  // ignora a RLS. Cada uma precisa estar em UM de dois conjuntos:
+  //   (a) contém uma chamada a helper de tenant/identidade, direta ou por
+  //       delegação a outra função que contém (fecho transitivo em `prosrc`);
+  //   (b) está em `DEFINERS_GLOBAIS_JUSTIFICADOS`, com o porquê escrito.
+  // A falha lista quem ficou fora dos dois. Entrar na allowlist é decisão
+  // humana no diff — nunca por osmose.
+  test("todo DEFINER chamável por app_role com argumento tem guard de tenant/identidade ou justificativa", async () => {
+    // `has_function_privilege` em vez de `information_schema.routine_privileges`:
+    // cobre o GRANT direto, o GRANT a PUBLIC e a herança por membership — os
+    // três caminhos por onde app_role chega a EXECUTE. A view só lista o grant
+    // nominal.
+    const rows = await owner!<
+      { proname: string; prosrc: string; alvo: boolean }[]
+    >`
+      SELECT p.proname,
+             p.prosrc,
+             (p.prosecdef
+              AND p.pronargs >= 1
+              AND has_function_privilege('app_role', p.oid, 'EXECUTE')) AS alvo
+        FROM pg_proc p
+        JOIN pg_namespace n ON n.oid = p.pronamespace
+       WHERE n.nspname = 'public'
+         AND p.prokind IN ('f', 'p')
+       ORDER BY 1`;
+
+    // Comentários e literais de string saem ANTES do casamento: um
+    // `-- não usa app_patient_in_clinic` ou um RAISE que cite o helper NÃO é
+    // uma chamada, e sem isto o oráculo passaria por menção.
+    //
+    // ORDEM IMPORTA (revisão pós-PR #544): literais primeiro, depois `--`.
+    // Um `--` DENTRO de literal (`RAISE '... a--b'`) tratado antes engoliria
+    // o resto da linha, inclusive código real depois da string na mesma
+    // linha — e um guard que estivesse ali sumiria do casamento. Com o
+    // literal já reduzido a `''`, o `--` que sobra é comentário de verdade.
+    const corpo = new Map(
+      rows.map((r) => [
+        r.proname,
+        r.prosrc
+          .replace(/\/\*[\s\S]*?\*\//g, " ")
+          .replace(/'(?:[^']|'')*'/g, "''")
+          .replace(/--[^\n]*/g, " "),
+      ]),
+    );
+    // Uma chamada só conta como FRONTEIRA se não for alternativa de um `OR`.
+    // `WHEN a.session_id IS NULL OR app_session_conteudo_visivel(...)` era a
+    // forma exata da 0122 (S-02): o guard existe, está numa função coberta, e
+    // não gata nada no ramo sem sessão. Delegação transitiva ingênua aceitava
+    // esse corpo — o mutante provou (PR do #529). Limite declarado: é uma
+    // heurística textual; um guard num `WHEN` separado ainda passa. A prova
+    // de comportamento é o caso 14 de `sigilo-disciplina-rls.int.test.ts`.
+    //
+    // O lado oposto da mesma heurística: uma função cujo ÚNICO guard legítimo
+    // esteja numa disjunção (ex.: `WHERE s.terapeuta_id = app_user_id_exigido()
+    // OR app_is_on_team(s.patient_id)` — os dois ramos são identidade-bound e
+    // o conjunto é seguro) fica "descoberta" aqui e só passa entrando em
+    // `DEFINERS_GLOBAIS_JUSTIFICADOS` com a justificativa escrita. É falso
+    // positivo deliberado: custa uma linha no diff, e é o revisor humano — não
+    // o regex — quem decide que a disjunção inteira é fronteira.
+    const fechaParenteses = (src: string, abre: number) => {
+      let nivel = 0;
+      for (let i = abre; i < src.length; i++) {
+        if (src[i] === "(") nivel++;
+        else if (src[i] === ")" && --nivel === 0) return i;
+      }
+      return src.length;
+    };
+    const chama = (fn: string, alvo: string) => {
+      const src = corpo.get(fn) ?? "";
+      for (const m of src.matchAll(new RegExp(`\\b${alvo}\\s*\\(`, "g"))) {
+        const antes = src.slice(0, m.index).trimEnd();
+        if (/\bOR(\s+NOT)?$/i.test(antes)) continue;
+        const abre = m.index + m[0].length - 1;
+        const depois = src.slice(fechaParenteses(src, abre) + 1);
+        if (/^\s*OR\b/i.test(depois)) continue;
+        return true;
+      }
+      return false;
+    };
+
+    // (a) fecho transitivo: começa nos helpers primitivos e cresce enquanto
+    // alguma função ainda não coberta chamar uma já coberta.
+    const cobertas = new Set<string>(HELPERS_DE_TENANT_E_IDENTIDADE);
+    let cresceu = true;
+    while (cresceu) {
+      cresceu = false;
+      for (const fn of corpo.keys()) {
+        if (cobertas.has(fn)) continue;
+        for (const alvo of cobertas) {
+          if (alvo !== fn && chama(fn, alvo)) {
+            cobertas.add(fn);
+            cresceu = true;
+            break;
+          }
+        }
+      }
+    }
+
+    const universo = rows.filter((r) => r.alvo).map((r) => r.proname);
+    expect(universo.length).toBeGreaterThan(0); // não-vacuidade
+
+    const foraDosDoisConjuntos = universo.filter(
+      (fn) => !cobertas.has(fn) && !(fn in DEFINERS_GLOBAIS_JUSTIFICADOS),
+    );
+    expect(foraDosDoisConjuntos).toEqual([]);
+
+    // A allowlist também é medida, nos dois sentidos: (1) toda entrada existe
+    // e está no universo — entrada morta é justificativa de função que já não
+    // é DEFINER, ou que perdeu o EXECUTE, e esconderia uma futura homônima;
+    // (2) nenhuma entrada é coberta por (a) — justificativa redundante mente
+    // sobre o que a função faz. E toda justificativa é texto de verdade.
+    for (const [fn, porque] of Object.entries(DEFINERS_GLOBAIS_JUSTIFICADOS)) {
+      expect(
+        universo,
+        `${fn} está na allowlist mas não é DEFINER chamável por app_role com argumento`,
+      ).toContain(fn);
+      expect(cobertas.has(fn), `${fn} já tem guard — tirar da allowlist`).toBe(
+        false,
+      );
+      expect(porque.trim().length, `${fn} sem justificativa`).toBeGreaterThan(
+        20,
+      );
+    }
+    expect(Object.keys(DEFINERS_GLOBAIS_JUSTIFICADOS).length).toBe(5);
   });
 
   // ─── 2c. D23: guards de papel e identidade (0093) ──────────────────────────
@@ -538,10 +733,10 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_USER_ROLE_HELPER);
-    expect(FUNCOES_COM_USER_ROLE_HELPER.length).toBe(16);
+    expect(FUNCOES_COM_USER_ROLE_HELPER.length).toBe(17);
   });
 
-  test("as 9 funções de autorização por identidade chamam app_user_id_exigido() — conjunto exato", async () => {
+  test("as 11 funções de autorização por identidade chamam app_user_id_exigido() — conjunto exato", async () => {
     const rows = await owner!<{ proname: string }[]>`
       SELECT p.proname
         FROM pg_proc p
@@ -553,7 +748,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.proname)).toEqual(
       FUNCOES_COM_USER_ID_EXIGIDO_HELPER,
     );
-    expect(FUNCOES_COM_USER_ID_EXIGIDO_HELPER.length).toBe(10);
+    expect(FUNCOES_COM_USER_ID_EXIGIDO_HELPER.length).toBe(12);
   });
 
   test("as 3 funções com identidade leniente chamam app_user_id_atual() — conjunto exato", async () => {

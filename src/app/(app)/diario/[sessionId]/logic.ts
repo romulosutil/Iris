@@ -92,9 +92,11 @@ const capturaSchema = z.object({
 
 /**
  * Captura rápida de diário — texto livre do terapeuta durante/após a sessão.
- * O RLS (`session_note_insert`) exige que `ctx.userId` seja o terapeuta dono
- * da sessão; um terapeuta que não é dono cai no catch e recebe mensagem
- * genérica (RLS não deixa distinguir "não existe" de "sem permissão").
+ * O RLS (`session_note_insert`) exige que `ctx.userId` seja o profissional
+ * responsável pela sessão — titular OU substituto designado na agenda
+ * (`app_session_profissional_responsavel`, 0143, #539); quem não é cai no
+ * catch e recebe mensagem genérica (RLS não deixa distinguir "não existe" de
+ * "sem permissão").
  */
 async function capturarDiarioCore(
   ctx: TenantContext,
@@ -122,7 +124,7 @@ async function capturarDiarioCore(
       // cobertura) o terapeuta de COBERTURA não lê a linha `patient`, então a
       // modalidade chegava `null` e a régua recusava por "modalidade
       // ausente" um caso clinicamente autorizado. A modalidade agora sai por
-      // `app_fatos_prontidao` (migração `0142`), pela MESMA porta e sob o
+      // `app_fatos_prontidao` (migração `0144`), pela MESMA porta e sob o
       // MESMO guard dos seis fatos — quem lê os fatos lê a modalidade, e
       // ninguém mais.
       const [sess] = await tx
@@ -629,9 +631,10 @@ const consolidarSchema = z.object({
  * costura de extração (`ExtractionProvider`: stub demo gera 'sugerida',
  * produção fica 'pendente_reprocessamento' até a Fase 3 ligar o LLM real).
  *
- * Roda no contexto do terapeuta dono da sessão — `extraction_insert` e
- * `extraction_delete` (RLS) exigem `app_session_terapeuta_id(session_id) =
- * app.user_id`, então `requireDiario` sozinho não bastaria sem essa condição.
+ * Roda no contexto do profissional responsável pela sessão (titular OU
+ * substituto, #539) — `extraction_insert` e `extraction_delete` (RLS) exigem
+ * `app_session_profissional_responsavel(session_id)`, então `requireDiario`
+ * sozinho não bastaria sem essa condição.
  */
 async function consolidarSessaoCore(
   ctx: TenantContext,
@@ -670,7 +673,7 @@ async function consolidarSessaoCore(
       // `patient_select` (RLS por equipe, sem recorte de cobertura) o
       // terapeuta de cobertura não lê a linha `patient`; a modalidade chegava
       // `null` e a régua recusava por "modalidade ausente" o que é cobertura
-      // clínica legítima. Agora ela sai de `app_fatos_prontidao` (`0142`),
+      // clínica legítima. Agora ela sai de `app_fatos_prontidao` (`0144`),
       // pela mesma porta e sob o mesmo guard dos seis fatos. O que sobra aqui
       // são só colunas de `session` — sempre legíveis a quem pode gravar a
       // nota, que é o motivo de o `sess!` abaixo continuar seguro.
@@ -718,43 +721,28 @@ async function consolidarSessaoCore(
         });
 
       // 2) popula numero_sequencial_paciente só se ainda nulo (idempotente):
-      //    próximo inteiro por paciente, resolvido via helper SECURITY DEFINER
-      //    (app_proximo_numero_sequencial) — precisa enxergar TODAS as sessões
-      //    do paciente na clínica, não só as que o RLS deixa este terapeuta
-      //    ver (um terapeuta de cobertura, fora da equipe, subestimaria o
-      //    MAX() se calculado sob o próprio RLS). O índice único
-      //    `uq_session_numero_por_paciente` fecha a corrida remanescente
-      //    entre duas consolidações concorrentes: se o UPDATE colidir, relemos
-      //    o número já gravado pela outra transação (idempotente).
-      //    `sess` já foi lido acima, antes de qualquer escrita (T07b) — reusa.
+      //    `app_session_definir_numero_sequencial` (0143, #539) é SECURITY
+      //    DEFINER com guard interno — tenant + `app_session_profissional_
+      //    responsavel` (titular OU substituto). Sai daqui o UPDATE direto em
+      //    `session`: sob `session_update` o substituto afetava 0 linhas em
+      //    silêncio, e a alternativa (estender a policy) deixaria ele
+      //    remarcar/cancelar/reatribuir a sessão. O DEFINER também enxerga
+      //    TODAS as sessões do paciente para o MAX() (cobertura fora da equipe
+      //    subestimaria sob a própria RLS) e resolve a corrida de duas
+      //    consolidações concorrentes (23505 em `uq_session_numero_por_paciente`)
+      //    relendo o número já gravado, na subtransação certa.
+      //
+      //    MERGE (T07b + #539): a leitura de `sess` que ficava AQUI subiu para
+      //    antes da primeira escrita — a régua (`assertPodeDocumentar`) tem de
+      //    correr na mesma transação e ANTES do upsert da nota, senão uma meta
+      //    descontinuada entre a checagem e o INSERT passaria por ela. É a
+      //    MESMA leitura (`patientId` + `numero`), só adiantada; reusada aqui.
       let numero = sess!.numero ?? null;
       if (numero === null) {
-        try {
-          const upd = await tx.execute(sql`
-            UPDATE session SET numero_sequencial_paciente =
-              app_proximo_numero_sequencial(${sess!.patientId})
-            WHERE id = ${sid} AND numero_sequencial_paciente IS NULL
-            RETURNING numero_sequencial_paciente AS numero`);
-          const row = (upd as unknown as Array<{ numero: number }>)[0];
-          numero = row?.numero ?? sess!.numero ?? null;
-        } catch (err) {
-          // Corrida: outra consolidação concorrente já gravou o número
-          // (violação de uq_session_numero_por_paciente). Relemos o valor
-          // já persistido — mantém a operação idempotente.
-          if (
-            err instanceof Error &&
-            "code" in err &&
-            (err as { code?: string }).code === "23505"
-          ) {
-            const [atual] = await tx
-              .select({ numero: session.numeroSequencialPaciente })
-              .from(session)
-              .where(eq(session.id, sid));
-            numero = atual?.numero ?? null;
-          } else {
-            throw err;
-          }
-        }
+        const upd = await tx.execute(sql`
+          SELECT app_session_definir_numero_sequencial(${sid}::uuid) AS numero`);
+        const row = (upd as unknown as Array<{ numero: number | null }>)[0];
+        numero = row?.numero ?? null;
       }
 
       // 3) #174 regra 6: a nota consolidada é registro clínico — se o paciente

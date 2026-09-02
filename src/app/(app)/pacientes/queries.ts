@@ -126,7 +126,7 @@ export async function listarTodosPacientes(
     if (podeLerProntidao && linhas.length > 0) {
       const ids = linhas.map((linha) => linha.id);
       // Uma chamada só, com o array de ids da página — não uma por paciente.
-      // `app_fatos_prontidao` (migração `0142`, D-A12) lê pelo MESMO
+      // `app_fatos_prontidao` (migração `0144`, D-A12) lê pelo MESMO
       // predicado que `obterFatosProntidaoNaTx` (`prontidao-queries.ts`): as
       // duas portas passam a divergir zero, inclusive no recorte de
       // cobertura que faltava aqui antes da Task 7c.

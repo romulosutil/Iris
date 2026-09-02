@@ -32,7 +32,7 @@
 -- inteira (PII) a quem só precisa de um enum.
 --
 -- `DROP` antes do `CREATE`: `CREATE OR REPLACE` não troca o tipo de retorno
--- de uma função existente (`42P13`). A `0142` nunca saiu desta máquina, e o
+-- de uma função existente (`42P13`). A `0144` nunca saiu desta máquina, e o
 -- par DROP+CREATE deixa a migração idempotente para quem já aplicou a versão
 -- de seis colunas localmente.
 

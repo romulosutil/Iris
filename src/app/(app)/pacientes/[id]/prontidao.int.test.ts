@@ -16,7 +16,7 @@ vi.mock("server-only", () => ({}));
  * Task 3 (prontidão do prontuário) — `obterFatosProntidao` lê os seis fatos
  * numa transação `withTenant`, sob a RLS real.
  *
- * Task 7c (0142) trocou a leitura direta por `app_fatos_prontidao`
+ * Task 7c (0144) trocou a leitura direta por `app_fatos_prontidao`
  * (`SECURITY DEFINER`): o motivo do segundo `describe` é D-A9/D-A10. As
  * tabelas clínicas (`goal` incluída) têm policy de SELECT chaveada por PAPEL
  * e EQUIPE (`goal_select`, `db/migrations/0006_fase2_rls.sql:207` —
@@ -189,7 +189,7 @@ describe.skipIf(!hasDb)("obterFatosProntidao (Task 3)", () => {
       expect(fatos.temProtocoloAtivo).toBe(false);
     });
 
-    // Task 7c (0142): a leitura passou a sair por `app_fatos_prontidao`
+    // Task 7c (0144): a leitura passou a sair por `app_fatos_prontidao`
     // (`SECURITY DEFINER`), cujo guard RAISE em isolamento cross-tenant
     // (D-A13) — não devolve mais `false` silencioso. `false` aqui seria
     // ambíguo com "não existe"; exceção nomeada não é.
@@ -224,7 +224,7 @@ describe.skipIf(!hasDb)("obterFatosProntidao (Task 3)", () => {
     });
 
     // Documenta o comportamento REAL do guard, seja ele qual for. Task 7c
-    // (0142) trocou "false silencioso" por exceção nomeada (D-A13): um
+    // (0144) trocou "false silencioso" por exceção nomeada (D-A13): um
     // terapeuta sem vínculo de equipe E sem sessão de cobertura para PAC não
     // tem autorização clínica nenhuma — nem por `app_is_on_team`, nem pelo
     // recorte de cobertura da `0092`. Se este teste ficar vermelho, a régua

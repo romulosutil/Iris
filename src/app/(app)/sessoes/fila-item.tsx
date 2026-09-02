@@ -70,7 +70,7 @@ export function ItemFila({ item }: { item: SessaoTravada }) {
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="font-display font-semibold text-[var(--text-primary)]">
-          {item.patientNome}
+          {item.patientNome ?? "Paciente (acesso restrito)"}
         </p>
         {/* R-18: o selo NUNCA aparece sem a linha de dívida logo abaixo. */}
         <span className="font-display rounded-[var(--radius-xs)] border-2 border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] px-3 py-1 text-xs font-semibold text-[var(--status-warning-fg)]">

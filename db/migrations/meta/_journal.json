@@ -1000,7 +1000,21 @@
       "idx": 142,
       "version": "7",
       "when": 1788190225804,
-      "tag": "0142_fatos_prontidao_definer",
+      "tag": "0142_alerta_trecho_fonte_guard_tenant",
+      "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1788190226804,
+      "tag": "0143_profissional_responsavel_da_sessao",
+      "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1788190227804,
+      "tag": "0144_fatos_prontidao_definer",
       "breakpoints": true
     }
   ]

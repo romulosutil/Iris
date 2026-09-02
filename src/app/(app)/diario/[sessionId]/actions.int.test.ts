@@ -103,7 +103,7 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     await owner`INSERT INTO care_team_membership (patient_id, user_id, papel_na_equipe, disciplina)
       VALUES (${PAC}, ${U_T1}, 'terapeuta_referencia', 'ABA')`;
     // U_COBERTURA propositalmente FORA da care team: `app_fatos_prontidao`
-    // (migração `0142`, Task 7c) autoriza a leitura clínica pelo recorte de
+    // (migração `0144`, Task 7c) autoriza a leitura clínica pelo recorte de
     // cobertura (`session.terapeuta_id = app.user_id`), não por vínculo de
     // equipe. Uma linha de `care_team_membership` aqui mascararia a própria
     // coisa que este describe prova.
@@ -178,7 +178,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
 
   // Contrapartida do teste acima: aceitar `coordenador` na guarda de papel NÃO
   // abre o diário alheio. Quem restringe é a RLS (`session_note_insert` exige
-  // `app_session_terapeuta_id(session_id) = app.user_id`), não a guarda.
+  // `app_session_profissional_responsavel(session_id)` — titular ou substituto
+  // designado, #539), não a guarda.
   test("#506 · coordenador que NÃO é o terapeuta da sessão continua barrado", async () => {
     const r = await capturarDiario(ctxSolo, {
       sessionId: SESS,

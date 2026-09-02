@@ -58,7 +58,7 @@ export type ProntidaoLida = {
  * chamador for um terapeuta de cobertura (`session.terapeuta_id`/
  * `atendido_por_id`) fora da equipe — falso-negativo que o gate fail-closed
  * transformaria em bloqueio indevido. `app_fatos_prontidao` (`SECURITY
- * DEFINER`, migração `0142`) espelha `goal_select` MAIS o recorte de
+ * DEFINER`, migração `0144`) espelha `goal_select` MAIS o recorte de
  * cobertura que a `0092` (D8/#174) já reconhece como autorização clínica
  * legítima, e RAISE em vez de `false` silencioso quando nem isso autoriza.
  * `montarProntidao` (`src/lib/patient/prontidao.ts`) segue só montando

@@ -36,7 +36,7 @@ export type ProgressoOnboarding = Record<PassoId, boolean>;
  * ativa" aqui responderia certo só para o `protocol_driven` e criaria uma
  * segunda tabela de degraus fora de `modalidade.ts` — exatamente o que a
  * D-A5 proíbe. Então o SQL devolve só os FATOS (via `app_fatos_prontidao`,
- * migração `0142`, a mesma porta de `prontidao-queries.ts` e da lista de
+ * migração `0144`, a mesma porta de `prontidao-queries.ts` e da lista de
  * pacientes) e quem decide continua sendo a função pura.
  *
  * O `json_agg` cobre todos os pacientes visíveis, sem `LIMIT`: "existe ao

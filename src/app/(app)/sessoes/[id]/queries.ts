@@ -28,7 +28,7 @@ import { obterFatosProntidaoNaTx } from "@/app/(app)/pacientes/[id]/prontidao-qu
  * {coordenador, terapeuta} (`PAPEIS_COM_LEITURA_CLINICA`, `prontidao.ts`) —
  * então nunca vale a pena LER de verdade para eles.
  *
- * Isso deixou de ser só otimização com a Task 7c (0142): `session_select`
+ * Isso deixou de ser só otimização com a Task 7c (0144): `session_select`
  * (`db/migrations/0006_fase2_rls.sql`) deixa `admin_recepcao` enxergar
  * QUALQUER sessão da clínica — mas o guard de `app_fatos_prontidao` não a
  * autoriza (D-A11) e RAISE quando reprova (D-A13), em vez do `false`
@@ -45,6 +45,7 @@ const FATOS_VAZIOS: FatosProntidao = {
   temInstrumentoAplicado: false,
   temSessaoConsolidada: false,
 };
+import { ehProfissionalResponsavel } from "@/lib/sessao/responsavel";
 
 export type ProtocoloOpcao = { id: string; nome: string; disciplina: string };
 
@@ -104,6 +105,7 @@ export async function carregarSessao(
         id: session.id,
         patientId: session.patientId,
         terapeutaId: session.terapeutaId,
+        atendidoPorId: session.atendidoPorId,
         estado: session.estado,
         agendadaPara: session.agendadaPara,
         numeroSequencialPaciente: session.numeroSequencialPaciente,
@@ -250,8 +252,14 @@ export async function carregarSessao(
       patientId: sess.patientId,
       pacienteNome: pac?.nome ?? null,
       terapeutaId: sess.terapeutaId,
-      ehDono: sess.terapeutaId === ctx.userId,
-      podeVer: ctx.role === "coordenador" || sess.terapeutaId === ctx.userId,
+      // #539 (D-AUD-7): "dono" = profissional responsável = titular OU
+      // substituto designado na agenda. Mesma régua da RLS
+      // (`app_session_profissional_responsavel`, 0143) e de `fila.ts` — se as
+      // três divergirem, a tela nega o formulário a quem o banco deixa escrever.
+      ehDono: ehProfissionalResponsavel(ctx.userId, sess),
+      podeVer:
+        ctx.role === "coordenador" ||
+        ehProfissionalResponsavel(ctx.userId, sess),
       podeColapsarAprovacao: podeAutoValidar(ctx, {
         terapeutaId: sess.terapeutaId,
       }),

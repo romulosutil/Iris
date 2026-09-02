@@ -27,7 +27,7 @@ export class ProntuarioIncompletoError extends Error {
  * `null`: "não vejo" e "não está definida" eram indistinguíveis aqui dentro,
  * e a régua tratava o primeiro como o segundo — recusando por modalidade
  * ausente uma cobertura clínica legítima (D8/#174). Lida pela MESMA porta
- * autorizada dos seis fatos (`app_fatos_prontidao`, migração `0142`), `null`
+ * autorizada dos seis fatos (`app_fatos_prontidao`, migração `0144`), `null`
  * volta a significar só "não está definida" — que é exatamente o que o
  * degrau bloqueante "modalidade" existe para dizer.
  */

@@ -38,7 +38,7 @@ A Task 7b contornou isso na **fixture** de teste (uma linha de
 
 ## 3. A migração
 
-`db/migrations/0142_fatos_prontidao_definer.sql`. Entrada manual no
+`db/migrations/0144_fatos_prontidao_definer.sql`. Entrada manual no
 `_journal.json`: `idx: 142`, `when: 1788190225804` (= `1788190224804` da `0141`
 **+ 1000**). `when` menor ou igual ao máximo faz o Drizzle **pular o arquivo em
 silêncio** — foi o que aconteceu com a `0055` em produção (#165).
@@ -155,7 +155,7 @@ entrada da MESMA régua. O `leftJoin` de `logic.ts` (Task 7b, deliberado e
 documentado) fazia `clinicalModality` chegar `null`, e a régua recusava por
 modalidade ausente. O fluxo D8/regra 6 estava quebrado em produção pela 7b.
 
-**Decisão.** A `0142` ganha uma 8ª coluna de retorno, `modalidade
+**Decisão.** A `0144` ganha uma 8ª coluna de retorno, `modalidade
 clinical_modality`. Mesma porta, mesmo guard, nenhuma policy tocada.
 
 | Alternativa | Por que não |
@@ -175,7 +175,7 @@ diverge dela nas duas direções:
   chamador (a régua de documentação) e ao mesmo recorte da `0092`.
 
 **`DROP FUNCTION` antes do `CREATE`.** `CREATE OR REPLACE` não troca o tipo de
-retorno de uma função existente (`42P13`). A `0142` nunca saiu da máquina de
+retorno de uma função existente (`42P13`). A `0144` nunca saiu da máquina de
 desenvolvimento; o par DROP+CREATE deixa a migração idempotente para quem já
 aplicou a versão de seis colunas localmente.
 
@@ -194,3 +194,40 @@ existe para remover.
 - ❌ Deixar em `logic.ts` os comentários que justificam o `leftJoin` depois que
   o `leftJoin` sai: comentário que descreve código morto mente mais que a
   ausência dele.
+
+## 9. Renumeração para `0144` (02/09/2026)
+
+A migração nasceu `0142`. Enquanto a branch trabalhava, `main` mergeou DUAS
+migrações — `0142_alerta_trecho_fonte_guard_tenant` (#529) e
+`0143_profissional_responsavel_da_sessao` (#539) — ocupando o mesmo `idx` e o
+mesmo `when`. Quem acusou foi `src/db/migrations-vs-main.test.ts`, comparando
+com `origin/main`: migração nova com `when` ≤ o maior de `main` fica pulável
+em silêncio pelo próximo hand-migration (#165, #305, #306).
+
+A branch integrou `main` e a nossa virou `0144_fatos_prontidao_definer`, com
+`when` = 1788190227804 (o maior de `main` + 1000). Renumerar foi seguro só
+porque esta migração nunca saiu da máquina de desenvolvimento — editar a tag
+de uma migração já aplicada em produção não reexecuta nada, porque o Drizzle
+aplica por tag.
+
+**O que a renumeração exigiu além do rename**, e é onde se erra:
+
+- Apagar o registro obsoleto em `drizzle.__drizzle_migrations` do banco local.
+  O `0142` antigo ficou gravado com `created_at` = 1788190225804, **o mesmo
+  `when` do `0142` de `main`** — e o Drizzle só aplica o que tem `when` maior
+  que o máximo já aplicado. Sem apagar, o `0142` de `main` seria pulado EM
+  SILÊNCIO no banco local.
+- Trocar as 17 referências a `0142` espalhadas em comentários. Deixá-las
+  apontaria para a migração de `main`, que é outra coisa. As referências a
+  `0142` que sobraram em `db/tests/clinic-id-helper-rls.int.test.ts` são de
+  `main` (#529) e estão certas.
+- Somar os dois lados nos oráculos de conjunto exato do guard D16/D23, que as
+  duas branches mexeram: `FUNCOES_COM_HELPER` 21 → **25**,
+  `FUNCOES_COM_USER_ROLE_HELPER` 15 → **17**,
+  `FUNCOES_COM_USER_ID_EXIGIDO_HELPER` 9 → **12**. Resolver a favor de um lado
+  só apagaria a função do outro do oráculo.
+- Em `logic.ts`, `main` (#539) reintroduziu a leitura de `sess` no passo 2,
+  onde ela ficava antes da T07b. A T07b a ADIANTOU para antes da primeira
+  escrita, porque a régua tem de correr na mesma transação e antes do upsert.
+  A resolução mantém a leitura adiantada e o `app_session_definir_numero_
+  sequencial` de `main` — manter as duas seria redeclarar `sess`.
