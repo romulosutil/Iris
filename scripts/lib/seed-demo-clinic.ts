@@ -20,6 +20,7 @@ import {
   patient,
   consent,
   patientProtocol,
+  goal,
   session,
 } from "@/db/schema";
 import { provisionUser } from "@/auth/provisioning";
@@ -131,6 +132,22 @@ export async function seedDemoClinic(
       patientId: paciente.id,
       protocolId: protocoloDemo.id,
       ativadoPor: coordenadorId,
+    });
+
+    // Escada de prontidão: para `protocol_driven` os degraus bloqueantes são
+    // Protocolo E Meta ativa (spec da jornada de admissão, §3.1). O protocolo
+    // acima sozinho não destrava — sem meta `ativa`, `assertPodeDocumentar`
+    // recusa e a rota da sessão renderiza o cartão de bloqueio no lugar do
+    // formulário, e não existe campo "Anotação rápida" para o spec preencher.
+    // Uma clínica demo que não consegue documentar não demonstra o produto.
+    await ownerDb.insert(goal).values({
+      clinicId,
+      patientId: paciente.id,
+      descricao: "Pedir água apontando, sem ajuda física.",
+      disciplina: "ABA",
+      estado: "ativa",
+      criterioDominio: { tipo: "ocorrencias_consecutivas", valor: 3 },
+      criadoPor: coordenadorId,
     });
 
     await ownerDb.insert(session).values({
