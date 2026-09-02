@@ -47,6 +47,8 @@ sessão: o sistema sabe o que falta e não diz.
 | **D-A5**   | A escada sai de `capacidadesDaModalidade`.                                                                  | `modalidade.ts` já é fonte única do que cada modalidade tem. Uma segunda tabela de degraus divergiria no primeiro modo novo — foi exatamente o bug que `modalidade.ts` nasceu para fechar.       |
 | **D-A6**   | Para `cognitive_behavioral`, o degrau bloqueante é **≥1 aplicação de instrumento padronizado** (marco zero). | Análogo clínico da meta no ABA. `EvolucaoTcc` lê `obterInstrumentoAplicacoes`; sem baseline o gráfico nasce com um ponto só.                                                                    |
 | **D-A7**   | `conventional` **não tem degrau bloqueante**.                                                               | Acompanhamento narrativo, sem gráfico, por decisão de produto de 20/08/2026 (`modalidade.ts`). Inventar régua onde não há métrica seria certeza fabricada.                                      |
+| **D-A8**   | A régua morde na **action**, não só na página. A UI apenas antecipa o que a action vai recusar.             | Gate que só existe no render não é gate: `capturarDiario` e `consolidarSessao` são server actions alcançáveis sem passar pela tela. Ver `ctx-forjavel-use-server`.                              |
+| **D-A9**   | Os fatos só são lidos para `coordenador` e `terapeuta`. `admin_recepcao` nunca recebe escada nem selo.       | `goal_select` (`0006_fase2_rls.sql:207`) exige `coordenador` OR `app_is_on_team`. Sob a RLS da recepção, `EXISTS` devolve `false` para linhas que existem — a escada afirmaria "falta meta" sobre um prontuário que ela nem pode ler. Ver §4a. |
 
 ## 3. A jornada nova
 
@@ -135,6 +137,30 @@ O último caso é a memória `erro-renderizado-como-empty-state`: `catch` que vi
 estado vazio transforma falha de leitura em afirmação clínica falsa. Aqui o
 fallback é ausência do cartão, nunca `podeDocumentar: true`.
 
+### 4a. O cartão também não pode fingir BLOQUEADO (D-A9)
+
+A §4 dizia que o cartão nunca finge "pronto". Falta a simétrica, e ela é a que
+morde: as cinco tabelas lidas têm policy de **papel e equipe**, não só de
+clínica. `goal_select` exige `coordenador` OR `app_is_on_team(patient_id)`.
+
+Sob a RLS de `admin_recepcao`, portanto, todo `EXISTS` clínico devolve `false`
+para linhas que existem. A escada diria "Falta meta" sobre um prontuário
+completo — e diria isso ao papel que a política proíbe de ler dado clínico.
+Uma afirmação falsa e um vazamento de estado clínico no mesmo selo.
+
+A direção do erro é fail-closed (bloqueia, não vaza linha), que é o lado certo
+de errar. Mas a resposta **não** é um `SECURITY DEFINER` que enxergue tudo:
+seria reintroduzir a família de defeito de um definer que abre demais.
+
+Regra: `obterFatosProntidao` só é chamada para `coordenador` e `terapeuta`.
+Para `admin_recepcao`, `montarProntidao` devolve escada vazia,
+`podeDocumentar: false` e `quemResolve: "Coordenação"` — sem nenhum degrau
+clínico nomeado. Na lista `/pacientes`, ela não vê selo de prontidão.
+
+Prova obrigatória, três contextos: `ctxCoordenador`, `ctxTerapeutaNaEquipe`,
+`ctxTerapeutaForaDaEquipe`. O terceiro é o que revela se a régua da equipe é a
+certa — hoje a agenda não exige equipe para agendar.
+
 ## 5. O que muda fora da escada
 
 - **`pacientes/[id]/page.tsx`** — estado vazio de Evolução passa a renderizar o
@@ -163,6 +189,13 @@ lista seis formas de um teste passar contra o código pré-fix.
 - ❌ Botão primário para um passo que o papel atual não pode dar.
 - ❌ `catch` que devolve prontidão vazia e destrava o documentar.
 - ❌ Bloquear Ficha Clínica ou Anamnese (D-A3).
+- ❌ Gate só no render, com a server action aceitando a escrita (D-A8).
+- ❌ Nomear degrau clínico para `admin_recepcao` (D-A9).
+- ❌ `SECURITY DEFINER` para ler fatos acima da RLS. Se algum dia for
+  inevitável, o guard interno copia o predicado EXATO da policy de leitura
+  correspondente e entra na varredura de `FUNCOES_COM_HELPER`.
+- ❌ Logar `err.message` de erro de driver: em `DrizzleQueryError` a `message`
+  é o SQL inteiro com os `params`. Logar `name` + código do Postgres.
 
 ## 8. Fora de escopo
 
