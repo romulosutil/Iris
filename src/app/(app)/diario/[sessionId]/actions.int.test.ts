@@ -161,7 +161,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
 
   // Contrapartida do teste acima: aceitar `coordenador` na guarda de papel NÃO
   // abre o diário alheio. Quem restringe é a RLS (`session_note_insert` exige
-  // `app_session_terapeuta_id(session_id) = app.user_id`), não a guarda.
+  // `app_session_profissional_responsavel(session_id)` — titular ou substituto
+  // designado, #539), não a guarda.
   test("#506 · coordenador que NÃO é o terapeuta da sessão continua barrado", async () => {
     const r = await capturarDiario(ctxSolo, {
       sessionId: SESS,

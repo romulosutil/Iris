@@ -6,6 +6,7 @@ import {
   avaliarFriccao,
   type FriccaoNivel,
 } from "@/lib/extraction/review-policy";
+import { ehProfissionalResponsavel } from "@/lib/sessao/responsavel";
 import { chaveDominio, resumirPayload, type LinhaResumo } from "./resumo";
 
 // Item do histórico do paciente (extração já aprovada/editada) exibido lado a
@@ -58,6 +59,7 @@ export async function carregarRevisao(
         id: session.id,
         patientId: session.patientId,
         terapeutaId: session.terapeutaId,
+        atendidoPorId: session.atendidoPorId,
       })
       .from(session)
       .where(eq(session.id, sessionId));
@@ -151,7 +153,9 @@ export async function carregarRevisao(
     return {
       sessionId,
       pacienteNome: pac?.nome ?? null,
-      ehDono: sess.terapeutaId === ctx.userId,
+      // #539 (D-AUD-7): titular OU substituto — mesma régua da RLS de
+      // `extraction_update` (`app_session_profissional_responsavel`, 0142).
+      ehDono: ehProfissionalResponsavel(ctx.userId, sess),
       extracoes,
     };
   });

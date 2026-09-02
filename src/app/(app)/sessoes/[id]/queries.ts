@@ -16,6 +16,7 @@ import {
   type ResultadoEstado,
 } from "@/lib/sessao/estado";
 import { podeAutoValidar } from "@/lib/sessao/aprovacao";
+import { ehProfissionalResponsavel } from "@/lib/sessao/responsavel";
 
 export type ProtocoloOpcao = { id: string; nome: string; disciplina: string };
 
@@ -68,6 +69,7 @@ export async function carregarSessao(
         id: session.id,
         patientId: session.patientId,
         terapeutaId: session.terapeutaId,
+        atendidoPorId: session.atendidoPorId,
         estado: session.estado,
         agendadaPara: session.agendadaPara,
         numeroSequencialPaciente: session.numeroSequencialPaciente,
@@ -170,8 +172,14 @@ export async function carregarSessao(
       patientId: sess.patientId,
       pacienteNome: pac?.nome ?? null,
       terapeutaId: sess.terapeutaId,
-      ehDono: sess.terapeutaId === ctx.userId,
-      podeVer: ctx.role === "coordenador" || sess.terapeutaId === ctx.userId,
+      // #539 (D-AUD-7): "dono" = profissional responsável = titular OU
+      // substituto designado na agenda. Mesma régua da RLS
+      // (`app_session_profissional_responsavel`, 0142) e de `fila.ts` — se as
+      // três divergirem, a tela nega o formulário a quem o banco deixa escrever.
+      ehDono: ehProfissionalResponsavel(ctx.userId, sess),
+      podeVer:
+        ctx.role === "coordenador" ||
+        ehProfissionalResponsavel(ctx.userId, sess),
       podeColapsarAprovacao: podeAutoValidar(ctx, {
         terapeutaId: sess.terapeutaId,
       }),

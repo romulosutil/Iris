@@ -88,9 +88,11 @@ const capturaSchema = z.object({
 
 /**
  * Captura rápida de diário — texto livre do terapeuta durante/após a sessão.
- * O RLS (`session_note_insert`) exige que `ctx.userId` seja o terapeuta dono
- * da sessão; um terapeuta que não é dono cai no catch e recebe mensagem
- * genérica (RLS não deixa distinguir "não existe" de "sem permissão").
+ * O RLS (`session_note_insert`) exige que `ctx.userId` seja o profissional
+ * responsável pela sessão — titular OU substituto designado na agenda
+ * (`app_session_profissional_responsavel`, 0142, #539); quem não é cai no
+ * catch e recebe mensagem genérica (RLS não deixa distinguir "não existe" de
+ * "sem permissão").
  */
 async function capturarDiarioCore(
   ctx: TenantContext,
@@ -598,9 +600,10 @@ const consolidarSchema = z.object({
  * costura de extração (`ExtractionProvider`: stub demo gera 'sugerida',
  * produção fica 'pendente_reprocessamento' até a Fase 3 ligar o LLM real).
  *
- * Roda no contexto do terapeuta dono da sessão — `extraction_insert` e
- * `extraction_delete` (RLS) exigem `app_session_terapeuta_id(session_id) =
- * app.user_id`, então `requireDiario` sozinho não bastaria sem essa condição.
+ * Roda no contexto do profissional responsável pela sessão (titular OU
+ * substituto, #539) — `extraction_insert` e `extraction_delete` (RLS) exigem
+ * `app_session_profissional_responsavel(session_id)`, então `requireDiario`
+ * sozinho não bastaria sem essa condição.
  */
 async function consolidarSessaoCore(
   ctx: TenantContext,
