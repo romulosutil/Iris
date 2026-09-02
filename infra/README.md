@@ -152,6 +152,36 @@ pnpm seed:demo     # dados de demonstração para navegar as telas
 
 `seed:demo` popula dado sintético para o smoke de navegação por papel.
 
+### Scripts com a role dona — regra de guard (#534)
+
+Regra: **diagnóstico de produção roda sob `withTenant` e escreve `audit_log`;
+script com role dona só com guard.** Em detalhe:
+
+- Correção pontual em dado de produção (destravar login, reprocessar uma
+  linha) é feita pelo caminho da aplicação — `withTenant(...)` em
+  `src/db/rls.ts`, que fixa `app.clinic_id` / `app.user_role` e passa pela
+  RLS — e deixa trilha em `audit_log`. Sem tenant e sem trilha não é
+  diagnóstico, é escrita cega.
+- Script em `scripts/**` que abre conexão Postgres (`postgres(`, `new Pool(`,
+  `drizzle(`) com `MIGRATION_DATABASE_URL` (role dona, bypassa RLS) **precisa
+  chamar o guard de ambiente antes de conectar**: `assertSeedAllowed` (seeds,
+  D52) ou `assertScriptRemotoPermitido` (`scripts/lib/guardrail-conexao.mjs`,
+  qualquer outro). O guard é fail-closed fora de `localhost` e só abre com
+  `ALLOW_SEED_REMOTE=true` — uma porta só, para seed e para script.
+- `scripts/lib/guardrail-conexao-wiring.test.ts` (roda no `pnpm test`) varre
+  `scripts/**` e acusa qualquer script que conecte sem o guard **antes** da
+  conexão. A allowlist do teste é só para job de produção com role de login
+  própria (`iris_escalonamento`, `iris_arquivamento`, `iris_retencao`, …) e
+  `migrate.mjs`; cada entrada vem com justificativa e o teste falha se ela
+  apodrecer.
+- `pnpm unlock:user <email>` (role dona) segue a regra: e-mail obrigatório,
+  guard antes da conexão, trilha em `audit_log`
+  (`acao = 'desbloqueio_usuario_script'`, `ator_id` nulo, detalhe sem PII)
+  para cada clínica do usuário. Sem vínculo o script **para** — ele não
+  concede papel; o acesso vem pelo convite da clínica.
+- Script de diagnóstico não versionado (ex.: um `check-*.ts` local) não pode
+  ficar na árvore: ou entra pelo mesmo teste de fiação, ou é apagado.
+
 ## Gotchas de dev local
 
 - **Porta do Postgres:** o compose mapeia o host em **5433** (evita conflito com
@@ -1286,6 +1316,10 @@ SMOKE_AMBIENTE_TESTE=1 \
 SMOKE_DATABASE_URL=postgres://iris:...@localhost:5433/iris \
 node scripts/smoke-alerta-risco.mjs
 ```
+
+Fora de `localhost` (staging), o guard de conexão (#534, §Scripts com a role
+dona) exige também `ALLOW_SEED_REMOTE=true` — sem ela o script para antes de
+conectar.
 
 Duas coisas sobre esse script, porque as duas são consequência direta do
 desenho de permissões da `0049`:
