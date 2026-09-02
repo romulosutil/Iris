@@ -36,14 +36,14 @@ describe("<WebMCPProvider/>", () => {
   it("registra SÓ `get_iris_overview` — nenhuma tool de evidência clínica", () => {
     render(<WebMCPProvider />);
     expect(provideContext).toHaveBeenCalledTimes(1);
-    const { tools } = provideContext.mock.calls[0][0] as { tools: Tool[] };
+    const { tools } = provideContext.mock.calls[0]?.[0] as { tools: Tool[] };
     expect(tools.map((t) => t.name)).toEqual(["get_iris_overview"]);
   });
 
   it("a tool restante devolve descrição institucional, sem campo que pareça evidência", async () => {
     render(<WebMCPProvider />);
-    const { tools } = provideContext.mock.calls[0][0] as { tools: Tool[] };
-    const saida = (await tools[0].execute({})) as Record<string, unknown>;
+    const { tools } = provideContext.mock.calls[0]?.[0] as { tools: Tool[] };
+    const saida = (await tools[0]?.execute({})) as Record<string, unknown>;
     expect(saida.name).toBe("Iris");
     // O formato da tool fabricada: `results[].id = "ev-001"` + `summary`.
     expect(JSON.stringify(saida)).not.toMatch(/"results"|"summary"|ev-\d+/);
