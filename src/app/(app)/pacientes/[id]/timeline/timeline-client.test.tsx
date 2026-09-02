@@ -37,6 +37,7 @@ function mockSnapshot(sessionNumero: number): TimelineSnapshot {
 function mockTimelineData(sessoes: number[]): TimelineData {
   return {
     snapshots: sessoes.map(mockSnapshot),
+    estadoDasMetas: {},
     metasAtivas: [],
     protocolosAtivos: [],
     milestonesAtivos: [],

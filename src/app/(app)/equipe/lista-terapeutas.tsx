@@ -20,7 +20,7 @@ export function ListaTerapeutas({ terapeutas }: { terapeutas: Terapeuta[] }) {
                   <span className="font-display text-base font-bold text-[var(--text-primary)]">
                     {t.name}
                   </span>
-                  <span className="rounded-[var(--radius-pill)] border border-[var(--status-success-border)] bg-[var(--status-success-bg)] px-2 py-0.5 font-mono text-[10px] font-semibold text-[var(--status-success-fg)] uppercase">
+                  <span className="rounded-[var(--radius-pill)] border border-[var(--status-success-border)] bg-[var(--status-success-bg)] px-2 py-0.5 font-mono text-xs font-semibold text-[var(--status-success-fg)] uppercase">
                     Ativo
                   </span>
                 </div>

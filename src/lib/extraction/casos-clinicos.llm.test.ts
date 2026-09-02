@@ -104,7 +104,7 @@ async function extrairConvencional(
     notaConsolidada: caso.diario,
     contexto: caso.contexto,
   });
-  const bruto = await invoker({
+  const { payload: bruto } = await invoker({
     system: CONVENTIONAL_SYSTEM_PROMPT,
     user,
   });

@@ -2,7 +2,7 @@ import { Progress, type ProgressVariante } from "@/components/ui/progress";
 import {
   StatusBadge,
   type BadgesVariantes,
-} from "@/components/ui/status-badge";
+} from "@/components/ui/patterns/status-badge";
 import { formatarDisciplina } from "@/lib/disciplinas";
 import { formatarHoras } from "@/lib/horas";
 import {

@@ -136,7 +136,9 @@ describe.skipIf(!hasDb)("reinforcer_profile on-approve (Fase 4 · 4C.1)", () => 
     expect(rows.length).toBe(0);
   });
 
-  test("sessão sem numero_sequencial_paciente: aprovação segue OK, mas reinforcer_profile NÃO é inserido", async () => {
+  // Q-03 (#532): aprovar antes da consolidação deixou de "seguir OK" sem
+  // gravar nada — a aprovação é recusada com `SESSAO_SEM_NUMERO` e desfeita.
+  test("sessão sem numero_sequencial_paciente: aprovação falha com SESSAO_SEM_NUMERO e reinforcer_profile NÃO é inserido", async () => {
     const SESS_SEM_NUMERO = "00000000-0000-0000-0000-00000005e1f4";
     const EX_SEM_NUMERO = "00000000-0000-0000-0000-00000e0a0006";
     await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, disciplina) VALUES
@@ -150,7 +152,13 @@ describe.skipIf(!hasDb)("reinforcer_profile on-approve (Fase 4 · 4C.1)", () => 
       extractionId: EX_SEM_NUMERO,
       versao: 1,
     });
-    expect(r.ok).toBe(true); // a revisão em si não falha
+    expect(r.ok).toBeFalsy();
+    expect(r.error).toBe("SESSAO_SEM_NUMERO");
+
+    const [ext] =
+      await owner`SELECT estado, versao FROM extraction WHERE id = ${EX_SEM_NUMERO}`;
+    expect(ext!.estado).toBe("sugerida");
+    expect(ext!.versao).toBe(1);
 
     const rows =
       await owner`SELECT id FROM reinforcer_profile WHERE extraction_id = ${EX_SEM_NUMERO}`;

@@ -7,6 +7,7 @@ import {
   type ResultadoConciliacaoVinculos,
 } from "@/lib/billing/conciliacao";
 import { listarCobrancasDeCicloNaoConciliadas } from "@/lib/billing/erro-aplicacao";
+import { detalheSemPii, registrarHeartbeat } from "@/lib/jobs/heartbeat";
 
 /**
  * Conciliação manual de billing (#375).
@@ -179,6 +180,15 @@ export async function POST(request: Request): Promise<Response> {
     ciclosAbortado !== null ||
     vinculosAbortado !== null ||
     cobrancasSemCicloAbortado !== null;
+
+  // #536 — sinal de vida no banco. A conciliação é SOB DEMANDA (#375), então
+  // o detector só alarma se a ÚLTIMA passada abortou — não por idade. Só
+  // contagens; nenhum id de cobrança ou clínica.
+  await registrarHeartbeat(
+    "conciliacao",
+    !abortou,
+    detalheSemPii({ totalDivergencias, abortou }),
+  );
 
   return Response.json({
     // `ok` é "a passada rodou inteira", não "não achou nada": relatório com

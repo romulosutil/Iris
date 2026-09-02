@@ -6,7 +6,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { StatusBadge } from "@/components/ui/patterns/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DialogoExpurgo } from "./dialogo-expurgo";
 import type { LinhaFila } from "./queries";

@@ -12,6 +12,7 @@ import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext, type Tx } from "@/db/rls";
 import type { PdfRenderer } from "@/lib/report/renderer";
 import { exportReport } from "@/lib/report/export";
+import { erroDeActionSeRenderOcupado } from "@/lib/report/render-lock";
 import { buildConvenioNarrativoInput } from "@/lib/report/convenio-narrativo/build-input";
 import { buildConvenioNarrativoHtml } from "@/lib/report/convenio-narrativo/build-html";
 import { resolveConvenioNarrativoProvider } from "@/lib/report/convenio-narrativo/provider";
@@ -258,6 +259,9 @@ export async function exportarConvenioNarrativo(
       return { reportId, hash };
     });
   } catch (err) {
+    // PF-02 (#538): semáforo do PDF ocupado → contrato de erro da action.
+    const ocupado = erroDeActionSeRenderOcupado(err);
+    if (ocupado) return ocupado;
     const mensagemConsentimento = traduzirErroDeConsentimento(err);
     if (mensagemConsentimento) return { error: mensagemConsentimento };
     throw err;

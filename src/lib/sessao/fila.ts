@@ -33,8 +33,9 @@ type SessionEstadoDb =
 type Row = {
   session_id: string;
   patient_id: string;
-  patient_nome: string;
+  patient_nome: string | null;
   terapeuta_id: string;
+  atendido_por_id: string | null;
   terapeuta_nome: string | null;
   agendada_para: string | Date;
   estado: SessionEstadoDb;
@@ -46,7 +47,13 @@ type Row = {
 export type SessaoTravada = {
   sessionId: string;
   patientId: string;
-  patientNome: string;
+  /**
+   * `null` quando a RLS de `patient` esconde a linha — o profissional
+   * responsável que NÃO está na equipe de cuidado (cobertura, substituto do
+   * #539). A sessão continua na fila: o escopo é `session`, não `patient`; a
+   * UI mostra "Paciente (acesso restrito)", como a agenda e as pendências.
+   */
+  patientNome: string | null;
   terapeutaId: string;
   terapeutaNome: string | null;
   agendadaPara: Date;
@@ -55,7 +62,12 @@ export type SessaoTravada = {
   /** Gesto primário do estado — vem da mesma função, nenhuma tela redefine. */
   gesto: GestoPrimario;
   itensNaFilaValidacao: number;
-  /** `session.terapeuta_id === ctx.userId`. Base do escopo dito por extenso (R-14). */
+  /**
+   * Sou o profissional responsável: `terapeuta_id` OU `atendido_por_id`
+   * (substituto designado na agenda — #539, D-AUD-7). Mesma régua da RLS
+   * (`app_session_profissional_responsavel`, 0143) e do `ehDono` das telas.
+   * Base do escopo dito por extenso (R-14).
+   */
   minha: boolean;
 };
 
@@ -114,11 +126,16 @@ function filaValidacaoDaSessao(selecao: SQL): SQL {
  *
  * 🚫 R-08: nada aqui lê contagem de membros da clínica. Não existe — e não pode
  * nascer — helper de "é clínica solo?" nem contagem de coordenadores para
- * decidir escopo. O escopo sai de `session.terapeuta_id`, uma sessão de cada
- * vez. (Os nomes proibidos não são escritos aqui de propósito: o gate da
- * Definição de Pronto é um `grep` literal que tem que devolver zero.)
+ * decidir escopo. O escopo sai de `session.terapeuta_id` /
+ * `session.atendido_por_id`, uma sessão de cada vez. (Os nomes proibidos não
+ * são escritos aqui de propósito: o gate da Definição de Pronto é um `grep`
+ * literal que tem que devolver zero.)
  *
- * Terapeuta: só as próprias sessões — "7 sessões suas" (R-14).
+ * Terapeuta: só as próprias sessões — "7 sessões suas" (R-14). "Própria" é a
+ * régua única do #539 (D-AUD-7): titular (`terapeuta_id`) OU substituto
+ * designado na agenda (`atendido_por_id`) — a mesma que a RLS aplica na
+ * escrita (`app_session_profissional_responsavel`, 0143). Sem a segunda perna
+ * o substituto documentava (RLS deixa) mas nunca via a sessão travada.
  * `admin_recepcao`: não tem fila (R-23); é tratado antes, sem tocar o banco.
  */
 function escopoDaFila(ctx: TenantContext): SQL {
@@ -128,7 +145,10 @@ function escopoDaFila(ctx: TenantContext): SQL {
       OR s.terapeuta_id = ${ctx.userId}::uuid
     )`;
   }
-  return sql`s.terapeuta_id = ${ctx.userId}::uuid`;
+  return sql`(
+    s.terapeuta_id = ${ctx.userId}::uuid
+    OR s.atendido_por_id = ${ctx.userId}::uuid
+  )`;
 }
 
 /**
@@ -243,6 +263,7 @@ async function coletarTravadas(
         s.patient_id,
         p.nome AS patient_nome,
         s.terapeuta_id,
+        s.atendido_por_id,
         u.name AS terapeuta_nome,
         s.agendada_para,
         s.estado::text AS estado,
@@ -258,7 +279,9 @@ async function coletarTravadas(
         COALESCE(${filaValidacaoDaSessao(sql`count(*)::int`)}, 0) AS itens_fila
       FROM candidatas c
       JOIN session s ON s.id = c.id
-      JOIN patient p ON p.id = s.patient_id
+      -- LEFT: a RLS de patient (equipe de cuidado) não decide o que é fila --
+      -- a sessão do substituto/cobertura fora da equipe entra sem o nome (#539).
+      LEFT JOIN patient p ON p.id = s.patient_id
       LEFT JOIN app_user u ON u.id = s.terapeuta_id
       ORDER BY s.agendada_para ASC
     `)) as unknown as Row[];
@@ -297,7 +320,7 @@ async function coletarTravadas(
       motivo: resultado.motivo,
       gesto: resultado.gesto,
       itensNaFilaValidacao: r.itens_fila,
-      minha: r.terapeuta_id === ctx.userId,
+      minha: r.terapeuta_id === ctx.userId || r.atendido_por_id === ctx.userId,
     });
   }
 

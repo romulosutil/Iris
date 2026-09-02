@@ -8,6 +8,11 @@ import {
   type AsrClassificacaoErro,
 } from "@/lib/asr/provider";
 import { codigoPg } from "@/db/pg-error";
+import {
+  detalheDoErro,
+  detalheSemPii,
+  registrarHeartbeat,
+} from "@/lib/jobs/heartbeat";
 
 /**
  * Rota interna do worker de transcrição (#72, T07).
@@ -269,6 +274,19 @@ export async function POST(request: Request): Promise<Response> {
       resultados.push(await processarClipe(clipe));
     }
 
+    // #536 — sinal de vida no banco (o `.mjs` deste job é fetch-only). Só
+    // contagens: nada de id de clipe, clínica ou transcrição.
+    await registrarHeartbeat(
+      "asr",
+      true,
+      detalheSemPii({
+        processados: resultados.length,
+        transcritos: resultados.filter((r) => r.desfecho === "transcrito")
+          .length,
+        falhas: resultados.filter((r) => r.desfecho === "falhou").length,
+      }),
+    );
+
     return Response.json({
       ok: true,
       // `null` quando o backstop falhou — distinto de `0` ("rodou, nada a
@@ -287,6 +305,7 @@ export async function POST(request: Request): Promise<Response> {
       "[asr-transcrever] falha no tick do worker",
       diagnosticoDoErro(err),
     );
+    await registrarHeartbeat("asr", false, detalheDoErro(err));
     return Response.json(
       { ok: false, categoria: categoriaDoErro(err) },
       { status: 500 },

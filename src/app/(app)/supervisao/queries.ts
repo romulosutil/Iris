@@ -11,6 +11,7 @@ import {
   sinaisDeFaltas,
   chaveNatural,
 } from "@/lib/supervisao/sinais";
+import { lerSegmentacao } from "@/lib/evidence/snapshot-schema";
 
 export type ItemSupervisao = {
   chaveNatural: string;
@@ -35,7 +36,7 @@ type ClinicRow = {
 type SnapshotQueryRow = {
   patient_id: string;
   session_numero: number;
-  segmentacao: any;
+  segmentacao: unknown;
   patient_nome: string;
 };
 
@@ -53,7 +54,7 @@ type AlertaQueryRow = {
   tipo: SinalTipo;
   goal_id: string | null;
   protocol_id: string | null;
-  detalhe: any;
+  detalhe: unknown;
 };
 
 type NameRow = {
@@ -91,10 +92,12 @@ export async function listarSupervisao(
     const mappedSnapshots: SnapshotRow[] = snapshotRows.map((r) => ({
       patientId: r.patient_id,
       sessionNumero: r.session_numero,
-      segmentacao:
-        typeof r.segmentacao === "string"
-          ? JSON.parse(r.segmentacao)
-          : r.segmentacao,
+      // Forma única do snapshot (A-06). `sinais.ts` ainda declara
+      // `metrica: string`, mas o banco grava um objeto — o cast é explícito
+      // para o desencontro ficar visível, não escondido num `any`.
+      segmentacao: lerSegmentacao(
+        r.segmentacao,
+      ) as unknown as SnapshotRow["segmentacao"],
     }));
     const snapSignals = sinaisDeSnapshot(mappedSnapshots);
 
@@ -228,43 +231,70 @@ export async function listarSupervisao(
     }
 
     // 6. Alerta com status reconhecido mas sem sinal vivo correspondente ("sinal cessou")
-    for (const alert of alertaRows) {
-      if (
-        alert.status === "reconhecido" &&
-        !liveKeys.has(alert.chave_natural)
-      ) {
-        // Enriquecer nomes de paciente, goal, protocol se não estiverem no map
-        if (!patientNames.has(alert.patient_id)) {
-          const patientRow = (await tx.execute(sql`
-            SELECT id, nome FROM patient WHERE id = ${alert.patient_id}::uuid
-          `)) as unknown as NameRow[];
-          if (patientRow[0]) {
-            patientNames.set(alert.patient_id, patientRow[0].nome);
-          }
-        }
+    const alertasCessados = alertaRows.filter(
+      (a) => a.status === "reconhecido" && !liveKeys.has(a.chave_natural),
+    );
 
-        if (alert.goal_id && !goalNames.has(alert.goal_id)) {
-          const goalRow = (await tx.execute(sql`
-            SELECT id, descricao AS nome FROM goal WHERE id = ${alert.goal_id}::uuid
-          `)) as unknown as NameRow[];
-          if (goalRow[0]) {
-            goalNames.set(alert.goal_id, goalRow[0].nome);
-          }
-        }
+    // PF-01 (#538): nomes que ainda faltam resolvidos em UM lote por tabela
+    // (antes: até 3 SELECTs por alerta, dentro do for). Proporcional ao
+    // histórico de alertas da clínica — a tela do coordenador crescia com ele.
+    const faltam = (ids: (string | null)[], ja: Map<string, string>) =>
+      Array.from(
+        new Set(ids.filter((id): id is string => !!id && !ja.has(id))),
+      );
+    const resolverNomes = async (
+      tabela: "patient" | "goal" | "protocol",
+      ids: string[],
+      destino: Map<string, string>,
+    ) => {
+      if (ids.length === 0) return;
+      const lista = sql.join(
+        ids.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      );
+      const rows = (await (tabela === "patient"
+        ? tx.execute(sql`SELECT id, nome FROM patient WHERE id IN (${lista})`)
+        : tabela === "goal"
+          ? tx.execute(
+              sql`SELECT id, descricao AS nome FROM goal WHERE id IN (${lista})`,
+            )
+          : tx.execute(
+              sql`SELECT id, nome FROM protocol WHERE id IN (${lista})`,
+            ))) as unknown as NameRow[];
+      rows.forEach((r) => destino.set(r.id, r.nome));
+    };
+    await resolverNomes(
+      "patient",
+      faltam(
+        alertasCessados.map((a) => a.patient_id),
+        patientNames,
+      ),
+      patientNames,
+    );
+    await resolverNomes(
+      "goal",
+      faltam(
+        alertasCessados.map((a) => a.goal_id),
+        goalNames,
+      ),
+      goalNames,
+    );
+    await resolverNomes(
+      "protocol",
+      faltam(
+        alertasCessados.map((a) => a.protocol_id),
+        protocolNames,
+      ),
+      protocolNames,
+    );
 
-        if (alert.protocol_id && !protocolNames.has(alert.protocol_id)) {
-          const protocolRow = (await tx.execute(sql`
-            SELECT id, nome FROM protocol WHERE id = ${alert.protocol_id}::uuid
-          `)) as unknown as NameRow[];
-          if (protocolRow[0]) {
-            protocolNames.set(alert.protocol_id, protocolRow[0].nome);
-          }
-        }
-
-        const det =
+    for (const alert of alertasCessados) {
+      {
+        const det = (
           typeof alert.detalhe === "string"
             ? JSON.parse(alert.detalhe)
-            : alert.detalhe;
+            : alert.detalhe
+        ) as DetalheEstagnacao | DetalheFaltas;
 
         itens.push({
           chaveNatural: alert.chave_natural,
@@ -294,5 +324,104 @@ export async function listarSupervisao(
     });
 
     return { itens, total: itens.length };
+  });
+}
+
+// ─── DA-01 (#535): "Saúde da IA" ─────────────────────────────────────────────
+
+/** Uma linha da view `metricas_extracao_por_clinica_semana` (migração 0148):
+ * semana ISO × modelo × versão do prompt. Sem PII por construção. */
+export type SaudeIaLinha = {
+  /** Segunda-feira da semana ISO, `YYYY-MM-DD`. */
+  semanaInicio: string;
+  /** `IYYY-Www`, ex.: `2026-W36`. */
+  semanaIso: string;
+  modelo: string | null;
+  promptVersao: string | null;
+  totalSugeridas: number;
+  aprovadasSemEdicao: number;
+  editadas: number;
+  descartadas: number;
+  /** DLQ da revisão (`erro_validacao`, #532): decisão humana que não gravou. */
+  erroValidacao: number;
+  /** Chamadas que falharam (`pendente_reprocessamento`). */
+  pendentes: number;
+  medianaSegundosAteRevisao: number | null;
+  medianaLatenciaMs: number | null;
+  tokensEntrada: number | null;
+  tokensSaida: number | null;
+};
+
+type SaudeIaRow = {
+  semana_inicio: string;
+  semana_iso: string;
+  modelo: string | null;
+  prompt_versao: string | null;
+  total_sugeridas: number;
+  aprovadas_sem_edicao: number;
+  editadas: number;
+  descartadas: number;
+  erro_validacao: number;
+  pendentes: number;
+  mediana_segundos_ate_revisao: number | null;
+  mediana_latencia_ms: number | null;
+  tokens_entrada: string | number | null;
+  tokens_saida: string | number | null;
+};
+
+/** `bigint` chega como string pelo driver; `null` fica `null` (não 0). */
+function inteiroOuNull(v: string | number | null): number | null {
+  if (v === null || v === undefined) return null;
+  return typeof v === "number" ? v : Number(v);
+}
+
+export const SAUDE_IA_SEMANAS_PADRAO = 8;
+
+/**
+ * Lê a view de métricas da extração para a clínica do contexto, das últimas
+ * `semanas` semanas ISO (inclusive a corrente), mais recente primeiro.
+ *
+ * Isolamento e papel são impostos NA VIEW (`app_clinic_id_exigido()` +
+ * `app.user_role = 'coordenador'`), não aqui: para qualquer outro papel a
+ * view devolve zero linhas, e sem tenant no GUC ela levanta P0001.
+ */
+export async function listarSaudeIa(
+  ctx: TenantContext,
+  opcoes: { semanas?: number } = {},
+): Promise<SaudeIaLinha[]> {
+  const semanas = Math.max(1, opcoes.semanas ?? SAUDE_IA_SEMANAS_PADRAO);
+  return withTenant(ctx, async (tx) => {
+    const rows = (await tx.execute(sql`
+      SELECT semana_inicio::text AS semana_inicio, semana_iso, modelo, prompt_versao,
+             total_sugeridas, aprovadas_sem_edicao, editadas, descartadas,
+             erro_validacao, pendentes,
+             mediana_segundos_ate_revisao, mediana_latencia_ms,
+             tokens_entrada, tokens_saida
+      FROM metricas_extracao_por_clinica_semana
+      -- "agora" no fuso da clínica (D61), o mesmo calendário que a view usa
+      -- para semana_inicio; sem isto a janela de N semanas escorregaria na
+      -- virada de semana em Brasília (banco em UTC).
+      WHERE semana_inicio >= (
+        date_trunc('week', now() AT TIME ZONE (SELECT timezone FROM clinic WHERE id = app_clinic_id_exigido()))
+        - (${semanas - 1} * interval '1 week')
+      )::date
+      ORDER BY semana_inicio DESC, modelo NULLS LAST, prompt_versao NULLS LAST
+    `)) as unknown as SaudeIaRow[];
+    return rows.map((r) => ({
+      semanaInicio: r.semana_inicio,
+      semanaIso: r.semana_iso,
+      modelo: r.modelo,
+      promptVersao: r.prompt_versao,
+      totalSugeridas: r.total_sugeridas,
+      aprovadasSemEdicao: r.aprovadas_sem_edicao,
+      editadas: r.editadas,
+      descartadas: r.descartadas,
+      erroValidacao: r.erro_validacao,
+      pendentes: r.pendentes,
+      medianaSegundosAteRevisao: r.mediana_segundos_ate_revisao,
+      medianaLatenciaMs: r.mediana_latencia_ms,
+      tokensEntrada: inteiroOuNull(r.tokens_entrada),
+      tokensSaida: inteiroOuNull(r.tokens_saida),
+    }));
   });
 }

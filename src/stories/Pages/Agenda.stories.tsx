@@ -3,7 +3,7 @@ import { Header } from "@/components/ui/header";
 import { Container, Stack, Cluster } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
 import { DataRow } from "@/components/ui/data-row";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { StatusBadge } from "@/components/ui/patterns/status-badge";
 import { Button } from "@/components/ui/button";
 
 const meta = {

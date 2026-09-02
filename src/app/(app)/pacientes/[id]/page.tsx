@@ -10,7 +10,7 @@ import { Stack, Cluster } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { StatusBadge } from "@/components/ui/patterns/status-badge";
 import Link from "next/link";
 import { ArquivamentoDialog } from "./arquivamento-dialog";
 import { AltaDialog } from "./alta-dialog";

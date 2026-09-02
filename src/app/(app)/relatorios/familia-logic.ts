@@ -10,6 +10,7 @@ import { requireRole, RoleError } from "@/auth/require-role";
 import { withTenant, type TenantContext, type Tx } from "@/db/rls";
 import type { PdfRenderer } from "@/lib/report/renderer";
 import { exportReport } from "@/lib/report/export";
+import { erroDeActionSeRenderOcupado } from "@/lib/report/render-lock";
 import { buildFamiliaInput } from "@/lib/report/familia/build-input";
 import { buildFamiliaHtml } from "@/lib/report/familia/build-html";
 import { resolveFamilyReportProvider } from "@/lib/report/familia/provider";
@@ -234,6 +235,9 @@ export async function exportarFamilia(
       return { reportId, hash };
     });
   } catch (err) {
+    // PF-02 (#538): semáforo do PDF ocupado → contrato de erro da action.
+    const ocupado = erroDeActionSeRenderOcupado(err);
+    if (ocupado) return ocupado;
     const mensagemConsentimento = traduzirErroDeConsentimento(err);
     if (mensagemConsentimento) return { error: mensagemConsentimento };
     throw err;

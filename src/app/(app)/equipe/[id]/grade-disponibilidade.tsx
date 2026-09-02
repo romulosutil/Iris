@@ -1,6 +1,9 @@
 "use client";
 
 import { AvailabilityGrid } from "@/components/ui/availability-grid";
+// D61: a grade de disponibilidade não tem `clinic.timezone` no caminho da
+// request; a constante fica até a página passar o fuso real (#538, revisão).
+import { FUSO_CLINICA } from "@/app/(app)/agenda/fuso";
 
 export type GradeProps = {
   passoMin: number;
@@ -24,6 +27,7 @@ export function GradeDisponibilidade({
       fechamento={fechamento}
       celulasIniciais={celulasIniciais}
       onCelulasChange={onChange}
+      fuso={FUSO_CLINICA}
     />
   );
 }
