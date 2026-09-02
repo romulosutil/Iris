@@ -46,7 +46,7 @@ import {
   gravarHeartbeat as gravarHeartbeatNoBanco,
 } from "./lib/heartbeat.mjs";
 
-// Nome deste job em `job_heartbeat` (0143) — casa com `LIMITES_HEARTBEAT` em
+// Nome deste job em `job_heartbeat` (0146) — casa com `LIMITES_HEARTBEAT` em
 // scripts/alarme-jobs.mjs. Mudar um sem o outro cega o detector.
 const JOB = "arquivamento";
 

@@ -1,6 +1,6 @@
 {
-  "id": "5ef85827-d41e-4cbc-8b3e-de7fee8e82b2",
-  "prevId": "1b863183-1db8-4b30-aeb4-00aa1d80afe6",
+  "id": "92c6c1b9-05a9-4e56-939a-28c4e7302761",
+  "prevId": "a96d5094-823f-4a60-8420-f093521aef13",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -4017,6 +4017,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": 1
+        },
+        "erro_validacao_detalhe": {
+          "name": "erro_validacao_detalhe",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {

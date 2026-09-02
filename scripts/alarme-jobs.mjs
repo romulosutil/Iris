@@ -183,7 +183,7 @@ export function abrirConexao(databaseUrl) {
 // vencido, alerta vencido, dump no bucket): é a prova mais forte, e não muda
 // aqui. Os demais jobs não deixam rastro que se possa medir de fora — um job
 // de retenção parado é igual a "nenhum prontuário está a vencer" — então cada
-// um grava um sinal de vida em `job_heartbeat` (0143, via
+// um grava um sinal de vida em `job_heartbeat` (0146, via
 // `scripts/lib/heartbeat.mjs` ou `src/lib/jobs/heartbeat.ts`) e este detector
 // lê a tabela inteira numa chamada.
 //
@@ -206,7 +206,7 @@ export const LIMITES_HEARTBEAT = Object.freeze({
  * limite do job. Devolve o mesmo shape das outras checagens.
  *
  * Linha AUSENTE é `problema`, não `indeterminado`: o detector conseguiu ler a
- * tabela e o job simplesmente nunca gravou — ou nunca rodou desde a 0143, ou
+ * tabela e o job simplesmente nunca gravou — ou nunca rodou desde a 0146, ou
  * não está provisionado (é exatamente assim que se mede se
  * `iris-expurgo-audit-log` existe em produção). `indeterminado` fica reservado
  * para "não consegui ler".
@@ -242,7 +242,7 @@ export function avaliarHeartbeat(job, linha, agora = Date.now()) {
     return {
       estado: "problema",
       motivo: job,
-      detalhe: `nenhum heartbeat registrado para "${job}" — o job nunca rodou desde a migração 0143 ou o serviço não está provisionado (ver infra/README.md, §Alarme automático).`,
+      detalhe: `nenhum heartbeat registrado para "${job}" — o job nunca rodou desde a migração 0146 ou o serviço não está provisionado (ver infra/README.md, §Alarme automático).`,
     };
   }
 

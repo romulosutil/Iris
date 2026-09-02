@@ -77,7 +77,7 @@ BEGIN
     ELSE NULL
   END;
   IF v_role_exigida IS NULL THEN
-    RAISE EXCEPTION 'job_heartbeat: job "%" não está no mapa job->role da 0143', p_job
+    RAISE EXCEPTION 'job_heartbeat: job "%" não está no mapa job->role da 0146', p_job
       USING ERRCODE = 'P0001';
   END IF;
   IF NOT pg_has_role(session_user, v_role_exigida, 'MEMBER') THEN
@@ -111,7 +111,7 @@ REVOKE ALL ON FUNCTION public.app_job_heartbeat_gravar(text, boolean, text) FROM
 --   iris_retencao           — scripts/retencao-aviso-previo.mjs
 --   iris_arquivamento       — scripts/auto-arquivamento.mjs
 --   iris_escalonamento      — scripts/escalonamento-risco.mjs
---   iris_expurgo_audit_log  — scripts/expurgo-audit-log.mjs (0142)
+--   iris_expurgo_audit_log  — scripts/expurgo-audit-log.mjs (0145)
 GRANT EXECUTE ON FUNCTION public.app_job_heartbeat_gravar(text, boolean, text) TO app_role;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.app_job_heartbeat_gravar(text, boolean, text) TO iris_retencao;

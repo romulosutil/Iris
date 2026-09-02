@@ -7,13 +7,13 @@
  * `reclassificacao`, `invalidacao`, `reconhecimento_alerta`,
  * `relatorio_exportado`, `evidencia_aprovada_lote`… que são trilha clínica e
  * de governança e acompanham o prontuário (`docs/legal/politica-retencao-dados.md`:
- * 180 dias é "mínimo, não teto", e vale para LOG DE ACESSO). A `0142` restringe
+ * 180 dias é "mínimo, não teto", e vale para LOG DE ACESSO). A `0145` restringe
  * o DELETE a uma allowlist de ações de ACESSO (D-AUD-4) e é fail-closed: ação
  * fora da allowlist — inclusive uma que ninguém classificou — nunca é apagada.
  *
- * Régua de mutação: trocar o `AND acao = ANY(...)` da `0142` pelo corpo da
+ * Régua de mutação: trocar o `AND acao = ANY(...)` da `0145` pelo corpo da
  * `0070` derruba os casos 1 e 3 (medido: este arquivo foi rodado VERMELHO
- * contra a `0070` antes de a `0142` existir — saída na PR).
+ * contra a `0070` antes de a `0145` existir — saída na PR).
  *
  * A função é chamada como a role dona no arranjo: é `SECURITY DEFINER`, e o
  * que está sob teste é o PREDICADO do DELETE, não a fronteira de execução. A
@@ -58,7 +58,7 @@ describe.skipIf(!hasDb)("#536 · expurgo do audit_log por finalidade", () => {
     await owner!`INSERT INTO clinic (id, nome, is_demo) VALUES (${CLINICA}, 'Clínica #536', false)`;
     await owner!`INSERT INTO app_user (id, name, email) VALUES (${ATOR}, 'Ator #536', 'ator.536@t.com')`;
 
-    // Uma linha por caso. `login` é ação de ACESSO (allowlist da 0142);
+    // Uma linha por caso. `login` é ação de ACESSO (allowlist da 0145);
     // `reclassificacao` e `relatorio_exportado` são trilha clínica/governança;
     // `acao_nao_classificada_536` não está em lista nenhuma.
     await owner!`INSERT INTO audit_log (id, clinic_id, ator_id, acao, entidade, entidade_id, criado_em) VALUES

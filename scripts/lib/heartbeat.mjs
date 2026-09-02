@@ -1,5 +1,5 @@
 /**
- * #536 (DA-03) — heartbeat dos jobs de infra no BANCO (`job_heartbeat`, 0143).
+ * #536 (DA-03) — heartbeat dos jobs de infra no BANCO (`job_heartbeat`, 0146).
  *
  * Até aqui cada job gravava `.ultima-*` num volume que só o próprio container
  * enxerga: `scripts/alarme-jobs.mjs` cobria 3 de 8 jobs porque só conseguia
@@ -53,7 +53,7 @@ export function detalheDoErro(err) {
 }
 
 /**
- * Grava o heartbeat de `job` chamando a função definer da 0143.
+ * Grava o heartbeat de `job` chamando a função definer da 0146.
  *
  * NUNCA lança: a varredura já aconteceu (ou já falhou) quando isto roda, e um
  * heartbeat que estoura não pode transformar `exit 0` em `exit 1` nem mascarar

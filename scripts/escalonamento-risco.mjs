@@ -54,7 +54,7 @@ import {
 } from "./lib/heartbeat.mjs";
 import { enviarEmailRt } from "./lib/resend-rt.mjs";
 
-// Nome deste job em `job_heartbeat` (0143). O detector de alarme continua
+// Nome deste job em `job_heartbeat` (0146). O detector de alarme continua
 // medindo o escalonamento pelo EFEITO (alerta vencido sem escalar, 0129) — o
 // heartbeat aqui é sinal complementar, legível no banco, não a checagem.
 const JOB = "escalonamento";

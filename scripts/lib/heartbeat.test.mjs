@@ -5,7 +5,7 @@
  *  - `detalheSemPii` só deixa passar NÚMEROS e booleanos: qualquer string
  *    (id, nome, trecho, `message` de erro) é descartada na origem, e não
  *    depende de quem chama lembrar de filtrar.
- *  - `gravarHeartbeat` chama a função definer da 0143 com `(job, ok, detalhe)`
+ *  - `gravarHeartbeat` chama a função definer da 0146 com `(job, ok, detalhe)`
  *    e NUNCA lança: um heartbeat que falha não pode transformar uma varredura
  *    bem-sucedida em exit != 0 — o alarme (ausência de heartbeat) é o canal
  *    certo para essa falha, não o laço do job.

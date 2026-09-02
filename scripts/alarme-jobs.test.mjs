@@ -503,7 +503,7 @@ describe("alarme-jobs.mjs — decidirEnvios (#294)", () => {
 // ─── #536 (DA-03): heartbeat no banco — um caso por job novo ─────────────────
 //
 // O dublê devolve a MESMA forma de linha que `app_alarme_job_heartbeats()`
-// (0143) devolve de verdade. `agora` é fixo para a idade ser determinística.
+// (0146) devolve de verdade. `agora` é fixo para a idade ser determinística.
 describe("alarme-jobs.mjs — heartbeats dos jobs (#536)", () => {
   const AGORA = Date.parse("2026-09-02T12:00:00.000Z");
   const H = 3_600_000;

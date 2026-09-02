@@ -1,5 +1,5 @@
 /**
- * #536 (DA-03) — fronteira de acesso de `job_heartbeat` (migração 0143).
+ * #536 (DA-03) — fronteira de acesso de `job_heartbeat` (migração 0146).
  *
  * O que se prova aqui, conectando como as roles REAIS (não como a dona, que é
  * BYPASSRLS e passaria com a migração certa ou errada):

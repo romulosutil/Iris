@@ -1385,7 +1385,7 @@ EXPURGO_DATABASE_URL='postgres://iris_expurgo_audit_log_login:...' node /app/scr
 1. **Pseudonimização de logs órfãos:** invoca `app_pseudonimizar_audit_log_orfao()`,
    tratando logs onde `ator_id IS NULL` devido ao `ON DELETE SET NULL` no
    apagamento da conta de um usuário.
-2. **Expurgo físico POR FINALIDADE (#536, migração `0142`):** invoca
+2. **Expurgo físico POR FINALIDADE (#536, migração `0145`):** invoca
    `app_expurgar_audit_log_expirado_por_acao()`, que apaga **só** linhas com
    `criado_em < now() - 180 days` **e** `acao` na allowlist de **log de
    acesso** (`login`, `logout`, `login_falhou`, `sessao_expirada`,
@@ -1400,7 +1400,7 @@ EXPURGO_DATABASE_URL='postgres://iris_expurgo_audit_log_login:...' node /app/scr
 **Role dedicada.** A `0070` fez `REVOKE ALL ... FROM PUBLIC` nas funções e
 nunca concedeu EXECUTE a role nenhuma; o script lia `DATABASE_URL`
 (`app_role`) e, portanto, **estourava `42501` a cada tick** — ou o serviço
-nunca existiu. A `0142` cria `iris_expurgo_audit_log` (NOLOGIN, EXECUTE só
+nunca existiu. A `0145` cria `iris_expurgo_audit_log` (NOLOGIN, EXECUTE só
 nas funções do expurgo). Provisionar a role de login uma vez, como dono:
 
 ```sql
@@ -1409,7 +1409,7 @@ CREATE ROLE iris_expurgo_audit_log_login LOGIN PASSWORD '<senha forte>' IN ROLE 
 
 > ⚠️ **PENDÊNCIA — medir em produção (#536):** não é verificável do
 > repositório se o serviço `iris-expurgo-audit-log` existe no Easypanel. Como
-> saber: depois do deploy da `0143`, o detector `iris-alarme` manda e-mail
+> saber: depois do deploy da `0146`, o detector `iris-alarme` manda e-mail
 > `expurgo-audit-log` com "nenhum heartbeat registrado" se o job não estiver
 > de pé — esse e-mail **é** a medição. Se o serviço existir, trocar a env
 > `DATABASE_URL` por `EXPURGO_DATABASE_URL` (role acima) e reimplantar; se
@@ -2667,7 +2667,7 @@ Três medem o **efeito** do job parado (a prova mais forte — não mudam):
 Retenção, arquivamento, exportação, ASR, expurgo do audit_log e conciliação
 não deixam rastro que se possa medir de fora: um job de retenção parado é
 igual a "nenhum prontuário está a vencer". Cada um grava um sinal de vida em
-`job_heartbeat` (migração `0143`) ao fim de cada passada — o `.mjs` via
+`job_heartbeat` (migração `0146`) ao fim de cada passada — o `.mjs` via
 `scripts/lib/heartbeat.mjs` (retenção, arquivamento, escalonamento,
 asr-sweeper, expurgo) ou a **rota** do app via `src/lib/jobs/heartbeat.ts`
 (billing, conciliação, exportação, asr-transcrever — o trilho `.mjs` desses é
@@ -2694,7 +2694,7 @@ Regras, iguais para todos:
   É a única condição que alarma a conciliação.
 - Linha **ausente** → `problema`, não `indeterminado`: o detector conseguiu
   ler a tabela e o job simplesmente nunca gravou — ou nunca rodou desde a
-  `0143`, ou o serviço não está provisionado. **É assim que se mede se
+  `0146`, ou o serviço não está provisionado. **É assim que se mede se
   `iris-expurgo-audit-log` existe em produção** (ver a pendência na seção do
   job). Espere um e-mail por job no primeiro dia após o deploy, até cada
   imagem de infra ser reconstruída com o `COPY scripts/lib/heartbeat.mjs`.

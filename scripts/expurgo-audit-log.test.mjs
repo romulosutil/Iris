@@ -55,7 +55,7 @@ describe("verificarElegibilidadeExpurgoAuditLog", () => {
 });
 
 describe("executarExpurgoAuditLog (#536)", () => {
-  it("chama pseudonimização e o expurgo POR AÇÃO (0142), e soma as contagens", async () => {
+  it("chama pseudonimização e o expurgo POR AÇÃO (0145), e soma as contagens", async () => {
     const sql = makeFakeSql({
       porAcao: [
         { acao: "login", apagadas: 10 },

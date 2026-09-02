@@ -6,18 +6,18 @@
  * O QUE ELE FAZ:
  * 1. `app_pseudonimizar_audit_log_orfao()` (0070): pseudonimiza os logs de
  *    contas de usuário deletadas.
- * 2. `app_expurgar_audit_log_expirado_por_acao()` (0142): apaga SÓ LOG DE
+ * 2. `app_expurgar_audit_log_expirado_por_acao()` (0145): apaga SÓ LOG DE
  *    ACESSO com mais de 180 dias — allowlist por `acao`, fail-closed (D-AUD-4).
  *    Trilha clínica/governança (reclassificação, aprovação, exportação, alerta,
  *    expurgo de paciente…) acompanha o prontuário e NUNCA é apagada por idade.
  *    A função devolve a contagem por `acao`, e é isso que vai para o log — só
  *    nomes de ação e números, nunca id, ator ou detalhe.
- * 3. Grava o heartbeat em `job_heartbeat` (0143) — é o que o detector
+ * 3. Grava o heartbeat em `job_heartbeat` (0146) — é o que o detector
  *    `scripts/alarme-jobs.mjs` lê para saber se este job existe e roda.
  *
  * Env:
  *   EXPURGO_DATABASE_URL  role de login que herda `iris_expurgo_audit_log`
- *                         (0142). Obrigatória e SEM fallback para DATABASE_URL:
+ *                         (0145). Obrigatória e SEM fallback para DATABASE_URL:
  *                         `app_role` não tem EXECUTE nas funções do expurgo
  *                         (nunca teve — a 0070 revogou de PUBLIC e não concedeu
  *                         a ninguém), então o fallback só trocaria "não roda"
@@ -123,7 +123,7 @@ export async function main() {
   const dbUrl = process.env.EXPURGO_DATABASE_URL;
   if (!dbUrl) {
     console.error(
-      `${PREFIXO} ERRO: EXPURGO_DATABASE_URL não definida — o job precisa da role de login que herda \`iris_expurgo_audit_log\` (0142). Ver §Job de Expurgo do AuditLog em infra/README.md.`,
+      `${PREFIXO} ERRO: EXPURGO_DATABASE_URL não definida — o job precisa da role de login que herda \`iris_expurgo_audit_log\` (0145). Ver §Job de Expurgo do AuditLog em infra/README.md.`,
     );
     return 1;
   }
