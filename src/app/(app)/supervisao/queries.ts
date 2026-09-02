@@ -373,7 +373,7 @@ export async function listarSaudeIa(
       -- virada de semana em Brasília (banco em UTC).
       WHERE semana_inicio >= (
         date_trunc('week', now() AT TIME ZONE (SELECT timezone FROM clinic WHERE id = app_clinic_id_exigido()))
-        - make_interval(weeks => ${semanas - 1})
+        - (${semanas - 1} * interval '1 week')
       )::date
       ORDER BY semana_inicio DESC, modelo NULLS LAST, prompt_versao NULLS LAST
     `)) as unknown as SaudeIaRow[];
