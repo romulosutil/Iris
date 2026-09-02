@@ -3,7 +3,7 @@
  * responsável pela sessão": `terapeuta_id` OU `atendido_por_id` (substituto
  * designado na agenda).
  *
- * Antes da `0142` havia três réguas: a RLS de `session_note`/`audio_capture`/
+ * Antes da `0143` havia três réguas: a RLS de `session_note`/`audio_capture`/
  * `extraction`/`session_protocol_scope` só aceitava `app_session_terapeuta_id`,
  * `ehDono` e `fila.ts` só olhavam `terapeuta_id`, e `app_desarquivar_paciente`
  * aceitava os dois. A agenda deixava designar um substituto que, na hora de
@@ -104,7 +104,7 @@ describe.skipIf(!hasDb)("#539 · profissional responsável pela sessão", () => 
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES (${PAC}, ${CLINIC}, 'Paciente substituído')`;
     // Só a titular está na equipe de cuidado: o substituto NÃO está — é o
     // cenário real ("terapeuta faltou, outro cobre") e o que fazia
-    // `session_select` devolver 0 linhas para ele antes da 0142.
+    // `session_select` devolver 0 linhas para ele antes da 0143.
     await owner`INSERT INTO care_team_membership (patient_id, user_id, disciplina, papel_na_equipe) VALUES
       (${PAC}, ${U_TITULAR}, 'ABA', 'terapeuta_referencia')`;
 

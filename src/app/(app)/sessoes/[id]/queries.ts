@@ -174,7 +174,7 @@ export async function carregarSessao(
       terapeutaId: sess.terapeutaId,
       // #539 (D-AUD-7): "dono" = profissional responsável = titular OU
       // substituto designado na agenda. Mesma régua da RLS
-      // (`app_session_profissional_responsavel`, 0142) e de `fila.ts` — se as
+      // (`app_session_profissional_responsavel`, 0143) e de `fila.ts` — se as
       // três divergirem, a tela nega o formulário a quem o banco deixa escrever.
       ehDono: ehProfissionalResponsavel(ctx.userId, sess),
       podeVer:

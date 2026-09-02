@@ -90,7 +90,7 @@ const capturaSchema = z.object({
  * Captura rápida de diário — texto livre do terapeuta durante/após a sessão.
  * O RLS (`session_note_insert`) exige que `ctx.userId` seja o profissional
  * responsável pela sessão — titular OU substituto designado na agenda
- * (`app_session_profissional_responsavel`, 0142, #539); quem não é cai no
+ * (`app_session_profissional_responsavel`, 0143, #539); quem não é cai no
  * catch e recebe mensagem genérica (RLS não deixa distinguir "não existe" de
  * "sem permissão").
  */
@@ -665,7 +665,7 @@ async function consolidarSessaoCore(
         });
 
       // 2) popula numero_sequencial_paciente só se ainda nulo (idempotente):
-      //    `app_session_definir_numero_sequencial` (0142, #539) é SECURITY
+      //    `app_session_definir_numero_sequencial` (0143, #539) é SECURITY
       //    DEFINER com guard interno — tenant + `app_session_profissional_
       //    responsavel` (titular OU substituto). Sai daqui o UPDATE direto em
       //    `session`: sob `session_update` o substituto afetava 0 linhas em

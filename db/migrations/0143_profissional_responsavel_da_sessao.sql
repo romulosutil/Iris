@@ -34,7 +34,7 @@
 -- (0085) e `app_alerta_risco_visivel` (0093) ainda usam
 -- `app_session_terapeuta_id(session_id) = ...` como ramo de leitura de
 -- alertas — o mesmo predicado que o #529/W1 reescreve em `app_alerta_trecho_fonte`
--- (0142 do W1). Unificar ali depois que o W1 entrar, para não editar a mesma
+-- (0142, W1 já em main). Unificar os três no follow-up #554, para não editar a mesma
 -- função em dois PRs.
 
 CREATE OR REPLACE FUNCTION public.app_session_profissional_responsavel(p_session uuid)

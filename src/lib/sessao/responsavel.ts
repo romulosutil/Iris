@@ -2,7 +2,7 @@
 // aplicação (#539, auditoria 360 PR-05 · decisão D-AUD-7, proposta pendente de
 // validação).
 //
-// Espelha `app_session_profissional_responsavel(session_id)` (migração 0142):
+// Espelha `app_session_profissional_responsavel(session_id)` (migração 0143):
 // titular (`terapeuta_id`) OU substituto designado na agenda
 // (`atendido_por_id`). É o que a RLS de `session_note`/`audio_capture`/
 // `extraction`/`session_protocol_scope` exige para ESCREVER — então é o que

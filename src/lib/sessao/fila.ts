@@ -65,7 +65,7 @@ export type SessaoTravada = {
   /**
    * Sou o profissional responsável: `terapeuta_id` OU `atendido_por_id`
    * (substituto designado na agenda — #539, D-AUD-7). Mesma régua da RLS
-   * (`app_session_profissional_responsavel`, 0142) e do `ehDono` das telas.
+   * (`app_session_profissional_responsavel`, 0143) e do `ehDono` das telas.
    * Base do escopo dito por extenso (R-14).
    */
   minha: boolean;
@@ -134,7 +134,7 @@ function filaValidacaoDaSessao(selecao: SQL): SQL {
  * Terapeuta: só as próprias sessões — "7 sessões suas" (R-14). "Própria" é a
  * régua única do #539 (D-AUD-7): titular (`terapeuta_id`) OU substituto
  * designado na agenda (`atendido_por_id`) — a mesma que a RLS aplica na
- * escrita (`app_session_profissional_responsavel`, 0142). Sem a segunda perna
+ * escrita (`app_session_profissional_responsavel`, 0143). Sem a segunda perna
  * o substituto documentava (RLS deixa) mas nunca via a sessão travada.
  * `admin_recepcao`: não tem fila (R-23); é tratado antes, sem tocar o banco.
  */

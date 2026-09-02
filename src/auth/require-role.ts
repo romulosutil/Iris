@@ -74,7 +74,7 @@ export function requireAgendar(ctx: TenantContext): void {
  * Guarda das ações do diário de sessão (#506). Aceita `terapeuta` E
  * `coordenador` — quem restringe a ESCRITA ao profissional que atendeu não é
  * esta guarda, e sim a RLS: `session_note_insert`/`session_note_update`
- * (migração `0006_fase2_rls.sql`, reescritas na `0142`) e `audio_update`
+ * (migração `0006_fase2_rls.sql`, reescritas na `0143`) e `audio_update`
  * exigem `app_session_profissional_responsavel(session_id)` — titular OU
  * substituto designado na agenda (#539). Coordenador só escreve no diário
  * das sessões em que ELE é o profissional responsável.

@@ -143,7 +143,7 @@ após as promoções acima. Achados restantes:
 - **🟢 Sessão substituta.** Terapeuta faltou, outro cobre. Régua unificada
   (#539, auditoria 360 PR-05 · D-AUD-7): "profissional responsável pela
   sessão" = `terapeuta_id` OU `atendido_por_id` (substituto designado na
-  agenda), em UM lugar — `app_session_profissional_responsavel` (migração 0142) na RLS de escrita de `session_note`/`audio_capture`/`extraction`/
+  agenda), em UM lugar — `app_session_profissional_responsavel` (migração 0143) na RLS de escrita de `session_note`/`audio_capture`/`extraction`/
   `session_protocol_scope`, em `session_select`, nas funções de leitura e no
   DEFINER que grava o número sequencial (`session_update` não muda); `ehDono` das telas e `fila.ts` espelham a mesma função
   (`src/lib/sessao/responsavel.ts`). O substituto lê e documenta a sessão em

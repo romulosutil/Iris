@@ -154,7 +154,7 @@ export async function carregarRevisao(
       sessionId,
       pacienteNome: pac?.nome ?? null,
       // #539 (D-AUD-7): titular OU substituto — mesma régua da RLS de
-      // `extraction_update` (`app_session_profissional_responsavel`, 0142).
+      // `extraction_update` (`app_session_profissional_responsavel`, 0143).
       ehDono: ehProfissionalResponsavel(ctx.userId, sess),
       extracoes,
     };
