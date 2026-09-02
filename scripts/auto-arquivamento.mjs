@@ -40,6 +40,15 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import postgres from "postgres";
+import {
+  detalheDoErro,
+  detalheSemPii,
+  gravarHeartbeat as gravarHeartbeatNoBanco,
+} from "./lib/heartbeat.mjs";
+
+// Nome deste job em `job_heartbeat` (0143) — casa com `LIMITES_HEARTBEAT` em
+// scripts/alarme-jobs.mjs. Mudar um sem o outro cega o detector.
+const JOB = "arquivamento";
 
 /**
  * ESPELHO da régua canônica `REGUA_ARQUIVAMENTO` em
@@ -147,8 +156,24 @@ export async function executar(sql, { modoDryRun = false } = {}) {
     // um job parado.
     return;
   }
-  await varrer(sql);
+  let contagens;
+  try {
+    contagens = await varrer(sql);
+  } catch (err) {
+    // #536 — heartbeat de FALHA no banco antes de propagar: o detector
+    // (alarme-jobs) distingue "parou" de "roda e falha". Só `name`+`code`.
+    await gravarHeartbeatNoBanco(sql, JOB, {
+      ok: false,
+      detalhe: detalheDoErro(err),
+    });
+    throw err;
+  }
   await gravarHeartbeat();
+  // #536 — o mesmo sinal, agora onde o detector consegue ler. Só contagens.
+  await gravarHeartbeatNoBanco(sql, JOB, {
+    ok: true,
+    detalhe: detalheSemPii(contagens),
+  });
 }
 
 export async function main(args = process.argv.slice(2)) {

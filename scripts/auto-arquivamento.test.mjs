@@ -14,8 +14,15 @@ function makeFakeSql({
   erro = null,
 } = {}) {
   const chamadas = [];
-  function sql(strings) {
+  const heartbeats = [];
+  function sql(strings, ...valores) {
     const texto = strings.join("?");
+    // #536 — o heartbeat no banco fica FORA de `chamadas` e fora do `erro`
+    // injetado: o que se mede aqui é o que o job MANDOU gravar.
+    if (texto.includes("app_job_heartbeat_gravar")) {
+      heartbeats.push(valores);
+      return Promise.resolve([]);
+    }
     chamadas.push(texto);
     if (erro) return Promise.reject(erro);
     if (texto.includes("app_auto_arquivar_pacientes"))
@@ -23,6 +30,7 @@ function makeFakeSql({
     return Promise.resolve([]);
   }
   sql.chamadas = chamadas;
+  sql.heartbeats = heartbeats;
   sql.beginChamado = 0;
   sql.rollback = 0;
   sql.commit = 0;
@@ -78,6 +86,16 @@ describe("auto-arquivamento.mjs — varredura (#174)", () => {
 
     expect(await heartbeatExiste()).toBe(true);
   });
+
+  test("#536: varredura real grava heartbeat NO BANCO — ok=true e só contagens", async () => {
+    const sql = makeFakeSql({ linhas: [{ avisados: 4, arquivados: 2 }] });
+
+    await executar(sql, { modoDryRun: false });
+
+    expect(sql.heartbeats).toEqual([
+      ["arquivamento", true, "avisados=4 arquivados=2"],
+    ]);
+  });
 });
 
 describe("auto-arquivamento.mjs — dry-run", () => {
@@ -93,6 +111,8 @@ describe("auto-arquivamento.mjs — dry-run", () => {
     expect(sql.rollback).toBe(1);
     expect(sql.commit).toBe(0);
     expect(await heartbeatExiste()).toBe(false);
+    // #536 — nem no banco: heartbeat de dry-run mascararia um job parado.
+    expect(sql.heartbeats).toEqual([]);
   });
 
   test("erro REAL dentro da transação propaga (não é confundido com o rollback)", async () => {
@@ -113,6 +133,21 @@ describe("auto-arquivamento.mjs — falha", () => {
       "permission denied for function",
     );
     expect(await heartbeatExiste()).toBe(false);
+  });
+
+  test("#536: falha grava heartbeat de ERRO no banco (ok=false, name+code) e NÃO a message", async () => {
+    const sql = makeFakeSql({
+      erro: Object.assign(new Error("permission denied for function"), {
+        name: "PostgresError",
+        code: "42501",
+      }),
+    });
+
+    await expect(executar(sql, { modoDryRun: false })).rejects.toThrow();
+
+    expect(sql.heartbeats).toEqual([
+      ["arquivamento", false, "erro=PostgresError code=42501"],
+    ]);
   });
 });
 

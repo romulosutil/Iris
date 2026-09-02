@@ -47,6 +47,9 @@ RUN npm install --no-package-lock --no-audit --no-fund \
 
 COPY scripts/disparo-asr-transcrever.mjs ./scripts/disparo-asr-transcrever.mjs
 COPY scripts/asr-sweeper-orfaos.mjs ./scripts/asr-sweeper-orfaos.mjs
+# #536 — o sweeper importa o helper de heartbeat; sem este COPY a imagem sobe
+# e morre em ERR_MODULE_NOT_FOUND no primeiro tick (lição da #126/#156).
+COPY scripts/lib/heartbeat.mjs ./scripts/lib/heartbeat.mjs
 
 COPY infra/asr/agendador.sh ./agendador.sh
 COPY infra/asr/sweeper-orfaos.sh ./sweeper-orfaos.sh

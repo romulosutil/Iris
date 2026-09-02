@@ -39,8 +39,16 @@ export function detalheSemPii(contagens) {
  * nunca `message`.
  */
 export function detalheDoErro(err) {
-  const name = err && typeof err === "object" && "name" in err ? err.name : "";
-  const code = err && typeof err === "object" && "code" in err ? err.code : "";
+  // Os jobs embrulham o erro do driver (`new Error("falha no lote 3 …", {
+  // cause })`): o `code` que interessa está na `cause`, não no embrulho.
+  const alvo =
+    err && typeof err === "object" && err.cause && typeof err.cause === "object"
+      ? err.cause
+      : err;
+  const name =
+    alvo && typeof alvo === "object" && "name" in alvo ? alvo.name : "";
+  const code =
+    alvo && typeof alvo === "object" && "code" in alvo ? alvo.code : "";
   return `erro=${name || "desconhecido"}${code ? ` code=${code}` : ""}`;
 }
 

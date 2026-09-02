@@ -13,7 +13,7 @@
  *    driver carrega SQL + params).
  */
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { detalheSemPii, gravarHeartbeat } from "./heartbeat.mjs";
+import { detalheDoErro, detalheSemPii, gravarHeartbeat } from "./heartbeat.mjs";
 
 function sqlDubleQueGrava(chamadas) {
   return function sql(strings, ...valores) {
@@ -55,6 +55,30 @@ describe("heartbeat.mjs — detalheSemPii (#536)", () => {
 
   test("NaN e Infinity não passam — não são contagem", () => {
     expect(detalheSemPii({ a: NaN, b: Infinity, c: 2 })).toBe("c=2");
+  });
+});
+
+describe("heartbeat.mjs — detalheDoErro (#536)", () => {
+  test("name + code do erro, nunca a message", () => {
+    const err = Object.assign(new Error("SELECT … params: Fulano"), {
+      name: "PostgresError",
+      code: "42501",
+    });
+    expect(detalheDoErro(err)).toBe("erro=PostgresError code=42501");
+  });
+
+  test("erro embrulhado pelo job: lê name/code da `cause`", () => {
+    const cause = Object.assign(new Error("permission denied"), {
+      name: "PostgresError",
+      code: "42501",
+    });
+    const err = new Error("falha no lote 3 — 400 aviso(s) …", { cause });
+    expect(detalheDoErro(err)).toBe("erro=PostgresError code=42501");
+  });
+
+  test("erro sem code → só o name; valor não-objeto → desconhecido", () => {
+    expect(detalheDoErro(new Error("x"))).toBe("erro=Error");
+    expect(detalheDoErro("string solta")).toBe("erro=desconhecido");
   });
 });
 
