@@ -59,8 +59,16 @@ import { enviarEmailRt } from "./lib/resend-rt.mjs";
 // heartbeat aqui é sinal complementar, legível no banco, não a checagem.
 const JOB = "escalonamento";
 
-const HEARTBEAT_DIR = process.env.ESCALONAMENTO_HEARTBEAT_DIR ?? "/heartbeat";
-const HEARTBEAT_FILE = path.join(HEARTBEAT_DIR, ".ultima-varredura");
+// Lido NA CHAMADA, não no import (mesmo desenho de retencao/arquivamento):
+// lido no import, o teste que aponta ESCALONAMENTO_HEARTBEAT_DIR para um
+// diretório temporário não tem efeito e `gravarHeartbeat()` tenta criar
+// `/heartbeat` na raiz do runner do CI (EACCES) — passou local no Windows,
+// onde `/heartbeat` vira `C:\heartbeat` gravável, e caiu no CI (PR #551).
+const HEARTBEAT_ARQUIVO = ".ultima-varredura";
+
+function heartbeatDir() {
+  return process.env.ESCALONAMENTO_HEARTBEAT_DIR ?? "/heartbeat";
+}
 
 function log(msg) {
   console.log(`[escalonamento] ${new Date().toISOString()} ${msg}`);
@@ -77,8 +85,13 @@ function log(msg) {
  * externo, não de uma ausência de erro.
  */
 async function gravarHeartbeat() {
-  await mkdir(HEARTBEAT_DIR, { recursive: true });
-  await writeFile(HEARTBEAT_FILE, `${new Date().toISOString()}\n`, "utf8");
+  const dir = heartbeatDir();
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    path.join(dir, HEARTBEAT_ARQUIVO),
+    `${new Date().toISOString()}\n`,
+    "utf8",
+  );
 }
 
 /**
