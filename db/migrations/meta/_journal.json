@@ -1030,6 +1030,20 @@
       "when": 1788190229804,
       "tag": "0146_job_heartbeat",
       "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "7",
+      "when": 1788190230804,
+      "tag": "0147_extraction_rastreio_ia",
+      "breakpoints": true
+    },
+    {
+      "idx": 148,
+      "version": "7",
+      "when": 1788190231804,
+      "tag": "0148_metricas_extracao_view",
+      "breakpoints": true
     }
   ]
 }
