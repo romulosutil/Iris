@@ -12,6 +12,9 @@ import { patient } from "@/db/schema";
 import { mensagemDeEstado } from "@/lib/billing/estado-conta";
 import { obterSituacaoConta } from "../../queries";
 import { capacidadesDaModalidade } from "./modalidade";
+import { montarProntidao } from "@/lib/patient/prontidao";
+import { obterFatosProntidao } from "./prontidao-queries";
+import { CartaoProntidao } from "@/components/app/cartao-prontidao";
 
 /**
  * Casca comum de TODAS as telas de um paciente.
@@ -47,7 +50,7 @@ export default async function PacienteLayout({
 }: PacienteLayoutProps) {
   const { id } = await params;
   const ctx = await getTenantContext();
-  const [situacao, dadosPaciente] = await Promise.all([
+  const [situacao, dadosPaciente, fatos] = await Promise.all([
     obterSituacaoConta(ctx),
     withTenant(ctx, async (tx) => {
       const [p] = await tx
@@ -56,6 +59,26 @@ export default async function PacienteLayout({
         .where(eq(patient.id, id));
       return p;
     }),
+    // `admin_recepcao` não entra: sob a RLS dela todo EXISTS clínico devolve
+    // false para linhas que existem. `montarProntidao` já devolve a escada
+    // vazia para ela — não gastar a consulta é só a consequência.
+    ctx.role === "coordenador" || ctx.role === "terapeuta"
+      ? obterFatosProntidao(ctx, id).catch((erro: unknown) => {
+          // NUNCA `erro.message`: em `DrizzleQueryError` a `message` é o SQL
+          // inteiro com os `params` interpolados. `name` + código do Postgres
+          // localiza o caso sem despejar consulta no log.
+          const codigo =
+            erro && typeof erro === "object" && "cause" in erro
+              ? ((erro.cause as { code?: string })?.code ?? "sem-codigo")
+              : "sem-codigo";
+          console.warn(
+            `[prontidao] falha ao ler fatos (patientId=${id}, erro=${
+              erro instanceof Error ? erro.name : "desconhecido"
+            }, pg=${codigo})`,
+          );
+          return null;
+        })
+      : Promise.resolve(null),
   ]);
 
   const base = `/pacientes/${id}`;
@@ -137,6 +160,16 @@ export default async function PacienteLayout({
           </Tooltip>
         </div>
       </div>
+      {fatos ? (
+        <CartaoProntidao
+          prontidao={montarProntidao({
+            modalidade: dadosPaciente?.clinicalModality,
+            fatos,
+            role: ctx.role,
+            patientId: id,
+          })}
+        />
+      ) : null}
       {!situacao.podeEscrever ? (
         <Alert severidade="info" destacado titulo="Conta em somente-leitura">
           <p>{mensagemDeEstado(situacao.estado)}</p>
