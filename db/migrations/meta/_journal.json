@@ -1037,6 +1037,13 @@
       "when": 1788356043495,
       "tag": "0143_extraction_rastreio_ia",
       "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1788356044495,
+      "tag": "0144_metricas_extracao_view",
+      "breakpoints": true
     }
   ]
 }

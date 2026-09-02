@@ -296,3 +296,91 @@ export async function listarSupervisao(
     return { itens, total: itens.length };
   });
 }
+
+// ─── DA-01 (#535): "Saúde da IA" ─────────────────────────────────────────────
+
+/** Uma linha da view `metricas_extracao_por_clinica_semana` (migração 0144):
+ * semana ISO × modelo × versão do prompt. Sem PII por construção. */
+export type SaudeIaLinha = {
+  /** Segunda-feira da semana ISO, `YYYY-MM-DD`. */
+  semanaInicio: string;
+  /** `IYYY-Www`, ex.: `2026-W36`. */
+  semanaIso: string;
+  modelo: string | null;
+  promptVersao: string | null;
+  totalSugeridas: number;
+  aprovadasSemEdicao: number;
+  editadas: number;
+  descartadas: number;
+  /** Chamadas que falharam (`pendente_reprocessamento`). */
+  pendentes: number;
+  medianaSegundosAteRevisao: number | null;
+  medianaLatenciaMs: number | null;
+  tokensEntrada: number | null;
+  tokensSaida: number | null;
+};
+
+type SaudeIaRow = {
+  semana_inicio: string;
+  semana_iso: string;
+  modelo: string | null;
+  prompt_versao: string | null;
+  total_sugeridas: number;
+  aprovadas_sem_edicao: number;
+  editadas: number;
+  descartadas: number;
+  pendentes: number;
+  mediana_segundos_ate_revisao: number | null;
+  mediana_latencia_ms: number | null;
+  tokens_entrada: string | number | null;
+  tokens_saida: string | number | null;
+};
+
+/** `bigint` chega como string pelo driver; `null` fica `null` (não 0). */
+function inteiroOuNull(v: string | number | null): number | null {
+  if (v === null || v === undefined) return null;
+  return typeof v === "number" ? v : Number(v);
+}
+
+export const SAUDE_IA_SEMANAS_PADRAO = 8;
+
+/**
+ * Lê a view de métricas da extração para a clínica do contexto, das últimas
+ * `semanas` semanas ISO (inclusive a corrente), mais recente primeiro.
+ *
+ * Isolamento e papel são impostos NA VIEW (`app_clinic_id_exigido()` +
+ * `app.user_role = 'coordenador'`), não aqui: para qualquer outro papel a
+ * view devolve zero linhas, e sem tenant no GUC ela levanta P0001.
+ */
+export async function listarSaudeIa(
+  ctx: TenantContext,
+  opcoes: { semanas?: number } = {},
+): Promise<SaudeIaLinha[]> {
+  const semanas = Math.max(1, opcoes.semanas ?? SAUDE_IA_SEMANAS_PADRAO);
+  return withTenant(ctx, async (tx) => {
+    const rows = (await tx.execute(sql`
+      SELECT semana_inicio::text AS semana_inicio, semana_iso, modelo, prompt_versao,
+             total_sugeridas, aprovadas_sem_edicao, editadas, descartadas, pendentes,
+             mediana_segundos_ate_revisao, mediana_latencia_ms,
+             tokens_entrada, tokens_saida
+      FROM metricas_extracao_por_clinica_semana
+      WHERE semana_inicio >= (date_trunc('week', now()) - make_interval(weeks => ${semanas - 1}))::date
+      ORDER BY semana_inicio DESC, modelo NULLS LAST, prompt_versao NULLS LAST
+    `)) as unknown as SaudeIaRow[];
+    return rows.map((r) => ({
+      semanaInicio: r.semana_inicio,
+      semanaIso: r.semana_iso,
+      modelo: r.modelo,
+      promptVersao: r.prompt_versao,
+      totalSugeridas: r.total_sugeridas,
+      aprovadasSemEdicao: r.aprovadas_sem_edicao,
+      editadas: r.editadas,
+      descartadas: r.descartadas,
+      pendentes: r.pendentes,
+      medianaSegundosAteRevisao: r.mediana_segundos_ate_revisao,
+      medianaLatenciaMs: r.mediana_latencia_ms,
+      tokensEntrada: inteiroOuNull(r.tokens_entrada),
+      tokensSaida: inteiroOuNull(r.tokens_saida),
+    }));
+  });
+}
