@@ -140,11 +140,17 @@ após as promoções acima. Achados restantes:
   barato do diário aprovado: resumo de 2 frases copiável, sem dado sensível,
   para o terapeuta colar no WhatsApp. → pós-MVP nomeado (validar demanda no
   piloto antes).
-- **🟡 Sessão substituta.** Terapeuta faltou, outro cobre. O grafo M:N com
-  vigência suporta o vínculo, mas a jornada (substituto vê briefing? registra
-  no prontuário de paciente que não é "dele"?) não está desenhada. Regra
-  simples: membro temporário da equipe de cuidado com vigência de 1 dia.
-  → Prompt 1 (schema) + Prompt 3 (fluxo).
+- **🟢 Sessão substituta.** Terapeuta faltou, outro cobre. Régua unificada
+  (#539, auditoria 360 PR-05 · D-AUD-7): "profissional responsável pela
+  sessão" = `terapeuta_id` OU `atendido_por_id` (substituto designado na
+  agenda), em UM lugar — `app_session_profissional_responsavel` (migração 0142) na RLS de escrita de `session_note`/`audio_capture`/`extraction`/
+  `session_protocol_scope`, `session_select`/`session_update` e nas funções de
+  leitura; `ehDono` das telas e `fila.ts` espelham a mesma função
+  (`src/lib/sessao/responsavel.ts`). O substituto lê e documenta a sessão em
+  que foi designado sem entrar na equipe de cuidado; autoria fica em
+  `session_note.autor_id`. Ainda em discovery (relatório da auditoria §7.2):
+  briefing prévio para o substituto e sigilo (`discipline_only`) entre
+  titular e substituto de disciplinas diferentes.
 - **✅ Reforço de decisão:** a pesquisa de mercado (ver modelo-de-negocio.md)
   confirma que agenda completa/financeiro são commodity dos concorrentes —
   o corte do Bloco 0 (agenda mínima apenas) está correto.
