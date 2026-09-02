@@ -11,6 +11,7 @@ import {
   sinaisDeFaltas,
   chaveNatural,
 } from "@/lib/supervisao/sinais";
+import { lerSegmentacao } from "@/lib/evidence/snapshot-schema";
 
 export type ItemSupervisao = {
   chaveNatural: string;
@@ -35,7 +36,7 @@ type ClinicRow = {
 type SnapshotQueryRow = {
   patient_id: string;
   session_numero: number;
-  segmentacao: any;
+  segmentacao: unknown;
   patient_nome: string;
 };
 
@@ -53,7 +54,7 @@ type AlertaQueryRow = {
   tipo: SinalTipo;
   goal_id: string | null;
   protocol_id: string | null;
-  detalhe: any;
+  detalhe: unknown;
 };
 
 type NameRow = {
@@ -91,10 +92,12 @@ export async function listarSupervisao(
     const mappedSnapshots: SnapshotRow[] = snapshotRows.map((r) => ({
       patientId: r.patient_id,
       sessionNumero: r.session_numero,
-      segmentacao:
-        typeof r.segmentacao === "string"
-          ? JSON.parse(r.segmentacao)
-          : r.segmentacao,
+      // Forma única do snapshot (A-06). `sinais.ts` ainda declara
+      // `metrica: string`, mas o banco grava um objeto — o cast é explícito
+      // para o desencontro ficar visível, não escondido num `any`.
+      segmentacao: lerSegmentacao(
+        r.segmentacao,
+      ) as unknown as SnapshotRow["segmentacao"],
     }));
     const snapSignals = sinaisDeSnapshot(mappedSnapshots);
 
@@ -228,43 +231,70 @@ export async function listarSupervisao(
     }
 
     // 6. Alerta com status reconhecido mas sem sinal vivo correspondente ("sinal cessou")
-    for (const alert of alertaRows) {
-      if (
-        alert.status === "reconhecido" &&
-        !liveKeys.has(alert.chave_natural)
-      ) {
-        // Enriquecer nomes de paciente, goal, protocol se não estiverem no map
-        if (!patientNames.has(alert.patient_id)) {
-          const patientRow = (await tx.execute(sql`
-            SELECT id, nome FROM patient WHERE id = ${alert.patient_id}::uuid
-          `)) as unknown as NameRow[];
-          if (patientRow[0]) {
-            patientNames.set(alert.patient_id, patientRow[0].nome);
-          }
-        }
+    const alertasCessados = alertaRows.filter(
+      (a) => a.status === "reconhecido" && !liveKeys.has(a.chave_natural),
+    );
 
-        if (alert.goal_id && !goalNames.has(alert.goal_id)) {
-          const goalRow = (await tx.execute(sql`
-            SELECT id, descricao AS nome FROM goal WHERE id = ${alert.goal_id}::uuid
-          `)) as unknown as NameRow[];
-          if (goalRow[0]) {
-            goalNames.set(alert.goal_id, goalRow[0].nome);
-          }
-        }
+    // PF-01 (#538): nomes que ainda faltam resolvidos em UM lote por tabela
+    // (antes: até 3 SELECTs por alerta, dentro do for). Proporcional ao
+    // histórico de alertas da clínica — a tela do coordenador crescia com ele.
+    const faltam = (ids: (string | null)[], ja: Map<string, string>) =>
+      Array.from(
+        new Set(ids.filter((id): id is string => !!id && !ja.has(id))),
+      );
+    const resolverNomes = async (
+      tabela: "patient" | "goal" | "protocol",
+      ids: string[],
+      destino: Map<string, string>,
+    ) => {
+      if (ids.length === 0) return;
+      const lista = sql.join(
+        ids.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      );
+      const rows = (await (tabela === "patient"
+        ? tx.execute(sql`SELECT id, nome FROM patient WHERE id IN (${lista})`)
+        : tabela === "goal"
+          ? tx.execute(
+              sql`SELECT id, descricao AS nome FROM goal WHERE id IN (${lista})`,
+            )
+          : tx.execute(
+              sql`SELECT id, nome FROM protocol WHERE id IN (${lista})`,
+            ))) as unknown as NameRow[];
+      rows.forEach((r) => destino.set(r.id, r.nome));
+    };
+    await resolverNomes(
+      "patient",
+      faltam(
+        alertasCessados.map((a) => a.patient_id),
+        patientNames,
+      ),
+      patientNames,
+    );
+    await resolverNomes(
+      "goal",
+      faltam(
+        alertasCessados.map((a) => a.goal_id),
+        goalNames,
+      ),
+      goalNames,
+    );
+    await resolverNomes(
+      "protocol",
+      faltam(
+        alertasCessados.map((a) => a.protocol_id),
+        protocolNames,
+      ),
+      protocolNames,
+    );
 
-        if (alert.protocol_id && !protocolNames.has(alert.protocol_id)) {
-          const protocolRow = (await tx.execute(sql`
-            SELECT id, nome FROM protocol WHERE id = ${alert.protocol_id}::uuid
-          `)) as unknown as NameRow[];
-          if (protocolRow[0]) {
-            protocolNames.set(alert.protocol_id, protocolRow[0].nome);
-          }
-        }
-
-        const det =
+    for (const alert of alertasCessados) {
+      {
+        const det = (
           typeof alert.detalhe === "string"
             ? JSON.parse(alert.detalhe)
-            : alert.detalhe;
+            : alert.detalhe
+        ) as DetalheEstagnacao | DetalheFaltas;
 
         itens.push({
           chaveNatural: alert.chave_natural,
