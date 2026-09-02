@@ -13,6 +13,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/cn";
+import { surface } from "@/components/ui/primitives/surface";
 import type { FriccaoNivel } from "@/lib/extraction/review-policy";
 import { rotuloSubtipo, type LinhaResumo } from "./resumo";
 import type { ExtracaoRevisavel, HistoricoItem } from "./queries";
@@ -130,6 +131,7 @@ function AcaoForm({
   variante,
   disabled,
   camposExtras,
+  aoMudarEstado,
 }: {
   action: (prev: RevisaoState, fd: FormData) => Promise<RevisaoState>;
   sessionId: string;
@@ -139,11 +141,16 @@ function AcaoForm({
   disabled?: boolean;
   /** Campos hidden/visíveis extras (ex.: justificativa do colapso, T07). */
   camposExtras?: React.ReactNode;
+  /** Notifica o cartão do gesto (pendente/concluído) para a superfície reagir. */
+  aoMudarEstado?: (estado: { pending: boolean; ok: boolean }) => void;
 }) {
   const [state, formAction, pending] = useActionState<RevisaoState, FormData>(
     action,
     {},
   );
+  React.useEffect(() => {
+    aoMudarEstado?.({ pending, ok: state.ok === true });
+  }, [aoMudarEstado, pending, state.ok]);
   return (
     <form action={formAction} className="contents">
       <input type="hidden" name="sessionId" value={sessionId} />
@@ -291,6 +298,19 @@ function CartaoRevisao({
   const [justificativaColapso, setJustificativaColapso] = React.useState("");
   const detalheId = `detalhe-${ex.id}`;
 
+  // U-02 (#538): enquanto `sugerida`, o cartão AFUNDA (surface "sugerida":
+  // tracejado violeta + sombra inset) — a mesma geometria de candidato da IA
+  // que o coordenador vê na fila. É o gesto de aprovar que LEVANTA o cartão
+  // para a elevação de fato (surface "solida"); até lá o selo de 14px não é a
+  // única marca de tentativo. Erro na action devolve ao estado tentativo.
+  const [aprovada, setAprovada] = React.useState(false);
+  const aoMudarEstadoAprovar = React.useCallback(
+    ({ pending, ok }: { pending: boolean; ok: boolean }) => {
+      setAprovada(pending || ok);
+    },
+    [],
+  );
+
   const exigeJustificativaColapso =
     podeColapsarAprovacao && info.exigeConfirmacao;
 
@@ -300,7 +320,13 @@ function CartaoRevisao({
     (!exigeJustificativaColapso || justificativaColapso.trim() !== "");
 
   return (
-    <article className="rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] shadow-[var(--ds-shadow)]">
+    <article
+      data-estado={aprovada ? "aprovada" : "sugerida"}
+      className={surface(aprovada ? "solida" : "sugerida", {
+        radius: "control",
+        className: "bg-[var(--surface-card)]",
+      })}
+    >
       <div className={cn("h-2 w-full", info.faixa)} aria-hidden />
       <div className="flex flex-col gap-3 p-5">
         <Split alinha="start">
@@ -381,6 +407,7 @@ function CartaoRevisao({
                   extractionId={ex.id}
                   variante="primaria"
                   disabled={!podeAprovar}
+                  aoMudarEstado={aoMudarEstadoAprovar}
                   camposExtras={
                     exigeJustificativaColapso ? (
                       <input
