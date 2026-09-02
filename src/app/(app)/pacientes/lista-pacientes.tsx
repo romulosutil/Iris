@@ -41,7 +41,7 @@ export function ListaPacientes({
                       incompleto não fique invisível para quem cadastrou e saiu
                       da tela — o texto carrega o estado, a cor só reforça. */}
                   {p.temPrescricao ? null : (
-                    <span className="rounded-[var(--radius-pill)] border border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] px-2 py-0.5 font-mono text-[10px] font-semibold text-[var(--status-warning-fg)] uppercase">
+                    <span className="rounded-[var(--radius-pill)] border border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] px-2 py-0.5 font-mono text-xs font-semibold text-[var(--status-warning-fg)] uppercase">
                       Sem prescrição
                     </span>
                   )}

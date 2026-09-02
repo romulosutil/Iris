@@ -88,7 +88,7 @@ export function CalendarEventCard({
           </span>
         </div>
         {horarioStr && (
-          <span className="shrink-0 font-mono text-[10px] font-bold opacity-80">
+          <span className="shrink-0 font-mono text-xs font-bold opacity-80">
             {horarioStr}
           </span>
         )}
@@ -127,7 +127,7 @@ export function CalendarEventCard({
           {pacienteNome}
         </h4>
         {disciplinaNome && (
-          <p className="mt-0.5 font-mono text-[11px] font-medium uppercase opacity-85">
+          <p className="mt-0.5 font-mono text-xs font-medium uppercase opacity-85">
             {disciplinaNome}
           </p>
         )}

@@ -76,7 +76,7 @@ export function CalendarEventSidebar({
           {/* Cabeçalho */}
           <div className="flex items-start justify-between border-b-2 border-black pb-4">
             <div>
-              <span className="font-mono text-[11px] font-bold tracking-wider text-[var(--text-secondary,#71717A)] uppercase">
+              <span className="font-mono text-xs font-bold tracking-wider text-[var(--text-secondary,#71717A)] uppercase">
                 {sessao.disciplina}
               </span>
               <h2 className="font-display text-lg font-bold text-[var(--text-primary,#09090B)] sm:text-xl">
@@ -109,7 +109,7 @@ export function CalendarEventSidebar({
           {/* Ficha e Detalhes do Profissional */}
           <div className="space-y-3 rounded-[var(--radius-control)] border-2 border-black p-4 shadow-[2px_2px_0_#000]">
             <div>
-              <span className="font-mono text-[10px] font-bold text-[var(--text-secondary)] uppercase">
+              <span className="font-mono text-xs font-bold text-[var(--text-secondary)] uppercase">
                 Profissional Responsável
               </span>
               <p className="font-display font-semibold text-[var(--text-primary)]">
@@ -119,7 +119,7 @@ export function CalendarEventSidebar({
 
             {modalidadeStr && (
               <div>
-                <span className="font-mono text-[10px] font-bold text-[var(--text-secondary)] uppercase">
+                <span className="font-mono text-xs font-bold text-[var(--text-secondary)] uppercase">
                   Modalidade
                 </span>
                 <p className="font-display font-medium text-[var(--text-primary)] capitalize">

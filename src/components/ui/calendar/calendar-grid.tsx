@@ -296,7 +296,7 @@ export function CalendarGrid({
                         <p className="font-display truncate text-xs font-bold text-[var(--text-primary)] sm:text-sm">
                           {r.nome}
                         </p>
-                        <p className="truncate font-mono text-[10px] text-[var(--text-secondary)]">
+                        <p className="truncate font-mono text-xs text-[var(--text-secondary)]">
                           {sessoesRecurso.length} sessões ({concluidas} ok)
                         </p>
                       </div>
@@ -401,7 +401,7 @@ export function CalendarGrid({
               <td className="font-display sticky left-0 z-10 w-24 border-r-2 border-black bg-[var(--surface-card,#ffffff)] p-2 text-xs font-bold text-[var(--text-primary)] sm:w-32 sm:p-3">
                 <div>{d.rotulo}</div>
                 {d.dataISO && (
-                  <div className="font-mono text-[10px] text-[var(--text-secondary)]">
+                  <div className="font-mono text-xs text-[var(--text-secondary)]">
                     {d.dataISO}
                   </div>
                 )}

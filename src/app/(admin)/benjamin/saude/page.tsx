@@ -57,7 +57,7 @@ export default async function SuperAdminSaudePage() {
                       <td className="px-3 py-2.5 font-sans font-medium text-slate-200">
                         {evt.evento}
                       </td>
-                      <td className="px-3 py-2.5 text-[11px] text-slate-400">
+                      <td className="px-3 py-2.5 text-xs text-slate-400">
                         {evt.asaasEventId}
                       </td>
                       <td className="px-3 py-2.5 text-right text-slate-400">
@@ -112,7 +112,7 @@ export default async function SuperAdminSaudePage() {
                     <tr key={alerta.id} className="hover:bg-slate-850/50">
                       <td className="px-3 py-2.5 font-sans">
                         <span
-                          className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                          className={`rounded px-1.5 py-0.5 text-xs font-semibold uppercase ${
                             alerta.nivel === "alta"
                               ? "border border-rose-800/50 bg-rose-950 text-rose-300"
                               : "border border-amber-800/50 bg-amber-950 text-amber-300"
@@ -121,7 +121,7 @@ export default async function SuperAdminSaudePage() {
                           {alerta.nivel}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 text-[11px] text-slate-400">
+                      <td className="px-3 py-2.5 text-xs text-slate-400">
                         {alerta.clinicId}
                       </td>
                       <td className="px-3 py-2.5 text-right text-slate-400">

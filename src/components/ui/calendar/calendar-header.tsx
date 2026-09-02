@@ -39,7 +39,7 @@ export function CalendarHeader({
             <h1 className="font-display text-2xl font-bold tracking-tight text-[var(--text-primary)]">
               {titulo}
             </h1>
-            <span className="rounded-full border border-black bg-[#fff6db] px-2 py-0.5 font-mono text-[10px] font-bold text-[#664d00]">
+            <span className="rounded-full border border-black bg-[#fff6db] px-2 py-0.5 font-mono text-xs font-bold text-[#664d00]">
               {FUSO_CLINICA}
             </span>
           </div>
@@ -78,7 +78,7 @@ export function CalendarHeader({
       {metricas && (
         <div className="grid grid-cols-2 gap-3 border-t-2 border-black pt-3 sm:grid-cols-4">
           <div className="rounded-[var(--radius-control)] border-2 border-black bg-[var(--bg-app)] p-2.5 shadow-[1px_1px_0_#000]">
-            <span className="font-mono text-[10px] font-bold text-[var(--text-secondary)] uppercase">
+            <span className="font-mono text-xs font-bold text-[var(--text-secondary)] uppercase">
               Total Sessões
             </span>
             <p className="font-display text-lg font-bold text-[var(--text-primary)]">
@@ -86,7 +86,7 @@ export function CalendarHeader({
             </p>
           </div>
           <div className="rounded-[var(--radius-control)] border-2 border-black bg-[#e6f4f1] p-2.5 shadow-[1px_1px_0_#000]">
-            <span className="font-mono text-[10px] font-bold text-[#0a5c54] uppercase">
+            <span className="font-mono text-xs font-bold text-[#0a5c54] uppercase">
               Realizadas
             </span>
             <p className="font-display text-lg font-bold text-[#0a5c54]">
@@ -94,7 +94,7 @@ export function CalendarHeader({
             </p>
           </div>
           <div className="rounded-[var(--radius-control)] border-2 border-black bg-[#e7f0fb] p-2.5 shadow-[1px_1px_0_#000]">
-            <span className="font-mono text-[10px] font-bold text-[#124a78] uppercase">
+            <span className="font-mono text-xs font-bold text-[#124a78] uppercase">
               Agendadas
             </span>
             <p className="font-display text-lg font-bold text-[#124a78]">
@@ -102,7 +102,7 @@ export function CalendarHeader({
             </p>
           </div>
           <div className="rounded-[var(--radius-control)] border-2 border-black bg-[#fbe9e9] p-2.5 shadow-[1px_1px_0_#000]">
-            <span className="font-mono text-[10px] font-bold text-[#7e1f16] uppercase">
+            <span className="font-mono text-xs font-bold text-[#7e1f16] uppercase">
               Faltas / Canceladas
             </span>
             <p className="font-display text-lg font-bold text-[#7e1f16]">
