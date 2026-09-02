@@ -31,6 +31,32 @@ const config = [
   ...next,
   ...storybook.configs["flat/recommended"],
   prettier,
+  {
+    // #531 (S-03): `console.error(rotulo, err)` imprime a `message` do
+    // `DrizzleQueryError` — "Failed query: <sql>\nparams: <params>" — no
+    // stdout do container, e no diário os params são a nota clínica. O
+    // helper `logarErroSemPII` registra só nome + SQLSTATE + hash. Testes e
+    // stories ficam fora: lá o "erro" é dublê.
+    files: ["src/app/**/*.{ts,tsx}", "src/lib/**/*.{ts,tsx}"],
+    ignores: ["**/*.test.{ts,tsx}", "**/*.stories.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "CallExpression[callee.object.name='console'][callee.property.name='error'] > Identifier.arguments[name=/^(err|e|error|erro|dbErr|exception)$/]",
+          message:
+            "Não passe o erro ao console.error: a message do DrizzleQueryError carrega SQL + params (PHI). Use logarErroSemPII(rotulo, err, extra?) de @/lib/observabilidade/logar-erro.",
+        },
+        {
+          selector:
+            "CallExpression[callee.object.name='console'][callee.property.name='error'] ObjectExpression > Property[value.name=/^(err|e|error|erro|dbErr|exception)$/]",
+          message:
+            "Não embuta o erro num objeto do console.error: a message do DrizzleQueryError carrega SQL + params (PHI). Use logarErroSemPII(rotulo, err, extra?) de @/lib/observabilidade/logar-erro.",
+        },
+      ],
+    },
+  },
 ];
 
 export default config;
