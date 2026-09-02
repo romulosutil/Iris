@@ -74,6 +74,33 @@ describe("alertasGraveDe", () => {
     expect(r).toEqual([]);
   });
 
+  // #532 (Q-01): o DLQ antigo gravava `{error: msg}` em `payload_editado`.
+  // Um objeto fora do formato de registro ABC NÃO pode mascarar o alerta
+  // grave que a IA sugeriu — é ignorado e vale o `payload`.
+  test("payloadEditado fora do formato (ex.: {error} legado do DLQ) é ignorado — vale o payload original", () => {
+    const r = alertasGraveDe([
+      {
+        id: "e1",
+        estado: "aprovada",
+        payload: { severidade: "grave", comportamento: "bateu a cabeça" },
+        payloadEditado: { error: "insert into evidence ... params" },
+        sessionNumero: 46,
+        revisadoEm: null,
+      },
+      {
+        id: "e2",
+        estado: "editada",
+        payload: { severidade: "grave", comportamento: "mordeu" },
+        payloadEditado: { severidade: "GRAVE" }, // enum inválido → fora do formato
+        sessionNumero: 45,
+        revisadoEm: null,
+      },
+    ]);
+    expect(r.map((x) => x.extractionId)).toEqual(["e1", "e2"]);
+    expect(r[0]?.comportamento).toBe("bateu a cabeça");
+    expect(r[1]?.comportamento).toBe("mordeu");
+  });
+
   test("payloadEditado (edição humana) vence payload original da IA", () => {
     const r = alertasGraveDe([
       {
