@@ -16,6 +16,8 @@ import {
   type ResultadoEstado,
 } from "@/lib/sessao/estado";
 import { podeAutoValidar } from "@/lib/sessao/aprovacao";
+import { montarProntidao, type Prontidao } from "@/lib/patient/prontidao";
+import { obterFatosProntidao } from "@/app/(app)/pacientes/[id]/prontidao-queries";
 
 export type ProtocoloOpcao = { id: string; nome: string; disciplina: string };
 
@@ -47,6 +49,13 @@ export type DadosSessao = {
   } | null;
   protocolos: ProtocoloOpcao[];
   protocolIdsPreSelecionados: string[];
+  /**
+   * T07 — mesma régua que já trava a aba central do paciente (Task 5,
+   * `layout.tsx`): sem protocolo vigente E meta ativa, `materializar.ts`
+   * descarta a evidência da sessão. `PassoEmFoco` lê `podeDocumentar` para
+   * substituir `PassoDocumentar` pelo `CartaoProntidao` quando bloqueado.
+   */
+  prontidao: Prontidao;
 };
 
 /**
@@ -77,7 +86,10 @@ export async function carregarSessao(
     if (!sess) return null;
 
     const [pac] = await tx
-      .select({ nome: patient.nome })
+      .select({
+        nome: patient.nome,
+        clinicalModality: patient.clinicalModality,
+      })
       .from(patient)
       .where(eq(patient.id, sess.patientId));
 
@@ -165,6 +177,21 @@ export async function carregarSessao(
       daDisciplina.length > 0 ? daDisciplina : protocolosAtivos
     ).map((p) => p.id);
 
+    // T07 — DELIBERADAMENTE sem `.catch` aqui, ao contrário de `layout.tsx`
+    // (Task 5). Lá uma falha de leitura vira "cartão não renderiza" (a aba do
+    // paciente continua útil sem ele). Aqui a mesma falha silenciosa
+    // significaria "sem prontidão conhecida ⇒ deixa documentar" — exatamente o
+    // resultado que essa régua existe para impedir. Uma leitura que falhou
+    // nunca pode ler como "livre para documentar": deixa o erro propagar e
+    // `SessaoPage` estoura como qualquer outra falha de carregamento.
+    const fatosProntidao = await obterFatosProntidao(ctx, sess.patientId);
+    const prontidao = montarProntidao({
+      modalidade: pac?.clinicalModality,
+      fatos: fatosProntidao,
+      role: ctx.role,
+      patientId: sess.patientId,
+    });
+
     return {
       sessionId,
       patientId: sess.patientId,
@@ -182,6 +209,7 @@ export async function carregarSessao(
         : null,
       protocolos: protocolosAtivos,
       protocolIdsPreSelecionados,
+      prontidao,
     };
   });
 }

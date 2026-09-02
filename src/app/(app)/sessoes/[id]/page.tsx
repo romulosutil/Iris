@@ -13,6 +13,7 @@ import { Timeline, ROTULO_GESTO, ROTULO_MOTIVO } from "./timeline";
 import { PassoDocumentar } from "./passo-documentar";
 import { PassoRevisar } from "./passo-revisar";
 import { CorrigirNota } from "./corrigir-nota";
+import { CartaoProntidao } from "@/components/app/cartao-prontidao";
 
 /**
  * `/sessoes/[id]` — timeline dos 5 estados canônicos + o passo em foco
@@ -125,6 +126,18 @@ async function PassoEmFoco({
       );
 
     case "documentar":
+      // A régua morde aqui: agendar é livre, documentar não. Sem protocolo
+      // vigente e meta ativa, `materializar.ts` descarta a evidência — o
+      // terapeuta gastaria a sessão inteira preenchendo um formulário cujo
+      // resultado nunca chega à evolução.
+      if (!dados.prontidao.podeDocumentar) {
+        return (
+          <CartaoProntidao
+            prontidao={dados.prontidao}
+            titulo="Esta sessão ainda não pode ser documentada"
+          />
+        );
+      }
       return (
         <PassoDocumentar
           sessionId={sessionId}
