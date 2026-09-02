@@ -73,7 +73,10 @@ type ExtracaoAbcRow = {
  */
 function conteudoAbcEfetivo(r: ExtracaoAbcRow): RegistroAbcPayload {
   if (r.payloadEditado != null) {
-    const editado = registroAbcSchema.safeParse(r.payloadEditado);
+    // `.strict()`: o schema do agente tem todos os campos opcionais e o Zod
+    // descarta chaves desconhecidas — sem strict, `{error: msg}` "passaria"
+    // como `{}` e apagaria a severidade em silêncio.
+    const editado = registroAbcSchema.strict().safeParse(r.payloadEditado);
     if (editado.success) return editado.data;
   }
   return (r.payload ?? {}) as RegistroAbcPayload;
