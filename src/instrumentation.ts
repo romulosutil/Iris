@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
+import { higienizarEventoSentry } from "@/lib/observabilidade/sentry-sem-pii";
 
 /**
  * Observabilidade server/edge → GlitchTip (self-host, SDK compatível com Sentry).
@@ -21,6 +22,10 @@ export async function register(): Promise<void> {
     // Só erros por ora; sem tracing de performance (custo/ruído).
     tracesSampleRate: 0,
     sendDefaultPii: false,
+    // #531 (S-03): a `message` de `DrizzleQueryError`/`PostgresError` carrega
+    // SQL + params (a nota clínica). Vira `Nome (SQLSTATE code)` e qualquer
+    // string do evento perde o que vem depois de `params:`.
+    beforeSend: (event, hint) => higienizarEventoSentry(event, hint),
   });
 }
 
