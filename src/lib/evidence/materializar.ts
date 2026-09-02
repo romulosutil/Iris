@@ -55,6 +55,8 @@ import {
   type Observacao,
   type TipoEstrutura,
 } from "./segmentacao";
+import type { Tx } from "@/db/rls";
+import type { RepertorioState, Segmentacao } from "./snapshot-schema";
 
 export type EvidenciaObservada = {
   sessionNumero: number;
@@ -130,12 +132,20 @@ export type MaterializarQueries = {
   }): Promise<void>;
 };
 
+/**
+ * O que o adapter precisa de um executor Drizzle: a transação de `withTenant`
+ * (RLS aplicado) em produção, ou o `db` do dono em scripts de seed.
+ */
+export type ExecutorDrizzle = Pick<Tx, "execute" | "select">;
+
 /** Adapter sobre uma transação Drizzle (`withTenant`, RLS aplicado). */
-export function drizzleMaterializarQueries(tx: any): MaterializarQueries {
+export function drizzleMaterializarQueries(
+  tx: ExecutorDrizzle,
+): MaterializarQueries {
   return {
     async evidenciasDoPaciente(patientId) {
       const rows = await tx.execute(sqlEvidenciaPaciente(patientId));
-      return (rows as any[]).map((r) => rowParaObservacao(r));
+      return (rows as unknown as LinhaEvidencia[]).map(rowParaObservacao);
     },
     async taxonomiaDoProtocolo(protocolId) {
       const [row] = await tx
@@ -415,8 +425,23 @@ export function postgresMaterializarQueries(
   };
 }
 
-function rowParaObservacao(r: any): EvidenciaObservada {
-  const classificacao = r.classificacaoAtual ?? r.classificacao_atual ?? {};
+/** Linha crua de `sqlEvidenciaPaciente` (camelCase ou snake_case, conforme o driver). */
+type LinhaEvidencia = Record<string, unknown>;
+
+type ClassificacaoAtual = {
+  nivel_ajuda?: unknown;
+  polaridade?: unknown;
+  alvo_resolvido?: {
+    goal_id?: string | null;
+    milestone_id?: string | null;
+    protocol_id?: string | null;
+  } | null;
+};
+
+function rowParaObservacao(r: LinhaEvidencia): EvidenciaObservada {
+  const classificacao = (r.classificacaoAtual ??
+    r.classificacao_atual ??
+    {}) as ClassificacaoAtual;
   const nivelAjuda: string | null =
     typeof classificacao?.nivel_ajuda === "string"
       ? classificacao.nivel_ajuda
@@ -432,13 +457,15 @@ function rowParaObservacao(r: any): EvidenciaObservada {
   // `evidence`, nunca movem) para que o recompute religue a evidência ao
   // stream de segmentação/repertório do NOVO alvo, não do original.
   const alvoResolvido = classificacao?.alvo_resolvido;
+  const id = (...candidatos: unknown[]): string | null => {
+    for (const c of candidatos) if (typeof c === "string") return c;
+    return null;
+  };
   return {
     sessionNumero: Number(r.sessionNumero ?? r.session_numero),
-    goalId: alvoResolvido?.goal_id ?? r.goalId ?? r.goal_id ?? null,
-    milestoneId:
-      alvoResolvido?.milestone_id ?? r.milestoneId ?? r.milestone_id ?? null,
-    protocolId:
-      alvoResolvido?.protocol_id ?? r.protocolId ?? r.protocol_id ?? null,
+    goalId: id(alvoResolvido?.goal_id, r.goalId, r.goal_id),
+    milestoneId: id(alvoResolvido?.milestone_id, r.milestoneId, r.milestone_id),
+    protocolId: id(alvoResolvido?.protocol_id, r.protocolId, r.protocol_id),
     nivelAjuda,
     polaridade,
     temQueryAberta: Boolean(r.temQueryAberta ?? r.tem_query_aberta),
@@ -608,7 +635,7 @@ export async function materializarSnapshot(
   await Promise.all(
     numerosAMaterializar.map((numero) => {
       // segmentacao = { goal_id: { protocol_id: { tipo_estrutura, metrica, rotulo } } }
-      const segmentacao: Record<string, Record<string, unknown>> = {};
+      const segmentacao: Segmentacao = {};
       for (const [chave, resultados] of segmentacaoResultados) {
         const [goalId, protocolId] = chave.split("::");
         // Última observação com sessionNumero <= numero (estado corrente naquele ponto).
@@ -625,7 +652,7 @@ export async function materializarSnapshot(
       }
 
       // repertorio_state = { goal_id: { nivel_ajuda_recente, contagem, is_candidata } }
-      const repertorio: Record<string, unknown> = {};
+      const repertorio: RepertorioState = {};
       for (const [goalId, streamCompleto] of streamsPorGoal) {
         const ateAqui = streamCompleto.filter((o) => o.sessionNumero <= numero);
         const parcial = computarRepertorio({ [goalId]: ateAqui })[goalId]!;

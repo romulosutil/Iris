@@ -134,7 +134,7 @@ export function Scrubber({
           </div>
           {dataSessaoSelecionada && (
             <div
-              className="truncate text-[10px] text-[var(--text-secondary)] sm:text-xs"
+              className="truncate text-xs text-[var(--text-secondary)]"
               suppressHydrationWarning
             >
               {formatarData(dataSessaoSelecionada)}

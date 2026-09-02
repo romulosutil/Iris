@@ -1241,6 +1241,25 @@ export const extraction = pgTable(
     revisadoPor: uuid("revisado_por").references(() => appUser.id),
     revisadoEm: timestamp("revisado_em", { withTimezone: true }),
     versao: integer("versao").notNull().default(1),
+    // DLQ da revisão (#532, Q-01): diagnóstico da falha que levou a extração a
+    // `erro_validacao` — `{codigo, hash, quando}` (SQLSTATE/name + sha256 curto
+    // da message, para correlação com o log; NUNCA a message crua, que carrega
+    // SQL + params = PHI). Vive em coluna própria para não contaminar
+    // `payload_editado`, que é conteúdo clínico efetivo. Zerada ao sair de
+    // `erro_validacao`.
+    erroValidacaoDetalhe: jsonb("erro_validacao_detalhe"),
+    // Rastreio da chamada de IA (#535, DA-02): sem isto nao ha como medir
+    // "aprovacao sem edicao por modelo/prompt" nem custo/latencia por clinica.
+    // Todas nullable: linhas anteriores a migracao e providers sem modelo
+    // (NullProvider) ficam NULL. `modelo` e o id do modelo chamado ('stub' na
+    // clinica demo); `prompt_versao` e o sha256 curto do system prompt usado;
+    // `latencia_ms` e o tempo de parede de `provider.extrair()` (inclui retry)
+    // e e gravado TAMBEM na linha `pendente_reprocessamento` de falha.
+    modelo: text("modelo"),
+    promptVersao: text("prompt_versao"),
+    latenciaMs: integer("latencia_ms"),
+    tokensEntrada: integer("tokens_entrada"),
+    tokensSaida: integer("tokens_saida"),
   },
   (t) => [index("idx_extraction_session").on(t.sessionId)],
 );
@@ -2671,4 +2690,20 @@ export const exportBundleBlob = pgTable("export_bundle_blob", {
     .primaryKey()
     .references(() => exportBundle.id, { onDelete: "cascade" }),
   bytes: bytea("bytes").notNull(),
+});
+
+// ─── #536 (DA-03) — sinal de vida dos jobs de infra ──────────────────────────
+// Uma linha por job (`retencao`, `arquivamento`, `exportacao`, `asr`, …),
+// gravada pelo próprio job ao fim de cada passada e lida pelo detector de
+// alarme (`scripts/alarme-jobs.mjs`). Substitui o arquivo `.ultima-*` de cada
+// container, que só o próprio container enxerga. `detalhe` é SÓ contagens
+// (`avisados=3 arquivados=0`) ou categoria de erro — nunca id, nome ou trecho:
+// a tabela cruza clínicas e sai no e-mail de alarme. Sem `clinic_id` de
+// propósito: não é dado de tenant. Acesso só por funções `SECURITY DEFINER`
+// (0146): RLS forçada e sem policy, nenhuma role lê ou escreve na tabela direto.
+export const jobHeartbeat = pgTable("job_heartbeat", {
+  job: text("job").primaryKey(),
+  ultimoOk: timestamp("ultimo_ok", { withTimezone: true }),
+  ultimoErro: timestamp("ultimo_erro", { withTimezone: true }),
+  detalhe: text("detalhe"),
 });

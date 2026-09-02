@@ -161,7 +161,7 @@ function MenuUsuario({
       >
         <span
           aria-hidden
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-control)] border-2 border-current/30 font-mono text-[10px] font-bold"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-control)] border-2 border-current/30 font-mono text-xs font-bold"
         >
           AD
         </span>
@@ -255,7 +255,7 @@ export function Rail({
       <span className="relative flex h-7 w-7 shrink-0 items-center justify-center">
         <span
           aria-hidden
-          className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-control)] border-2 border-current/30 font-mono text-[10px] font-bold"
+          className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-control)] border-2 border-current/30 font-mono text-xs font-bold"
         >
           {monograma(item.label)}
         </span>

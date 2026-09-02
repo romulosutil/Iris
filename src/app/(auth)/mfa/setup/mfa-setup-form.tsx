@@ -640,7 +640,7 @@ export function MfaSetupForm() {
               </Button>
 
               {!confirmouBackup && (
-                <p className="text-center text-[11px] text-[var(--text-secondary)] italic">
+                <p className="text-center text-xs text-[var(--text-secondary)] italic">
                   * Marque a confirmação no Passo 2 para liberar o botão Ativar.
                 </p>
               )}

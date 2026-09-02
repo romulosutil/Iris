@@ -192,7 +192,7 @@ export function GraficoEvolucaoCrencas({
                   x={paddingX - 8}
                   y={y + 4}
                   textAnchor="end"
-                  className="fill-[var(--text-secondary)] font-mono text-[10px]"
+                  className="fill-[var(--text-secondary)] font-mono text-xs"
                 >
                   {val}%
                 </text>
@@ -306,7 +306,7 @@ export function GraficoEvolucaoCrencas({
                   x={x}
                   y={height - 10}
                   textAnchor="middle"
-                  className="fill-[var(--text-secondary)] font-mono text-[10px]"
+                  className="fill-[var(--text-secondary)] font-mono text-xs"
                 >
                   #{idx}
                 </text>

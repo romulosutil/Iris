@@ -995,6 +995,55 @@
       "when": 1788190224804,
       "tag": "0141_asr_teto_reversoes_e_backstop",
       "breakpoints": true
+    },
+    {
+      "idx": 142,
+      "version": "7",
+      "when": 1788190225804,
+      "tag": "0142_alerta_trecho_fonte_guard_tenant",
+      "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1788190226804,
+      "tag": "0143_profissional_responsavel_da_sessao",
+      "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1788190227804,
+      "tag": "0144_erro_validacao_detalhe",
+      "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1788190228804,
+      "tag": "0145_expurgo_audit_log_por_finalidade",
+      "breakpoints": true
+    },
+    {
+      "idx": 146,
+      "version": "7",
+      "when": 1788190229804,
+      "tag": "0146_job_heartbeat",
+      "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "7",
+      "when": 1788190230804,
+      "tag": "0147_extraction_rastreio_ia",
+      "breakpoints": true
+    },
+    {
+      "idx": 148,
+      "version": "7",
+      "when": 1788190231804,
+      "tag": "0148_metricas_extracao_view",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,10 @@
 import { timingSafeEqual } from "node:crypto";
 import { processarProximo, expirarVencidos } from "@/lib/export/acervo/motor";
+import {
+  detalheDoErro,
+  detalheSemPii,
+  registrarHeartbeat,
+} from "@/lib/jobs/heartbeat";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,6 +54,14 @@ export async function POST(request: Request): Promise<Response> {
     // Expira bundles com retenção vencida (> 72h)
     const { expirados } = await expirarVencidos();
 
+    // #536 — sinal de vida no banco (o `.mjs` deste job é fetch-only). Só
+    // contagens; `bundleId`/`erro` dos itens NÃO entram.
+    await registrarHeartbeat(
+      "exportacao",
+      true,
+      detalheSemPii({ processados: processados.length, expirados }),
+    );
+
     return Response.json({
       ok: true,
       processados,
@@ -57,6 +70,7 @@ export async function POST(request: Request): Promise<Response> {
     });
   } catch (err: any) {
     console.error("[job-exportacao-integral] falha no processamento", err);
+    await registrarHeartbeat("exportacao", false, detalheDoErro(err));
     return Response.json(
       {
         ok: false,

@@ -14,12 +14,16 @@ import {
 /**
  * Selo persistente do estado do dado clínico (princípio 1: honestidade visual =
  * honestidade epistêmica). "Sugerida" NUNCA se parece com um fato: a diferença
- * é estrutural (contorno tracejado sem fill vs fill sólido), reforçada por ícone
- * e texto — nunca cor sozinha (§4C). Selo sempre visível, nunca só um matiz.
+ * é estrutural — contorno TRACEJADO violeta sobre o tint `--status-ia-bg`
+ * (a mesma superfície "afundada" do card sugerido) vs contorno sólido nas
+ * demais variantes — reforçada por ícone e texto, nunca cor sozinha (§4C).
+ * Selo sempre visível, nunca só um matiz.
  *
  * Vocabulário ÚNICO (D4 do refactor): alinhado a `extraction_estado` da Fase 3
  * (sugerida/aprovada/editada/descartada/pendente) + estados de governança da
- * Fase 5 (reclassificada/devolvida).
+ * Fase 5 (reclassificada/devolvida). `BadgesVariantes` é minúsculo e único —
+ * as duplicatas capitalizadas (`Success`/`AI`/…) foram removidas (DS-04, #538).
+ * Caminho de import único: `@/components/ui/patterns/status-badge`.
  */
 export type EstadoDado =
   | "sugerida" // candidato da IA — tentativo, ainda não é evidência
@@ -31,17 +35,7 @@ export type EstadoDado =
   | "devolvida"; // coordenador devolveu ao terapeuta — pede ação
 
 export type BadgesVariantes =
-  | "success"
-  | "warning"
-  | "error"
-  | "ai"
-  | "info"
-  | "brand"
-  | "neutral"
-  | "Success"
-  | "Warning"
-  | "AI"
-  | "Info";
+  "success" | "warning" | "error" | "ai" | "info" | "brand" | "neutral";
 
 const estadoToVariante: Record<EstadoDado, BadgesVariantes> = {
   sugerida: "ai",
@@ -53,37 +47,27 @@ const estadoToVariante: Record<EstadoDado, BadgesVariantes> = {
   devolvida: "warning",
 };
 
-const variantStyles: Record<string, string> = {
+const variantStyles: Record<BadgesVariantes, string> = {
   success:
     "bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)]",
-  Success:
-    "bg-[var(--status-success-bg)] border-[var(--status-success-border)] text-[var(--status-success-fg)]",
   warning:
-    "bg-[var(--status-warning-bg)] border-[var(--status-warning-border)] text-[var(--status-warning-fg)]",
-  Warning:
     "bg-[var(--status-warning-bg)] border-[var(--status-warning-border)] text-[var(--status-warning-fg)]",
   error:
     "bg-[var(--status-error-bg)] border-[var(--status-error-border)] text-[var(--status-error-fg)]",
   ai: "bg-[var(--status-ia-bg)] border-[var(--status-ia-border)] text-[var(--status-ia-fg)]",
-  AI: "bg-[var(--status-ia-bg)] border-[var(--status-ia-border)] text-[var(--status-ia-fg)]",
   info: "bg-[var(--status-info-bg)] border-[var(--status-info-border)] text-[var(--status-info-fg)]",
-  Info: "bg-[var(--status-info-bg)] border-[var(--status-info-border)] text-[var(--status-info-fg)]",
   brand:
     "bg-[var(--action-primary)] border-[var(--border-brutal)] text-[var(--action-primary-fg)]",
   neutral:
     "bg-[var(--surface-elevated)] border-[var(--border-brutal)] text-[var(--text-primary)]",
 };
 
-const dotColorMap: Record<string, string> = {
+const dotColorMap: Record<BadgesVariantes, string> = {
   success: "bg-[var(--status-success-border)]",
-  Success: "bg-[var(--status-success-border)]",
   warning: "bg-[var(--status-warning-border)]",
-  Warning: "bg-[var(--status-warning-border)]",
   error: "bg-[var(--status-error-border)]",
   ai: "bg-[var(--status-ia-border)]",
-  AI: "bg-[var(--status-ia-border)]",
   info: "bg-[var(--status-info-border)]",
-  Info: "bg-[var(--status-info-border)]",
   brand: "bg-[var(--action-primary)]",
   neutral: "bg-[var(--text-secondary)]",
 };
@@ -125,18 +109,14 @@ const config: Record<EstadoDado, Config> = {
 };
 
 const defaultIcons: Record<
-  string,
+  BadgesVariantes,
   React.ComponentType<{ size?: number | string; className?: string }>
 > = {
   success: CheckIcon,
-  Success: CheckIcon,
   warning: ClockIcon,
-  Warning: ClockIcon,
   error: AlertTriangleIcon,
   ai: SparkleIcon,
-  AI: SparkleIcon,
   info: LayersIcon,
-  Info: LayersIcon,
   brand: CheckIcon,
   neutral: DiscardIcon,
 };
@@ -158,20 +138,15 @@ export const StatusBadge = React.forwardRef<HTMLSpanElement, StatusBadgeProps>(
   ) {
     const resolvedVariant =
       variante ?? (estado ? estadoToVariante[estado] : "neutral");
-    const styleClasses =
-      variantStyles[resolvedVariant] ?? variantStyles.neutral;
+    const styleClasses = variantStyles[resolvedVariant];
 
     const borderStyle =
-      estado === "sugerida" ||
-      resolvedVariant === "ai" ||
-      resolvedVariant === "AI"
+      estado === "sugerida" || resolvedVariant === "ai"
         ? "border-dashed"
         : "border-solid";
 
-    const rotulo = estado ? config[estado].rotulo : String(resolvedVariant);
-    const Icone = estado
-      ? config[estado].Icone
-      : (defaultIcons[resolvedVariant] ?? CheckIcon);
+    const rotulo = estado ? config[estado].rotulo : resolvedVariant;
+    const Icone = estado ? config[estado].Icone : defaultIcons[resolvedVariant];
 
     return (
       <span
@@ -206,8 +181,8 @@ export const StatusDot = React.forwardRef<HTMLSpanElement, StatusDotProps>(
   function StatusDot({ className, estado, variante, children, ...props }, ref) {
     const resolvedVariant =
       variante ?? (estado ? estadoToVariante[estado] : "neutral");
-    const dotStyle = dotColorMap[resolvedVariant] ?? dotColorMap.neutral;
-    const rotulo = estado ? config[estado].rotulo : String(resolvedVariant);
+    const dotStyle = dotColorMap[resolvedVariant];
+    const rotulo = estado ? config[estado].rotulo : resolvedVariant;
 
     return (
       <span

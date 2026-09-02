@@ -17,7 +17,8 @@ import { CheckInButton } from "./checkin-button";
 import { GerirSessao } from "./gerir-sessao";
 import { AppointmentCard } from "@/components/ui/appointment-card";
 import { CollapsibleCluster } from "@/components/ui/collapsible-cluster";
-import { Calendar } from "@/components/ui/calendar";
+import { CalendarGrid } from "@/components/ui/calendar/calendar-grid";
+import { CalendarEventCard } from "@/components/ui/calendar/calendar-event-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CareCalendarIllustration } from "@/components/ui/illustrations";
 import { podeCriarSessaoEmAgenda } from "@/lib/agenda/gating";
@@ -439,12 +440,35 @@ export function AgendaViewCliente({
 
       {/* Visão 1: Matriz Calendário (Horário x Terapeuta) */}
       {modoVisao === "matriz" && sessoesFiltradas.length > 0 ? (
-        <Calendar.Grid
+        <CalendarGrid
           modo="daily-resources"
           sessoes={sessoesFiltradas}
           recursos={terapeutas}
           fuso={fuso}
-          podeGerir={podeGerir}
+          // A-01 (#538): o check-in é do app, não do DS — a grade só oferece o
+          // slot `renderEvent`; o card puro do DS recebe a ação por `acao`.
+          renderEvent={(s, { horarioStr, variante, mostrarTerapeuta }) => (
+            <CalendarEventCard
+              pacienteNome={s.pacienteNome ?? "Paciente"}
+              disciplinaNome={s.disciplina}
+              horarioStr={horarioStr}
+              estado={s.estado}
+              terapeutaNome={
+                mostrarTerapeuta ? (s.terapeutaNome ?? undefined) : undefined
+              }
+              variante={variante}
+              onClick={() => setSessaoSelecionada(s)}
+              acao={
+                s.estado === "agendada" && podeGerir ? (
+                  <CheckInButton
+                    sessionId={s.id}
+                    checkInEm={s.checkInEm}
+                    fuso={fuso}
+                  />
+                ) : null
+              }
+            />
+          )}
           onSlotClick={
             // #512 · T13 (P1, issue #521, opção a) — clicar num slot vazio é
             // gesto de CRIAR sessão: segue `podeCriarSessao`, não `podeGerir`
@@ -454,7 +478,6 @@ export function AgendaViewCliente({
               ? () => trocarEscala("semana")
               : undefined
           }
-          onEventClick={(sessao) => setSessaoSelecionada(sessao)}
         />
       ) : null}
 

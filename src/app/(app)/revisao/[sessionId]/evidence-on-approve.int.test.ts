@@ -181,7 +181,11 @@ describe.skipIf(!hasDb)("evidence on-approve (Fase 4)", () => {
     });
   });
 
-  test("sessão sem numero_sequencial_paciente: aprovação segue OK, mas evidence NÃO é inserida", async () => {
+  // Q-03 (#532): "aprovada sem evidence" deixou de ser comportamento aceito —
+  // era exatamente o silêncio que a auditoria apontou. Sem `numero_sequencial`
+  // a aprovação é RECUSADA com `SESSAO_SEM_NUMERO` e a transação desfeita
+  // (extração continua `sugerida`, versão intacta, zero evidence).
+  test("sessão sem numero_sequencial_paciente: aprovação falha com SESSAO_SEM_NUMERO e nada muda", async () => {
     const SESS_SEM_NUMERO = "00000000-0000-0000-0000-00000005e1f2";
     const EX_SEM_NUMERO = "00000000-0000-0000-0000-00000e0a0003";
     await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, disciplina) VALUES
@@ -195,7 +199,14 @@ describe.skipIf(!hasDb)("evidence on-approve (Fase 4)", () => {
       extractionId: EX_SEM_NUMERO,
       versao: 1,
     });
-    expect(r.ok).toBe(true); // a revisão em si não falha
+    expect(r.ok).toBeFalsy();
+    expect(r.error).toBe("SESSAO_SEM_NUMERO");
+
+    const [ext] =
+      await owner`SELECT estado, versao, revisado_por FROM extraction WHERE id = ${EX_SEM_NUMERO}`;
+    expect(ext!.estado).toBe("sugerida");
+    expect(ext!.versao).toBe(1);
+    expect(ext!.revisado_por).toBeNull();
 
     const rows =
       await owner`SELECT id FROM evidence WHERE extraction_id = ${EX_SEM_NUMERO}`;

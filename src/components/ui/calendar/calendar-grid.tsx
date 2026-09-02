@@ -2,9 +2,34 @@
 
 import * as React from "react";
 import { cn } from "@/lib/cn";
-import { CalendarEventCard } from "./calendar-event-card";
-import type { SessaoDoDia } from "@/app/(app)/agenda/actions";
-import { FUSO_CLINICA } from "@/app/(app)/agenda/fuso"; // fallback só quando nenhum `fuso` é passado (ver comentário em CalendarGridProps)
+import {
+  CalendarEventCard,
+  type CalendarEventoEstado,
+} from "./calendar-event-card";
+
+/**
+ * O mínimo que a grade precisa de um evento para posicioná-lo e descrevê-lo.
+ * A-01 (#538): o DS não importa mais `SessaoDoDia` do app — o app passa o
+ * tipo real como `T` e recebe o mesmo `T` em `onEventClick` e `renderEvent`.
+ */
+export interface CalendarEvento {
+  id: string;
+  agendadaPara: Date;
+  terapeutaId: string;
+  estado: CalendarEventoEstado;
+  pacienteNome?: string | null;
+  disciplina?: string | null;
+  terapeutaNome?: string | null;
+}
+
+/** Contexto que a grade entrega a `renderEvent`. */
+export interface CalendarEventoContexto {
+  /** Horário do slot já formatado no fuso da clínica (ausente na timeline semanal). */
+  horarioStr?: string;
+  variante: "detalhada" | "compacta";
+  /** false quando a coluna/linha já identifica o terapeuta. */
+  mostrarTerapeuta: boolean;
+}
 
 type CalendarGridMode =
   "daily-resources" | "weekly-timeline" | "availability-matrix";
@@ -15,9 +40,9 @@ interface ResourceColumn {
   subtitulo?: string;
 }
 
-export interface CalendarGridProps {
+export interface CalendarGridProps<T extends CalendarEvento = CalendarEvento> {
   modo: CalendarGridMode;
-  sessoes?: SessaoDoDia[];
+  sessoes?: T[];
   recursos?: ResourceColumn[];
   diasSemana?: { dataISO: string; rotulo: string; diaSemana: number }[];
   abertura?: string;
@@ -30,13 +55,21 @@ export interface CalendarGridProps {
     horarioStr: string,
     diaSemana?: number,
   ) => void;
-  onEventClick?: (sessao: SessaoDoDia) => void;
-  podeGerir?: boolean;
+  onEventClick?: (sessao: T) => void;
+  /**
+   * Renderiza o evento dentro do slot. Sem isto a grade usa o
+   * `CalendarEventCard` puro do DS; o app injeta aqui o que é dele (check-in,
+   * gestão) em vez de o DS importar componentes do app (A-01, #538).
+   */
+  renderEvent?: (
+    sessao: T,
+    contexto: CalendarEventoContexto,
+  ) => React.ReactNode;
   bloqueios?: { dataInicio: string; dataFim: string }[];
-  /** Fuso IANA da clínica (D61). Default `FUSO_CLINICA` só para os poucos
-   * callers de design system sem caminho de request (ex.: Storybook). Todo
-   * caller de produção passa o valor real de `clinic.timezone`. */
-  fuso?: string;
+  /** Fuso IANA da clínica (D61) — OBRIGATÓRIO, sem default: com default o
+   * SSR caía no fuso do container (revisão da PR #556). Produção passa
+   * `clinic.timezone`; Storybook/testes passam um literal. */
+  fuso: string;
 }
 
 function horaParaMin(h: string): number {
@@ -115,23 +148,49 @@ function useEscalaDiaMobile(): boolean {
   return mobile;
 }
 
-interface CalendarDayListProps {
-  sessoes: SessaoDoDia[];
+interface CalendarDayListProps<T extends CalendarEvento> {
+  sessoes: T[];
   passoMin: number;
   fuso: string;
-  onEventClick?: (sessao: SessaoDoDia) => void;
-  podeGerir: boolean;
+  onEventClick?: (sessao: T) => void;
+  renderEvent?: CalendarGridProps<T>["renderEvent"];
+}
+
+const CONTEXTO_COMPACTO: CalendarEventoContexto = {
+  variante: "compacta",
+  mostrarTerapeuta: false,
+};
+
+/** Evento padrão do DS: o card puro, sem nada do app. */
+function renderEventoPadrao<T extends CalendarEvento>(
+  s: T,
+  { horarioStr, variante, mostrarTerapeuta }: CalendarEventoContexto,
+  onEventClick?: (sessao: T) => void,
+) {
+  return (
+    <CalendarEventCard
+      pacienteNome={s.pacienteNome ?? "Paciente"}
+      disciplinaNome={s.disciplina}
+      horarioStr={horarioStr}
+      estado={s.estado}
+      terapeutaNome={
+        mostrarTerapeuta ? (s.terapeutaNome ?? undefined) : undefined
+      }
+      variante={variante}
+      onClick={() => onEventClick?.(s)}
+    />
+  );
 }
 
 // Lista cronológica da escala "Dia" para mobile (R-30). Ordena por horário
 // real da sessão (não pelo slot arredondado), uma linha por sessão.
-function CalendarDayList({
+function CalendarDayList<T extends CalendarEvento>({
   sessoes,
   passoMin,
   fuso,
   onEventClick,
-  podeGerir,
-}: CalendarDayListProps) {
+  renderEvent,
+}: CalendarDayListProps<T>) {
   const sessoesOrdenadas = React.useMemo(
     () =>
       [...sessoes].sort(
@@ -161,25 +220,25 @@ function CalendarDayList({
       aria-label="Sessões do dia, em ordem cronológica"
       className="flex flex-col gap-2"
     >
-      {sessoesOrdenadas.map((s) => (
-        <li key={s.id}>
-          <CalendarEventCard
-            id={s.id}
-            pacienteNome={s.pacienteNome ?? "Paciente"}
-            disciplinaNome={s.disciplina}
-            horarioStr={obterHorarioSlot(s.agendadaPara, passoMin, fuso)}
-            estado={s.estado}
-            terapeutaNome={s.terapeutaNome ?? undefined}
-            onClick={() => onEventClick?.(s)}
-            podeGerir={podeGerir}
-          />
-        </li>
-      ))}
+      {sessoesOrdenadas.map((s) => {
+        const contexto: CalendarEventoContexto = {
+          horarioStr: obterHorarioSlot(s.agendadaPara, passoMin, fuso),
+          variante: "detalhada",
+          mostrarTerapeuta: true,
+        };
+        return (
+          <li key={s.id}>
+            {renderEvent
+              ? renderEvent(s, contexto)
+              : renderEventoPadrao(s, contexto, onEventClick)}
+          </li>
+        );
+      })}
     </ul>
   );
 }
 
-export function CalendarGrid({
+export function CalendarGrid<T extends CalendarEvento = CalendarEvento>({
   modo,
   sessoes = [],
   recursos = [],
@@ -191,10 +250,10 @@ export function CalendarGrid({
   onCelulasChange,
   onSlotClick,
   onEventClick,
-  podeGerir = true,
+  renderEvent,
   bloqueios = [],
-  fuso = FUSO_CLINICA,
-}: CalendarGridProps) {
+  fuso,
+}: CalendarGridProps<T>) {
   const mobileDia = useEscalaDiaMobile();
 
   const horarios = React.useMemo(
@@ -203,7 +262,7 @@ export function CalendarGrid({
   );
 
   const mapaSessoes = React.useMemo(() => {
-    const map = new Map<string, SessaoDoDia[]>();
+    const map = new Map<string, T[]>();
     for (const s of sessoes) {
       const h = obterHorarioSlot(s.agendadaPara, passoMin, fuso);
       const rId = s.terapeutaId ?? "sem-terapeuta";
@@ -257,7 +316,7 @@ export function CalendarGrid({
           passoMin={passoMin}
           fuso={fuso}
           onEventClick={onEventClick}
-          podeGerir={podeGerir}
+          renderEvent={renderEvent}
         />
       );
     }
@@ -296,7 +355,7 @@ export function CalendarGrid({
                         <p className="font-display truncate text-xs font-bold text-[var(--text-primary)] sm:text-sm">
                           {r.nome}
                         </p>
-                        <p className="truncate font-mono text-[10px] text-[var(--text-secondary)]">
+                        <p className="truncate font-mono text-xs text-[var(--text-secondary)]">
                           {sessoesRecurso.length} sessões ({concluidas} ok)
                         </p>
                       </div>
@@ -333,22 +392,24 @@ export function CalendarGrid({
                       )}
                     >
                       <div className="space-y-1.5">
-                        {sessoesSlot.map((s) => (
-                          <CalendarEventCard
-                            key={s.id}
-                            id={s.id}
-                            pacienteNome={s.pacienteNome ?? "Paciente"}
-                            disciplinaNome={s.disciplina}
-                            horarioStr={obterHorarioSlot(
+                        {sessoesSlot.map((s) => {
+                          const contexto: CalendarEventoContexto = {
+                            horarioStr: obterHorarioSlot(
                               s.agendadaPara,
                               passoMin,
                               fuso,
-                            )}
-                            estado={s.estado}
-                            onClick={() => onEventClick?.(s)}
-                            podeGerir={podeGerir}
-                          />
-                        ))}
+                            ),
+                            variante: "detalhada",
+                            mostrarTerapeuta: false,
+                          };
+                          return (
+                            <React.Fragment key={s.id}>
+                              {renderEvent
+                                ? renderEvent(s, contexto)
+                                : renderEventoPadrao(s, contexto, onEventClick)}
+                            </React.Fragment>
+                          );
+                        })}
                       </div>
                     </td>
                   );
@@ -401,7 +462,7 @@ export function CalendarGrid({
               <td className="font-display sticky left-0 z-10 w-24 border-r-2 border-black bg-[var(--surface-card,#ffffff)] p-2 text-xs font-bold text-[var(--text-primary)] sm:w-32 sm:p-3">
                 <div>{d.rotulo}</div>
                 {d.dataISO && (
-                  <div className="font-mono text-[10px] text-[var(--text-secondary)]">
+                  <div className="font-mono text-xs text-[var(--text-secondary)]">
                     {d.dataISO}
                   </div>
                 )}
@@ -614,15 +675,13 @@ export function CalendarGrid({
                           data-testid="bloco-overlay"
                           style={{ left: leftStyle, width: widthStyle }}
                         >
-                          <CalendarEventCard
-                            id={s.id}
-                            pacienteNome={s.pacienteNome ?? "Paciente"}
-                            disciplinaNome={s.disciplina}
-                            estado={s.estado}
-                            variante="compacta"
-                            onClick={() => onEventClick?.(s)}
-                            podeGerir={podeGerir}
-                          />
+                          {renderEvent
+                            ? renderEvent(s, CONTEXTO_COMPACTO)
+                            : renderEventoPadrao(
+                                s,
+                                CONTEXTO_COMPACTO,
+                                onEventClick,
+                              )}
                         </div>
                       ))}
                     </div>
