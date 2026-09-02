@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, eq, exists, isNull, sql } from "drizzle-orm";
 import { withTenant, type TenantContext } from "@/db/rls";
 import * as schema from "@/db/schema";
+import { montarProntidao } from "@/lib/patient/prontidao";
 
 export interface PacienteListItem {
   id: string;
@@ -29,6 +30,13 @@ export interface PacienteListItem {
    * reaparece quando alguém tenta montar a equipe e não consegue.
    */
   temPrescricao: boolean;
+  /**
+   * Rótulo do próximo degrau da escada de prontidão, ou `null` quando o
+   * prontuário já está pronto. Derivado na leitura, como `temPrescricao` —
+   * pelo mesmo motivo: flag persistida passa a mentir assim que alguém
+   * descontinua a última meta por outro caminho.
+   */
+  proximoPasso: string | null;
 }
 
 /**
@@ -39,7 +47,11 @@ export interface PacienteListItem {
 export async function listarTodosPacientes(
   ctx: TenantContext,
 ): Promise<PacienteListItem[]> {
-  return withTenant(ctx, (tx) =>
+  // Uma query só, seis `EXISTS` correlacionados a mais — mesmo idioma de
+  // `temPrescricao` abaixo. A alternativa óbvia (chamar `obterFatosProntidao`
+  // por linha) abriria uma transação por paciente: numa clínica com 80
+  // pacientes, 80 idas ao banco só para pintar uma pílula na lista.
+  const linhas = await withTenant(ctx, (tx) =>
     tx
       .select({
         id: schema.patient.id,
@@ -50,6 +62,7 @@ export async function listarTodosPacientes(
         convenio: schema.patient.convenio,
         criadoEm: schema.patient.criadoEm,
         arquivadoEm: schema.patient.arquivadoEm,
+        clinicalModality: schema.patient.clinicalModality,
         // EXISTS correlacionado em vez de join: um paciente com três
         // disciplinas prescritas não pode virar três linhas na lista.
         // `vigencia_fim IS NULL` é o mesmo filtro de vigência usado em todo o
@@ -77,9 +90,103 @@ export async function listarTodosPacientes(
               ),
             ),
         ).mapWith(Boolean),
+        // Os seis fatos da escada de prontidão (`src/lib/patient/prontidao.ts`),
+        // mesmos predicados de `obterFatosProntidaoNaTx`
+        // (`prontidao-queries.ts`) — copiados, não importados: aquela função
+        // abre a própria transação e lê UM paciente; esta lê a clínica
+        // inteira numa passada só.
+        temFichaClinica: exists(
+          tx
+            .select({ um: sql`1` })
+            .from(schema.patientClinicalProfile)
+            .where(
+              eq(schema.patientClinicalProfile.patientId, schema.patient.id),
+            ),
+        ).mapWith(Boolean),
+        temAnamnese: exists(
+          tx
+            .select({ um: sql`1` })
+            .from(schema.anamnese)
+            .where(eq(schema.anamnese.patientId, schema.patient.id)),
+        ).mapWith(Boolean),
+        // Vigência aberta: protocolo desativado não tem marcos a pontuar.
+        temProtocoloAtivo: exists(
+          tx
+            .select({ um: sql`1` })
+            .from(schema.patientProtocol)
+            .where(
+              and(
+                eq(schema.patientProtocol.patientId, schema.patient.id),
+                isNull(schema.patientProtocol.desativadoEm),
+              ),
+            ),
+        ).mapWith(Boolean),
+        // Só 'ativa'. Rascunho não é alvo de resolução em `materializar.ts`.
+        temMetaAtiva: exists(
+          tx
+            .select({ um: sql`1` })
+            .from(schema.goal)
+            .where(
+              and(
+                eq(schema.goal.patientId, schema.patient.id),
+                eq(schema.goal.estado, "ativa"),
+              ),
+            ),
+        ).mapWith(Boolean),
+        temInstrumentoAplicado: exists(
+          tx
+            .select({ um: sql`1` })
+            .from(schema.instrumentoAplicacao)
+            .where(
+              eq(schema.instrumentoAplicacao.patientId, schema.patient.id),
+            ),
+        ).mapWith(Boolean),
+        // Snapshot, não sessão: é ele que prova que a documentação virou dado
+        // legível na evolução.
+        temSessaoConsolidada: exists(
+          tx
+            .select({ um: sql`1` })
+            .from(schema.sessionSnapshot)
+            .where(eq(schema.sessionSnapshot.patientId, schema.patient.id)),
+        ).mapWith(Boolean),
       })
       .from(schema.patient)
       .where(eq(schema.patient.clinicId, ctx.clinicId))
       .orderBy(asc(schema.patient.nome)),
   );
+
+  // `montarProntidao` é pura — roda fora da transação, sobre os fatos já
+  // lidos. Aqui é onde os seis fatos intermediários e `clinicalModality`
+  // são descartados: `PacienteListItem` expõe só `proximoPasso`.
+  return linhas.map((linha) => {
+    const {
+      clinicalModality,
+      temFichaClinica,
+      temAnamnese,
+      temProtocoloAtivo,
+      temMetaAtiva,
+      temInstrumentoAplicado,
+      temSessaoConsolidada,
+      ...paciente
+    } = linha;
+
+    const prontidao = montarProntidao({
+      modalidade: clinicalModality,
+      fatos: {
+        temFichaClinica,
+        temAnamnese,
+        temProtocoloAtivo,
+        temMetaAtiva,
+        temInstrumentoAplicado,
+        temSessaoConsolidada,
+      },
+      role: ctx.role,
+      patientId: linha.id,
+    });
+
+    return {
+      ...paciente,
+      proximoPasso: prontidao.proximo?.rotulo ?? null,
+    };
+  });
 }

@@ -45,6 +45,21 @@ export function ListaPacientes({
                       Sem prescrição
                     </span>
                   )}
+                  {/* Escada de prontidão (#512/#530): próximo degrau da fila
+                      de admissão, visível sem abrir o prontuário. Some
+                      sozinho quando `proximoPasso` é `null` — prontuário
+                      pronto (nada a fazer) ou papel sem leitura clínica
+                      (`montarProntidao` já devolve `proximo: null` para a
+                      recepção). O texto carrega o estado, a cor só reforça —
+                      mesma regra do selo vizinho. */}
+                  {p.proximoPasso ? (
+                    <span
+                      data-testid="pill-prontidao"
+                      className="rounded-[var(--radius-pill)] border border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] px-2 py-0.5 font-mono text-[10px] font-semibold text-[var(--status-warning-fg)] uppercase"
+                    >
+                      {p.proximoPasso}
+                    </span>
+                  ) : null}
                 </div>
                 <Button variante="terciaria" tamanho="sm" asChild>
                   <Link href={`/pacientes/${p.id}`}>Ver Prontuário &rarr;</Link>
