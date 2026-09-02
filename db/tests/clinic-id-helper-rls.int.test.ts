@@ -259,7 +259,7 @@ async function comoDono(tx: postgres.TransactionSql) {
  * `clinic`, `clinic_id = ...` puro, com papel, e com FK de paciente).
  */
 /**
- * As 21 funções que resolvem o tenant pelo helper (`0087`, resíduo do D16).
+ * As 23 funções que resolvem o tenant pelo helper (`0087`, resíduo do D16; `0142` #529; `0143` #539).
  *
  * Todas são `SECURITY DEFINER` menos nenhuma — e é justamente por isso que elas
  * importam: uma função DEFINER roda com os direitos do dono, ou seja, IGNORA a
@@ -304,6 +304,11 @@ const FUNCOES_COM_HELPER = [
   // #262 (0095) — grava dados cadastrais/fiscais da clínica (página Dados).
   "app_salvar_dados_clinica",
   "app_session_clinica_visivel",
+  // #539 (0143, D-AUD-7) — régua única de "profissional responsável":
+  // `terapeuta_id OU atendido_por_id`. SECURITY INVOKER (lê `session` sob a
+  // RLS de quem chama); o guard de tenant é redundante com a RLS e está lá
+  // por disciplina D16.
+  "app_session_profissional_responsavel",
   "app_session_terapeuta_id",
   "app_user_in_clinic",
   // #407/T05 — definer de validação da anamnese: resolve tenant por
@@ -340,7 +345,7 @@ const FUNCOES_COM_USER_ROLE_HELPER = [
 ];
 
 /**
- * As 10 funções que chamam app_user_id_exigido() (0093 + 0094, D23, 0112 #392, 0114 #393, 0115 #407, 0121 #119, 0142 #529).
+ * As 11 funções que chamam app_user_id_exigido() (0093 + 0094, D23, 0112 #392, 0114 #393, 0115 #407, 0121 #119, 0142 #529, 0143 #539).
  */
 const FUNCOES_COM_USER_ID_EXIGIDO_HELPER = [
   "app_alerta_risco_visivel",
@@ -360,6 +365,8 @@ const FUNCOES_COM_USER_ID_EXIGIDO_HELPER = [
   "app_session_clinica_visivel",
   // #119 (0121) — valida autor ou mesma disciplina na equipe ativa.
   "app_session_disciplina_liberada",
+  // #539 (0143) — `app_user_id_exigido() IN (terapeuta_id, atendido_por_id)`.
+  "app_session_profissional_responsavel",
   // #407/T05 — `validada_por = app_user_id_exigido()` na transição de estado.
   "app_validar_anamnese",
 ];
@@ -517,7 +524,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.relname)).toEqual([]);
   });
 
-  test("as 21 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
+  test("as 23 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
     // Mesmo raciocínio do literal de policies: o oráculo é escrito à mão para
     // que uma função NOVA que entre no regime (ou uma que saia) precise de uma
     // linha aqui, no diff, e não passe por osmose.
@@ -530,7 +537,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_HELPER);
-    expect(FUNCOES_COM_HELPER.length).toBe(22);
+    expect(FUNCOES_COM_HELPER.length).toBe(23);
   });
 
   // ─── 2d. Q-05 (#529): oráculo SISTÊMICO de definers ───────────────────────
@@ -711,7 +718,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(FUNCOES_COM_USER_ROLE_HELPER.length).toBe(16);
   });
 
-  test("as 9 funções de autorização por identidade chamam app_user_id_exigido() — conjunto exato", async () => {
+  test("as 11 funções de autorização por identidade chamam app_user_id_exigido() — conjunto exato", async () => {
     const rows = await owner!<{ proname: string }[]>`
       SELECT p.proname
         FROM pg_proc p
@@ -723,7 +730,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.proname)).toEqual(
       FUNCOES_COM_USER_ID_EXIGIDO_HELPER,
     );
-    expect(FUNCOES_COM_USER_ID_EXIGIDO_HELPER.length).toBe(10);
+    expect(FUNCOES_COM_USER_ID_EXIGIDO_HELPER.length).toBe(11);
   });
 
   test("as 3 funções com identidade leniente chamam app_user_id_atual() — conjunto exato", async () => {
