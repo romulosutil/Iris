@@ -235,7 +235,7 @@ Formato por achado: **Título** · Status · Disciplina(s) · Tipo · Problema �
 #### S-09 · Visibilidade do repositório e identificadores de produção versionados
 
 - **Status**: NECESSITA INVESTIGAÇÃO · **Disciplinas**: Security · **Tipo**: Risk
-- **Problema**: `.github/workflows/pr-review.yml:23` diz "Repositório público"; a linha `:43` do mesmo arquivo diz "Repo privado, um único time". O repositório versiona ids de cliente Asaas de produção (`cus_000193772978`, `cus_000193771154` em `BACKLOG.md:84`; `cus_000008723016` em `infra/README.md:2287`), prefixo do token de webhook (`dQx2A1mhoaidY2…`, `BACKLOG.md:51,1128`), hostnames internos e o e-mail pessoal do fundador como default em `scripts/unlock-user.ts:15` e `seed-demo-account.ts:52`.
+- **Problema**: `.github/workflows/pr-review.yml:23` diz "Repositório público"; a linha `:43` do mesmo arquivo diz "Repo privado, um único time". O repositório versiona ids de cliente Asaas de produção (`cus_…`, `cus_…` em `BACKLOG.md:84`; `cus_…` em `infra/README.md:2287`), prefixo do token de webhook (`<prefixo no runbook>`, `BACKLOG.md:51,1128`), hostnames internos e o e-mail pessoal do fundador como default em `scripts/unlock-user.ts:15` e `seed-demo-account.ts:52`.
 - **Evidência**: citada acima; `gh` indisponível para confirmar visibilidade.
 - **Impacto**: se público, enumeração de clientes do gateway e engenharia social; se privado, higiene.
 - **Recomendação**: confirmar visibilidade; em qualquer caso, passar identificadores de produção do `BACKLOG.md` para um runbook privado e trocar defaults de e-mail por obrigatórios.
