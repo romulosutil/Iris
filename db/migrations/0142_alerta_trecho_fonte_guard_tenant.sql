@@ -20,6 +20,14 @@
 --
 -- Fail-closed por construção: linha de outra clínica não satisfaz o WHERE, a
 -- função devolve NULL — nunca o trecho, nunca erro que nomeie a linha.
+--
+-- Chamadores (revisão pós-PR #544):
+--   * src/app/(app)/alertas-risco/queries.ts:67  (lista/detalhe de alertas)
+--   * src/lib/export/acervo/coletor.ts:578       (exportação do acervo)
+-- Pré-requisito: só sob `withTenant` (app.clinic_id, app.user_role e
+-- app.user_id definidos). Fora de tenant, app_clinic_id_exigido() /
+-- app_user_role_exigido() / app_user_id_exigido() levantam P0001 — a função
+-- não degrada para NULL em silêncio, ela recusa.
 
 CREATE OR REPLACE FUNCTION public.app_alerta_trecho_fonte(p_alerta uuid)
 RETURNS text

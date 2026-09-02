@@ -571,13 +571,19 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     // Comentários e literais de string saem ANTES do casamento: um
     // `-- não usa app_patient_in_clinic` ou um RAISE que cite o helper NÃO é
     // uma chamada, e sem isto o oráculo passaria por menção.
+    //
+    // ORDEM IMPORTA (revisão pós-PR #544): literais primeiro, depois `--`.
+    // Um `--` DENTRO de literal (`RAISE '... a--b'`) tratado antes engoliria
+    // o resto da linha, inclusive código real depois da string na mesma
+    // linha — e um guard que estivesse ali sumiria do casamento. Com o
+    // literal já reduzido a `''`, o `--` que sobra é comentário de verdade.
     const corpo = new Map(
       rows.map((r) => [
         r.proname,
         r.prosrc
           .replace(/\/\*[\s\S]*?\*\//g, " ")
-          .replace(/--[^\n]*/g, " ")
-          .replace(/'(?:[^']|'')*'/g, "''"),
+          .replace(/'(?:[^']|'')*'/g, "''")
+          .replace(/--[^\n]*/g, " "),
       ]),
     );
     // Uma chamada só conta como FRONTEIRA se não for alternativa de um `OR`.
@@ -587,6 +593,14 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     // esse corpo — o mutante provou (PR do #529). Limite declarado: é uma
     // heurística textual; um guard num `WHEN` separado ainda passa. A prova
     // de comportamento é o caso 14 de `sigilo-disciplina-rls.int.test.ts`.
+    //
+    // O lado oposto da mesma heurística: uma função cujo ÚNICO guard legítimo
+    // esteja numa disjunção (ex.: `WHERE s.terapeuta_id = app_user_id_exigido()
+    // OR app_is_on_team(s.patient_id)` — os dois ramos são identidade-bound e
+    // o conjunto é seguro) fica "descoberta" aqui e só passa entrando em
+    // `DEFINERS_GLOBAIS_JUSTIFICADOS` com a justificativa escrita. É falso
+    // positivo deliberado: custa uma linha no diff, e é o revisor humano — não
+    // o regex — quem decide que a disjunção inteira é fronteira.
     const fechaParenteses = (src: string, abre: number) => {
       let nivel = 0;
       for (let i = abre; i < src.length; i++) {
