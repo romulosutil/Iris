@@ -14,7 +14,7 @@
  * - Alertas clínicos de supervisão e risco
  *
  * Uso:
- *   pnpm tsx --conditions=react-server --env-file=.env scripts/seed-demo-account.ts sutil.romulo@gmail.com
+ *   pnpm tsx --conditions=react-server --env-file=.env scripts/seed-demo-account.ts <email-do-coordenador>
  */
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
