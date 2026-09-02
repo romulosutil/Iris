@@ -1,6 +1,6 @@
 import "server-only";
 import { sql } from "drizzle-orm";
-import { withTenant, type TenantContext } from "@/db/rls";
+import { withTenant, type TenantContext, type Tx } from "@/db/rls";
 import {
   anamnese,
   goal,
@@ -33,56 +33,74 @@ import type { FatosProntidao } from "@/lib/patient/prontidao";
  * blinda isso é `montarProntidao` (`src/lib/patient/prontidao.ts`), que só
  * monta escada para {coordenador, terapeuta}; esta função nunca decide papel
  * sozinha.
+ *
+ * ── Duas portas, UMA query ────────────────────────────────────────────────
+ * `obterFatosProntidaoNaTx` recebe a `tx` já aberta; `obterFatosProntidao`
+ * abre a sua. A extração existe porque quem já está dentro de uma transação
+ * (`carregarSessao`, `assertPodeDocumentar`) precisa dos fatos na MESMA
+ * imagem do banco — e porque `withTenant` aninhado é uma armadilha: ele seta
+ * o tenant com `set_config(..., true)` (transaction-local) e a transação
+ * interna do Drizzle vira SAVEPOINT; ao liberar o savepoint, os valores que
+ * ele escreveu PERMANECEM no resto da transação externa. Hoje ninguém passa
+ * `ctx` diferente, então nada quebra — amanhã, um `ctx` diferente trocaria o
+ * tenant de todas as queries seguintes da transação externa, em silêncio.
+ * As duas portas rodam o MESMO SQL: é esse o ponto da extração.
  */
-export async function obterFatosProntidao(
-  ctx: TenantContext,
+export async function obterFatosProntidaoNaTx(
+  tx: Tx,
   patientId: string,
 ): Promise<FatosProntidao> {
-  return withTenant(ctx, async (tx) => {
-    const [linha] = await tx
-      .select({
-        temFichaClinica: sql<boolean>`EXISTS (
+  const [linha] = await tx
+    .select({
+      temFichaClinica: sql<boolean>`EXISTS (
           SELECT 1 FROM ${patientClinicalProfile}
           WHERE ${patientClinicalProfile.patientId} = ${patientId}
         )`,
-        temAnamnese: sql<boolean>`EXISTS (
+      temAnamnese: sql<boolean>`EXISTS (
           SELECT 1 FROM ${anamnese}
           WHERE ${anamnese.patientId} = ${patientId}
         )`,
-        // Vigência aberta: protocolo desativado não tem marcos a pontuar.
-        temProtocoloAtivo: sql<boolean>`EXISTS (
+      // Vigência aberta: protocolo desativado não tem marcos a pontuar.
+      temProtocoloAtivo: sql<boolean>`EXISTS (
           SELECT 1 FROM ${patientProtocol}
           WHERE ${patientProtocol.patientId} = ${patientId}
             AND ${patientProtocol.desativadoEm} IS NULL
         )`,
-        // Só 'ativa'. Rascunho não é alvo de resolução em `materializar.ts`, e
-        // contá-lo destravaria o documentar sem destravar o dado.
-        temMetaAtiva: sql<boolean>`EXISTS (
+      // Só 'ativa'. Rascunho não é alvo de resolução em `materializar.ts`, e
+      // contá-lo destravaria o documentar sem destravar o dado.
+      temMetaAtiva: sql<boolean>`EXISTS (
           SELECT 1 FROM ${goal}
           WHERE ${goal.patientId} = ${patientId}
             AND ${goal.estado} = 'ativa'
         )`,
-        temInstrumentoAplicado: sql<boolean>`EXISTS (
+      temInstrumentoAplicado: sql<boolean>`EXISTS (
           SELECT 1 FROM ${instrumentoAplicacao}
           WHERE ${instrumentoAplicacao.patientId} = ${patientId}
         )`,
-        // Snapshot, não sessão: é ele que prova que a documentação virou dado
-        // legível na evolução. Sessão consolidada sem snapshot é exatamente o
-        // caso que esta feature existe para tornar impossível.
-        temSessaoConsolidada: sql<boolean>`EXISTS (
+      // Snapshot, não sessão: é ele que prova que a documentação virou dado
+      // legível na evolução. Sessão consolidada sem snapshot é exatamente o
+      // caso que esta feature existe para tornar impossível.
+      temSessaoConsolidada: sql<boolean>`EXISTS (
           SELECT 1 FROM ${sessionSnapshot}
           WHERE ${sessionSnapshot.patientId} = ${patientId}
         )`,
-      })
-      .from(sql`(SELECT 1) AS uma_linha`);
+    })
+    .from(sql`(SELECT 1) AS uma_linha`);
 
-    return {
-      temFichaClinica: Boolean(linha?.temFichaClinica),
-      temAnamnese: Boolean(linha?.temAnamnese),
-      temProtocoloAtivo: Boolean(linha?.temProtocoloAtivo),
-      temMetaAtiva: Boolean(linha?.temMetaAtiva),
-      temInstrumentoAplicado: Boolean(linha?.temInstrumentoAplicado),
-      temSessaoConsolidada: Boolean(linha?.temSessaoConsolidada),
-    };
-  });
+  return {
+    temFichaClinica: Boolean(linha?.temFichaClinica),
+    temAnamnese: Boolean(linha?.temAnamnese),
+    temProtocoloAtivo: Boolean(linha?.temProtocoloAtivo),
+    temMetaAtiva: Boolean(linha?.temMetaAtiva),
+    temInstrumentoAplicado: Boolean(linha?.temInstrumentoAplicado),
+    temSessaoConsolidada: Boolean(linha?.temSessaoConsolidada),
+  };
+}
+
+/** Porta para quem AINDA NÃO tem transação aberta (páginas, layouts). */
+export async function obterFatosProntidao(
+  ctx: TenantContext,
+  patientId: string,
+): Promise<FatosProntidao> {
+  return withTenant(ctx, (tx) => obterFatosProntidaoNaTx(tx, patientId));
 }
