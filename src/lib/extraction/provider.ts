@@ -56,6 +56,7 @@ import { DemoStubProvider } from "./demo-stub-provider";
 import { NullProvider } from "./null-provider";
 import { LlmExtractionProvider } from "./llm-provider";
 import { createGeminiInvoker } from "./gemini-invoker";
+import { extracaoLlmHabilitada } from "@/lib/flags";
 
 /**
  * Modelo do Gemini usado pela extração de PRODUÇÃO.
@@ -90,9 +91,7 @@ export function resolveProvider(clinic: {
   isDemo: boolean;
 }): ExtractionProvider {
   if (clinic.isDemo) return new DemoStubProvider();
-  const llmHabilitado =
-    process.env.EXTRACTION_LLM_ENABLED === "true" &&
-    !!process.env.GOOGLE_API_KEY;
+  const llmHabilitado = extracaoLlmHabilitada() && !!process.env.GOOGLE_API_KEY;
   return llmHabilitado
     ? new LlmExtractionProvider(createGeminiInvoker(modeloDeExtracao()))
     : new NullProvider();
