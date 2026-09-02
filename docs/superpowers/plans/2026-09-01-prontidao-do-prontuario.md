@@ -27,7 +27,7 @@ com RLS, Vitest, Testing Library, Tailwind v4.
   `*.int.test.ts`. Rodar `vitest run` num `*.int.test.ts` **coleta zero** e
   passa verde enganando; conferir sempre a contagem.
 - **Não existe `jest-dom`.** `toBeInTheDocument` estoura `Invalid Chai
-  property`. Usar matcher nativo sobre o DOM cru:
+property`. Usar matcher nativo sobre o DOM cru:
   `expect(screen.queryByText(/x/i)).not.toBeNull()`.
 - `pnpm format` reformata o repositório inteiro. Formatar só os arquivos
   tocados: `pnpm prettier --write <caminho>`.
@@ -508,8 +508,13 @@ const DEFINICOES: Record<DegrauId, DefinicaoDegrau> = {
     concluido: (f) => f.temInstrumentoAplicado,
   },
   primeira_sessao: {
-    rotulo: "Documentar a primeira sessão",
-    descricao: "A partir daqui a evolução passa a existir.",
+    // (auditoria 02/09, R-8) — o fato é `EXISTS session_snapshot`, não
+    // `EXISTS session`. Sessão consolidada sem snapshot existe (Q-01/Q-03) e
+    // aqui conta como pendente; o rótulo diz o que mede, senão parece que a
+    // sessão sumiu.
+    rotulo: "Documentar a 1ª sessão com dado na evolução",
+    descricao:
+      "Conta a partir do primeiro snapshot: sessão documentada que não gerou dado ainda não fecha este degrau.",
     papelQueResolve: "terapeuta",
     rota: () => "/sessoes",
     concluido: (f) => f.temSessaoConsolidada,
@@ -604,12 +609,18 @@ git commit -m "feat(paciente): add pure readiness resolver for the patient recor
 
 **Files:**
 
-- Create: `src/app/(app)/pacientes/[id]/prontidao-queries.ts`
-- Test: `src/app/(app)/pacientes/[id]/prontidao.int.test.ts`
+- Create: `src/lib/patient/prontidao-queries.ts`
+- Test: `src/lib/patient/prontidao-queries.int.test.ts`
+
+_(auditoria 02/09, R-6)_ — a query mora em `src/lib/patient/`, não em
+`pacientes/[id]/`: tem três consumidores em três rotas (`pacientes/[id]/layout`,
+`sessoes/[id]/queries`, `pacientes/queries`) mais `assert-pode-documentar.ts`.
+Rota importando rota é o achado `A-02`. O precedente `onboarding-queries.ts`
+fica em `src/app/(app)/` porque tem um consumidor só.
 
 - [ ] **Step 1: Escrever o teste de integração que falha**
 
-Criar `src/app/(app)/pacientes/[id]/prontidao.int.test.ts`. Copiar o arranjo de
+Criar `src/lib/patient/prontidao-queries.int.test.ts`. Copiar o arranjo de
 conexão e o `beforeAll`/`afterAll` de
 `src/app/(app)/pacientes/[id]/arquivamento.int.test.ts` (mesmo padrão: `postgres`
 direto, `hasDb`, `vi.mock("server-only")`), trocando o corpo dos testes por:
@@ -713,13 +724,13 @@ describe("obterFatosProntidao — leitura por papel", () => {
 
 - [ ] **Step 2: Rodar e confirmar que falha**
 
-Run: `pnpm test:rls src/app/(app)/pacientes/[id]/prontidao.int.test.ts`
+Run: `pnpm test:rls src/lib/patient/prontidao-queries.int.test.ts`
 Expected: FAIL — módulo inexistente. **Conferir a contagem de testes coletados
 (10).** Zero coletado significa config errada, não sucesso.
 
 - [ ] **Step 3: Implementar**
 
-Criar `src/app/(app)/pacientes/[id]/prontidao-queries.ts`:
+Criar `src/lib/patient/prontidao-queries.ts`:
 
 ```ts
 import "server-only";
@@ -837,13 +848,13 @@ nunca "consertar" o teste.
 
 - [ ] **Step 4: Rodar e confirmar verde**
 
-Run: `pnpm test:rls src/app/(app)/pacientes/[id]/prontidao.int.test.ts`
+Run: `pnpm test:rls src/lib/patient/prontidao-queries.int.test.ts`
 Expected: PASS, 10 testes coletados.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add "src/app/(app)/pacientes/[id]/prontidao-queries.ts" "src/app/(app)/pacientes/[id]/prontidao.int.test.ts"
+git add "src/lib/patient/prontidao-queries.ts" "src/lib/patient/prontidao-queries.int.test.ts"
 git commit -m "feat(paciente): read readiness facts in a single RLS-scoped transaction"
 ```
 
@@ -1024,15 +1035,36 @@ export function CartaoProntidao({
 `Button` aceita `asChild` (`src/components/ui/button.tsx:33`) e nesse modo ignora
 `iconLeft`/`iconRight` — o ícone, se houver, vai dentro do `Link`.
 
+(auditoria 02/09, R-7) — o `<span>` de estado usa o par de tokens fixado na
+spec §3.2 (tabela `EstadoDegrau → tokens`): `concluido` → `--status-success-*`;
+`pendente` → neutro (`--text-secondary`, sem fundo); `bloqueante` →
+`--status-warning-*`, **nunca** `--status-error-*` (é ausência de dado, não
+erro) e nunca o violeta de "sugerido pela IA" nem o verde de "aprovado" da
+revisão. O rótulo textual já está no snippet e é obrigatório — o teste
+"marca o degrau bloqueante de forma redundante ao texto" é o que trava isso.
+
 - [ ] **Step 4: Rodar e confirmar verde**
 
 Run: `pnpm test src/components/app/cartao-prontidao.test.tsx`
 Expected: PASS, 5 testes.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Story com os 7 estados da spec §4** _(auditoria 02/09, R-7)_
+
+Criar `src/components/app/cartao-prontidao.stories.tsx` (padrão de
+`src/components/ui/alert.stories.tsx`), uma story por estado: prontuário pronto
+(renderiza nada — a story existe para provar isso), bloqueado e o papel atual
+resolve, bloqueado e não resolve ("Aguardando coordenação"), modalidade não
+resolvida, conta em somente-leitura, evolução sem snapshot, falha de leitura
+(cartão ausente). É onde a colisão de vocabulário do DS (`U-02`/`DS-02`) fica
+visível antes de chegar ao prontuário.
+
+Run: `pnpm storybook` e conferir as 7 a olho — cor e rótulo concordando em
+cada uma.
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add src/components/app/cartao-prontidao.tsx src/components/app/cartao-prontidao.test.tsx
+git add src/components/app/cartao-prontidao.tsx src/components/app/cartao-prontidao.test.tsx src/components/app/cartao-prontidao.stories.tsx
 git commit -m "feat(ui): add patient readiness card with a single primary gesture"
 ```
 
@@ -1085,7 +1117,7 @@ de mocks já usado no arquivo (`vi.mock` das queries que o layout importa) e
 acrescentar:
 
 ```ts
-vi.mock("./prontidao-queries", () => ({
+vi.mock("@/lib/patient/prontidao-queries", () => ({
   obterFatosProntidao: vi.fn(async () => ({
     temFichaClinica: false,
     temAnamnese: false,
@@ -1100,7 +1132,9 @@ vi.mock("./prontidao-queries", () => ({
 ```tsx
 it("mostra a escada de prontidão no topo do prontuário", async () => {
   render(await PacienteLayout({ children: <div />, params: paramsFake }));
-  expect(screen.queryByText(/para este prontuário gerar dados/i)).not.toBeNull();
+  expect(
+    screen.queryByText(/para este prontuário gerar dados/i),
+  ).not.toBeNull();
 });
 ```
 
@@ -1115,7 +1149,7 @@ Em `layout.tsx`, acrescentar aos imports:
 
 ```ts
 import { montarProntidao } from "@/lib/patient/prontidao";
-import { obterFatosProntidao } from "./prontidao-queries";
+import { obterFatosProntidao } from "@/lib/patient/prontidao-queries";
 import { CartaoProntidao } from "@/components/app/cartao-prontidao";
 import { logarErroSemPII } from "@/lib/log/erro-sem-pii";
 ```
@@ -1123,44 +1157,46 @@ import { logarErroSemPII } from "@/lib/log/erro-sem-pii";
 Acrescentar a leitura ao `Promise.all` já existente:
 
 ```ts
-  const [situacao, dadosPaciente, fatos] = await Promise.all([
-    obterSituacaoConta(ctx),
-    withTenant(ctx, async (tx) => {
-      /* ...bloco existente, inalterado... */
-    }),
-    // Falha aqui NÃO derruba o prontuário nem finge "pronto": vira `null`, e
-    // o cartão simplesmente não renderiza. `catch` que devolvesse fatos
-    // zerados marcaria tudo como pendente; `catch` que devolvesse fatos
-    // completos destravaria o documentar. Ambos mentem — a ausência, não.
-    // `admin_recepcao` não entra: sob a RLS dela todo EXISTS clínico devolve
-    // false para linhas que existem (D-A9). `montarProntidao` já devolve a
-    // escada vazia para ela — não gastar a consulta é só a consequência.
-    ctx.role === "coordenador" || ctx.role === "terapeuta"
-      ? obterFatosProntidao(ctx, id).catch((erro: unknown) => {
-          // NUNCA `erro.message`: em `DrizzleQueryError` a `message` é o SQL
-          // inteiro com os `params` interpolados. `name` + código do Postgres
-          // + id de correlação localizam o caso sem despejar consulta no log
-          // (auditoria 02/09, R-3 — helper único, não idioma inline a copiar).
-          logarErroSemPII("prontidao", erro, { patientId: id });
-          return null;
-        })
-      : Promise.resolve(null),
-  ]);
+const [situacao, dadosPaciente, fatos] = await Promise.all([
+  obterSituacaoConta(ctx),
+  withTenant(ctx, async (tx) => {
+    /* ...bloco existente, inalterado... */
+  }),
+  // Falha aqui NÃO derruba o prontuário nem finge "pronto": vira `null`, e
+  // o cartão simplesmente não renderiza. `catch` que devolvesse fatos
+  // zerados marcaria tudo como pendente; `catch` que devolvesse fatos
+  // completos destravaria o documentar. Ambos mentem — a ausência, não.
+  // `admin_recepcao` não entra: sob a RLS dela todo EXISTS clínico devolve
+  // false para linhas que existem (D-A9). `montarProntidao` já devolve a
+  // escada vazia para ela — não gastar a consulta é só a consequência.
+  ctx.role === "coordenador" || ctx.role === "terapeuta"
+    ? obterFatosProntidao(ctx, id).catch((erro: unknown) => {
+        // NUNCA `erro.message`: em `DrizzleQueryError` a `message` é o SQL
+        // inteiro com os `params` interpolados. `name` + código do Postgres
+        // + id de correlação localizam o caso sem despejar consulta no log
+        // (auditoria 02/09, R-3 — helper único, não idioma inline a copiar).
+        logarErroSemPII("prontidao", erro, { patientId: id });
+        return null;
+      })
+    : Promise.resolve(null),
+]);
 ```
 
 E, logo depois do bloco de `TabsNav` e antes do `Alert` de somente-leitura:
 
 ```tsx
-      {fatos ? (
-        <CartaoProntidao
-          prontidao={montarProntidao({
-            modalidade: dadosPaciente?.clinicalModality,
-            fatos,
-            role: ctx.role,
-            patientId: id,
-          })}
-        />
-      ) : null}
+{
+  fatos ? (
+    <CartaoProntidao
+      prontidao={montarProntidao({
+        modalidade: dadosPaciente?.clinicalModality,
+        fatos,
+        role: ctx.role,
+        patientId: id,
+      })}
+    />
+  ) : null;
+}
 ```
 
 - [ ] **Step 4: Rodar e confirmar verde**
@@ -1221,9 +1257,9 @@ describe("EvolucaoVazia", () => {
 
   it("aponta o degrau que realmente falta", () => {
     render(<EvolucaoVazia prontidao={SEM_META} />);
-    expect(
-      screen.getByTestId("gesto-primario").getAttribute("href"),
-    ).toBe("/pacientes/p1/metas");
+    expect(screen.getByTestId("gesto-primario").getAttribute("href")).toBe(
+      "/pacientes/p1/metas",
+    );
   });
 });
 ```
@@ -1332,7 +1368,11 @@ describe("bloqueio do passo Documentar", () => {
   });
 
   test("conventional nunca bloqueia", async () => {
-    const dados = await carregarSessao(ctxTerapeuta, SESSAO_CONVENCIONAL, agora);
+    const dados = await carregarSessao(
+      ctxTerapeuta,
+      SESSAO_CONVENCIONAL,
+      agora,
+    );
     expect(dados?.prontidao.podeDocumentar).toBe(true);
   });
 
@@ -1343,7 +1383,11 @@ describe("bloqueio do passo Documentar", () => {
   test("terapeuta fora da equipe: bloqueado sem degrau clínico nomeado", async () => {
     await inserirProtocolo(PAC, { desativado: false });
     await inserirMeta(PAC, "ativa");
-    const dados = await carregarSessao(ctxTerapeutaForaDaEquipe, SESSAO_SEM_PREPARO, agora);
+    const dados = await carregarSessao(
+      ctxTerapeutaForaDaEquipe,
+      SESSAO_SEM_PREPARO,
+      agora,
+    );
     expect(dados?.prontidao.podeDocumentar).toBe(false);
     expect(dados?.prontidao.degraus).toEqual([]);
     expect(dados?.prontidao.quemResolve).toBe("Coordenação");
@@ -1364,7 +1408,7 @@ acrescentar a leitura da prontidão do paciente da sessão e devolvê-la no obje
 
 ```ts
 import { montarProntidao } from "@/lib/patient/prontidao";
-import { obterFatosProntidao } from "../../pacientes/[id]/prontidao-queries";
+import { obterFatosProntidao } from "@/lib/patient/prontidao-queries";
 
 // ...dentro de carregarSessao, depois de já ter patientId e clinicalModality:
 const fatos = await obterFatosProntidao(ctx, patientId);
@@ -1523,7 +1567,7 @@ Criar `src/lib/patient/assert-pode-documentar.ts`:
 ```ts
 import "server-only";
 import { montarProntidao } from "./prontidao";
-import { obterFatosProntidaoNaTx } from "@/app/(app)/pacientes/[id]/prontidao-queries";
+import { obterFatosProntidaoNaTx } from "./prontidao-queries";
 import type { TenantContext } from "@/db/rls";
 
 /** Erro de regra de negócio, não de infraestrutura: o chamador traduz em
@@ -1591,15 +1635,15 @@ Em `capturarDiarioCore` e `consolidarSessaoCore`, dentro do `withTenant` já
 aberto e **antes de qualquer escrita**:
 
 ```ts
-    await assertPodeDocumentar(ctx, tx, patientId, clinicalModality);
+await assertPodeDocumentar(ctx, tx, patientId, clinicalModality);
 ```
 
 No `catch` de cada action, traduzir:
 
 ```ts
-    if (erro instanceof ProntuarioIncompletoError) {
-      return { error: erro.motivo };
-    }
+if (erro instanceof ProntuarioIncompletoError) {
+  return { error: erro.motivo };
+}
 ```
 
 - [ ] **Step 5: Rodar e confirmar verde**
@@ -1626,7 +1670,7 @@ guarda.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/lib/patient/assert-pode-documentar.ts "src/app/(app)/diario/[sessionId]/logic.ts" "src/app/(app)/diario/[sessionId]/actions.ts" "src/app/(app)/pacientes/[id]/prontidao-queries.ts" "src/app/(app)/diario/[sessionId]/gate-documentar.int.test.ts"
+git add src/lib/patient/assert-pode-documentar.ts "src/app/(app)/diario/[sessionId]/logic.ts" "src/app/(app)/diario/[sessionId]/actions.ts" "src/lib/patient/prontidao-queries.ts" "src/app/(app)/diario/[sessionId]/gate-documentar.int.test.ts"
 git commit -m "feat(sessao): enforce the documenting gate in the server action, not only in the view"
 ```
 
@@ -1728,13 +1772,13 @@ Expected: FAIL — `proximoPasso` não existe em `PacienteListItem`.
 Em `src/app/(app)/pacientes/queries.ts`, acrescentar a `PacienteListItem`:
 
 ```ts
-  /**
-   * Rótulo do próximo degrau da escada de prontidão, ou `null` quando o
-   * prontuário já está pronto. Derivado na leitura, como `temPrescricao` —
-   * pelo mesmo motivo: flag persistida passa a mentir assim que alguém
-   * descontinua a última meta por outro caminho.
-   */
-  proximoPasso: string | null;
+/**
+ * Rótulo do próximo degrau da escada de prontidão, ou `null` quando o
+ * prontuário já está pronto. Derivado na leitura, como `temPrescricao` —
+ * pelo mesmo motivo: flag persistida passa a mentir assim que alguém
+ * descontinua a última meta por outro caminho.
+ */
+proximoPasso: string | null;
 ```
 
 No `select`, acrescentar a modalidade e os quatro `EXISTS` correlacionados. Um
@@ -1807,27 +1851,27 @@ Selo nenhum é melhor que selo falso.
 E mapear as linhas depois do `withTenant`, fora da transação (é cálculo puro):
 
 ```ts
-  return linhas.map(({ clinicalModality, naEquipe, ...resto }) => {
-    // (auditoria 02/09, R-1) — o mesmo predicado da Task 3; divergir aqui
-    // reabre o selo falso para o terapeuta fora da equipe.
-    const visivel = ctx.role === "coordenador" || naEquipe;
-    const prontidao = montarProntidao({
-      modalidade: clinicalModality,
-      fatos: visivel
-        ? {
-            temFichaClinica: resto.temFichaClinica,
-            temAnamnese: resto.temAnamnese,
-            temProtocoloAtivo: resto.temProtocoloAtivo,
-            temMetaAtiva: resto.temMetaAtiva,
-            temInstrumentoAplicado: resto.temInstrumentoAplicado,
-            temSessaoConsolidada: resto.temSessaoConsolidada,
-          }
-        : null,
-      role: ctx.role,
-      patientId: resto.id,
-    });
-    return { ...resto, proximoPasso: prontidao.proximo?.rotulo ?? null };
+return linhas.map(({ clinicalModality, naEquipe, ...resto }) => {
+  // (auditoria 02/09, R-1) — o mesmo predicado da Task 3; divergir aqui
+  // reabre o selo falso para o terapeuta fora da equipe.
+  const visivel = ctx.role === "coordenador" || naEquipe;
+  const prontidao = montarProntidao({
+    modalidade: clinicalModality,
+    fatos: visivel
+      ? {
+          temFichaClinica: resto.temFichaClinica,
+          temAnamnese: resto.temAnamnese,
+          temProtocoloAtivo: resto.temProtocoloAtivo,
+          temMetaAtiva: resto.temMetaAtiva,
+          temInstrumentoAplicado: resto.temInstrumentoAplicado,
+          temSessaoConsolidada: resto.temSessaoConsolidada,
+        }
+      : null,
+    role: ctx.role,
+    patientId: resto.id,
   });
+  return { ...resto, proximoPasso: prontidao.proximo?.rotulo ?? null };
+});
 ```
 
 - [ ] **Step 4: Implementar o selo**
@@ -1836,14 +1880,16 @@ Em `lista-pacientes.tsx`, logo depois do selo `Sem prescrição` (mesmo cluster 
 selos, mesma linha do nome):
 
 ```tsx
-                  {p.proximoPasso ? (
-                    <span
-                      data-testid="pill-prontidao"
-                      className="rounded-[var(--radius-pill)] border border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] px-2 py-0.5 font-mono text-[10px] font-semibold text-[var(--status-warning-fg)] uppercase"
-                    >
-                      {p.proximoPasso}
-                    </span>
-                  ) : null}
+{
+  p.proximoPasso ? (
+    <span
+      data-testid="pill-prontidao"
+      className="rounded-[var(--radius-pill)] border border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] px-2 py-0.5 font-mono text-[10px] font-semibold text-[var(--status-warning-fg)] uppercase"
+    >
+      {p.proximoPasso}
+    </span>
+  ) : null;
+}
 ```
 
 O texto carrega o estado; a cor só reforça — mesma regra já aplicada ao selo
