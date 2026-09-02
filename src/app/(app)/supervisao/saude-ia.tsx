@@ -57,9 +57,11 @@ export function SaudeIa({
       ) : (
         <Table zebrada>
           <TableCaption>
-            Uma linha por semana ISO, modelo e versão do prompt. Falhas são
-            chamadas que não responderam (sessão marcada como pendente de
-            reprocessamento). Latência e tempo até revisão são medianas.
+            Uma linha por semana ISO (no fuso da clínica), modelo e versão do
+            prompt. Falhas de validação são decisões de revisão que não gravaram
+            (erro de validação); falhas são chamadas que não responderam (sessão
+            marcada como pendente de reprocessamento). Latência e tempo até
+            revisão são medianas.
           </TableCaption>
           <TableHeader>
             <TableRow>
@@ -77,6 +79,9 @@ export function SaudeIa({
               </TableHead>
               <TableHead scope="col" className="text-right">
                 Descartadas
+              </TableHead>
+              <TableHead scope="col" className="text-right">
+                Falhas de validação
               </TableHead>
               <TableHead scope="col" className="text-right">
                 Falhas
@@ -121,6 +126,9 @@ export function SaudeIa({
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatarInteiro(l.descartadas)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatarInteiro(l.erroValidacao)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatarInteiro(l.pendentes)}

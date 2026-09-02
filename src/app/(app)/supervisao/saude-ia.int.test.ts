@@ -79,8 +79,9 @@ describe.skipIf(!hasDb)("DA-01 · metricas_extracao_por_clinica_semana", () => {
       (${SESS_B}, ${CLINIC_B}, ${PAC_B}, ${U_COORD_B}, now(), 'realizada', 'aba')`;
 
     // Clínica A, semana corrente, modelo m1/prompt p1:
-    //   2 aprovadas sem edição, 1 editada, 1 descartada, 1 sugerida (=5
-    //   sugeridas), 1 pendente (chamada que falhou: latência sem tokens).
+    //   2 aprovadas sem edição, 1 editada, 1 descartada, 1 sugerida, 1 em
+    //   erro_validacao (DLQ, #532) (=6 sugeridas), 1 pendente (chamada que
+    //   falhou: latência sem tokens).
     const linha = (
       estado: string,
       revisada: boolean,
@@ -103,6 +104,7 @@ describe.skipIf(!hasDb)("DA-01 · metricas_extracao_por_clinica_semana", () => {
     await linha("editada", true, 2000, [100, 10]);
     await linha("descartada", true, 4000, [100, 10]);
     await linha("sugerida", false, 5000, [100, 10]);
+    await linha("erro_validacao", true, 6000, [100, 10]);
     await linha("pendente_reprocessamento", false, 92000, null);
     // Clínica B: uma sugestão com outro modelo — nunca aparece para A.
     await owner`
@@ -126,45 +128,55 @@ describe.skipIf(!hasDb)("DA-01 · metricas_extracao_por_clinica_semana", () => {
     expect(p1).toBeDefined();
     expect(p1.modelo).toBe("m1");
     expect(p1.semanaIso).toMatch(/^\d{4}-W\d{2}$/);
-    expect(p1.totalSugeridas).toBe(5);
+    expect(p1.totalSugeridas).toBe(6);
     expect(p1.aprovadasSemEdicao).toBe(2);
     expect(p1.editadas).toBe(1);
     expect(p1.descartadas).toBe(1);
+    expect(p1.erroValidacao).toBe(1);
     expect(p1.pendentes).toBe(0);
     // todas revisadas 1 h depois de criadas
     expect(p1.medianaSegundosAteRevisao).toBeCloseTo(3600, 0);
-    // latências 1000..5000 → mediana 3000
-    expect(p1.medianaLatenciaMs).toBe(3000);
-    expect(p1.tokensEntrada).toBe(500);
-    expect(p1.tokensSaida).toBe(50);
+    // latências 1000..6000 → mediana 3500
+    expect(p1.medianaLatenciaMs).toBe(3500);
+    expect(p1.tokensEntrada).toBe(600);
+    expect(p1.tokensSaida).toBe(60);
 
     const falha = linhas.find((l) => l.promptVersao === null)!;
     expect(falha).toBeDefined();
     expect(falha.modelo).toBe("m1");
     expect(falha.totalSugeridas).toBe(0);
+    expect(falha.erroValidacao).toBe(0);
     expect(falha.pendentes).toBe(1);
     expect(falha.medianaLatenciaMs).toBe(92000);
     expect(falha.medianaSegundosAteRevisao).toBeNull();
     expect(falha.tokensEntrada).toBeNull();
   });
 
-  test("a view não expõe coluna clínica/PII: só agregados, semana, modelo e prompt", async () => {
+  test("a view expõe EXATAMENTE as colunas agregadas (allowlist) — nenhuma de PII", async () => {
     const colunas = await owner`
       SELECT column_name FROM information_schema.columns
       WHERE table_name = 'metricas_extracao_por_clinica_semana'
       ORDER BY ordinal_position`;
-    const nomes = colunas.map((c) => c.column_name as string);
-    for (const proibida of [
-      "session_id",
-      "patient_id",
-      "trecho_fonte",
-      "payload",
-      "payload_editado",
-      "revisado_por",
-    ]) {
-      expect(nomes).not.toContain(proibida);
-    }
-    expect(nomes).toContain("aprovadas_sem_edicao");
+    // Allowlist exata: coluna nova na view só entra passando por aqui — é o
+    // que impede `session_id`, `trecho_fonte`, `payload*` ou `revisado_por`
+    // de vazarem para um agregado "sem PII" por descuido.
+    expect(colunas.map((c) => c.column_name as string)).toEqual([
+      "clinic_id",
+      "semana_inicio",
+      "semana_iso",
+      "modelo",
+      "prompt_versao",
+      "total_sugeridas",
+      "aprovadas_sem_edicao",
+      "editadas",
+      "descartadas",
+      "erro_validacao",
+      "pendentes",
+      "mediana_segundos_ate_revisao",
+      "mediana_latencia_ms",
+      "tokens_entrada",
+      "tokens_saida",
+    ]);
   });
 
   test("coordenador da clínica B vê só a própria clínica — zero linhas de A", async () => {

@@ -312,6 +312,8 @@ export type SaudeIaLinha = {
   aprovadasSemEdicao: number;
   editadas: number;
   descartadas: number;
+  /** DLQ da revisão (`erro_validacao`, #532): decisão humana que não gravou. */
+  erroValidacao: number;
   /** Chamadas que falharam (`pendente_reprocessamento`). */
   pendentes: number;
   medianaSegundosAteRevisao: number | null;
@@ -329,6 +331,7 @@ type SaudeIaRow = {
   aprovadas_sem_edicao: number;
   editadas: number;
   descartadas: number;
+  erro_validacao: number;
   pendentes: number;
   mediana_segundos_ate_revisao: number | null;
   mediana_latencia_ms: number | null;
@@ -360,11 +363,18 @@ export async function listarSaudeIa(
   return withTenant(ctx, async (tx) => {
     const rows = (await tx.execute(sql`
       SELECT semana_inicio::text AS semana_inicio, semana_iso, modelo, prompt_versao,
-             total_sugeridas, aprovadas_sem_edicao, editadas, descartadas, pendentes,
+             total_sugeridas, aprovadas_sem_edicao, editadas, descartadas,
+             erro_validacao, pendentes,
              mediana_segundos_ate_revisao, mediana_latencia_ms,
              tokens_entrada, tokens_saida
       FROM metricas_extracao_por_clinica_semana
-      WHERE semana_inicio >= (date_trunc('week', now()) - make_interval(weeks => ${semanas - 1}))::date
+      -- "agora" no fuso da clínica (D61), o mesmo calendário que a view usa
+      -- para semana_inicio; sem isto a janela de N semanas escorregaria na
+      -- virada de semana em Brasília (banco em UTC).
+      WHERE semana_inicio >= (
+        date_trunc('week', now() AT TIME ZONE (SELECT timezone FROM clinic WHERE id = app_clinic_id_exigido()))
+        - make_interval(weeks => ${semanas - 1})
+      )::date
       ORDER BY semana_inicio DESC, modelo NULLS LAST, prompt_versao NULLS LAST
     `)) as unknown as SaudeIaRow[];
     return rows.map((r) => ({
@@ -376,6 +386,7 @@ export async function listarSaudeIa(
       aprovadasSemEdicao: r.aprovadas_sem_edicao,
       editadas: r.editadas,
       descartadas: r.descartadas,
+      erroValidacao: r.erro_validacao,
       pendentes: r.pendentes,
       medianaSegundosAteRevisao: r.mediana_segundos_ate_revisao,
       medianaLatenciaMs: r.mediana_latencia_ms,

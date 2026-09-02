@@ -46,14 +46,14 @@ export function formatarLatenciaMs(ms: number | null): string {
   return `${fmt1.format(ms / 1000)} s`;
 }
 
-/** `2026-W36` + `2026-08-31` → `W36 · 31/08` (segunda-feira da semana ISO). */
+/** `2026-W36` + `2026-08-31` → `Semana 36 · 31/08` (segunda-feira da semana ISO). */
 export function formatarSemana(
   semanaIso: string,
   semanaInicio: string,
 ): string {
   const w = semanaIso.split("-W")[1] ?? semanaIso;
   const [, m, d] = semanaInicio.split("-");
-  return `W${w} · ${d}/${m}`;
+  return `Semana ${w} · ${d}/${m}`;
 }
 
 /** Inteiro em pt-BR; `null` = não medido. */

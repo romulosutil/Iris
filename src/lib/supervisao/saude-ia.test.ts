@@ -67,6 +67,6 @@ describe("formatarLatenciaMs", () => {
 
 describe("formatarSemana", () => {
   test("semana ISO + segunda-feira em pt-BR", () => {
-    expect(formatarSemana("2026-W36", "2026-08-31")).toBe("W36 · 31/08");
+    expect(formatarSemana("2026-W36", "2026-08-31")).toBe("Semana 36 · 31/08");
   });
 });
