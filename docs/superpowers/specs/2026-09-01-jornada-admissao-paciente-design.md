@@ -200,10 +200,14 @@ hoje a agenda não exige equipe para agendar (D-A10).
 | Alvo                    | Tipo               | Critério                                                        |
 | ----------------------- | ------------------ | --------------------------------------------------------------- |
 | `prontidao.ts`          | unit puro          | matriz modalidade × fatos × papel; inclui modalidade `null`      |
-| `prontidao-queries.ts`  | int-test (RLS)     | fatos corretos + **cross-tenant não vaza**                       |
-| Bloqueio do documentar  | int-test           | **mutação**: reverter a guarda tem que deixar vermelho           |
+| `prontidao-queries.ts`  | int-test (RLS)     | fatos corretos + **cross-tenant devolve `null`**, não escada de `false`s (o "tudo false" fixaria "invisível = inexistente") _(auditoria 02/09, R-4)_ |
+| `prontidao-queries.ts`  | int-test (RLS)     | quatro contextos — `ctxCoordenador`, `ctxTerapeutaNaEquipe`, `ctxTerapeutaForaDaEquipe`, `ctxRecepcao` — a mesma meta; os dois últimos recebem `null`; **paciente inexistente devolve `null`**, não escada _(auditoria 02/09, R-4)_ |
+| Bloqueio do documentar  | int-test           | **mutação**: reverter a guarda **na action** (`assertPodeDocumentar`, Task 7b) tem que deixar vermelho; a mutação do render prova só a UI _(auditoria 02/09, R-2)_ |
+| Conta em somente-leitura | componente + int-test | prontuário **bloqueado** numa conta somente-leitura: escada visível, gesto primário desabilitado pela razão que `layout.tsx` já exibe, e a action recusa pela conta antes de recusar pela escada _(auditoria 02/09, R-4)_ |
+| Modalidade trocada depois de pronta | int-test | `protocol_driven` pronto → `alterarModalidadeClinica` para `cognitive_behavioral` → volta a bloquear por instrumento. É a prova de D-A4 ("derivada, nunca coluna") _(auditoria 02/09, R-4)_ |
+| Qualquer `SECURITY DEFINER` novo | int-test (oráculo RLS) | entra em `FUNCOES_COM_HELPER` (`db/tests/clinic-id-helper-rls.int.test.ts`) **e** tem caso negativo cross-tenant próprio — a allowlist positiva sozinha não acusa falta de guard (`Q-05`). Vale em especial para a pill da lista (Task 8: 4 `EXISTS` + `app_is_on_team` por linha é custo que convida a um definer) _(auditoria 02/09, R-4)_ |
 | `CartaoProntidao`       | componente + a11y  | os 7 estados da §4; sem botão morto no estado "não resolvo"      |
-| 5º passo do onboarding  | int-test           | passo desfeito (meta descontinuada) volta a pendente             |
+| 5º passo do onboarding  | int-test           | passo desfeito (meta descontinuada) volta a pendente. O `EXISTS` roda sob a RLS do **coordenador** — ok hoje; se um dia rodar para terapeuta, cai em R-1 _(auditoria 02/09, R-4)_ |
 
 O item de mutação não é formalidade: a memória `teste-verde-que-nao-testa-nada`
 lista seis formas de um teste passar contra o código pré-fix.

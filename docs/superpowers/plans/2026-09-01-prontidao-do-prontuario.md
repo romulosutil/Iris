@@ -1948,6 +1948,25 @@ git commit -m "feat(onboarding): add fifth step covering the gap up to a usable 
 
 ### Task 10: Verificação final
 
+- [ ] **Step 0: Provas exigidas pela auditoria (spec §6)** _(auditoria 02/09, R-4)_
+
+Antes da suíte, conferir que existem — e ficam vermelhos quando devem — os
+casos que a spec §6 passou a exigir e que nenhuma task acima cria sozinha:
+
+- **Conta somente-leitura com prontuário bloqueado**: em
+  `cartao-prontidao.test.tsx`, o gesto primário sai desabilitado quando a
+  conta está em somente-leitura (mesma razão que `layout.tsx` exibe); em
+  `gate-documentar.int.test.ts`, a action recusa pela conta **antes** de
+  recusar pela escada (`comEscrita` já faz isso — o teste prova a ordem).
+- **Modalidade trocada depois de pronta**: em `bloqueio-documentar.int.test.ts`,
+  paciente `protocol_driven` com protocolo + meta (`podeDocumentar: true`) →
+  `alterarModalidadeClinica(..., "cognitive_behavioral")` → `carregarSessao`
+  devolve `podeDocumentar: false` por instrumento. Prova D-A4 sem coluna.
+- **Definer novo**: se alguma task acima acabou criando um `SECURITY DEFINER`
+  (a Task 8 é a candidata), ele está em `FUNCOES_COM_HELPER` e tem caso
+  negativo cross-tenant em `db/tests/`. Se não criou nenhum, escrever isso na
+  descrição da PR — ausência declarada, não presumida.
+
 - [ ] **Step 1: Suíte completa**
 
 ```bash
