@@ -40,6 +40,12 @@ const EXTRACTION_PUBLICA = "00000000-0000-0000-0000-000000011932";
 const ALERTA_SESS_SIGILOSA = "00000000-0000-0000-0000-000000011951";
 const ALERTA_SEM_SESSAO = "00000000-0000-0000-0000-000000011952";
 
+// #529 (auditoria 360, S-02) — segundo tenant, para o caso negativo cross-tenant
+// de `app_alerta_trecho_fonte`. A coordenadora de B conhece o UUID do alerta de A
+// (é o único dado que o atacante precisa) e NUNCA pode receber o trecho.
+const CLINIC_B = "00000000-0000-0000-0000-0000000119bb";
+const U_COORD_B = "00000000-0000-0000-0000-000000011906"; // Coordenadora da clínica B
+
 const ctx = (role: string, userId: string, clinicId = CLINIC_A) =>
   ({ role, userId, clinicId }) as TenantContext;
 
@@ -49,21 +55,25 @@ describe.skipIf(!hasDb)("#119 · Sigilo por disciplina no prontuário sob RLS", 
     await owner!`TRUNCATE clinic, app_user, user_role RESTART IDENTITY CASCADE`;
 
     // 1. Clínica e Usuários
-    await owner!`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'Clínica A #119')`;
+    await owner!`INSERT INTO clinic (id, nome) VALUES
+      (${CLINIC_A}, 'Clínica A #119'),
+      (${CLINIC_B}, 'Clínica B #529')`;
 
     await owner!`INSERT INTO app_user (id, name, email) VALUES
       (${U_TERAPEUTA},  'Terapeuta Convencional', 'ter@i119.test'),
       (${U_MESMA_DISC}, 'Colega Convencional',    'colega@i119.test'),
       (${U_FONO},       'Fonoaudióloga',          'fono@i119.test'),
       (${U_COORD},      'Coordenadora Geral',     'coord@i119.test'),
-      (${U_VIG_FIM},    'Ex-Terapeuta Conv',      'ex@i119.test')`;
+      (${U_VIG_FIM},    'Ex-Terapeuta Conv',      'ex@i119.test'),
+      (${U_COORD_B},    'Coordenadora da B',      'coord.b@i529.test')`;
 
     await owner!`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
       (${U_TERAPEUTA},  ${CLINIC_A}, 'terapeuta'),
       (${U_MESMA_DISC}, ${CLINIC_A}, 'terapeuta'),
       (${U_FONO},       ${CLINIC_A}, 'terapeuta'),
       (${U_COORD},      ${CLINIC_A}, 'coordenador'),
-      (${U_VIG_FIM},    ${CLINIC_A}, 'terapeuta')`;
+      (${U_VIG_FIM},    ${CLINIC_A}, 'terapeuta'),
+      (${U_COORD_B},    ${CLINIC_B}, 'coordenador')`;
 
     // 2. Paciente e Equipe de Cuidado
     await owner!`INSERT INTO patient (id, clinic_id, nome) VALUES (${PATIENT_A}, ${CLINIC_A}, 'Paciente Multi #119')`;
@@ -246,6 +256,35 @@ describe.skipIf(!hasDb)("#119 · Sigilo por disciplina no prontuário sob RLS", 
         db.execute(sql`SELECT id, trecho_fonte FROM alerta_risco_clinico WHERE id = ${ALERTA_SESS_SIGILOSA}::uuid`),
       ),
     ).rejects.toThrow();
+  });
+
+  // ─── #529 (auditoria 360, S-02): fronteira de tenant DENTRO do definer ──────
+  //
+  // `app_alerta_trecho_fonte` é SECURITY DEFINER: roda com os direitos do dono e
+  // IGNORA a RLS de `alerta_risco_clinico`. No ramo `session_id IS NULL` (alerta
+  // de RPD/instrumento, CHECK da 0114) a 0122 devolvia o trecho sem nenhum
+  // predicado de clínica — bastava conhecer o UUID. O guard interno é a ÚNICA
+  // fronteira (CLAUDE.md §Migrações, item 5), e ele espelha o predicado da
+  // policy `alerta_risco_scope`. A chamada é feita SEM `FROM alerta_risco_clinico`
+  // de propósito: passar pela tabela deixaria a RLS filtrar a linha antes e o
+  // teste ficaria verde pelo motivo errado, sem exercitar o definer.
+
+  test("14. app_alerta_trecho_fonte: coordenadora de OUTRA clínica, alerta sem sessão -> NULL (nunca o trecho)", async () => {
+    const rows = await withTenant(ctx("coordenador", U_COORD_B, CLINIC_B), (db) =>
+      db.execute(sql`SELECT app_alerta_trecho_fonte(${ALERTA_SEM_SESSAO}::uuid) AS trecho_fonte`),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.trecho_fonte).toBeNull();
+  });
+
+  test("15. app_alerta_trecho_fonte: coordenadora da MESMA clínica, alerta sem sessão -> trecho íntegro (contraprova)", async () => {
+    // Sem esta contraprova, um definer que devolvesse NULL SEMPRE passaria no
+    // caso 14 e apagaria o trecho de todo alerta de RPD/instrumento do produto.
+    const rows = await withTenant(ctx("coordenador", U_COORD), (db) =>
+      db.execute(sql`SELECT app_alerta_trecho_fonte(${ALERTA_SEM_SESSAO}::uuid) AS trecho_fonte`),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.trecho_fonte).toBe("Citação Literal RPD Sem Sessão");
   });
 });
 
