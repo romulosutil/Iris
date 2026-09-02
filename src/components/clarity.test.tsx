@@ -14,9 +14,6 @@ const sdk = vi.hoisted(() => ({
   identify: vi.fn(),
 }));
 vi.mock("@microsoft/clarity", () => ({ default: sdk }));
-vi.mock("@/auth/client", () => ({
-  useSession: () => ({ data: null }),
-}));
 
 const { Clarity } = await import("./clarity");
 
@@ -61,6 +58,25 @@ describe("<Clarity/> — ciclo de vida da gravação", () => {
     render(<Clarity />);
     expect(sdk.init).not.toHaveBeenCalled();
     expect(clarityGlobal).toHaveBeenCalledWith("start");
+  });
+
+  it("NUNCA identifica o usuário: replay anônimo, sem `identify` nem sessão (revisão PR #545)", async () => {
+    // `/termos`, `/privacidade` e `/sobre` são linkados de dentro do app: staff
+    // logado abre estas páginas. `identify(session.user.id)` amarraria o
+    // replay a um id do produto clínico, mandado à Microsoft sem operador
+    // nomeado em docs/legal. Religar é decisão pendente do Rômulo.
+    render(<Clarity />);
+    expect(sdk.identify).not.toHaveBeenCalled();
+
+    // Sem sessão no módulo: a fonte não pode nem importar `@/auth/client` —
+    // é o único caminho pelo qual um id de usuário chegaria aqui.
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const fonte = readFileSync(
+      join(process.cwd(), "src/components/clarity.tsx"),
+      "utf8",
+    );
+    expect(fonte).not.toMatch(/@\/auth\/client|useSession|ClaritySDK\.identify/);
   });
 
   it("sem projectId não toca o SDK nem o global", () => {
