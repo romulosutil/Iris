@@ -33,10 +33,11 @@ const execFileP = promisify(execFile);
 // e uma réplica semanal legítima (até 168h) disparava alarme todo dia.
 const MARGEM_BACKUP_H = 12;
 
-// Checagens que rodam contra o banco (billing, escalonamento) — a única
-// checagem de fora dessa lista é `backup-offsite`, cujo `indeterminado` é
-// rotineiro (env ausente em dev/CI) e não deve escalar (ver Fix 2 do review
-// final de #294).
+// Checagens que rodam contra o banco (billing, escalonamento) — de fora dessa
+// lista ficam `backup-offsite`, cujo `indeterminado` é rotineiro (env ausente
+// em dev/CI) e não deve escalar (ver Fix 2 do review final de #294), e os
+// heartbeats de #536: eles leem o MESMO banco, então um detector cego já é
+// acusado por billing/escalonamento — repetir o alarme sete vezes não ajuda.
 const CHECAGENS_COM_ESCALONAMENTO_DE_CEGUEIRA = ["billing", "escalonamento"];
 const LIMITE_INDETERMINADO_CONSECUTIVO = 6; // ~6h no intervalo padrão de 1h (INTERVALO_S=3600).
 const MOTIVO_DETECTOR_CEGO = (motivo) => `detector-cego-${motivo}`;
@@ -173,6 +174,96 @@ export async function verificarEscalonamento(sql) {
 
 export function abrirConexao(databaseUrl) {
   return postgres(databaseUrl, { max: 1 });
+}
+
+// ─── #536 (DA-03): heartbeat no banco — os jobs sem efeito colateral visível ─
+//
+// billing, escalonamento e backup-offsite continuam medidos pelo EFEITO (ciclo
+// vencido, alerta vencido, dump no bucket): é a prova mais forte, e não muda
+// aqui. Os demais jobs não deixam rastro que se possa medir de fora — um job
+// de retenção parado é igual a "nenhum prontuário está a vencer" — então cada
+// um grava um sinal de vida em `job_heartbeat` (0143, via
+// `scripts/lib/heartbeat.mjs` ou `src/lib/jobs/heartbeat.ts`) e este detector
+// lê a tabela inteira numa chamada.
+//
+// `limiteH` = cadência do agendador + margem (documentado em infra/README.md,
+// §Alarme automático). `sobDemanda`: job sem cadência (rodado à mão pelo
+// operador) — só a última passada ter FALHADO é problema; linha ausente ou
+// antiga é o estado normal.
+export const LIMITES_HEARTBEAT = Object.freeze({
+  retencao: { limiteH: 36 }, // 1x/dia (86400s) + 12h
+  arquivamento: { limiteH: 36 }, // 1x/dia (86400s) + 12h
+  exportacao: { limiteH: 1 }, // 5min (300s): 1h = 12 ticks perdidos
+  asr: { limiteH: 0.5 }, // 20s: 30min = ~90 ticks perdidos
+  "asr-sweeper": { limiteH: 3 }, // 1h (3600s) + 2h
+  "expurgo-audit-log": { limiteH: 36 }, // 1x/dia (documentado) + 12h
+  conciliacao: { limiteH: null, sobDemanda: true }, // runbook manual (#375)
+});
+
+/**
+ * Pura: avalia UMA linha de `job_heartbeat` (ou a ausência dela) contra o
+ * limite do job. Devolve o mesmo shape das outras checagens.
+ *
+ * Linha AUSENTE é `problema`, não `indeterminado`: o detector conseguiu ler a
+ * tabela e o job simplesmente nunca gravou — ou nunca rodou desde a 0143, ou
+ * não está provisionado (é exatamente assim que se mede se
+ * `iris-expurgo-audit-log` existe em produção). `indeterminado` fica reservado
+ * para "não consegui ler".
+ */
+export function avaliarHeartbeat(job, linha, agora = Date.now()) {
+  const regra = LIMITES_HEARTBEAT[job];
+  const ok = { estado: "ok", motivo: job, detalhe: "" };
+  const okEm = linha?.ultimo_ok ? Date.parse(linha.ultimo_ok) : null;
+  const erroEm = linha?.ultimo_erro ? Date.parse(linha.ultimo_erro) : null;
+
+  // Última passada falhou depois do último sucesso (ou nunca houve sucesso):
+  // vale para todo job, inclusive os sob demanda.
+  if (erroEm !== null && (okEm === null || erroEm > okEm)) {
+    return {
+      estado: "problema",
+      motivo: job,
+      detalhe: `última passada de "${job}" falhou em ${new Date(erroEm).toISOString()} (${linha.detalhe || "sem detalhe"})${okEm === null ? " — nunca houve passada bem-sucedida" : `; último sucesso em ${new Date(okEm).toISOString()}`}.`,
+    };
+  }
+
+  if (regra?.sobDemanda) return ok;
+
+  if (!linha || okEm === null) {
+    return {
+      estado: "problema",
+      motivo: job,
+      detalhe: `nenhum heartbeat registrado para "${job}" — o job nunca rodou desde a migração 0143 ou o serviço não está provisionado (ver infra/README.md, §Alarme automático).`,
+    };
+  }
+
+  const idadeH = (agora - okEm) / 3_600_000;
+  if (idadeH <= regra.limiteH) return ok;
+  return {
+    estado: "problema",
+    motivo: job,
+    detalhe: `último sucesso de "${job}" há ${idadeH.toFixed(1)}h — acima do limite de ${regra.limiteH}h (${linha.detalhe || "sem detalhe"}).`,
+  };
+}
+
+/**
+ * Lê `app_alarme_job_heartbeats()` UMA vez e avalia cada job da tabela de
+ * limites. Falha de leitura vira `indeterminado` em TODOS — nunca `ok`.
+ */
+export async function verificarHeartbeats(sql, agora = Date.now()) {
+  const jobs = Object.keys(LIMITES_HEARTBEAT);
+  let linhas;
+  try {
+    linhas = await sql`SELECT * FROM app_alarme_job_heartbeats()`;
+  } catch (err) {
+    const detalhe = `não foi possível checar: ${err instanceof Error ? err.message : String(err)}`;
+    return jobs.map((job) => ({
+      estado: "indeterminado",
+      motivo: job,
+      detalhe,
+    }));
+  }
+  const porJob = new Map(linhas.map((l) => [l.job, l]));
+  return jobs.map((job) => avaliarHeartbeat(job, porJob.get(job), agora));
 }
 
 /**
@@ -324,6 +415,7 @@ export async function main() {
   try {
     resultados.push(await verificarBilling(sql));
     resultados.push(await verificarEscalonamento(sql));
+    resultados.push(...(await verificarHeartbeats(sql)));
   } finally {
     await sql.end({ timeout: 5 });
   }

@@ -3,7 +3,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
+  LIMITES_HEARTBEAT,
   atualizarContadorIndeterminado,
+  avaliarHeartbeat,
   decidirEnvios,
   deveAlertar,
   gravarContadorIndeterminado,
@@ -14,6 +16,7 @@ import {
   verificarBackupOffsite,
   verificarBilling,
   verificarEscalonamento,
+  verificarHeartbeats,
 } from "./alarme-jobs.mjs";
 
 function sqlDubleQueRetorna(linhas) {
@@ -88,9 +91,7 @@ describe("alarme-jobs.mjs — verificarBilling (#294)", () => {
     expect(resultado.estado).toBe("problema");
     expect(resultado.motivo).toBe("billing");
     expect(resultado.detalhe).toContain("3 ciclo(s)");
-    expect(resultado.detalhe).toContain(
-      "11111111-1111-1111-1111-111111111111",
-    );
+    expect(resultado.detalhe).toContain("11111111-1111-1111-1111-111111111111");
   });
 
   test("array vazio (sem linha) → ok, não estoura em linha.total", async () => {
@@ -132,9 +133,7 @@ describe("alarme-jobs.mjs — verificarEscalonamento (#294)", () => {
     expect(resultado.estado).toBe("problema");
     expect(resultado.motivo).toBe("escalonamento");
     expect(resultado.detalhe).toContain("3 alerta(s)");
-    expect(resultado.detalhe).toContain(
-      "22222222-2222-2222-2222-222222222222",
-    );
+    expect(resultado.detalhe).toContain("22222222-2222-2222-2222-222222222222");
   });
 
   test("array vazio (sem linha) → ok, não estoura em linha.total", async () => {
@@ -270,11 +269,7 @@ describe("alarme-jobs.mjs — verificarBackupOffsite (#294)", () => {
       lastModified: "2026-08-25T00:00:00.000Z", // 12h atrás
     });
     const execFn = execFnDubleQueRetorna(stdout);
-    const resultado = await verificarBackupOffsite(
-      envCompleto,
-      agora,
-      execFn,
-    );
+    const resultado = await verificarBackupOffsite(envCompleto, agora, execFn);
     expect(resultado).toEqual({
       estado: "ok",
       motivo: "backup-offsite",
@@ -290,11 +285,7 @@ describe("alarme-jobs.mjs — verificarBackupOffsite (#294)", () => {
       lastModified: "2026-08-20T12:00:00.000Z", // 120h atrás
     });
     const execFn = execFnDubleQueRetorna(stdout);
-    const resultado = await verificarBackupOffsite(
-      envCompleto,
-      agora,
-      execFn,
-    );
+    const resultado = await verificarBackupOffsite(envCompleto, agora, execFn);
     expect(resultado.estado).toBe("problema");
     expect(resultado.motivo).toBe("backup-offsite");
     expect(resultado.detalhe).toContain("120.0h");
@@ -419,9 +410,9 @@ describe("alarme-jobs.mjs — contador de indeterminado consecutivo / detector c
       estado: "problema",
     });
     expect(zerado.contador).toBe(0);
-    expect(
-      await lerContadorIndeterminado(heartbeatDir, "escalonamento"),
-    ).toBe(0);
+    expect(await lerContadorIndeterminado(heartbeatDir, "escalonamento")).toBe(
+      0,
+    );
   });
 
   test("motivos diferentes têm contadores independentes", async () => {
@@ -432,9 +423,9 @@ describe("alarme-jobs.mjs — contador de indeterminado consecutivo / detector c
       });
     }
     expect(await lerContadorIndeterminado(heartbeatDir, "billing")).toBe(3);
-    expect(
-      await lerContadorIndeterminado(heartbeatDir, "escalonamento"),
-    ).toBe(0);
+    expect(await lerContadorIndeterminado(heartbeatDir, "escalonamento")).toBe(
+      0,
+    );
   });
 
   test("backup-offsite NUNCA escala — indeterminado é rotineiro em dev/CI", async () => {
@@ -446,9 +437,9 @@ describe("alarme-jobs.mjs — contador de indeterminado consecutivo / detector c
       expect(resultado.cegou).toBe(false);
       expect(resultado.contador).toBe(0);
     }
-    expect(
-      await lerContadorIndeterminado(heartbeatDir, "backup-offsite"),
-    ).toBe(0);
+    expect(await lerContadorIndeterminado(heartbeatDir, "backup-offsite")).toBe(
+      0,
+    );
   });
 
   test("montarAlertaDetectorCego devolve motivo dedicado e estado problema", () => {
@@ -506,5 +497,192 @@ describe("alarme-jobs.mjs — decidirEnvios (#294)", () => {
     const terceiro = { estado: "problema", motivo: "c", detalhe: "" };
     const resultado = decidirEnvios([segundo, primeiro, terceiro]);
     expect(resultado.aEnviar).toEqual([segundo, primeiro, terceiro]);
+  });
+});
+
+// ─── #536 (DA-03): heartbeat no banco — um caso por job novo ─────────────────
+//
+// O dublê devolve a MESMA forma de linha que `app_alarme_job_heartbeats()`
+// (0143) devolve de verdade. `agora` é fixo para a idade ser determinística.
+describe("alarme-jobs.mjs — heartbeats dos jobs (#536)", () => {
+  const AGORA = Date.parse("2026-09-02T12:00:00.000Z");
+  const H = 3_600_000;
+  const linha = (job, { okHa = null, erroHa = null, detalhe = "" } = {}) => ({
+    job,
+    ultimo_ok: okHa === null ? null : new Date(AGORA - okHa * H),
+    ultimo_erro: erroHa === null ? null : new Date(AGORA - erroHa * H),
+    detalhe,
+  });
+
+  test("a tabela de limites cobre exatamente os jobs novos, e nenhum dos já cobertos por efeito colateral", () => {
+    expect(Object.keys(LIMITES_HEARTBEAT).sort()).toEqual(
+      [
+        "arquivamento",
+        "asr",
+        "asr-sweeper",
+        "conciliacao",
+        "expurgo-audit-log",
+        "exportacao",
+        "retencao",
+      ].sort(),
+    );
+    expect(LIMITES_HEARTBEAT).not.toHaveProperty("billing");
+    expect(LIMITES_HEARTBEAT).not.toHaveProperty("escalonamento");
+    expect(LIMITES_HEARTBEAT).not.toHaveProperty("backup-offsite");
+  });
+
+  test("retencao: último ok há 12h (cadência diária, limite 36h) → ok", () => {
+    const r = avaliarHeartbeat(
+      "retencao",
+      linha("retencao", { okHa: 12 }),
+      AGORA,
+    );
+    expect(r).toEqual({ estado: "ok", motivo: "retencao", detalhe: "" });
+  });
+
+  test("retencao: último ok há 40h → problema, detalhe cita idade e limite", () => {
+    const r = avaliarHeartbeat(
+      "retencao",
+      linha("retencao", { okHa: 40 }),
+      AGORA,
+    );
+    expect(r.estado).toBe("problema");
+    expect(r.motivo).toBe("retencao");
+    expect(r.detalhe).toContain("40.0h");
+    expect(r.detalhe).toContain("36h");
+  });
+
+  test("arquivamento: SEM linha na tabela → problema (nunca rodou ou não provisionado), nunca ok", () => {
+    const r = avaliarHeartbeat("arquivamento", undefined, AGORA);
+    expect(r.estado).toBe("problema");
+    expect(r.motivo).toBe("arquivamento");
+    expect(r.detalhe).toContain("nenhum heartbeat");
+  });
+
+  test("exportacao: ok há 10min (cadência 5min, limite 1h) → ok; há 2h → problema", () => {
+    expect(
+      avaliarHeartbeat(
+        "exportacao",
+        linha("exportacao", { okHa: 10 / 60 }),
+        AGORA,
+      ).estado,
+    ).toBe("ok");
+    const r = avaliarHeartbeat(
+      "exportacao",
+      linha("exportacao", { okHa: 2 }),
+      AGORA,
+    );
+    expect(r.estado).toBe("problema");
+    expect(r.detalhe).toContain("1h");
+  });
+
+  test("asr: última passada FALHOU depois do último ok → problema com o detalhe gravado, mesmo dentro do limite", () => {
+    const r = avaliarHeartbeat(
+      "asr",
+      linha("asr", {
+        okHa: 0.1,
+        erroHa: 0.05,
+        detalhe: "erro=PostgresError code=42501",
+      }),
+      AGORA,
+    );
+    expect(r.estado).toBe("problema");
+    expect(r.motivo).toBe("asr");
+    expect(r.detalhe).toContain("falhou");
+    expect(r.detalhe).toContain("erro=PostgresError code=42501");
+  });
+
+  test("asr: erro ANTIGO seguido de ok recente → ok (o erro foi superado)", () => {
+    const r = avaliarHeartbeat(
+      "asr",
+      linha("asr", { okHa: 0.1, erroHa: 5 }),
+      AGORA,
+    );
+    expect(r.estado).toBe("ok");
+  });
+
+  test("asr-sweeper: ok há 2h (cadência 1h, limite 3h) → ok; há 4h → problema", () => {
+    expect(
+      avaliarHeartbeat("asr-sweeper", linha("asr-sweeper", { okHa: 2 }), AGORA)
+        .estado,
+    ).toBe("ok");
+    expect(
+      avaliarHeartbeat("asr-sweeper", linha("asr-sweeper", { okHa: 4 }), AGORA)
+        .estado,
+    ).toBe("problema");
+  });
+
+  test("expurgo-audit-log: sem linha → problema — é assim que se MEDE se o serviço existe em produção", () => {
+    const r = avaliarHeartbeat("expurgo-audit-log", undefined, AGORA);
+    expect(r.estado).toBe("problema");
+    expect(r.motivo).toBe("expurgo-audit-log");
+  });
+
+  test("expurgo-audit-log: ok há 30h (limite 36h) → ok", () => {
+    expect(
+      avaliarHeartbeat(
+        "expurgo-audit-log",
+        linha("expurgo-audit-log", { okHa: 30 }),
+        AGORA,
+      ).estado,
+    ).toBe("ok");
+  });
+
+  test("conciliacao é SOB DEMANDA: sem linha → ok, ok há 400h → ok, última passada falhou → problema", () => {
+    expect(avaliarHeartbeat("conciliacao", undefined, AGORA).estado).toBe("ok");
+    expect(
+      avaliarHeartbeat(
+        "conciliacao",
+        linha("conciliacao", { okHa: 400 }),
+        AGORA,
+      ).estado,
+    ).toBe("ok");
+    const r = avaliarHeartbeat(
+      "conciliacao",
+      linha("conciliacao", { okHa: 400, erroHa: 1, detalhe: "abortou=true" }),
+      AGORA,
+    );
+    expect(r.estado).toBe("problema");
+    expect(r.detalhe).toContain("abortou=true");
+  });
+
+  test("verificarHeartbeats: devolve UM resultado por job da tabela de limites, casando as linhas pelo nome", async () => {
+    const sql = sqlDubleQueRetorna([
+      linha("retencao", { okHa: 1 }),
+      linha("arquivamento", { okHa: 100 }),
+      linha("job-que-ninguem-monitora", { okHa: 1 }),
+    ]);
+    const resultados = await verificarHeartbeats(sql, AGORA);
+    expect(resultados.map((r) => r.motivo).sort()).toEqual(
+      Object.keys(LIMITES_HEARTBEAT).sort(),
+    );
+    const porMotivo = Object.fromEntries(resultados.map((r) => [r.motivo, r]));
+    expect(porMotivo.retencao.estado).toBe("ok");
+    expect(porMotivo.arquivamento.estado).toBe("problema");
+    expect(porMotivo.exportacao.estado).toBe("problema"); // sem linha
+    expect(porMotivo.conciliacao.estado).toBe("ok"); // sob demanda, sem linha
+    expect(porMotivo).not.toHaveProperty("job-que-ninguem-monitora");
+  });
+
+  test("verificarHeartbeats: banco lança → TODOS indeterminado, nenhum ok, detalhe com a mensagem", async () => {
+    const sql = sqlDubleQueLanca(
+      "permission denied for function app_alarme_job_heartbeats",
+    );
+    const resultados = await verificarHeartbeats(sql, AGORA);
+    expect(resultados).toHaveLength(Object.keys(LIMITES_HEARTBEAT).length);
+    for (const r of resultados) {
+      expect(r.estado).toBe("indeterminado");
+      expect(r.detalhe).toContain("permission denied");
+    }
+  });
+
+  test("heartbeats NÃO entram no escalonamento de detector cego (só billing/escalonamento)", async () => {
+    for (let i = 0; i < 10; i++) {
+      const resultado = await atualizarContadorIndeterminado(heartbeatDir, {
+        motivo: "retencao",
+        estado: "indeterminado",
+      });
+      expect(resultado.cegou).toBe(false);
+    }
   });
 });
