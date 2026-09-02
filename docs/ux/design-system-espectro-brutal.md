@@ -246,6 +246,15 @@ deveria fazer, independente de quem está olhando. Usar barra sólida de cor
 - **Gate a11y automatizado**: `pnpm test` roda axe (WCAG 2.x A/AA) sobre todos
   os componentes; zero violação é condição de merge. Complementa o painel
   `addon-a11y` manual do Storybook (contraste, que o jsdom não computa).
+- **Gate da Regra 0 (DS-05, #538)**: `pnpm lint` roda `ds/sem-paleta-crua`
+  (`scripts/lint/regra-ds-paleta-crua.mjs`) em `src/app/(app)` e
+  `src/components/{ui,app}`: paleta crua do Tailwind (`bg-slate-*`,
+  `text-gray-*`, `border-black`, `bg-white`…) e `text-[Npx]` com N < 12 em
+  literal de classe viram erro. Arquivos herdados ficam em
+  `scripts/lint/ds-paleta-crua.baseline.json` com a contagem atual — o teste
+  `scripts/lint/ds-paleta-crua.test.ts` (no `pnpm test`) falha se a contagem
+  subir e pede para abaixar o baseline quando ela cai
+  (`node scripts/lint/gerar-baseline-ds.mjs`). O baseline só desce.
 - Métrica de validação de produto definida antes de gerar código final:
   recomenda-se medir tempo até "aprovação sem edição" na tela de revisão
   do terapeuta antes/depois do novo sistema visual — é o número que já
