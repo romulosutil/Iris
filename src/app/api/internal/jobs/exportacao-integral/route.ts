@@ -1,30 +1,21 @@
-import { timingSafeEqual } from "node:crypto";
 import { processarProximo, expirarVencidos } from "@/lib/export/acervo/motor";
+import { autorizarBearer } from "@/lib/security/autorizar-bearer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Validação de token Bearer em tempo constante.
+ * Só `EXPORT_JOB_TOKEN` autoriza (A-05, #530). O fallback antigo para
+ * `INTERNAL_JOB_TOKEN ?? BILLING_JOB_TOKEN` foi removido: vazar o segredo do
+ * billing não pode dar poder sobre a exportação do acervo.
  */
-function autorizado(header: string | null): boolean {
-  const esperado =
-    process.env.EXPORT_JOB_TOKEN ??
-    process.env.INTERNAL_JOB_TOKEN ??
-    process.env.BILLING_JOB_TOKEN;
-
-  if (!esperado || !header) return false;
-  const prefixo = "Bearer ";
-  if (!header.startsWith(prefixo)) return false;
-  const recebido = header.slice(prefixo.length);
-  const a = Buffer.from(recebido, "utf8");
-  const b = Buffer.from(esperado, "utf8");
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
-
 export async function POST(request: Request): Promise<Response> {
-  if (!autorizado(request.headers.get("authorization"))) {
+  if (
+    !autorizarBearer(
+      request.headers.get("authorization"),
+      process.env.EXPORT_JOB_TOKEN,
+    )
+  ) {
     return Response.json({ error: "não autorizado" }, { status: 401 });
   }
 

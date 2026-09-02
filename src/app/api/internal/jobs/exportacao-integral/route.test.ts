@@ -33,6 +33,32 @@ describe("POST /api/internal/jobs/exportacao-integral (Task T5)", () => {
     expect(body.error).toBe("não autorizado");
   });
 
+  it("NÃO aceita BILLING_JOB_TOKEN nem INTERNAL_JOB_TOKEN como fallback (A-05, #530)", async () => {
+    // Antes: `EXPORT_JOB_TOKEN ?? INTERNAL_JOB_TOKEN ?? BILLING_JOB_TOKEN`.
+    // Vazar o segredo do billing dava poder sobre a exportação do acervo.
+    // Agora só `EXPORT_JOB_TOKEN` autoriza; sem ele, recusa tudo.
+    delete process.env.EXPORT_JOB_TOKEN;
+    vi.stubEnv("BILLING_JOB_TOKEN", "token-do-billing-que-nao-vale-aqui");
+    vi.stubEnv("INTERNAL_JOB_TOKEN", "token-interno-que-nao-existe-mais");
+    vi.mocked(motor.processarProximo).mockResolvedValue({ processado: false });
+    vi.mocked(motor.expirarVencidos).mockResolvedValue({ expirados: 0 });
+
+    for (const token of [
+      "token-do-billing-que-nao-vale-aqui",
+      "token-interno-que-nao-existe-mais",
+    ]) {
+      const res = await POST(
+        new Request("http://localhost/api/internal/jobs/exportacao-integral", {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}` },
+        }),
+      );
+      expect(res.status, `token ${token} não pode autorizar`).toBe(401);
+    }
+    expect(motor.processarProximo).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
+  });
+
   it("recusa requisições com token inválido (401)", async () => {
     const req = new Request(
       "http://localhost/api/internal/jobs/exportacao-integral",
