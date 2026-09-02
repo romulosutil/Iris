@@ -1009,6 +1009,13 @@
       "when": 1788190226804,
       "tag": "0143_profissional_responsavel_da_sessao",
       "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1788190227804,
+      "tag": "0144_erro_validacao_detalhe",
+      "breakpoints": true
     }
   ]
 }
