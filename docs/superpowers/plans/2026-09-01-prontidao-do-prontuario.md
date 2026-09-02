@@ -1412,6 +1412,11 @@ o HEAD apagaria o código novo; reverter com o patch inverso.
 
 Expected: vermelho. Se continuar verde, o teste não está exercitando a guarda.
 
+(auditoria 02/09, R-2) — esta mutação prova a **UI**, não a régua. A régua é
+`assertPodeDocumentar` na action (Task 7b), e é a mutação da Task 7b, Step 6,
+que conta como prova do gate. Uma implementação que passe só por este Step 5
+tem uma leitura e zero imposições.
+
 - [ ] **Step 6: Commit**
 
 ```bash
@@ -1422,6 +1427,9 @@ git commit -m "feat(sessao): block the documenting step until the record can pro
 ---
 
 ### Task 7b: A régua também na server action (D-A8)
+
+_(auditoria 02/09, R-2 — D-A8 pendente de validação com o Rômulo; se ele
+optar por UI-only, esta task sai e a spec registra a escolha em voz alta.)_
 
 A Task 7 põe a régua no render. **Render não é gate.** `capturarDiarioAction` e
 `consolidarSessaoAction` são server actions alcançáveis sem passar pela tela; do
@@ -1524,6 +1532,15 @@ export async function assertPodeDocumentar(
     patientId,
   });
   if (prontidao.podeDocumentar) return;
+
+  // (auditoria 02/09, R-1/R-2) — `fatos === null`: paciente não visível para
+  // este papel (terapeuta fora da equipe até D-A10). Bloqueia SEM nomear
+  // degrau — "falta ." com lista vazia seria a versão action da escada falsa.
+  if (fatos === null) {
+    throw new ProntuarioIncompletoError(
+      "Esta sessão não pode ser documentada: o prontuário não está liberado para você. Quem resolve: coordenação.",
+    );
+  }
 
   const faltando = prontidao.degraus
     .filter((d) => d.estado === "bloqueante")
