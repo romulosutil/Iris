@@ -41,6 +41,8 @@ export type ResumoErro = {
   codigo?: string;
   constraint?: string;
   causaNome?: string;
+  /** Status HTTP do gateway/SDK (`BillingProviderError`, `APIError`): número fechado, nunca texto. */
+  httpStatus?: number;
   hashMensagem?: string;
 };
 
@@ -87,6 +89,10 @@ export function resumirErro(
   else if (typeof codigo === "number") resumo.codigo = String(codigo);
   const constraint = constraintPg(err);
   if (constraint) resumo.constraint = constraint;
+  const comStatus = err as
+    { status?: unknown; statusCode?: unknown } | null | undefined;
+  const http = comStatus?.status ?? comStatus?.statusCode;
+  if (typeof http === "number") resumo.httpStatus = http;
   const causa = (err as { cause?: unknown } | null | undefined)?.cause;
   if (causa !== undefined && causa !== null) resumo.causaNome = nomeDe(causa);
   const mensagem = mensagemDe(err);
@@ -107,6 +113,7 @@ export function descreverErroSemPII(
   const detalhes: string[] = [];
   if (r.codigo) detalhes.push(`SQLSTATE ${r.codigo}`);
   if (r.constraint) detalhes.push(`constraint ${r.constraint}`);
+  if (r.httpStatus !== undefined) detalhes.push(`HTTP ${r.httpStatus}`);
   const cabeca = detalhes.length
     ? `${r.nome} (${detalhes.join(", ")})`
     : r.nome;

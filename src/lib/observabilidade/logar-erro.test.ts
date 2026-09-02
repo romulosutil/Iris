@@ -153,6 +153,25 @@ describe("resumirErro / descreverErroSemPII", () => {
   });
 });
 
+describe("status HTTP do erro (BillingProviderError, APIError)", () => {
+  it("entra no resumo e na linha — é número fechado do gateway, não PII", () => {
+    const err = Object.assign(new Error("corpo do gateway com e-mail"), {
+      name: "BillingProviderError",
+      status: 500,
+    });
+    const r = resumirErro(err, "abcd1234");
+    expect(r.httpStatus).toBe(500);
+    const linha = descreverErroSemPII(err, "abcd1234");
+    expect(linha).toBe("BillingProviderError (HTTP 500) correlacao=abcd1234");
+    expect(linha).not.toContain("e-mail");
+  });
+
+  it("ignora `status` que não é número (não vira caminho para texto)", () => {
+    const err = Object.assign(new Error("x"), { status: "500 texto livre" });
+    expect(resumirErro(err, "abcd1234").httpStatus).toBeUndefined();
+  });
+});
+
 describe("hashCurto", () => {
   it("é sha256 (8 hex) — vetores conhecidos", () => {
     expect(hashCurto("abc")).toBe("ba7816bf");
