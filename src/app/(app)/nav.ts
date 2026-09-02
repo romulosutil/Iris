@@ -10,10 +10,12 @@ export type MontarNavInput = {
    * (T02, R-12/R-13). Ignorado para `admin_recepcao` (R-23). */
   totalTravadas: number;
   /** #533 (`PR-01`) — badge de `Validação`: mesmo predicado da fila
-   * (`contarFilaValidacao`). Só o coordenador tem o item; os demais ignoram. */
+   * (`contarBadgesGovernanca().validacao` = `contarFilaValidacao`). Só o
+   * coordenador tem o item; os demais ignoram. */
   totalValidacao: number;
   /** #533 (`PR-02`) — badge de `Alertas de risco`: alertas `aberto`
-   * (`contarAlertasAbertos`, mesmo número do cabeçalho de `/alertas-risco`). */
+   * (`contarBadgesGovernanca().alertasAbertos`, mesmo número do cabeçalho de
+   * `/alertas-risco`). */
   totalAlertasAbertos: number;
 };
 

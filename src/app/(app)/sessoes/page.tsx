@@ -129,7 +129,9 @@ export default async function SessoesPage({
           aria-current={ordenacao === "dia" ? "true" : undefined}
           className={
             "flex min-h-11 items-center underline " +
-            (ordenacao === "dia" ? "font-bold" : "text-[var(--text-secondary)]")
+            (ordenacao === "dia"
+              ? "font-bold"
+              : "text-[var(--text-secondary)]")
           }
         >
           Por dia

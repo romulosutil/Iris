@@ -132,25 +132,3 @@ export async function estadoEstagio2(
     };
   });
 }
-
-/**
- * #533 (`PR-02`) — contagem para o badge de "Alertas de risco" na nav do
- * coordenador. MESMO predicado do cabeçalho de `/alertas-risco`
- * (`aguardando = status === "aberto"`): o número da nav e o da tela têm que
- * bater, senão um deles mente. Escalado (estágio 1/2) não entra aqui de
- * propósito — já tem o banner global de `AppLayout` (`estadoEstagio2`), com
- * tom mais alto que um badge.
- */
-export async function contarAlertasAbertos(
-  ctx: TenantContext,
-): Promise<{ total: number }> {
-  return withTenant(ctx, async (tx) => {
-    const linhas = (await tx.execute(sql`
-      SELECT count(*)::int AS total
-        FROM alerta_risco_clinico a
-       WHERE a.deletado_em IS NULL
-         AND a.status = 'aberto'
-    `)) as unknown as Array<{ total: number }>;
-    return { total: Number(linhas[0]?.total ?? 0) };
-  });
-}

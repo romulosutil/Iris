@@ -10,8 +10,8 @@ import { Container } from "@/components/ui/layout";
 import { Banner } from "@/components/ui/banner";
 import { FaixaTrial } from "@/components/app/faixa-trial";
 import { FaixaRecusa } from "@/components/app/faixa-recusa";
-import { estadoEstagio2, contarAlertasAbertos } from "./alertas-risco/queries";
-import { contarFilaValidacao } from "./validacao/queries";
+import { estadoEstagio2 } from "./alertas-risco/queries";
+import { contarBadgesGovernanca } from "@/lib/governanca/contadores";
 import { contarTravadas } from "@/lib/sessao/fila";
 import { obterSituacaoConta, obterAvisoRecusa } from "./queries";
 import { SignOutButton } from "./sign-out-button";
@@ -33,8 +33,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     { quantidade: riscoEstagio2, protocoloInterno },
     situacaoConta,
     avisoRecusa,
-    filaValidacao,
-    alertasAbertos,
+    badgesGovernanca,
   ] = await Promise.all([
     listarClinicasDoUsuario(ctx.userId),
     // #512 · T08 (R-24) — papéis NÃO resolvidos na clínica ativa, só para o
@@ -82,16 +81,18 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       );
       return null;
     }),
-    // #533 (`PR-01`/`PR-02`) — badges de governança, só para o coordenador
-    // (único papel com esses itens em `nav.ts`); os outros nem tocam o banco.
-    // Mesmo `.catch` de `contarTravadas`: contagem que falha vira badge 0,
-    // nunca `error.tsx` em toda rota do app por causa de um número na nav.
+    // #533 (`PR-01`/`PR-02`) — os dois badges de governança (Validação,
+    // Alertas de risco) numa única ida ao banco, só para o coordenador (único
+    // papel com esses itens em `nav.ts`); os outros nem tocam o banco. Sem
+    // cache de propósito — o porquê está em `contarBadgesGovernanca`. Mesmo
+    // `.catch` de `contarTravadas`: contagem que falha vira badge 0, nunca
+    // `error.tsx` em toda rota do app por causa de um número na nav.
     ehCoordenador
-      ? contarFilaValidacao(ctx).catch(() => ({ total: 0 }))
-      : Promise.resolve({ total: 0 }),
-    ehCoordenador
-      ? contarAlertasAbertos(ctx).catch(() => ({ total: 0 }))
-      : Promise.resolve({ total: 0 }),
+      ? contarBadgesGovernanca(ctx).catch(() => ({
+          validacao: 0,
+          alertasAbertos: 0,
+        }))
+      : Promise.resolve({ validacao: 0, alertasAbertos: 0 }),
   ]);
 
   const totalTravadas = travadas.total;
@@ -109,8 +110,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const { itemsNav, itemsAdmin } = montarNav({
     role: ctx.role,
     totalTravadas,
-    totalValidacao: filaValidacao.total,
-    totalAlertasAbertos: alertasAbertos.total,
+    totalValidacao: badgesGovernanca.validacao,
+    totalAlertasAbertos: badgesGovernanca.alertasAbertos,
   });
 
   return (
