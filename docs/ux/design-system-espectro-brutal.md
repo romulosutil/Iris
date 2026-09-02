@@ -165,6 +165,26 @@ este modo já existe como variante de tema, não como retrabalho.
 - Par de tokens dedicado para "candidato" vs. "conquistado" (princípio 4):
   preenchimento sólido + borda cheia (conquistado) vs. contorno + hachura
   leve, nunca cor sozinha (candidato).
+  - **Tokens (`globals.css`, #538 / DS-02):** `--status-progresso-bg`
+    `#f3ead2`, `--status-progresso-fg` `#5b4708`, `--status-progresso-border`
+    `#8a6d1d` (par escuro: `rgba(122,90,20,.4)` / `#f3dfa0` / `#c9a227`) +
+    `--pattern-progresso-hachura` (listras a 30% da borda, baixo contraste de
+    propósito — §5 proíbe padrão repetitivo de alto contraste). Classes:
+    `bg/text/border-status-progresso-*`.
+  - **Semântica:** "candidato a domínio" é **fato derivado de decisão humana**
+    (nível de ajuda caindo em sessões consecutivas), só ainda não consolidado.
+    Por isso é âmbar-neutro com **borda sólida fina** — nunca o
+    violeta/tracejado de `--status-ia-*`, que significa "sugerido pela IA,
+    ainda não é fato". Três estados, três formas: círculo cheio menta
+    (conquistado), quadrado hachurado âmbar (candidato), círculo tracejado
+    vazio neutro (não atingido).
+  - **Contraste medido (WCAG 2.1):** fg/bg 7.45:1 · fg/`surface-card` 8.94:1 ·
+    borda/bg 4.09:1 · borda/`surface-card` 4.90:1 · borda/`surface-muted`
+    4.26:1; escuro fg/bg 9.44:1 · borda/bg 5.16:1.
+  - **Componentes canônicos:** `ui/patterns/marco-status.tsx` (`MarcoStatus`,
+    glifo com `role="img"` + `aria-label`, nunca `title` como único canal) e
+    `ui/patterns/barra-progresso-epistemica.tsx` (barra empilhada com leitura
+    completa em `aria-label`).
 - `prefers-reduced-motion` respeitado explicitamente: o deslocamento no
   clique vira troca instantânea de sombra sem transição quando o SO pede
   menos movimento.

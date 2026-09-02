@@ -55,6 +55,8 @@ import { Progress } from "./progress";
 import { Avatar, AvatarFallback, AvatarGroup } from "./avatar";
 import { Stat } from "./stat";
 import { CopyButton } from "./patterns/copy-button";
+import { MarcoStatus } from "./patterns/marco-status";
+import { BarraProgressoEpistemica } from "./patterns/barra-progresso-epistemica";
 
 afterEach(cleanup);
 
@@ -646,5 +648,43 @@ test("MicroConquistaBadge — sem violações axe", async () => {
     <MicroConquistaBadge icon="sparkle">
       Marco VB-MAPP Conquistado!
     </MicroConquistaBadge>,
+  );
+});
+
+test("MarcoStatus — 3 estados (glifo nomeado) sem violações axe", async () => {
+  await semViolacoes(
+    <ul>
+      <li>
+        <MarcoStatus
+          estado="conquistado"
+          nome="Pede item preferido"
+          nivel="1"
+        />
+      </li>
+      <li>
+        <MarcoStatus
+          estado="candidato"
+          nome="Pede com duas palavras"
+          nivel="2"
+        />
+      </li>
+      <li>
+        <MarcoStatus estado="nao_atingido" nome="Pede informação" />
+      </li>
+      <li>
+        <MarcoStatus estado="candidato" nome="Imita gesto" rotuloVisivel />
+      </li>
+    </ul>,
+  );
+});
+
+test("BarraProgressoEpistemica — sem violações axe", async () => {
+  await semViolacoes(
+    <BarraProgressoEpistemica
+      rotulo="Domínio mando"
+      total={6}
+      conquistados={3}
+      candidatos={1}
+    />,
   );
 });

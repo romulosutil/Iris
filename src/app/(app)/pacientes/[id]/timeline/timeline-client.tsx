@@ -24,6 +24,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { surface } from "@/components/ui/primitives/surface";
+import {
+  MarcoStatus,
+  type MarcoStatusEstado,
+} from "@/components/ui/patterns/marco-status";
+import { BarraProgressoEpistemica } from "@/components/ui/patterns/barra-progresso-epistemica";
 
 type DeltaMeta = { id: string; descricao: string; disciplina: string | null };
 type DeltaMilestone = { id: string; nome: string; dominioId: string };
@@ -518,7 +524,7 @@ export function TimelineClient({
                     </div>
                     <div className="flex items-center gap-2">
                       {chunk.nivel !== null && (
-                        <span className="rounded border border-black bg-white px-2 py-0.5 text-xs font-black">
+                        <span className="rounded-[var(--radius-sm)] border border-[var(--border-brutal)] bg-[var(--surface-card)] px-2 py-0.5 text-xs font-black">
                           Nível {chunk.nivel}
                         </span>
                       )}
@@ -567,113 +573,74 @@ export function TimelineClient({
                 conquistados: 0,
                 candidatos: 0,
               };
-              const percConquistados =
-                stats.total > 0 ? (stats.conquistados / stats.total) * 100 : 0;
-              const percCandidatos =
-                stats.total > 0 ? (stats.candidatos / stats.total) * 100 : 0;
-
               return (
                 <div
                   key={dom}
-                  className="border-ink-anchor border-2 bg-[var(--surface-elevated)] p-3 shadow-[4px_4px_0px_#000000] sm:p-4"
+                  className={surface("solida", {
+                    radius: "md",
+                    className: "bg-[var(--surface-elevated)] p-3 sm:p-4",
+                  })}
                 >
-                  <div className="mb-4 flex flex-col gap-2 border-b border-black pb-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="mb-4 flex flex-col gap-2 border-b border-[var(--border-brutal)] pb-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <span className="font-display text-sm font-black tracking-tight uppercase">
                         Domínio: {dom.toUpperCase()}
                       </span>
-                      <div className="mt-0.5 text-[10px] text-[var(--text-secondary)]">
+                      <div className="mt-0.5 text-xs text-[var(--text-secondary)]">
                         {stats.total}{" "}
                         {stats.total === 1
                           ? "marco catalogado"
                           : "marcos catalogados"}
                       </div>
                     </div>
+                    {/* Contagens com o par de tokens de cada estado: menta =
+                        conquistado (fato); --status-progresso-* = candidato a
+                        domínio — fato humano ainda não consolidado, NUNCA o
+                        violeta de "sugerido pela IA" (DS-02, #538). */}
                     <div className="flex flex-wrap items-center gap-2 text-xs font-black">
-                      <span className="text-status-success-text bg-status-success-bg rounded border border-black px-1.5 py-0.5">
+                      <span className="border-status-success-border bg-status-success-bg text-status-success-fg rounded-[var(--radius-sm)] border px-1.5 py-0.5">
                         Conquistados: {stats.conquistados}
                       </span>
-                      <span className="rounded border border-[var(--status-ia-border)] bg-[var(--status-ia-bg)] px-1.5 py-0.5 text-[var(--status-ia-fg)]">
-                        Candidatos: {stats.candidatos}
+                      <span className="border-status-progresso-border bg-status-progresso-bg text-status-progresso-fg rounded-[var(--radius-sm)] border px-1.5 py-0.5">
+                        Candidatos a domínio: {stats.candidatos}
                       </span>
                     </div>
                   </div>
 
-                  {/* Barra de Progresso Neobrutalista Stacked */}
-                  <div className="mb-4 flex h-4 overflow-hidden rounded-sm border-2 border-black bg-[var(--surface-muted)]">
-                    {percConquistados > 0 && (
-                      <div
-                        style={{ width: `${percConquistados}%` }}
-                        className="h-full border-r-2 border-[var(--border-brutal)] bg-[var(--status-success-border)]"
-                        title={`${percConquistados.toFixed(0)}% Conquistados`}
-                      />
-                    )}
-                    {percCandidatos > 0 && (
-                      <div
-                        style={{ width: `${percCandidatos}%` }}
-                        className="h-full border-r-2 border-[var(--border-brutal)] bg-[var(--status-ia-border)]"
-                        title={`${percCandidatos.toFixed(0)}% Candidatos`}
-                      />
-                    )}
-                  </div>
+                  <BarraProgressoEpistemica
+                    className="mb-4"
+                    rotulo={`Domínio ${dom}`}
+                    total={stats.total}
+                    conquistados={stats.conquistados}
+                    candidatos={stats.candidatos}
+                  />
 
-                  {/* Grid de Milestones */}
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6">
+                  {/* Grade de marcos: lista semântica; cada marco anuncia o
+                      estado pelo glifo nomeado do MarcoStatus, nunca por
+                      `title` nem por cor sozinha (AC-01/U-03). */}
+                  <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6">
                     {items.map((m) => {
                       const entry = snapSelecionado.repertorioState?.[m.id];
-                      let status: "conquistado" | "candidato" | "nao_atingido" =
-                        "nao_atingido";
+                      let estado: MarcoStatusEstado = "nao_atingido";
                       if (entry) {
                         if (entry.nivelAjudaRecente === 0) {
-                          status = "conquistado";
+                          estado = "conquistado";
                         } else if (entry.isCandidata) {
-                          status = "candidato";
+                          estado = "candidato";
                         }
                       }
 
                       return (
-                        <div
-                          key={m.id}
-                          className="border-ink-anchor group relative flex min-w-0 cursor-help flex-col items-center justify-between gap-2 border bg-[var(--surface-card)] p-2 text-center"
-                          title={`${m.nome} ${m.nivel ? `(Nível ${m.nivel})` : ""}`}
-                        >
-                          <span className="line-clamp-1 w-full truncate text-[10px] font-black">
-                            {m.nivel ? `Nível ${m.nivel}` : "Marco"}
-                          </span>
-
-                          {/* Indicador Visual do Milestone */}
-                          {status === "conquistado" ? (
-                            <div
-                              className="bg-status-success-bg text-status-success-text flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-black text-xs font-black"
-                              title="Conquistado"
-                            >
-                              ✓
-                            </div>
-                          ) : status === "candidato" ? (
-                            <div
-                              className="flex h-8 w-8 shrink-0 rotate-45 transform items-center justify-center border-2 border-dashed border-[var(--status-ia-border)] bg-[var(--status-ia-bg)] text-xs font-black text-[var(--status-ia-fg)]"
-                              title="Candidato"
-                            >
-                              <span className="block -rotate-45 transform">
-                                ★
-                              </span>
-                            </div>
-                          ) : (
-                            <div
-                              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-gray-400 bg-gray-100 text-xs font-bold text-gray-400"
-                              title="Não Atingido"
-                            >
-                              ○
-                            </div>
-                          )}
-
-                          <span className="line-clamp-2 w-full text-[10px] leading-tight break-words text-[var(--text-secondary)]">
-                            {m.nome}
-                          </span>
-                        </div>
+                        <li key={m.id} className="min-w-0">
+                          <MarcoStatus
+                            estado={estado}
+                            nome={m.nome}
+                            nivel={m.nivel}
+                          />
+                        </li>
                       );
                     })}
-                  </div>
+                  </ul>
                 </div>
               );
             })}
@@ -692,7 +659,7 @@ export function TimelineClient({
           <h3 className="text-ink text-base font-black">
             Comparar Pontos Temporais
           </h3>
-          <p className="mt-0.5 text-[10px] text-[var(--text-secondary)]">
+          <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
             Selecione outra sessão para ver a evolução agregada no tempo.
           </p>
         </div>
