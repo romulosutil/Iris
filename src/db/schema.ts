@@ -1241,6 +1241,13 @@ export const extraction = pgTable(
     revisadoPor: uuid("revisado_por").references(() => appUser.id),
     revisadoEm: timestamp("revisado_em", { withTimezone: true }),
     versao: integer("versao").notNull().default(1),
+    // DLQ da revisão (#532, Q-01): diagnóstico da falha que levou a extração a
+    // `erro_validacao` — `{codigo, hash, quando}` (SQLSTATE/name + sha256 curto
+    // da message, para correlação com o log; NUNCA a message crua, que carrega
+    // SQL + params = PHI). Vive em coluna própria para não contaminar
+    // `payload_editado`, que é conteúdo clínico efetivo. Zerada ao sair de
+    // `erro_validacao`.
+    erroValidacaoDetalhe: jsonb("erro_validacao_detalhe"),
   },
   (t) => [index("idx_extraction_session").on(t.sessionId)],
 );
