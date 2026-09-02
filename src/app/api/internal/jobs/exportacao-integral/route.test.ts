@@ -74,6 +74,49 @@ describe("POST /api/internal/jobs/exportacao-integral (Task T5)", () => {
     expect(res.status).toBe(401);
   });
 
+  it("responde ok:false + 500 quando algum bundle `falhou`, sem esconder o resto (Q-07, #530)", async () => {
+    vi.mocked(motor.processarProximo)
+      .mockResolvedValueOnce({
+        processado: true,
+        bundleId: "bundle-ruim",
+        status: "falhou",
+        erro: "storage fora",
+      })
+      .mockResolvedValueOnce({
+        processado: true,
+        bundleId: "bundle-bom",
+        status: "pronto",
+      })
+      .mockResolvedValueOnce({ processado: false });
+    vi.mocked(motor.expirarVencidos).mockResolvedValueOnce({ expirados: 1 });
+
+    const res = await POST(
+      new Request("http://localhost/api/internal/jobs/exportacao-integral", {
+        method: "POST",
+        headers: { authorization: "Bearer token-secreto-export-123" },
+      }),
+    );
+
+    // O "exit 0 mentiroso" da #105: 200 {ok:true} com todo bundle em `falhou`
+    // deixava o acervo pendente para sempre sem sinal no job.
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.bundlesFalhos).toBe(1);
+    // O corpo continua inteiro: o job só registra este JSON.
+    expect(body.totalProcessados).toBe(2);
+    expect(body.processados).toHaveLength(2);
+    expect(body.processados[0]).toMatchObject({
+      bundleId: "bundle-ruim",
+      status: "falhou",
+      erro: "storage fora",
+    });
+    // A expiração de bundles vencidos ainda roda: falha de UM bundle não
+    // pode segurar a retenção dos outros.
+    expect(motor.expirarVencidos).toHaveBeenCalledTimes(1);
+    expect(body.expirados).toBe(1);
+  });
+
   it("processa fila e expirações quando autorizado (200)", async () => {
     vi.mocked(motor.processarProximo)
       .mockResolvedValueOnce({

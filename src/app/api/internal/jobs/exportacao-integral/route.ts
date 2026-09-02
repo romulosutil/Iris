@@ -37,15 +37,32 @@ export async function POST(request: Request): Promise<Response> {
       });
     }
 
-    // Expira bundles com retenção vencida (> 72h)
+    // Expira bundles com retenção vencida (> 72h). Roda MESMO com bundle em
+    // `falhou` acima: a falha de uma montagem não pode segurar a retenção das
+    // outras.
     const { expirados } = await expirarVencidos();
 
-    return Response.json({
-      ok: true,
-      processados,
-      totalProcessados: processados.length,
-      expirados,
-    });
+    // Q-07 (#530): bundle `falhou` é falha da passada, e o sinal tem de subir
+    // no status HTTP — o job (`scripts/exportacao-acervo.mjs`) só grava este
+    // JSON e sai pelo `resposta.ok`. Um 200 `{ok:true}` com todo bundle em
+    // `falhou` era o "exit 0 mentiroso" da #105 de novo: acervo pendente para
+    // sempre, sem alarme. O corpo vai INTEIRO nos dois caminhos: o que montou,
+    // o que falhou e por quê, e quantos expiraram.
+    const bundlesFalhos = processados.filter(
+      (p) => p.status === "falhou",
+    ).length;
+    const ok = bundlesFalhos === 0;
+
+    return Response.json(
+      {
+        ok,
+        processados,
+        totalProcessados: processados.length,
+        bundlesFalhos,
+        expirados,
+      },
+      { status: ok ? 200 : 500 },
+    );
   } catch (err: any) {
     console.error("[job-exportacao-integral] falha no processamento", err);
     return Response.json(
