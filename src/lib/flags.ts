@@ -27,7 +27,7 @@ export function asrHabilitado(): boolean {
  * Gates de LLM (auditoria 360, A-04). Cada agente de IA do produto tem um
  * gate legal/DPA próprio (D57/D66): sem a flag = "true" o provider real NUNCA
  * é instanciado e nenhum texto de paciente sai para o Google. Antes estavam
- * inline em três providers; aqui viram inventário — `FLAGS_LLM` é a lista
+ * inline em três providers; aqui viram inventário — `FLAGS` é a lista
  * que o teste percorre para afirmar o default fail-closed de cada uma.
  *
  * A chave (`GOOGLE_API_KEY`) continua sendo checada no provider: a flag diz
