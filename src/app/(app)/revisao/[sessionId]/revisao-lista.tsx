@@ -6,6 +6,7 @@ import { Stack, Cluster, Split } from "@/components/ui/layout";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { ClinicalQuote } from "@/components/ui/clinical-quote";
 import {
   Dialog,
   DialogContent,
@@ -99,13 +100,13 @@ function PainelHistorico({ itens }: { itens: HistoricoItem[] }) {
       ) : (
         <Stack gap="md" como="ul">
           {itens.map((h) => (
-            <li
-              key={h.id}
-              className="border-l-2 border-[var(--text-secondary)] pl-3"
-            >
-              <p className="text-sm text-[var(--text-primary)] italic">
-                &quot;{h.trechoFonte}&quot;
-              </p>
+            <li key={h.id}>
+              {/* DS-03: toda citação de trecho-fonte é ClinicalQuote — o
+                  acento lateral ad hoc (`border-l-2`) foi banido (D54). */}
+              <ClinicalQuote
+                rotulo="Registro anterior aprovado"
+                texto={h.trechoFonte}
+              />
               {h.revisadoEm ? (
                 <p className="mt-0.5 text-xs text-[var(--text-secondary)]">
                   aprovado em {dataFmt.format(h.revisadoEm)}
@@ -344,9 +345,7 @@ function CartaoRevisao({
           </Stack>
         </Split>
 
-        <blockquote className="border-l-2 border-[var(--text-secondary)] pl-3 text-base text-[var(--text-primary)] italic">
-          “{ex.trechoFonte}”
-        </blockquote>
+        <ClinicalQuote texto={ex.trechoFonte} />
 
         {expandido ? (
           <div id={detalheId} className="flex flex-col gap-4">
