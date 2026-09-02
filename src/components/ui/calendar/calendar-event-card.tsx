@@ -2,54 +2,64 @@
 
 import * as React from "react";
 import { cn } from "@/lib/cn";
-import { CheckInButton } from "@/app/(app)/agenda/checkin-button";
-import type { SessionEstado } from "@/app/(app)/agenda/actions";
+
+/** Estados que a grade sabe pintar. Espelha `session_estado` do banco. */
+export type CalendarEventoEstado =
+  "agendada" | "realizada" | "falta_paciente" | "falta_terapeuta" | "cancelada";
 
 export interface CalendarEventCardProps {
-  id: string;
   pacienteNome: string;
-  disciplinaNome?: string;
+  disciplinaNome?: string | null;
   horarioStr?: string;
-  estado: SessionEstado;
+  estado: CalendarEventoEstado;
   terapeutaNome?: string;
   variante?: "compacta" | "detalhada";
   onClick?: () => void;
-  podeGerir?: boolean;
+  /**
+   * Slot de ação do app (ex.: botão de check-in). O DS não sabe o que é uma
+   * sessão nem o que é check-in — antes este card importava `CheckInButton`
+   * de `@/app`, invertendo a camada (A-01, #538). Aparece no hover, só na
+   * variante detalhada.
+   */
+  acao?: React.ReactNode;
 }
 
 const ESTADO_ESTILOS: Record<
-  SessionEstado,
+  CalendarEventoEstado,
   { bg: string; border: string; text: string }
 > = {
   agendada: {
     bg: "bg-[#f1e9f6]",
-    border: "border-black",
+    border: "border-[var(--border-brutal)]",
     text: "text-[#45286e]",
   },
   realizada: {
     bg: "bg-[#e6f4f1]",
-    border: "border-black",
+    border: "border-[var(--border-brutal)]",
     text: "text-[#0a5c54]",
   },
   falta_paciente: {
     bg: "bg-[#fbe9e9]",
-    border: "border-black",
+    border: "border-[var(--border-brutal)]",
     text: "text-[#7e1f16]",
   },
   falta_terapeuta: {
     bg: "bg-[#fbe9e9]",
-    border: "border-black",
+    border: "border-[var(--border-brutal)]",
     text: "text-[#7e1f16]",
   },
   cancelada: {
-    bg: "bg-gray-200",
-    border: "border-black",
-    text: "text-gray-600",
+    bg: "bg-[var(--surface-muted)]",
+    border: "border-[var(--border-brutal)]",
+    text: "text-[var(--text-secondary)]",
   },
 };
 
+/**
+ * CalendarEventCard — card puro de evento da grade (DS). Sem dependência do
+ * app: o que é do app entra por `acao`.
+ */
 export function CalendarEventCard({
-  id,
   pacienteNome,
   disciplinaNome,
   horarioStr,
@@ -57,7 +67,7 @@ export function CalendarEventCard({
   terapeutaNome,
   variante = "detalhada",
   onClick,
-  podeGerir = true,
+  acao,
 }: CalendarEventCardProps) {
   const estilo = ESTADO_ESTILOS[estado] ?? ESTADO_ESTILOS.agendada;
 
@@ -74,14 +84,14 @@ export function CalendarEventCard({
           }
         }}
         className={cn(
-          "group font-display focus-visible:outline-focus relative flex cursor-pointer items-center justify-between gap-1.5 rounded-[var(--radius-control)] border-2 px-2 py-1 shadow-[1px_1px_0_#000] transition-all hover:-translate-y-0.5 hover:shadow-[2px_2px_0_#000]",
+          "group font-display focus-visible:outline-focus relative flex cursor-pointer items-center justify-between gap-1.5 rounded-[var(--radius-control)] border-2 px-2 py-1 shadow-[var(--shadow-brutal-xs)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--elevation-1)]",
           estilo.bg,
           estilo.border,
           estilo.text,
         )}
       >
         <div className="flex items-center gap-1.5 overflow-hidden">
-          <span className="h-2 w-2 shrink-0 rounded-full border border-black bg-current" />
+          <span className="h-2 w-2 shrink-0 rounded-full border border-[var(--border-brutal)] bg-current" />
           <span className="truncate text-xs font-semibold">
             {pacienteNome}
             {disciplinaNome ? ` · ${disciplinaNome}` : ""}
@@ -108,7 +118,7 @@ export function CalendarEventCard({
         }
       }}
       className={cn(
-        "group font-display focus-visible:outline-focus relative flex cursor-pointer flex-col justify-between rounded-[var(--radius-control)] border-2 p-2.5 shadow-[2px_2px_0_#000] transition-all hover:-translate-y-0.5 hover:shadow-[3px_3px_0_#000]",
+        "group font-display focus-visible:outline-focus relative flex cursor-pointer flex-col justify-between rounded-[var(--radius-control)] border-2 p-2.5 shadow-[var(--elevation-1)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--elevation-2)]",
         estilo.bg,
         estilo.border,
         estilo.text,
@@ -121,7 +131,7 @@ export function CalendarEventCard({
               {horarioStr}
             </span>
           )}
-          <span className="h-2.5 w-2.5 rounded-full border border-black bg-current" />
+          <span className="h-2.5 w-2.5 rounded-full border border-[var(--border-brutal)] bg-current" />
         </div>
         <h4 className="mt-1 text-sm leading-tight font-bold text-balance">
           {pacienteNome}
@@ -138,15 +148,14 @@ export function CalendarEventCard({
         )}
       </div>
 
-      {/* Botão de Check-in em 1-Clique no Hover (se agendada) */}
-      {estado === "agendada" && podeGerir && (
+      {acao ? (
         <div
           className="mt-2 hidden transition-all group-hover:block"
           onClick={(e) => e.stopPropagation()}
         >
-          <CheckInButton sessionId={id} />
+          {acao}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

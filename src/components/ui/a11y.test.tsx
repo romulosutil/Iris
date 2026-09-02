@@ -8,7 +8,7 @@ import { Pill } from "./primitives/pill";
 import { ConfidenceCard } from "./patterns/confidence-card";
 import { CompareRow } from "./patterns/compare-row";
 import { BatchBar } from "./patterns/batch-bar";
-import { Calendar } from "./calendar";
+import { CalendarGrid } from "./calendar/calendar-grid";
 import {
   ProtocolProgressBarChart,
   ProtocolTrendChart,
@@ -582,9 +582,9 @@ test("BatchBar — sem violações axe", async () => {
   );
 });
 
-test("Calendar.Grid (escala Dia) — sem violações axe", async () => {
+test("CalendarGrid (escala Dia) — sem violações axe", async () => {
   await semViolacoes(
-    <Calendar.Grid
+    <CalendarGrid
       modo="daily-resources"
       recursos={[{ id: "t1", nome: "Dra. Beatriz", subtitulo: "Fono" }]}
       sessoes={[

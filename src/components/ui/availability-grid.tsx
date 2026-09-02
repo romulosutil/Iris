@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
+import { CalendarGrid } from "@/components/ui/calendar/calendar-grid";
 
 export type AvailabilityGridProps = {
   passoMin?: number;
@@ -98,7 +98,7 @@ export function AvailabilityGrid({
       </div>
 
       {/* Grade de Matriz de Disponibilidade */}
-      <Calendar.Grid
+      <CalendarGrid
         modo="availability-matrix"
         abertura={abertura}
         fechamento={fechamento}
