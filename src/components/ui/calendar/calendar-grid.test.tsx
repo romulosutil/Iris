@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import { CalendarGrid } from "./calendar-grid";
-import type { SessaoDoDia } from "@/app/(app)/agenda/actions";
+import { CalendarGrid, type CalendarEvento } from "./calendar-grid";
 
 /**
  * R-30: em viewport estreito, a escala "Dia" (`modo="daily-resources"`) é
@@ -24,7 +23,7 @@ function stubMatchMedia(matches: boolean) {
   );
 }
 
-const sessoes: SessaoDoDia[] = [
+const sessoes: CalendarEvento[] = [
   {
     id: "s2",
     agendadaPara: new Date("2026-08-12T12:00:00Z"),
@@ -32,7 +31,6 @@ const sessoes: SessaoDoDia[] = [
     terapeutaId: "t1",
     terapeutaNome: "Dra. Beatriz",
     pacienteNome: "Lucas",
-    patientId: "p2",
     disciplina: "Fono",
   },
   {
@@ -42,7 +40,6 @@ const sessoes: SessaoDoDia[] = [
     terapeutaId: "t1",
     terapeutaNome: "Dra. Beatriz",
     pacienteNome: "Arthur",
-    patientId: "p1",
     disciplina: "Fono",
   },
 ];

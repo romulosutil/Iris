@@ -86,7 +86,7 @@ export const SearchInput = React.forwardRef<HTMLInputElement, SearchInputProps>(
               </button>
             ) : null}
             {shortcutHint && !hasValue ? (
-              <kbd className="rounded border border-[var(--border-brutal)] bg-[var(--surface-elevated)] px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wider text-[var(--text-secondary)] uppercase">
+              <kbd className="rounded border border-[var(--border-brutal)] bg-[var(--surface-elevated)] px-1.5 py-0.5 font-mono text-xs font-semibold tracking-wider text-[var(--text-secondary)] uppercase">
                 {shortcutHint}
               </kbd>
             ) : null}

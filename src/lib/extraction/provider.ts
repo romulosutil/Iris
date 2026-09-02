@@ -43,12 +43,43 @@ export type ExtractionDraft = {
  * o ciclo de vida errado, e um risco esperando validação é o oposto do que a
  * spec pede.
  */
+/**
+ * DA-02 (#535): rastreio da chamada de IA, gravado em `extraction` (colunas
+ * `modelo`, `prompt_versao`, `latencia_ms`, `tokens_entrada`, `tokens_saida`).
+ * Sem isto "≥70% de aprovação sem edição" (PRODUCT.md) não é mensurável por
+ * modelo/prompt, e custo/latência por clínica não existem em lugar nenhum.
+ * Tudo nullable: `null` significa "não medido", nunca "zero".
+ */
+export type ExtractionMeta = {
+  /** Id do modelo chamado; `'stub'` na clínica demo; `null` sem modelo. */
+  modelo: string | null;
+  /** sha256 curto do system prompt usado (`versaoDoPrompt`). */
+  promptVersao: string | null;
+  /** Tempo de parede de `extrair()` (inclui retry/backoff). */
+  latenciaMs: number | null;
+  tokensEntrada: number | null;
+  tokensSaida: number | null;
+};
+
+export const META_SEM_MODELO: ExtractionMeta = {
+  modelo: null,
+  promptVersao: null,
+  latenciaMs: null,
+  tokensEntrada: null,
+  tokensSaida: null,
+};
+
 export type ExtractionResult = {
   drafts: ExtractionDraft[];
   alertaRisco: AlertaRiscoAgente | null;
+  /** Opcional só para não obrigar dublês de teste; providers reais preenchem. */
+  meta?: ExtractionMeta;
 };
 
 export interface ExtractionProvider {
+  /** Modelo que o provider chama — para gravar na linha de falha
+   * (`pendente_reprocessamento`), quando não há `meta` de sucesso. */
+  readonly modelo?: string | null;
   extrair(ctx: ExtractionContext): Promise<ExtractionResult>;
 }
 
@@ -91,8 +122,10 @@ export function resolveProvider(clinic: {
   isDemo: boolean;
 }): ExtractionProvider {
   if (clinic.isDemo) return new DemoStubProvider();
+  // Flag centralizada em src/lib/flags.ts (A-04); instrumentação de modelo
+  // (#555) exige passar o modelo resolvido ao provider para o rastreio.
   const llmHabilitado = extracaoLlmHabilitada() && !!process.env.GOOGLE_API_KEY;
-  return llmHabilitado
-    ? new LlmExtractionProvider(createGeminiInvoker(modeloDeExtracao()))
-    : new NullProvider();
+  if (!llmHabilitado) return new NullProvider();
+  const modelo = modeloDeExtracao();
+  return new LlmExtractionProvider(createGeminiInvoker(modelo), { modelo });
 }

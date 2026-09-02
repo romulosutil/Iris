@@ -60,6 +60,15 @@ import {
 } from "@aws-sdk/client-s3";
 import { pathToFileURL } from "node:url";
 import postgres from "postgres";
+import {
+  detalheDoErro,
+  detalheSemPii,
+  gravarHeartbeat,
+} from "./lib/heartbeat.mjs";
+
+// Nome deste job em `job_heartbeat` (0146) — casa com `LIMITES_HEARTBEAT` em
+// scripts/alarme-jobs.mjs. Mudar um sem o outro cega o detector.
+const JOB = "asr-sweeper";
 
 const LIMITE_HORAS_DEFAULT = 6;
 
@@ -284,11 +293,28 @@ export async function main(args = process.argv.slice(2)) {
   const client = buildClient(config);
   const sql = postgres(config.databaseUrl, { max: 1 });
   try {
-    await varrer(client, config.bucket, {
-      limiteHoras: config.limiteHoras,
-      dryRun,
-      refsEmUso: criarConsultaEmUso(sql),
-    });
+    let contagens;
+    try {
+      contagens = await varrer(client, config.bucket, {
+        limiteHoras: config.limiteHoras,
+        dryRun,
+        refsEmUso: criarConsultaEmUso(sql),
+      });
+    } catch (err) {
+      // #536 — heartbeat de FALHA antes de propagar. Só `name`+`code`.
+      await gravarHeartbeat(sql, JOB, {
+        ok: false,
+        detalhe: detalheDoErro(err),
+      });
+      throw err;
+    }
+    // #536 — dry-run NÃO grava heartbeat: mascararia um sweeper parado.
+    if (!dryRun) {
+      await gravarHeartbeat(sql, JOB, {
+        ok: true,
+        detalhe: detalheSemPii(contagens),
+      });
+    }
   } finally {
     client.destroy();
     await sql.end();

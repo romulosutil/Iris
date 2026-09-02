@@ -152,6 +152,36 @@ pnpm seed:demo     # dados de demonstração para navegar as telas
 
 `seed:demo` popula dado sintético para o smoke de navegação por papel.
 
+### Scripts com a role dona — regra de guard (#534)
+
+Regra: **diagnóstico de produção roda sob `withTenant` e escreve `audit_log`;
+script com role dona só com guard.** Em detalhe:
+
+- Correção pontual em dado de produção (destravar login, reprocessar uma
+  linha) é feita pelo caminho da aplicação — `withTenant(...)` em
+  `src/db/rls.ts`, que fixa `app.clinic_id` / `app.user_role` e passa pela
+  RLS — e deixa trilha em `audit_log`. Sem tenant e sem trilha não é
+  diagnóstico, é escrita cega.
+- Script em `scripts/**` que abre conexão Postgres (`postgres(`, `new Pool(`,
+  `drizzle(`) com `MIGRATION_DATABASE_URL` (role dona, bypassa RLS) **precisa
+  chamar o guard de ambiente antes de conectar**: `assertSeedAllowed` (seeds,
+  D52) ou `assertScriptRemotoPermitido` (`scripts/lib/guardrail-conexao.mjs`,
+  qualquer outro). O guard é fail-closed fora de `localhost` e só abre com
+  `ALLOW_SEED_REMOTE=true` — uma porta só, para seed e para script.
+- `scripts/lib/guardrail-conexao-wiring.test.ts` (roda no `pnpm test`) varre
+  `scripts/**` e acusa qualquer script que conecte sem o guard **antes** da
+  conexão. A allowlist do teste é só para job de produção com role de login
+  própria (`iris_escalonamento`, `iris_arquivamento`, `iris_retencao`, …) e
+  `migrate.mjs`; cada entrada vem com justificativa e o teste falha se ela
+  apodrecer.
+- `pnpm unlock:user <email>` (role dona) segue a regra: e-mail obrigatório,
+  guard antes da conexão, trilha em `audit_log`
+  (`acao = 'desbloqueio_usuario_script'`, `ator_id` nulo, detalhe sem PII)
+  para cada clínica do usuário. Sem vínculo o script **para** — ele não
+  concede papel; o acesso vem pelo convite da clínica.
+- Script de diagnóstico não versionado (ex.: um `check-*.ts` local) não pode
+  ficar na árvore: ou entra pelo mesmo teste de fiação, ou é apagado.
+
 ## Gotchas de dev local
 
 - **Porta do Postgres:** o compose mapeia o host em **5433** (evita conflito com
@@ -1287,6 +1317,10 @@ SMOKE_DATABASE_URL=postgres://iris:...@localhost:5433/iris \
 node scripts/smoke-alerta-risco.mjs
 ```
 
+Fora de `localhost` (staging), o guard de conexão (#534, §Scripts com a role
+dona) exige também `ALLOW_SEED_REMOTE=true` — sem ela o script para antes de
+conectar.
+
 Duas coisas sobre esse script, porque as duas são consequência direta do
 desenho de permissões da `0049`:
 
@@ -1373,16 +1407,48 @@ problema está na migração, não no serviço.
 
 ---
 
-### Job de Expurgo e Retenção do AuditLog (Marco Civil Art. 15 — #116)
+### Job de Expurgo e Retenção do AuditLog (Marco Civil Art. 15 — #116, #536)
 
-Varredura diária para cumprimento da obrigação legal de retenção de 6 meses (180 dias):
+Varredura diária para cumprimento da obrigação legal de retenção de 6 meses
+(180 dias) dos **logs de acesso**:
 
 ```bash
-DATABASE_URL='postgres://...' node /app/scripts/expurgo-audit-log.mjs
+EXPURGO_DATABASE_URL='postgres://iris_expurgo_audit_log_login:...' node /app/scripts/expurgo-audit-log.mjs
 ```
 
-1. **Pseudonimização de logs órfãos:** invoca `app_pseudonimizar_audit_log_orfao()`, tratando logs onde `ator_id IS NULL` devido ao `ON DELETE SET NULL` no apagamento da conta de um usuário.
-2. **Expurgo físico:** invoca `app_expurgar_audit_log_expirado()`, removendo do banco apenas registros com `criado_em < NOW() - INTERVAL '180 days'`.
+1. **Pseudonimização de logs órfãos:** invoca `app_pseudonimizar_audit_log_orfao()`,
+   tratando logs onde `ator_id IS NULL` devido ao `ON DELETE SET NULL` no
+   apagamento da conta de um usuário.
+2. **Expurgo físico POR FINALIDADE (#536, migração `0145`):** invoca
+   `app_expurgar_audit_log_expirado_por_acao()`, que apaga **só** linhas com
+   `criado_em < now() - 180 days` **e** `acao` na allowlist de **log de
+   acesso** (`login`, `logout`, `login_falhou`, `sessao_expirada`,
+   `sessao_revogada`, `mfa_verificado`, `mfa_falhou`, `throttle_bloqueio` —
+   decisão D-AUD-4, pendente de validação). Trilha clínica e de governança
+   (`reclassificacao`, `invalidacao`, `relatorio_exportado`, `paciente_purgado`…)
+   **acompanha o prontuário e nunca é apagada por idade**; ação fora das duas
+   listas também não é apagada (fail-closed). A `0070` apagava tudo por idade —
+   era o achado S-05 da auditoria 360. O log do job traz a contagem por `acao`.
+3. **Heartbeat** em `job_heartbeat` (ver §Alarme automático abaixo).
+
+**Role dedicada.** A `0070` fez `REVOKE ALL ... FROM PUBLIC` nas funções e
+nunca concedeu EXECUTE a role nenhuma; o script lia `DATABASE_URL`
+(`app_role`) e, portanto, **estourava `42501` a cada tick** — ou o serviço
+nunca existiu. A `0145` cria `iris_expurgo_audit_log` (NOLOGIN, EXECUTE só
+nas funções do expurgo). Provisionar a role de login uma vez, como dono:
+
+```sql
+CREATE ROLE iris_expurgo_audit_log_login LOGIN PASSWORD '<senha forte>' IN ROLE iris_expurgo_audit_log;
+```
+
+> ⚠️ **PENDÊNCIA — medir em produção (#536):** não é verificável do
+> repositório se o serviço `iris-expurgo-audit-log` existe no Easypanel. Como
+> saber: depois do deploy da `0146`, o detector `iris-alarme` manda e-mail
+> `expurgo-audit-log` com "nenhum heartbeat registrado" se o job não estiver
+> de pé — esse e-mail **é** a medição. Se o serviço existir, trocar a env
+> `DATABASE_URL` por `EXPURGO_DATABASE_URL` (role acima) e reimplantar; se
+> não existir, criar como os demais jobs (comando
+> `node /app/scripts/expurgo-audit-log.mjs`, 1x/dia).
 
 ---
 
@@ -2620,13 +2686,59 @@ banco passam por `app_alarme_billing_atrasado()` e
 que devolvem só contagem, `clinic_id` e timestamp. Se um dia alguém precisar
 de mais dado no alerta, **muda a função**, não o grant.
 
-### As três checagens
+### As checagens
+
+Três medem o **efeito** do job parado (a prova mais forte — não mudam):
 
 | Checagem         | O que olha                                                                      | Limite |
 | ---------------- | ------------------------------------------------------------------------------- | ------ |
 | `billing`        | `billing_cycle` com `status = 'aberto'` e `fim` vencido                         | 2h     |
 | `escalonamento`  | `alerta_risco_clinico` com `status = 'aberto'` e `prazo_reconhecimento` vencido | 10min  |
 | `backup-offsite` | `lastModified` do objeto mais recente no bucket off-site (`mc ls --json`)       | 36h    |
+
+#### Heartbeat no banco (#536, DA-03) — os jobs sem efeito visível
+
+Retenção, arquivamento, exportação, ASR, expurgo do audit_log e conciliação
+não deixam rastro que se possa medir de fora: um job de retenção parado é
+igual a "nenhum prontuário está a vencer". Cada um grava um sinal de vida em
+`job_heartbeat` (migração `0146`) ao fim de cada passada — o `.mjs` via
+`scripts/lib/heartbeat.mjs` (retenção, arquivamento, escalonamento,
+asr-sweeper, expurgo) ou a **rota** do app via `src/lib/jobs/heartbeat.ts`
+(billing, conciliação, exportação, asr-transcrever — o trilho `.mjs` desses é
+fetch-only, sem banco por desenho). O detector lê a tabela inteira numa
+chamada (`app_alarme_job_heartbeats()`, EXECUTE só para `iris_alarme`).
+
+**Limite = cadência do agendador + margem** (`LIMITES_HEARTBEAT` em
+`scripts/alarme-jobs.mjs`; mudar aqui sem mudar lá cega o detector):
+
+| Job                 | Cadência (`INTERVALO_S`)              | Limite do `ultimo_ok` | Linha ausente |
+| ------------------- | ------------------------------------- | --------------------- | ------------- |
+| `retencao`          | 86400s (1x/dia)                       | 36h                   | `problema`    |
+| `arquivamento`      | 86400s (1x/dia)                       | 36h                   | `problema`    |
+| `exportacao`        | 300s (5min)                           | 1h                    | `problema`    |
+| `asr`               | 20s (asr-transcrever)                 | 30min                 | `problema`    |
+| `asr-sweeper`       | 3600s (1h)                            | 3h                    | `problema`    |
+| `expurgo-audit-log` | 1x/dia (documentado; serviço a medir) | 36h                   | `problema`    |
+| `conciliacao`       | **sob demanda** (runbook #375)        | —                     | `ok`          |
+
+Regras, iguais para todos:
+
+- `ultimo_erro` **mais recente** que `ultimo_ok` → `problema` ("última passada
+  falhou", com o `detalhe` gravado — `erro=<name> code=<code>`, nunca message).
+  É a única condição que alarma a conciliação.
+- Linha **ausente** → `problema`, não `indeterminado`: o detector conseguiu
+  ler a tabela e o job simplesmente nunca gravou — ou nunca rodou desde a
+  `0146`, ou o serviço não está provisionado. **É assim que se mede se
+  `iris-expurgo-audit-log` existe em produção** (ver a pendência na seção do
+  job). Espere um e-mail por job no primeiro dia após o deploy, até cada
+  imagem de infra ser reconstruída com o `COPY scripts/lib/heartbeat.mjs`.
+- Falha ao **ler** a tabela → `indeterminado` em todos os sete (loga, não
+  envia). Heartbeats **não** entram no escalonamento de detector cego: eles
+  leem o mesmo banco que `billing`/`escalonamento`, que já acusam.
+- `detalhe` nunca carrega id, nome ou trecho: os helpers só serializam
+  números/booleanos, e o banco trunca a 200 caracteres.
+- `--dry-run` de qualquer job **não** grava heartbeat (mascararia um job
+  parado).
 
 Cada checagem termina em um de **três** estados:
 

@@ -21,14 +21,30 @@ import { TOOL_INPUT_SCHEMA, type AgentInvoker } from "./llm-provider";
  * cru (inclui `additionalProperties`, `nullable`, tipos em minúsculo), sem
  * precisar reescrever o schema no formato `Schema`/`Type` (enum maiúsculo)
  * que `parameters` exigiria.
+ *
+ * DA-02 (#535): devolve `{ payload, meta }`. `usageMetadata` era descartado —
+ * modelo, latência e tokens nunca chegavam ao banco, e "≥70% de aprovação
+ * sem edição" (PRODUCT.md) não tinha como ser medido por modelo/prompt.
+ * `tokensSaida` soma candidatos + pensamento (`thoughtsTokenCount`): ambos
+ * são cobrados como saída. Sem `usageMetadata`, tokens ficam `null` — zero
+ * seria afirmar um custo que não medimos.
+ *
+ * A-03 (#535): `signal` é repassado ao SDK (`config.abortSignal`) para o
+ * timeout de `invocarComResiliencia` cancelar a requisição HTTP de verdade.
  */
 
 const NOME_FERRAMENTA = "registrar_extracao";
 
+function somaOuNull(...valores: Array<number | undefined>): number | null {
+  const definidos = valores.filter((v): v is number => typeof v === "number");
+  if (definidos.length === 0) return null;
+  return definidos.reduce((a, b) => a + b, 0);
+}
+
 export function createGeminiInvoker(
   model: string = process.env.GEMINI_TEST_MODEL || "gemini-2.0-flash",
 ): AgentInvoker {
-  return async ({ system, user }) => {
+  return async ({ system, user, signal }) => {
     const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) {
       throw new Error(
@@ -36,10 +52,12 @@ export function createGeminiInvoker(
       );
     }
     const client = new GoogleGenAI({ apiKey });
+    const inicio = Date.now();
     const resp = await client.models.generateContent({
       model,
       contents: [{ role: "user", parts: [{ text: user }] }],
       config: {
+        abortSignal: signal,
         systemInstruction: system,
         tools: [
           {
@@ -61,6 +79,7 @@ export function createGeminiInvoker(
         },
       },
     });
+    const latenciaMs = Date.now() - inicio;
 
     const chamada = resp.functionCalls?.[0];
     if (!chamada || chamada.name !== NOME_FERRAMENTA) {
@@ -68,6 +87,18 @@ export function createGeminiInvoker(
         `Gemini não retornou function call de "${NOME_FERRAMENTA}".`,
       );
     }
-    return chamada.args;
+    const uso = resp.usageMetadata;
+    return {
+      payload: chamada.args,
+      meta: {
+        modelo: model,
+        latenciaMs,
+        tokensEntrada: somaOuNull(uso?.promptTokenCount),
+        tokensSaida: somaOuNull(
+          uso?.candidatesTokenCount,
+          uso?.thoughtsTokenCount,
+        ),
+      },
+    };
   };
 }
