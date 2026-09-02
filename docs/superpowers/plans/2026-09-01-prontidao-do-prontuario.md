@@ -1042,8 +1042,40 @@ git commit -m "feat(ui): add patient readiness card with a single primary gestur
 
 **Files:**
 
+- Create: `src/lib/log/erro-sem-pii.ts` _(auditoria 02/09, R-3 — se ainda não
+  existir um helper equivalente; procurar por `codigoPg` antes de criar)_
 - Modify: `src/app/(app)/pacientes/[id]/layout.tsx`
 - Test: `src/app/(app)/pacientes/[id]/layout.test.tsx` (já existe)
+- Test: `src/lib/log/erro-sem-pii.test.ts` _(auditoria 02/09, R-3)_
+
+(auditoria 02/09, R-3) — o helper, para nascer junto com o primeiro consumidor:
+
+```ts
+import { codigoPg } from "@/db/pg-error";
+
+/**
+ * Loga um erro de driver SEM despejar a `message`: em `DrizzleQueryError` ela
+ * é o SQL inteiro com os `params` interpolados (S-03). Sai só `name`, código
+ * do Postgres e um id de correlação (nunca texto clínico).
+ */
+export function logarErroSemPII(
+  rotulo: string,
+  erro: unknown,
+  correlacao: Record<string, string>,
+): void {
+  const nome = erro instanceof Error ? erro.name : "desconhecido";
+  const pg = codigoPg(erro) ?? "sem-codigo";
+  const ids = Object.entries(correlacao)
+    .map(([k, v]) => `${k}=${v}`)
+    .join(", ");
+  console.warn(`[${rotulo}] ${nome} pg=${pg} (${ids})`);
+}
+```
+
+Teste mínimo (`erro-sem-pii.test.ts`): um `Error` cuja `message` contém
+`"SELECT * FROM goal WHERE"` e cujo `cause.code` é `"42501"` produz uma linha de
+log que **não contém** `SELECT` e **contém** `42501`. É a única prova que
+importa: o que não pode sair, não sai.
 
 - [ ] **Step 1: Escrever o teste que falha**
 
@@ -1085,6 +1117,7 @@ Em `layout.tsx`, acrescentar aos imports:
 import { montarProntidao } from "@/lib/patient/prontidao";
 import { obterFatosProntidao } from "./prontidao-queries";
 import { CartaoProntidao } from "@/components/app/cartao-prontidao";
+import { logarErroSemPII } from "@/lib/log/erro-sem-pii";
 ```
 
 Acrescentar a leitura ao `Promise.all` já existente:
@@ -1106,16 +1139,9 @@ Acrescentar a leitura ao `Promise.all` já existente:
       ? obterFatosProntidao(ctx, id).catch((erro: unknown) => {
           // NUNCA `erro.message`: em `DrizzleQueryError` a `message` é o SQL
           // inteiro com os `params` interpolados. `name` + código do Postgres
-          // localiza o caso sem despejar consulta no log.
-          const codigo =
-            erro && typeof erro === "object" && "cause" in erro
-              ? ((erro.cause as { code?: string })?.code ?? "sem-codigo")
-              : "sem-codigo";
-          console.warn(
-            `[prontidao] falha ao ler fatos (patientId=${id}, erro=${
-              erro instanceof Error ? erro.name : "desconhecido"
-            }, pg=${codigo})`,
-          );
+          // + id de correlação localizam o caso sem despejar consulta no log
+          // (auditoria 02/09, R-3 — helper único, não idioma inline a copiar).
+          logarErroSemPII("prontidao", erro, { patientId: id });
           return null;
         })
       : Promise.resolve(null),
@@ -1145,7 +1171,7 @@ Expected: PASS, incluindo os testes já existentes.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add "src/app/(app)/pacientes/[id]/layout.tsx" "src/app/(app)/pacientes/[id]/layout.test.tsx"
+git add src/lib/log/erro-sem-pii.ts src/lib/log/erro-sem-pii.test.ts "src/app/(app)/pacientes/[id]/layout.tsx" "src/app/(app)/pacientes/[id]/layout.test.tsx"
 git commit -m "feat(paciente): surface the readiness ladder at the top of the record"
 ```
 

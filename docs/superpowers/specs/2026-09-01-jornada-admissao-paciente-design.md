@@ -227,8 +227,16 @@ lista seis formas de um teste passar contra o código pré-fix.
   definer era abrir demais com parâmetro nulo; aqui o risco é o inverso
   (fechar demais), e a tentação de "resolver" com um definer que enxerga tudo
   recriaria o primeiro _(auditoria 02/09, R-1)_.
-- ❌ Logar `err.message` de erro de driver: em `DrizzleQueryError` a `message`
-  é o SQL inteiro com os `params`. Logar `name` + código do Postgres.
+- ❌ Logar `err.message` ou `err` inteiro de erro de driver: em
+  `DrizzleQueryError` a `message` é o SQL inteiro com os `params` (`S-03`).
+  Logar `name` + `cause.code` (`codigoPg`, `src/db/pg-error.ts`) + **id de
+  correlação** (`patientId`/`sessionId`, nunca texto clínico), via helper
+  `logarErroSemPII(rotulo, err, correlacao)`. Aqui o único parâmetro é
+  `patientId` (baixo risco), mas o idioma é o que se copia para a próxima
+  query, que terá texto clínico — e `carregarSessao` propaga sem `catch`
+  (correto, fail-closed), então quem loga é `error.tsx`/Sentry, com a mesma
+  regra. `prontidao-queries.ts`/`layout.tsx` são o primeiro consumidor do
+  helper se ele ainda não existir _(auditoria 02/09, R-3)_.
 
 ## 8. Fora de escopo
 
