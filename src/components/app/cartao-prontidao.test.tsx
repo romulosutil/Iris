@@ -60,6 +60,14 @@ describe("CartaoProntidao", () => {
     expect(screen.getAllByText(/obrigatório/i).length).toBeGreaterThan(0);
   });
 
+  // `Card` estampa um Pill "Conquistado ✓" em todo estado fora de
+  // sugerido/candidato, e o estampa mesmo sem `titulo`. Sobre um cartão que
+  // diz "falta protocolo e meta", o selo afirma o contrário do conteúdo.
+  it("não estampa selo de conquista sobre um prontuário incompleto", () => {
+    render(<CartaoProntidao prontidao={prontidao(NADA, "coordenador")} />);
+    expect(screen.queryByText(/conquistado/i)).toBeNull();
+  });
+
   it("lista a escada inteira, incluindo os degraus já concluídos", () => {
     render(<CartaoProntidao prontidao={prontidao(NADA, "coordenador")} />);
     expect(screen.getAllByRole("listitem")).toHaveLength(6);

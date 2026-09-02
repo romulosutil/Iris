@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Card } from "@/components/ui/card";
+import { surface } from "@/components/ui/primitives/surface";
 import { Button } from "@/components/ui/button";
 import type { EstadoDegrau, Prontidao } from "@/lib/patient/prontidao";
 
@@ -15,6 +15,18 @@ import type { EstadoDegrau, Prontidao } from "@/lib/patient/prontidao";
  * Some inteiro quando não há nada a fazer: `proximo === null` quer dizer
  * prontuário pronto, e um cartão vazio ainda ocupa altura de scroll e atenção
  * — "nada a fazer" tem de ocupar zero pixels, não uma caixa dizendo isso.
+ *
+ * NÃO USAR `<Card>` AQUI — e não "consertar" de volta. `Card` monta o
+ * `badgeNode` numa cadeia if/else SEM ramo "sem selo": tudo que não é
+ * `suggestion`/`sugerida`/`candidato`/`candidata` cai no `else` final e ganha um
+ * `Pill` menta sólido escrito "Conquistado ✓", renderizado incondicionalmente
+ * (independe de `titulo`). Num cartão cuja mensagem inteira é "falta protocolo
+ * prescrito e meta ativa", esse selo afirma o oposto do conteúdo — exatamente a
+ * classe de defeito (tela afirmando o que não é verdade) que esta escada existe
+ * para eliminar. Por isso o contêiner é montado aqui, compondo `surface()` — a
+ * mesma fonte única de borda/elevação/raio que o `Card` usa por dentro.
+ * Coberto pelo teste "não estampa selo de conquista sobre um prontuário
+ * incompleto".
  */
 
 const ROTULO_ESTADO: Record<EstadoDegrau, string> = {
@@ -47,7 +59,13 @@ export function CartaoProntidao({
   const concluidos = degraus.filter((d) => d.estado === "concluido").length;
 
   return (
-    <Card className="flex flex-col gap-4">
+    <div
+      className={surface("solida", {
+        radius: "control",
+        className:
+          "flex flex-col gap-4 bg-[var(--surface-card)] p-5 text-[var(--text-primary)]",
+      })}
+    >
       <div className="flex flex-col gap-1">
         <h2 className="font-display text-lg font-semibold text-[var(--text-primary)]">
           {titulo}
@@ -96,6 +114,6 @@ export function CartaoProntidao({
           Aguardando {quemResolve}: {proximo.rotulo}.
         </p>
       )}
-    </Card>
+    </div>
   );
 }
