@@ -3,6 +3,7 @@ import { cn } from "@/lib/cn";
 import { surface } from "@/components/ui/primitives/surface";
 import { Pill } from "@/components/ui/primitives/pill";
 import { Button } from "@/components/ui/button";
+import { ClinicalQuote } from "@/components/ui/clinical-quote";
 import {
   SparkleIcon,
   CheckIcon,
@@ -125,12 +126,10 @@ export function ConfidenceCard({
         </div>
       </div>
 
-      {/* Citação / Evidência extraída do diário */}
-      {trecho && (
-        <blockquote className="border-status-ia-border bg-status-ia-bg/20 font-body text-text-primary rounded border-l-2 p-2.5 text-sm italic">
-          “{trecho}”
-        </blockquote>
-      )}
+      {/* Citação / Evidência extraída do diário — ClinicalQuote é o único
+          componente de trecho-fonte (DS-03); o blockquote com acento lateral
+          ad hoc foi banido (D54). */}
+      {trecho && <ClinicalQuote texto={trecho} />}
 
       {/* Justificativa clínica da IA */}
       {justificativa && (

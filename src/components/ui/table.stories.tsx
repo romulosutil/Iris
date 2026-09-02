@@ -7,7 +7,7 @@ import {
   TableHead,
   TableCell,
 } from "./table";
-import { StatusBadge } from "./status-badge";
+import { StatusBadge } from "./patterns/status-badge";
 
 const meta = {
   title: "04. UI COMPONENTS/Data Display & Feedback/Table",

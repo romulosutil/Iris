@@ -98,6 +98,7 @@ export const Padrao = {
     <div className="mx-auto max-w-6xl bg-[var(--bg-app)] p-4">
       <AvailabilityGrid
         celulasIniciais={mockCelulas}
+        fuso="America/Sao_Paulo"
         onSalvar={() => alert("Disponibilidade salva com sucesso!")}
       />
     </div>
@@ -108,7 +109,10 @@ export const Mobile = {
   globals: { viewport: { value: "terapeuta" } },
   render: () => (
     <div className="bg-[var(--bg-app)] p-2">
-      <AvailabilityGrid celulasIniciais={mockCelulas} />
+      <AvailabilityGrid
+        celulasIniciais={mockCelulas}
+        fuso="America/Sao_Paulo"
+      />
     </div>
   ),
 };

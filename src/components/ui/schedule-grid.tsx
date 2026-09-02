@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Calendar } from "@/components/ui/calendar";
-import type { SessaoDoDia } from "@/app/(app)/agenda/actions";
+import {
+  CalendarGrid,
+  type CalendarEvento,
+} from "@/components/ui/calendar/calendar-grid";
 import { resolverInstante } from "@/lib/agenda/materializar";
 
 export interface FaixaJanela {
@@ -59,8 +61,8 @@ export function ScheduleGrid({
   aoAbrirRegra,
   fuso,
 }: ScheduleGridProps) {
-  // Converte BlocoAgendaItem para formato SessaoDoDia compativel com o Calendar.Grid
-  const sessoesFormatadas: SessaoDoDia[] = React.useMemo(() => {
+  // Converte BlocoAgendaItem para o `CalendarEvento` que a CalendarGrid posiciona
+  const sessoesFormatadas: CalendarEvento[] = React.useMemo(() => {
     const hoje = new Date();
     const hojeSemana = hoje.getDay(); // 0-6 (dom-seg)
     const inicioSemanaDia = hoje.getDate() - hojeSemana;
@@ -82,7 +84,6 @@ export function ScheduleGrid({
 
       return {
         id: b.id,
-        patientId: "demo-paciente",
         pacienteNome: b.rotulo,
         terapeutaId: "demo-terapeuta",
         terapeutaNome: "Profissional",
@@ -102,7 +103,7 @@ export function ScheduleGrid({
   }, [dias]);
 
   return (
-    <Calendar.Grid
+    <CalendarGrid
       modo="weekly-timeline"
       abertura={abertura}
       fechamento={fechamento}

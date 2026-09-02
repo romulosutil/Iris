@@ -1,12 +1,13 @@
 import "server-only";
 import { and, desc, eq, gte, lte, inArray, or, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { withTenant, type TenantContext } from "@/db/rls";
+import { withTenant, type TenantContext, type Tx } from "@/db/rls";
 import {
   sessionSnapshot,
   goal,
   goalCandidacy,
   goalMilestoneMapping,
+  milestoneCandidacy,
   milestone,
   patientProtocol,
   protocol,
@@ -24,18 +25,34 @@ import {
   calcularDelta,
   verificarProtocoloMudou,
   type DeltaSessao,
+  type EstadoDasMetas,
 } from "./logic";
+import { z } from "zod";
+import {
+  lerRepertorioState,
+  lerSegmentacao,
+  type RepertorioState,
+  type Segmentacao,
+} from "@/lib/evidence/snapshot-schema";
 
 export interface TimelineSnapshot {
   sessionNumero: number;
   geradoEm: Date;
-  repertorioState: any;
-  segmentacao: any;
+  /** `{ goal_id: { nivel_ajuda_recente, is_candidata, … } }` — ver snapshot-schema (A-06). */
+  repertorioState: RepertorioState;
+  /** `{ goal_id: { protocol_id: { rotulo, metrica, … } } }`. */
+  segmentacao: Segmentacao;
   espectro: ResultadoEspectro;
 }
 
 export interface TimelineData {
   snapshots: TimelineSnapshot[];
+  /**
+   * Estado OFICIAL de cada meta (`goal.estado` + `goal_candidacy`) — é daqui,
+   * e não do `repertorio_state` (heurístico), que `estadoDoMarco` decide
+   * conquistado/candidato (revisão da PR #556). Inclui metas não ativas.
+   */
+  estadoDasMetas: EstadoDasMetas;
   metasAtivas: Array<{
     id: string;
     descricao: string;
@@ -50,6 +67,11 @@ export interface TimelineData {
     nivel: string | null;
     tipoEstrutura: string;
     ordem: number | null;
+    /** Metas mapeadas a este marco (`goal_milestone_mapping`). O snapshot é
+     * indexado por META; é por aqui que a tela resolve o estado de um MARCO. */
+    goalIds: string[];
+    /** `milestone_candidacy.is_candidate` — candidatura oficial do marco. */
+    candidatoOficial: boolean;
   }>;
 }
 
@@ -143,10 +165,55 @@ export async function carregarTimeline(
           .where(inArray(goalCandidacy.goalId, metaIds))
       : [];
 
+    // Candidatura oficial do MARCO (`milestone_candidacy`), par da candidatura
+    // da meta acima — as duas alimentam `estadoDoMarco`.
+    const candidaturasMarco = milestones.length
+      ? await tx
+          .select({
+            milestoneId: milestoneCandidacy.milestoneId,
+            isCandidate: milestoneCandidacy.isCandidate,
+          })
+          .from(milestoneCandidacy)
+          .where(
+            and(
+              eq(milestoneCandidacy.patientId, patientId),
+              inArray(
+                milestoneCandidacy.milestoneId,
+                milestones.map((m) => m.id),
+              ),
+            ),
+          )
+      : [];
+    const candidaturaMarcoMap = new Map(
+      candidaturasMarco.map((c) => [c.milestoneId, c.isCandidate]),
+    );
+
+    // Inverso do mapeamento: marco → metas. A tela usa para ler o estado de
+    // um marco no `repertorio_state` (indexado por meta).
+    const metasDoMarco = new Map<string, string[]>();
+    for (const mm of mapeamentos) {
+      const lista = metasDoMarco.get(mm.milestoneId) ?? [];
+      lista.push(mm.goalId);
+      metasDoMarco.set(mm.milestoneId, lista);
+    }
+
     const PPMap = new Map(PP.map((p) => [p.id, p]));
     const milestoneMap = new Map(milestones.map((m) => [m.id, m]));
     const candidaturaMap = new Map(
       candidaturas.map((c) => [c.goalId, c.isCandidata]),
+    );
+
+    // Estado OFICIAL por meta (goal.estado + goal_candidacy) — base do
+    // `estadoDoMarco` (revisão da PR #556). Depois de `candidaturaMap`, que
+    // ele consome.
+    const estadoDasMetas: EstadoDasMetas = Object.fromEntries(
+      metas.map((m) => [
+        m.id,
+        {
+          estado: m.estado as EstadoDasMetas[string]["estado"],
+          candidataOficial: candidaturaMap.get(m.id) ?? false,
+        },
+      ]),
     );
 
     // Uma meta pode mapear vários marcos; o primeiro que resolve domínio define
@@ -176,8 +243,8 @@ export async function carregarTimeline(
 
     // 5. Mapeia cada snapshot e anexa o espectro pré-calculado
     const snapshots: TimelineSnapshot[] = snaps.map((s) => {
-      const rep = (s.repertorioState ?? {}) as any;
-      const seg = (s.segmentacao ?? {}) as any;
+      const rep = lerRepertorioState(s.repertorioState);
+      const seg = lerSegmentacao(s.segmentacao);
       const espectro = computarDadosEspectro(rep, alvosEspectro);
 
       return {
@@ -216,10 +283,13 @@ export async function carregarTimeline(
         nivel: m.nivel,
         tipoEstrutura: m.tipoEstrutura,
         ordem: m.ordem,
+        goalIds: metasDoMarco.get(m.id) ?? [],
+        candidatoOficial: candidaturaMarcoMap.get(m.id) ?? false,
       }));
 
     return {
       snapshots,
+      estadoDasMetas,
       metasAtivas,
       protocolosAtivos,
       milestonesAtivos,
@@ -231,7 +301,7 @@ export async function carregarTimeline(
  * Helper interno para obter o snapshot de uma sessão sem iniciar uma nova transação / withTenant.
  */
 async function obterSnapshotAsOf(
-  tx: any,
+  tx: Tx,
   patientId: string,
   sessionNumero: number,
 ) {
@@ -250,7 +320,15 @@ async function obterSnapshotAsOf(
       ),
     )
     .limit(1);
-  return snap || null;
+  // Forma única do snapshot (A-06): quem consome (`calcularDelta`,
+  // `verificarProtocoloMudou`) recebe o tipo, não o jsonb cru.
+  return snap
+    ? {
+        ...snap,
+        repertorioState: lerRepertorioState(snap.repertorioState),
+        segmentacao: lerSegmentacao(snap.segmentacao),
+      }
+    : null;
 }
 
 /**
@@ -270,7 +348,7 @@ export async function carregarSnapshotAsOf(
  * Helper interno para resolver descrições e nomes legíveis de metas e marcos
  * a partir de seus IDs obtidos do snapshot/delta.
  */
-async function resolverMetasEMilestones(tx: any, goalIds: string[]) {
+async function resolverMetasEMilestones(tx: Tx, goalIds: string[]) {
   if (!goalIds.length) {
     return { metas: [], milestones: [] };
   }
@@ -377,6 +455,16 @@ export async function carregarComparacao(
   });
 }
 
+/** Campos de `evidence.classificacao_original` que o drill-down lê (A-06). */
+const ClassificacaoOriginalSchema = z.object({
+  descricao: z.string().optional(),
+  polaridade: z.enum(["positiva", "negativa"]).optional(),
+  nivel_ajuda: z
+    .union([z.string(), z.number().transform(String)])
+    .nullable()
+    .optional(),
+});
+
 export interface ResumoEvidenciaTrecho {
   id: string;
   sessionNumero: number;
@@ -454,7 +542,11 @@ export async function carregarEvidenciasPorTrecho(
       .limit(15); // limite rígido de performance (Revisão Adversarial 5)
 
     return rows.map((r) => {
-      const classif = (r.classificacaoOriginal || {}) as any;
+      // Leniente: classificação fora da forma vira os fallbacks abaixo, não
+      // um drill-down quebrado (o texto do relato é o dado que importa aqui).
+      const classif =
+        ClassificacaoOriginalSchema.safeParse(r.classificacaoOriginal ?? {})
+          .data ?? {};
       return {
         id: r.id,
         sessionNumero: r.sessionNumero,
