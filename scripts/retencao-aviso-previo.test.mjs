@@ -24,8 +24,15 @@ import {
 // número solto significa "sempre este valor" (para o caso do teto).
 function makeFakeSql({ porLote = [0], erroNoLote = null } = {}) {
   const chamadas = [];
-  function sql(strings) {
+  const heartbeats = [];
+  function sql(strings, ...valores) {
     const texto = strings.join("?");
+    // #536 — o heartbeat no banco fica FORA de `chamadas`: a contagem de lotes
+    // e o índice do `erroNoLote` continuam falando só da varredura.
+    if (texto.includes("app_job_heartbeat_gravar")) {
+      heartbeats.push(valores);
+      return Promise.resolve([]);
+    }
     chamadas.push(texto);
     const i = chamadas.length; // 1-based, igual ao índice que o script loga
     if (erroNoLote === i) {
@@ -36,6 +43,7 @@ function makeFakeSql({ porLote = [0], erroNoLote = null } = {}) {
     return Promise.resolve([{ avisados }]);
   }
   sql.chamadas = chamadas;
+  sql.heartbeats = heartbeats;
   sql.beginChamado = 0;
   sql.rollback = 0;
   sql.commit = 0;
@@ -125,9 +133,30 @@ describe("retencao-aviso-previo.mjs — laço de lotes (#352)", () => {
 
     expect(await heartbeatExiste()).toBe(true);
   });
+
+  test("#536: varredura real grava heartbeat NO BANCO — ok=true e só contagens", async () => {
+    const sql = makeFakeSql({ porLote: [5, 0] });
+
+    await executar(sql, { modoDryRun: false });
+
+    expect(sql.heartbeats).toEqual([["retencao", true, "avisados=5 lotes=2"]]);
+  });
 });
 
 describe("retencao-aviso-previo.mjs — falha de lote", () => {
+  test("#536: falha grava heartbeat de ERRO no banco (ok=false, name+code) e NÃO a message", async () => {
+    const sql = makeFakeSql({ porLote: LOTE, erroNoLote: 1 });
+
+    await expect(executar(sql, { modoDryRun: false })).rejects.toThrow();
+
+    expect(sql.heartbeats).toHaveLength(1);
+    const [job, ok, detalhe] = sql.heartbeats[0];
+    expect(job).toBe("retencao");
+    expect(ok).toBe(false);
+    expect(detalhe).toContain("erro=Error");
+    expect(detalhe).not.toContain("permission denied");
+  });
+
   test("falha NOMEIA o índice do lote e diz quantos avisos ficaram gravados", async () => {
     const sql = makeFakeSql({ porLote: LOTE, erroNoLote: 3 });
 
@@ -169,6 +198,8 @@ describe("retencao-aviso-previo.mjs — dry-run", () => {
     expect(sql.rollback).toBe(1);
     expect(sql.commit).toBe(0);
     expect(await heartbeatExiste()).toBe(false);
+    // #536 — nem no banco: heartbeat de dry-run mascararia um job parado.
+    expect(sql.heartbeats).toEqual([]);
   });
 
   test("erro REAL dentro da transação propaga (não é confundido com o rollback)", async () => {

@@ -45,10 +45,13 @@ RUN npm install --no-package-lock --no-audit --no-fund postgres@3.4.9
 # `infra/Dockerfile` do app. Um `COPY agendador.sh` bare funcionaria no compose
 # local e quebraria em produção com "not found".
 #
-# Não há `COPY scripts/lib/` porque o script não importa nada de lá. Se um dia
-# importar, o COPY entra junto — foi exatamente essa lista incompleta que
-# derrubou o motor de escalonamento em produção na #126.
+# COPY do ARQUIVO de `scripts/lib/`, não do diretório inteiro (ele tem `.ts` de
+# seed que não têm nada que fazer aqui). `heartbeat.mjs` entrou na #536: o
+# script importa dele, e uma lista de COPY incompleta foi exatamente o que
+# derrubou o motor de escalonamento em produção na #126. A carga de imagem
+# (`scripts/ci/carga-imagens-infra.sh`) é o que pega a falta dele.
 COPY scripts/retencao-aviso-previo.mjs ./scripts/retencao-aviso-previo.mjs
+COPY scripts/lib/heartbeat.mjs ./scripts/lib/heartbeat.mjs
 COPY infra/retencao/agendador.sh ./agendador.sh
 RUN chmod +x agendador.sh
 

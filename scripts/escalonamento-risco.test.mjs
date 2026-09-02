@@ -1,5 +1,8 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { processarEmailRt, varrer } from "./escalonamento-risco.mjs";
+import { executar, processarEmailRt, varrer } from "./escalonamento-risco.mjs";
 
 // Fake mínimo do postgres.js: só precisa responder ao shape de tagged
 // template usado por processarEmailRt, e registrar as chamadas pra
@@ -12,11 +15,19 @@ function makeFakeSql({
 } = {}) {
   const chamadas = [];
   const registros = [];
+  const heartbeats = [];
   function sql(strings, ...valores) {
     const texto = strings.join("?");
     chamadas.push(texto);
-    if (texto.includes("app_escalonar_risco_vencidos"))
+    // #536 — heartbeat no banco, registrado à parte.
+    if (texto.includes("app_job_heartbeat_gravar")) {
+      heartbeats.push(valores);
+      return Promise.resolve([]);
+    }
+    if (texto.includes("app_escalonar_risco_vencidos")) {
+      if (escalados instanceof Error) return Promise.reject(escalados);
       return Promise.resolve(escalados);
+    }
     if (texto.includes("app_alertas_estagio2_sem_email"))
       return Promise.resolve(pendentes);
     if (texto.includes("app_rt_do_alerta")) return Promise.resolve(rtRows);
@@ -48,8 +59,85 @@ function makeFakeSql({
   }
   sql.chamadas = chamadas;
   sql.registros = registros;
+  sql.heartbeats = heartbeats;
   return sql;
 }
+
+// ─── #536: heartbeat no banco, nas duas pontas (sucesso e falha) ─────────────
+describe("escalonamento-risco.mjs — executar / heartbeat no banco (#536)", () => {
+  let heartbeatDir;
+
+  beforeEach(async () => {
+    heartbeatDir = await mkdtemp(path.join(tmpdir(), "iris-escalonamento-"));
+    // HEARTBEAT_DIR é lido no import do módulo; aqui só garantimos que a
+    // gravação do arquivo não estoura num diretório que não existe.
+    process.env.ESCALONAMENTO_HEARTBEAT_DIR = heartbeatDir;
+  });
+
+  afterEach(async () => {
+    delete process.env.ESCALONAMENTO_HEARTBEAT_DIR;
+    await rm(heartbeatDir, { recursive: true, force: true });
+  });
+
+  test("varredura real grava heartbeat no banco com ok=true e só a contagem", async () => {
+    const sql = makeFakeSql({
+      escalados: [
+        {
+          out_alerta_id: "a1",
+          out_clinic_id: "c1",
+          out_estagio: 1,
+          out_severidade: "alta",
+          out_prazo_minutos: 30,
+        },
+      ],
+    });
+
+    await executar(sql, { modoDryRun: false });
+
+    expect(sql.heartbeats).toEqual([["escalonamento", true, "escalados=1"]]);
+    // Nenhum id de alerta ou clínica vaza para o detalhe.
+    expect(sql.heartbeats[0][2]).not.toContain("a1");
+    expect(sql.heartbeats[0][2]).not.toContain("c1");
+  });
+
+  test("falha da função de banco grava heartbeat ok=false (name+code) e propaga", async () => {
+    const sql = makeFakeSql({
+      escalados: Object.assign(new Error("permission denied for function"), {
+        name: "PostgresError",
+        code: "42501",
+      }),
+    });
+
+    await expect(executar(sql, { modoDryRun: false })).rejects.toThrow(
+      "permission denied",
+    );
+
+    expect(sql.heartbeats).toEqual([
+      ["escalonamento", false, "erro=PostgresError code=42501"],
+    ]);
+  });
+
+  test("dry-run NÃO grava heartbeat no banco", async () => {
+    // O dry-run lê `alerta_risco_clinico` direto; o fake devolve `[]` para
+    // qualquer consulta desconhecida, então `linhas[0]` seria undefined —
+    // damos uma linha para o dry-run terminar.
+    const sql = makeFakeSql();
+    const original = sql;
+    const comDryRun = Object.assign(
+      function sqlDry(strings, ...valores) {
+        const texto = strings.join("?");
+        if (texto.includes("FROM alerta_risco_clinico"))
+          return Promise.resolve([{ estagio_1: 0, estagio_2: 0 }]);
+        return original(strings, ...valores);
+      },
+      { heartbeats: original.heartbeats },
+    );
+
+    await executar(comDryRun, { modoDryRun: true });
+
+    expect(original.heartbeats).toEqual([]);
+  });
+});
 
 describe("escalonamento-risco.mjs — processarEmailRt (#126)", () => {
   afterEach(() => {

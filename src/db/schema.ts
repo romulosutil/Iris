@@ -2679,3 +2679,19 @@ export const exportBundleBlob = pgTable("export_bundle_blob", {
     .references(() => exportBundle.id, { onDelete: "cascade" }),
   bytes: bytea("bytes").notNull(),
 });
+
+// ─── #536 (DA-03) — sinal de vida dos jobs de infra ──────────────────────────
+// Uma linha por job (`retencao`, `arquivamento`, `exportacao`, `asr`, …),
+// gravada pelo próprio job ao fim de cada passada e lida pelo detector de
+// alarme (`scripts/alarme-jobs.mjs`). Substitui o arquivo `.ultima-*` de cada
+// container, que só o próprio container enxerga. `detalhe` é SÓ contagens
+// (`avisados=3 arquivados=0`) ou categoria de erro — nunca id, nome ou trecho:
+// a tabela cruza clínicas e sai no e-mail de alarme. Sem `clinic_id` de
+// propósito: não é dado de tenant. Acesso só por funções `SECURITY DEFINER`
+// (0146): RLS forçada e sem policy, nenhuma role lê ou escreve na tabela direto.
+export const jobHeartbeat = pgTable("job_heartbeat", {
+  job: text("job").primaryKey(),
+  ultimoOk: timestamp("ultimo_ok", { withTimezone: true }),
+  ultimoErro: timestamp("ultimo_erro", { withTimezone: true }),
+  detalhe: text("detalhe"),
+});

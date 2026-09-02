@@ -9,6 +9,11 @@ import {
   type ResultadoComandoRetentativa,
   type ResultadoCortePorCarencia,
 } from "@/lib/billing/subscription";
+import {
+  detalheDoErro,
+  detalheSemPii,
+  registrarHeartbeat,
+} from "@/lib/jobs/heartbeat";
 
 /**
  * Gatilho interno do fechamento de ciclo (#36).
@@ -171,6 +176,22 @@ export async function POST(request: Request): Promise<Response> {
       carenciaAbortada !== null ||
       backstopAbortado !== null;
 
+    // #536 — sinal de vida no banco (o `.mjs` deste job é fetch-only). O
+    // detector de alarme continua medindo o billing pelo EFEITO (ciclo
+    // vencido, 0129); esta linha é diagnóstico legível no banco. Dry-run não
+    // grava: mascararia um job parado. Só contagens — nunca clinic_id/valor.
+    if (!dryRun) {
+      await registrarHeartbeat(
+        "billing",
+        !etapaAbortou,
+        detalheSemPii({
+          ciclosFechados: resultados.length,
+          comErro: comErro.length,
+          etapaAbortou,
+        }),
+      );
+    }
+
     return Response.json(
       {
         ok: !etapaAbortou,
@@ -296,6 +317,9 @@ export async function POST(request: Request): Promise<Response> {
     // O texto real do erro vai no corpo: uma mensagem genérica aqui
     // transformaria o diagnóstico de faturamento parado numa caçada às cegas.
     console.error("[billing-fechamento] falha na varredura", err);
+    if (!dryRun) {
+      await registrarHeartbeat("billing", false, detalheDoErro(err));
+    }
     return Response.json(
       {
         ok: false,
