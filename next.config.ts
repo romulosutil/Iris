@@ -50,8 +50,13 @@ function cspReportOnly(): string {
  * - `Permissions-Policy`: microfone SÓ na própria origem — o ditado do diário
  *   usa `getUserMedia({audio})`; fechar tudo quebraria a gravação com CI
  *   verde. Câmera, geolocalização e pagamento fechados.
- * - HSTS de 1 ano com subdomínios. Browsers ignoram o cabeçalho em `http://`,
- *   então o dev local em `localhost` não é afetado.
+ * - HSTS de 1 ano SEM `includeSubDomains` (revisão da PR #545): a diretiva
+ *   valeria por 1 ano para TODO subdomínio de `irisclinica.ia.br` — hosts de
+ *   infra (painel, logs, storage) ainda sem HTTPS válido ficariam
+ *   inacessíveis e o servidor não consegue desfazer o cache do navegador.
+ *   Não há medição de que todos servem HTTPS válido. Ligar `includeSubDomains`
+ *   só depois de medir os subdomínios (pendência registrada na PR). Browsers
+ *   ignoram o cabeçalho em `http://`, então o dev local não é afetado.
  */
 function cabecalhosDeSeguranca(): { key: string; value: string }[] {
   return [
@@ -65,7 +70,7 @@ function cabecalhosDeSeguranca(): { key: string; value: string }[] {
     },
     {
       key: "Strict-Transport-Security",
-      value: "max-age=31536000; includeSubDomains",
+      value: "max-age=31536000",
     },
     { key: "Content-Security-Policy-Report-Only", value: cspReportOnly() },
   ];

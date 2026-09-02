@@ -75,6 +75,38 @@ describe("scripts/exportacao-acervo.mjs — gatilho do job de exportação", () 
     expect(res.corpo).toContain("storage fora");
   });
 
+  it("500 com bundle `falhou` no corpo nomeia a causa `bundle`, não só o status (revisão PR #545)", async () => {
+    // É o caminho REAL de produção depois de Q-07: a rota responde 500
+    // justamente quando há bundle falho. Se o script classificasse por status
+    // antes de ler o corpo, o modo `bundle` seria inalcançável e o log diria
+    // "HTTP 500" onde a causa é "1 bundle falhou".
+    const res = await executarExportacao("https://x.test/j", "s", {
+      fetch: async () =>
+        new Response(
+          JSON.stringify({
+            ok: false,
+            processados: [
+              { bundleId: "b1", status: "falhou", erro: "storage fora" },
+            ],
+            bundlesFalhos: 1,
+            expirados: 0,
+          }),
+          { status: 500 },
+        ),
+    });
+    expect(res).toMatchObject({ ok: false, falha: "bundle" });
+    expect(res.erro).toContain("1 bundle");
+    expect(res.erro).toContain("HTTP 500");
+    expect(res.corpo).toContain("storage fora");
+  });
+
+  it("500 sem JSON legível continua sendo falha de `status`", async () => {
+    const res = await executarExportacao("https://x.test/j", "s", {
+      fetch: async () => new Response("Internal Server Error", { status: 500 }),
+    });
+    expect(res).toMatchObject({ ok: false, falha: "status", erro: "HTTP 500" });
+  });
+
   it("`ok:false` no corpo de um 200 também é falha (rota e script concordam)", async () => {
     const res = await executarExportacao("https://x.test/j", "s", {
       fetch: async () =>

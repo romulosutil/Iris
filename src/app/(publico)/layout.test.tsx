@@ -49,14 +49,42 @@ describe("Layout do grupo público (src/app/(publico)/layout.tsx)", () => {
       .map((a) => path.relative(raiz, a).replace(/\\/g, "/"));
     expect(comSdk).toEqual(["(publico)/layout.tsx"]);
   });
+
+  it("nenhum page.tsx/template.tsx de (app) ou (admin) importa Clarity/GA/WebMCP", () => {
+    // A varredura de layouts não pega uma página que importe o SDK direto.
+    // Revisão da PR #545: cobrir também `page.tsx` e `template.tsx` dos
+    // grupos autenticados, arquivo a arquivo.
+    const raiz = path.resolve(process.cwd(), "src/app");
+    const arquivos = [
+      ...listarArquivos(path.join(raiz, "(app)"), ["page.tsx", "template.tsx"]),
+      ...listarArquivos(path.join(raiz, "(admin)"), [
+        "page.tsx",
+        "template.tsx",
+      ]),
+    ];
+    expect(arquivos.length).toBeGreaterThan(10);
+
+    const comSdk = arquivos
+      .filter((a) =>
+        /components\/(clarity|google-analytics|webmcp-provider)/.test(
+          readFileSync(a, "utf8"),
+        ),
+      )
+      .map((a) => path.relative(raiz, a).replace(/\\/g, "/"));
+    expect(comSdk).toEqual([]);
+  });
 });
 
-function listarLayouts(dir: string): string[] {
+function listarArquivos(dir: string, nomes: readonly string[]): string[] {
   const saida: string[] = [];
   for (const entrada of readdirSync(dir, { withFileTypes: true })) {
     const caminho = path.join(dir, entrada.name);
-    if (entrada.isDirectory()) saida.push(...listarLayouts(caminho));
-    else if (entrada.name === "layout.tsx") saida.push(caminho);
+    if (entrada.isDirectory()) saida.push(...listarArquivos(caminho, nomes));
+    else if (nomes.includes(entrada.name)) saida.push(caminho);
   }
   return saida;
+}
+
+function listarLayouts(dir: string): string[] {
+  return listarArquivos(dir, ["layout.tsx"]);
 }

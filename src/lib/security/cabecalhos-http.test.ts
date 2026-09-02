@@ -32,11 +32,14 @@ describe("cabeçalhos de segurança (next.config.ts headers())", () => {
     expect(h.get("referrer-policy")).toBe("strict-origin-when-cross-origin");
   });
 
-  it("HSTS de 1 ano com subdomínios", async () => {
+  it("HSTS de 1 ano, SEM includeSubDomains até medir os subdomínios", async () => {
     const h = await cabecalhosGlobais();
     const hsts = h.get("strict-transport-security") ?? "";
     expect(hsts).toMatch(/max-age=31536000/);
-    expect(hsts).toMatch(/includeSubDomains/);
+    // `includeSubDomains` é irreversível pelo servidor por 1 ano e pegaria
+    // hosts de infra ainda em HTTP. Só entra com medição (pendência PR #545).
+    expect(hsts).not.toMatch(/includeSubDomains/i);
+    expect(hsts).not.toMatch(/preload/i);
   });
 
   it("nosniff", async () => {
