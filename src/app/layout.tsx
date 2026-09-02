@@ -58,8 +58,9 @@ export const viewport: Viewport = {
 };
 
 /**
- * Root layout SEM SDK de terceiro (S-01 / S-08, #530). Clarity, GA e o
- * WebMCPProvider montam só em `src/app/(publico)/layout.tsx`: este layout
+ * Root layout SEM SDK de terceiro (S-01 / S-08, #530). Session replay da
+ * Microsoft, GA e o provedor WebMCP montam só em
+ * `src/app/(publico)/layout.tsx`: este layout
  * envolve o prontuário, e session replay de tela clínica de menor não é
  * telemetria — é transferência internacional de dado sensível sem operador
  * nomeado. `layout.test.tsx` e `(publico)/layout.test.tsx` medem os dois
