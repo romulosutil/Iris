@@ -2,7 +2,28 @@ import "server-only";
 import { and, asc, eq, exists, isNull, sql } from "drizzle-orm";
 import { withTenant, type TenantContext } from "@/db/rls";
 import * as schema from "@/db/schema";
-import { montarProntidao } from "@/lib/patient/prontidao";
+import type { LinhaFatosProntidaoCrua } from "@/app/(app)/pacientes/[id]/prontidao-queries";
+import { montarProntidao, type FatosProntidao } from "@/lib/patient/prontidao";
+
+/**
+ * Papéis cuja RLS enxerga o prontuário clínico — mesmo conjunto de
+ * `PAPEIS_COM_LEITURA_CLINICA` (`src/lib/patient/prontidao.ts`). Fora dele,
+ * `montarProntidao` descarta `fatos` sem olhar (retorna a escada vazia antes
+ * de ler o objeto), então nem vale chamar `app_fatos_prontidao` — e para
+ * `admin_recepcao` especificamente é preciso NÃO chamar: `patient_select`
+ * deixa a recepção enxergar todo paciente da clínica na lista, mas o guard do
+ * definer (D-A11) não a autoriza, e o guard reprovado RAISE (D-A13). Chamar
+ * mesmo assim derrubaria `/pacientes` inteira para a recepção a cada
+ * paciente fora da própria sessão.
+ */
+const FATOS_VAZIOS: FatosProntidao = {
+  temFichaClinica: false,
+  temAnamnese: false,
+  temProtocoloAtivo: false,
+  temMetaAtiva: false,
+  temInstrumentoAplicado: false,
+  temSessaoConsolidada: false,
+};
 
 export interface PacienteListItem {
   id: string;
@@ -47,12 +68,15 @@ export interface PacienteListItem {
 export async function listarTodosPacientes(
   ctx: TenantContext,
 ): Promise<PacienteListItem[]> {
-  // Uma query só, seis `EXISTS` correlacionados a mais — mesmo idioma de
-  // `temPrescricao` abaixo. A alternativa óbvia (chamar `obterFatosProntidao`
-  // por linha) abriria uma transação por paciente: numa clínica com 80
-  // pacientes, 80 idas ao banco só para pintar uma pílula na lista.
-  const linhas = await withTenant(ctx, (tx) =>
-    tx
+  const podeLerProntidao =
+    ctx.role === "coordenador" || ctx.role === "terapeuta";
+
+  return withTenant(ctx, async (tx) => {
+    // Uma query só. Os seis fatos da escada de prontidão NÃO entram mais
+    // aqui: saíram para uma segunda chamada, em lote, a `app_fatos_prontidao`
+    // (abaixo) — D-A12. `temPrescricao` fica: não é um dos seis fatos do
+    // definer, e o `EXISTS` correlacionado aqui é o idioma certo pra ele.
+    const linhas = await tx
       .select({
         id: schema.patient.id,
         nome: schema.patient.nome,
@@ -90,103 +114,67 @@ export async function listarTodosPacientes(
               ),
             ),
         ).mapWith(Boolean),
-        // Os seis fatos da escada de prontidão (`src/lib/patient/prontidao.ts`),
-        // mesmos predicados de `obterFatosProntidaoNaTx`
-        // (`prontidao-queries.ts`) — copiados, não importados: aquela função
-        // abre a própria transação e lê UM paciente; esta lê a clínica
-        // inteira numa passada só.
-        temFichaClinica: exists(
-          tx
-            .select({ um: sql`1` })
-            .from(schema.patientClinicalProfile)
-            .where(
-              eq(schema.patientClinicalProfile.patientId, schema.patient.id),
-            ),
-        ).mapWith(Boolean),
-        temAnamnese: exists(
-          tx
-            .select({ um: sql`1` })
-            .from(schema.anamnese)
-            .where(eq(schema.anamnese.patientId, schema.patient.id)),
-        ).mapWith(Boolean),
-        // Vigência aberta: protocolo desativado não tem marcos a pontuar.
-        temProtocoloAtivo: exists(
-          tx
-            .select({ um: sql`1` })
-            .from(schema.patientProtocol)
-            .where(
-              and(
-                eq(schema.patientProtocol.patientId, schema.patient.id),
-                isNull(schema.patientProtocol.desativadoEm),
-              ),
-            ),
-        ).mapWith(Boolean),
-        // Só 'ativa'. Rascunho não é alvo de resolução em `materializar.ts`.
-        temMetaAtiva: exists(
-          tx
-            .select({ um: sql`1` })
-            .from(schema.goal)
-            .where(
-              and(
-                eq(schema.goal.patientId, schema.patient.id),
-                eq(schema.goal.estado, "ativa"),
-              ),
-            ),
-        ).mapWith(Boolean),
-        temInstrumentoAplicado: exists(
-          tx
-            .select({ um: sql`1` })
-            .from(schema.instrumentoAplicacao)
-            .where(
-              eq(schema.instrumentoAplicacao.patientId, schema.patient.id),
-            ),
-        ).mapWith(Boolean),
-        // Snapshot, não sessão: é ele que prova que a documentação virou dado
-        // legível na evolução.
-        temSessaoConsolidada: exists(
-          tx
-            .select({ um: sql`1` })
-            .from(schema.sessionSnapshot)
-            .where(eq(schema.sessionSnapshot.patientId, schema.patient.id)),
-        ).mapWith(Boolean),
       })
       .from(schema.patient)
       .where(eq(schema.patient.clinicId, ctx.clinicId))
-      .orderBy(asc(schema.patient.nome)),
-  );
+      .orderBy(asc(schema.patient.nome));
 
-  // `montarProntidao` é pura — roda fora da transação, sobre os fatos já
-  // lidos. Aqui é onde os seis fatos intermediários e `clinicalModality`
-  // são descartados: `PacienteListItem` expõe só `proximoPasso`.
-  return linhas.map((linha) => {
-    const {
-      clinicalModality,
-      temFichaClinica,
-      temAnamnese,
-      temProtocoloAtivo,
-      temMetaAtiva,
-      temInstrumentoAplicado,
-      temSessaoConsolidada,
-      ...paciente
-    } = linha;
+    // `admin_recepcao` (e qualquer papel fora de {coordenador, terapeuta})
+    // NÃO entra na chamada ao definer — ver `FATOS_VAZIOS` acima. Só chama a
+    // função quando há alguém a perguntar E algum papel que ela responde.
+    const fatosPorPaciente = new Map<string, FatosProntidao>();
+    if (podeLerProntidao && linhas.length > 0) {
+      const ids = linhas.map((linha) => linha.id);
+      // Uma chamada só, com o array de ids da página — não uma por paciente.
+      // `app_fatos_prontidao` (migração `0142`, D-A12) lê pelo MESMO
+      // predicado que `obterFatosProntidaoNaTx` (`prontidao-queries.ts`): as
+      // duas portas passam a divergir zero, inclusive no recorte de
+      // cobertura que faltava aqui antes da Task 7c.
+      // `sql.param(ids)`, NÃO `ARRAY[${ids}]` interpolado: bind direto de
+      // array achata os elementos em parâmetros escalares e vira row
+      // constructor (`ANY(($2, $3)::uuid[])`), que o Postgres rejeita com
+      // n>=2. Mesmo padrão de `assertDestinatariosNoTenant`
+      // (`src/lib/risco/notificacao.ts`) e `tiposEstruturaDosMarcos`
+      // (`src/lib/evidence/materializar.ts`).
+      const cruas = (await tx.execute<LinhaFatosProntidaoCrua>(
+        sql`SELECT * FROM app_fatos_prontidao(${sql.param(ids)}::uuid[])`,
+      )) as unknown as LinhaFatosProntidaoCrua[];
 
-    const prontidao = montarProntidao({
-      modalidade: clinicalModality,
-      fatos: {
-        temFichaClinica,
-        temAnamnese,
-        temProtocoloAtivo,
-        temMetaAtiva,
-        temInstrumentoAplicado,
-        temSessaoConsolidada,
-      },
-      role: ctx.role,
-      patientId: linha.id,
+      // `crua.modalidade` (8ª coluna, Task 7c) é IGNORADA de propósito aqui: a
+      // lista usa `clinicalModality` da própria linha de `patient`, que a RLS
+      // já filtrou para os pacientes visíveis a este chamador. A coluna do
+      // definer existe para os call sites de SESSÃO, onde o chamador pode ser
+      // um terapeuta de cobertura que não lê a linha `patient` — caso que não
+      // alcança esta lista. Não é esquecimento.
+      for (const crua of cruas) {
+        fatosPorPaciente.set(crua.patient_id, {
+          temFichaClinica: crua.tem_ficha_clinica,
+          temAnamnese: crua.tem_anamnese,
+          temProtocoloAtivo: crua.tem_protocolo_ativo,
+          temMetaAtiva: crua.tem_meta_ativa,
+          temInstrumentoAplicado: crua.tem_instrumento_aplicado,
+          temSessaoConsolidada: crua.tem_sessao_consolidada,
+        });
+      }
+    }
+
+    // `montarProntidao` é pura — roda sobre os fatos já lidos. Aqui é onde
+    // `clinicalModality` é descartado: `PacienteListItem` expõe só
+    // `proximoPasso`.
+    return linhas.map((linha) => {
+      const { clinicalModality, ...paciente } = linha;
+
+      const prontidao = montarProntidao({
+        modalidade: clinicalModality,
+        fatos: fatosPorPaciente.get(linha.id) ?? FATOS_VAZIOS,
+        role: ctx.role,
+        patientId: linha.id,
+      });
+
+      return {
+        ...paciente,
+        proximoPasso: prontidao.proximo?.rotulo ?? null,
+      };
     });
-
-    return {
-      ...paciente,
-      proximoPasso: prontidao.proximo?.rotulo ?? null,
-    };
   });
 }

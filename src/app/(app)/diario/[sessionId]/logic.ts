@@ -9,7 +9,6 @@ import {
   clinic,
   extraction,
   goal,
-  patient,
   session,
   sessionNote,
   sessionProtocolScope,
@@ -110,42 +109,33 @@ async function capturarDiarioCore(
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
   try {
     const row = await withTenant(ctx, async (tx) => {
-      // T07/T07b — extensão da MESMA leitura que já existia (antes só para o
-      // desarquivamento, #174 regra 6): resolve paciente + modalidade ANTES
-      // de qualquer escrita, na mesma transação da régua e do INSERT. A régua
+      // T07/T07b — a MESMA leitura que já existia (antes só para o
+      // desarquivamento, #174 regra 6): resolve o paciente ANTES de qualquer
+      // escrita, na mesma transação da régua e do INSERT. A régua
       // (`assertPodeDocumentar`) precisa correr aqui dentro, e não na action:
       // a action é alcançável sem passar pela página `/sessoes/[id]`, então
       // era a única leitura da regra e nenhuma escrita.
       //
-      // `leftJoin`, não `innerJoin`, DE PROPÓSITO: `session.patientId` vem da
-      // própria tabela `session` (sempre visível a quem pode gravar a nota —
-      // é a mesma leitura que já existia), mas `patient` tem RLS por EQUIPE
-      // (`patient_select`, 0001) — um terapeuta de COBERTURA (dono da sessão,
-      // fora da care team, #506/D8) não enxerga a linha do paciente. Com
-      // `innerJoin`, essa combinação (sessão existe, paciente ilegível) faria
-      // o SELECT inteiro devolver zero linhas: `sess` viraria `undefined`, o
-      // `if (sess)` abaixo pularia a régua por inteiro, e a escrita passaria
-      // SEM checagem nenhuma — o oposto exato do que esta task existe para
-      // fechar. Com `leftJoin`, `sess` continua populado (`clinicalModality`
-      // vem `null`) e a régua roda mesmo assim: sem enxergar a modalidade,
-      // `montarProntidao` cai no degrau "modalidade" (bloqueante) e RECUSA —
-      // fail-closed, nunca fail-open.
+      // Task 7c — só colunas de `session` aqui. O `leftJoin` em `patient` que
+      // trazia `clinicalModality` SUMIU, e com ele a ambiguidade que ele
+      // criava: sob `patient_select` (RLS por equipe, sem recorte de
+      // cobertura) o terapeuta de COBERTURA não lê a linha `patient`, então a
+      // modalidade chegava `null` e a régua recusava por "modalidade
+      // ausente" um caso clinicamente autorizado. A modalidade agora sai por
+      // `app_fatos_prontidao` (migração `0142`), pela MESMA porta e sob o
+      // MESMO guard dos seis fatos — quem lê os fatos lê a modalidade, e
+      // ninguém mais.
       const [sess] = await tx
-        .select({
-          patientId: session.patientId,
-          clinicalModality: patient.clinicalModality,
-        })
+        .select({ patientId: session.patientId })
         .from(session)
-        .leftJoin(patient, eq(patient.id, session.patientId))
         .where(eq(session.id, parsed.data.sessionId));
-      if (sess) {
-        await assertPodeDocumentar(
-          ctx,
-          tx,
-          sess.patientId,
-          sess.clinicalModality ?? null,
-        );
-      }
+      // Fail-closed. Sem o join, `sess` só falta quando a PRÓPRIA `session` é
+      // ilegível — e aí a escrita não pode seguir: o `if (sess)` que existia
+      // aqui pulava a régua e caía direto no `insert` abaixo. Erro genérico
+      // de propósito: quem não enxerga a sessão não deve aprender pela
+      // mensagem se ela existe.
+      if (!sess) throw new Error("capturarDiario: sessão ilegível ou ausente");
+      await assertPodeDocumentar(ctx, tx, sess.patientId);
 
       const [nota] = await tx
         .insert(sessionNote)
@@ -170,15 +160,14 @@ async function capturarDiarioCore(
         .returning({ id: sessionNote.id });
 
       // #174 regra 6, na MESMA transação da nota: ou o registro clínico e o
-      // desarquivamento existem juntos, ou nenhum dos dois existe.
-      if (sess) {
-        await desarquivarPacienteSeArquivado(
-          tx,
-          ctx,
-          sess.patientId,
-          "registro_clinico",
-        );
-      }
+      // desarquivamento existem juntos, ou nenhum dos dois existe. Sem
+      // `if (sess)`: o guard fail-closed acima já garantiu a sessão.
+      await desarquivarPacienteSeArquivado(
+        tx,
+        ctx,
+        sess.patientId,
+        "registro_clinico",
+      );
 
       return nota;
     });
@@ -670,36 +659,29 @@ async function consolidarSessaoCore(
     //    para decidir a re-extração e monta o contexto canônico do agente.
     const prep = await withTenant(ctx, async (tx) => {
       // T07/T07b — a MESMA leitura que o passo 2) abaixo já fazia (patientId
-      // + numero), estendida com a modalidade e adiantada para ANTES de
-      // qualquer escrita: a régua (`assertPodeDocumentar`) precisa correr
-      // aqui dentro, na mesma transação da nota, para que uma meta
-      // descontinuada entre a checagem e o INSERT não passe pela régua.
+      // + numero), adiantada para ANTES de qualquer escrita: a régua
+      // (`assertPodeDocumentar`) precisa correr aqui dentro, na mesma
+      // transação da nota, para que uma meta descontinuada entre a checagem e
+      // o INSERT não passe pela régua.
       //
-      // `leftJoin`, não `innerJoin` — mesmo motivo de `capturarDiarioCore`
-      // acima: `patient_select` é RLS por equipe, e um terapeuta de cobertura
-      // (dono da sessão, fora da care team) não enxergaria a linha do
-      // paciente. Um `innerJoin` faria `sess` vir `undefined` mesmo com a
-      // sessão existindo, e o código abaixo (`sess!.numero`, `sess!.patientId`)
-      // sempre assumiu `sess` presente — undefined ali é `TypeError`, não
-      // recusa controlada. Com `leftJoin`, `sess.patientId` (coluna de
-      // `session`, não de `patient`) permanece populado, e
-      // `clinicalModality` vem `null` quando ilegível — a régua RECUSA
-      // (degrau "modalidade") em vez de estourar.
+      // Task 7c — mesmo movimento de `capturarDiarioCore` acima: o `leftJoin`
+      // em `patient` (que só existia para trazer `clinicalModality`) foi
+      // embora, e a ambiguidade que ele criava foi junto. Sob
+      // `patient_select` (RLS por equipe, sem recorte de cobertura) o
+      // terapeuta de cobertura não lê a linha `patient`; a modalidade chegava
+      // `null` e a régua recusava por "modalidade ausente" o que é cobertura
+      // clínica legítima. Agora ela sai de `app_fatos_prontidao` (`0142`),
+      // pela mesma porta e sob o mesmo guard dos seis fatos. O que sobra aqui
+      // são só colunas de `session` — sempre legíveis a quem pode gravar a
+      // nota, que é o motivo de o `sess!` abaixo continuar seguro.
       const [sess] = await tx
         .select({
           patientId: session.patientId,
           numero: session.numeroSequencialPaciente,
-          clinicalModality: patient.clinicalModality,
         })
         .from(session)
-        .leftJoin(patient, eq(patient.id, session.patientId))
         .where(eq(session.id, sid));
-      await assertPodeDocumentar(
-        ctx,
-        tx,
-        sess!.patientId,
-        sess!.clinicalModality ?? null,
-      );
+      await assertPodeDocumentar(ctx, tx, sess!.patientId);
 
       // texto anterior (antes do upsert) → sabemos se o diário mudou
       const [notaAntiga] = await tx

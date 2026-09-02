@@ -163,8 +163,14 @@ export default async function PacienteLayout({
       {fatos ? (
         <CartaoProntidao
           prontidao={montarProntidao({
+            // Aqui a modalidade continua vindo da linha `patient`, e não da
+            // `fatos.modalidade` do definer: quem alcança a página do paciente
+            // passou por `patient_select` (é da equipe ou é coordenação), então
+            // a leitura é legítima. Diferente dos call sites de SESSÃO
+            // (`logic.ts`, `sessoes/[id]/queries.ts`), onde o chamador pode ser
+            // um terapeuta de cobertura que não lê a linha `patient` nenhuma.
             modalidade: dadosPaciente?.clinicalModality,
-            fatos,
+            fatos: fatos.fatos,
             role: ctx.role,
             patientId: id,
           })}

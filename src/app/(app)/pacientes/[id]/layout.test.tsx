@@ -20,13 +20,17 @@ vi.mock("@/auth/tenant", () => ({
 }));
 
 vi.mock("./prontidao-queries", () => ({
+  // Task 7c — a porta devolve `{ fatos, modalidade }`, não os fatos soltos.
   obterFatosProntidao: vi.fn(async () => ({
-    temFichaClinica: false,
-    temAnamnese: false,
-    temProtocoloAtivo: false,
-    temMetaAtiva: false,
-    temInstrumentoAplicado: false,
-    temSessaoConsolidada: false,
+    fatos: {
+      temFichaClinica: false,
+      temAnamnese: false,
+      temProtocoloAtivo: false,
+      temMetaAtiva: false,
+      temInstrumentoAplicado: false,
+      temSessaoConsolidada: false,
+    },
+    modalidade: null,
   })),
 }));
 

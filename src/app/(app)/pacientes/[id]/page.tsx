@@ -238,8 +238,12 @@ export default async function PacientePage({
           fatos ? (
             <EvolucaoVazia
               prontidao={montarProntidao({
+                // Modalidade da linha `patient`, não a do definer — mesmo
+                // motivo de `layout.tsx`: quem chega nesta página já passou
+                // por `patient_select`. Só os call sites de SESSÃO precisam da
+                // modalidade que sai por `app_fatos_prontidao`.
                 modalidade: paciente.clinicalModality,
-                fatos,
+                fatos: fatos.fatos,
                 role: ctx.role,
                 patientId: id,
               })}

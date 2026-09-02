@@ -1,7 +1,6 @@
 import "server-only";
 import { montarProntidao } from "./prontidao";
 import { obterFatosProntidaoNaTx } from "@/app/(app)/pacientes/[id]/prontidao-queries";
-import type { ModalidadeClinica } from "@/app/(app)/pacientes/[id]/modalidade";
 import type { Tx, TenantContext } from "@/db/rls";
 
 /** Erro de regra de negócio, não de infraestrutura: o chamador traduz em
@@ -21,14 +20,23 @@ export class ProntuarioIncompletoError extends Error {
  * Recebe a `tx` já aberta pelo core: os fatos precisam ser lidos na MESMA
  * transação da escrita. Numa transação à parte, uma meta descontinuada entre
  * a checagem e o INSERT passaria pela régua.
+ *
+ * Task 7c — a modalidade DEIXOU de ser parâmetro. Enquanto ela vinha de fora
+ * (do `leftJoin` em `patient` que `logic.ts` fazia, sob `patient_select`), o
+ * terapeuta de cobertura não lia a linha `patient` e a modalidade chegava
+ * `null`: "não vejo" e "não está definida" eram indistinguíveis aqui dentro,
+ * e a régua tratava o primeiro como o segundo — recusando por modalidade
+ * ausente uma cobertura clínica legítima (D8/#174). Lida pela MESMA porta
+ * autorizada dos seis fatos (`app_fatos_prontidao`, migração `0142`), `null`
+ * volta a significar só "não está definida" — que é exatamente o que o
+ * degrau bloqueante "modalidade" existe para dizer.
  */
 export async function assertPodeDocumentar(
   ctx: TenantContext,
   tx: Tx,
   patientId: string,
-  modalidade: ModalidadeClinica | null,
 ): Promise<void> {
-  const fatos = await obterFatosProntidaoNaTx(tx, patientId);
+  const { fatos, modalidade } = await obterFatosProntidaoNaTx(tx, patientId);
   const prontidao = montarProntidao({
     modalidade,
     fatos,

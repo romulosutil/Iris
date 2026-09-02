@@ -102,18 +102,11 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       (${SESS_SOLO}, ${CLINIC_A}, ${PAC2}, ${U_SOLO}, now(), 'realizada', 'aba')`;
     await owner`INSERT INTO care_team_membership (patient_id, user_id, papel_na_equipe, disciplina)
       VALUES (${PAC}, ${U_T1}, 'terapeuta_referencia', 'ABA')`;
-    // T07b — achado à parte, fora do escopo desta task: `goal_select`/`pp_read`
-    // (RLS) só reconhecem `coordenador` OU `app_is_on_team` como leitor
-    // clínico — SEM a exceção de cobertura que `app_desarquivar_paciente`
-    // (migração 0092, D8) já dá para `session.terapeuta_id = app.user_id`.
-    // Sem este vínculo, `assertPodeDocumentar` (T07b) RECUSARIA a escrita de
-    // U_COBERTURA mesmo com protocolo e meta ativos — ela não os enxergaria
-    // sob a própria RLS, ficaria com fatos falsos-negativos, e bloquearia uma
-    // cobertura legítima. Consertar a policy exigiria uma nova função
-    // SECURITY DEFINER (espelhando o guard de 0092) — fora do escopo deste
-    // gate; aqui só reflete o requisito NOVO que o gate introduz.
-    await owner`INSERT INTO care_team_membership (patient_id, user_id, papel_na_equipe, disciplina)
-      VALUES (${PAC}, ${U_COBERTURA}, 'substituto', 'ABA')`;
+    // U_COBERTURA propositalmente FORA da care team: `app_fatos_prontidao`
+    // (migração `0142`, Task 7c) autoriza a leitura clínica pelo recorte de
+    // cobertura (`session.terapeuta_id = app.user_id`), não por vínculo de
+    // equipe. Uma linha de `care_team_membership` aqui mascararia a própria
+    // coisa que este describe prova.
     await owner`INSERT INTO patient_protocol (patient_id, protocol_id, ativado_por, ativado_em, desativado_em) VALUES
       (${PAC}, ${PROTO}, ${U_T1}, now()::date, NULL),
       (${PAC2}, ${PROTO}, ${U_SOLO}, now()::date, NULL)`;

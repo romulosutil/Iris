@@ -137,3 +137,60 @@ GRANT EXECUTE ON FUNCTION app_fatos_prontidao(uuid[]) TO app_role;
 - ❌ Afrouxar `goal_select` para reconhecer cobertura: abriria a leitura de
   metas por um caminho que ninguém pediu, para toda query da aplicação.
 - ❌ Escrever a entrada do `_journal.json` com `when` ≤ o da `0141`.
+
+## 7. Adendo (02/09/2026) — a lacuna não parava nos seis fatos
+
+Descoberto ao rodar a suíte com o contorno de fixture já removido: com
+`care_team_membership` fora, o terapeuta de cobertura passou a falhar no degrau
+**modalidade**, não nos seis fatos. Dois testes de `actions.int.test.ts`
+(cobertura recebe o próximo número; regra 6 / D8 salva diário E desarquiva)
+ficaram vermelhos com `ProntuarioIncompletoError: ... falta definir a
+modalidade clínica`.
+
+**Causa.** `patient_select` (`0085_policies_tenant_helper.sql:224`) é
+`clinic_id = app_clinic_id_exigido() AND (papel IN (coordenador,
+admin_recepcao) OR app_is_on_team(id))` — também sem recorte de cobertura. A
+cobertura não lê a linha `patient` NENHUMA, e `patient.clinical_modality` é
+entrada da MESMA régua. O `leftJoin` de `logic.ts` (Task 7b, deliberado e
+documentado) fazia `clinicalModality` chegar `null`, e a régua recusava por
+modalidade ausente. O fluxo D8/regra 6 estava quebrado em produção pela 7b.
+
+**Decisão.** A `0142` ganha uma 8ª coluna de retorno, `modalidade
+clinical_modality`. Mesma porta, mesmo guard, nenhuma policy tocada.
+
+| Alternativa | Por que não |
+| ----------- | ----------- |
+| Alargar `patient_select` com o recorte de cobertura | expõe a linha `patient` inteira (PII) a quem precisa de um enum; muda a leitura de paciente para toda a aplicação |
+| Manter o `care_team_membership` na fixture e registrar a lacuna | deixa o fluxo D8/regra 6 quebrado em produção, com teste verde |
+
+**Divergências que a decisão assume, nomeadas.** O §7 da spec manda que o guard
+de um definer copie o predicado EXATO da policy de leitura correspondente. Para
+a coluna `modalidade` a policy correspondente é `patient_select`, e o guard
+diverge dela nas duas direções:
+
+- **Mais estrito:** `patient_select` autoriza `admin_recepcao`; o guard não
+  (D-A11). Direção fail-closed — a recepção nunca lê pela função.
+- **Mais frouxo:** `patient_select` não reconhece cobertura; o guard sim. É a
+  mesma exceção D-A10 já ratificada para `goal_select`, aplicada ao mesmo
+  chamador (a régua de documentação) e ao mesmo recorte da `0092`.
+
+**`DROP FUNCTION` antes do `CREATE`.** `CREATE OR REPLACE` não troca o tipo de
+retorno de uma função existente (`42P13`). A `0142` nunca saiu da máquina de
+desenvolvimento; o par DROP+CREATE deixa a migração idempotente para quem já
+aplicou a versão de seis colunas localmente.
+
+**Prova acrescentada.** Terapeuta de cobertura FORA da equipe lê a `modalidade`
+REAL do paciente, não `null` (`db/tests/fatos-prontidao-definer.int.test.ts`) —
+sem esse caso a coluna nova não tem oráculo. E os dois testes de
+`actions.int.test.ts` ficam verdes SEM tocar na fixture: adicionar
+`care_team_membership` de volta seria reintroduzir o contorno que esta task
+existe para remover.
+
+## 8. Anti-padrões (adendo)
+
+- ❌ Reintroduzir `care_team_membership` para `U_COBERTURA` em
+  `actions.int.test.ts` para fazer o vermelho passar.
+- ❌ Alargar `patient_select` para resolver a modalidade.
+- ❌ Deixar em `logic.ts` os comentários que justificam o `leftJoin` depois que
+  o `leftJoin` sai: comentário que descreve código morto mente mais que a
+  ausência dele.
