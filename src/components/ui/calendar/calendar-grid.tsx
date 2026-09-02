@@ -31,19 +31,6 @@ export interface CalendarEventoContexto {
   mostrarTerapeuta: boolean;
 }
 
-/**
- * Fuso de fallback quando nenhum `fuso` é passado: o do navegador. Só callers
- * sem contexto de clínica (Storybook, testes) caem aqui; produção passa
- * `clinic.timezone` (D61). Antes o DS importava `FUSO_CLINICA` do app.
- */
-function fusoDoNavegador(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  } catch {
-    return "UTC";
-  }
-}
-
 type CalendarGridMode =
   "daily-resources" | "weekly-timeline" | "availability-matrix";
 
@@ -79,10 +66,10 @@ export interface CalendarGridProps<T extends CalendarEvento = CalendarEvento> {
     contexto: CalendarEventoContexto,
   ) => React.ReactNode;
   bloqueios?: { dataInicio: string; dataFim: string }[];
-  /** Fuso IANA da clínica (D61). Default = fuso do navegador, só para callers
-   * de design system sem caminho de request (Storybook, testes). Todo caller
-   * de produção passa o valor real de `clinic.timezone`. */
-  fuso?: string;
+  /** Fuso IANA da clínica (D61) — OBRIGATÓRIO, sem default: com default o
+   * SSR caía no fuso do container (revisão da PR #556). Produção passa
+   * `clinic.timezone`; Storybook/testes passam um literal. */
+  fuso: string;
 }
 
 function horaParaMin(h: string): number {
@@ -265,7 +252,7 @@ export function CalendarGrid<T extends CalendarEvento = CalendarEvento>({
   onEventClick,
   renderEvent,
   bloqueios = [],
-  fuso = fusoDoNavegador(),
+  fuso,
 }: CalendarGridProps<T>) {
   const mobileDia = useEscalaDiaMobile();
 

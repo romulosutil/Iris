@@ -1,5 +1,10 @@
 import { expect, test } from "vitest";
-import { RenderOcupadoError, withRenderLock } from "./render-lock";
+import {
+  RenderOcupadoError,
+  erroDeActionSeRenderOcupado,
+  respostaHttpSeRenderOcupado,
+  withRenderLock,
+} from "./render-lock";
 
 test("serializa: nunca mais de 1 execução concorrente", async () => {
   let ativos = 0;
@@ -59,4 +64,21 @@ test("PF-02: timeoutMs = 0 mantém a espera ilimitada", async () => {
   const paciente = withRenderLock(async () => "esperou", { timeoutMs: 0 });
   await expect(segura).resolves.toBe("primeira");
   await expect(paciente).resolves.toBe("esperou");
+});
+
+test("PF-02: mapeamento para Server Action ({ error, codigo, retryAfterSegundos }) e para HTTP 503 + Retry-After", async () => {
+  const err = new RenderOcupadoError(20_000);
+  expect(erroDeActionSeRenderOcupado(err)).toEqual({
+    error: err.message,
+    codigo: "RENDER_OCUPADO",
+    retryAfterSegundos: 20,
+  });
+  expect(erroDeActionSeRenderOcupado(new Error("outro"))).toBeNull();
+
+  const res = respostaHttpSeRenderOcupado(err);
+  expect(res).not.toBeNull();
+  expect(res!.status).toBe(503);
+  expect(res!.headers.get("Retry-After")).toBe("20");
+  expect(await res!.text()).toContain("tente de novo");
+  expect(respostaHttpSeRenderOcupado("x")).toBeNull();
 });

@@ -96,16 +96,4 @@ describe("CalendarGrid — inversão de dependência (A-01, #538)", () => {
     card.click();
     expect(onEventClick).toHaveBeenCalledWith(sessoes[0]);
   });
-
-  it("sem `fuso`, cai no fuso do navegador (nunca numa constante do app)", () => {
-    stubMatchMedia(true);
-    render(
-      <CalendarGrid
-        modo="daily-resources"
-        sessoes={sessoes}
-        recursos={[{ id: "t1", nome: "Dra. Beatriz" }]}
-      />,
-    );
-    expect(screen.getByTestId("calendar-day-list")).toBeTruthy();
-  });
 });

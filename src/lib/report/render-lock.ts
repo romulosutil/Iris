@@ -76,3 +76,34 @@ export async function withRenderLock<T>(
     liberar();
   }
 }
+
+/**
+ * Contrato de Server Action (`{ error }`) para "render ocupado": as três
+ * exportações de relatório (`export-logic`, `familia-logic`,
+ * `convenio-narrativo-logic`) devolvem isto em vez de estourar — a copy já é
+ * a de `message`; `retryAfterSegundos` deixa a UI sugerir quando tentar.
+ */
+export function erroDeActionSeRenderOcupado(err: unknown): {
+  error: string;
+  codigo: "RENDER_OCUPADO";
+  retryAfterSegundos: number;
+} | null {
+  if (!(err instanceof RenderOcupadoError)) return null;
+  return {
+    error: err.message,
+    codigo: err.code,
+    retryAfterSegundos: err.retryAfterSegundos,
+  };
+}
+
+/** Para rotas HTTP (`route.ts`): 503 + `Retry-After` + a mesma copy, em texto. */
+export function respostaHttpSeRenderOcupado(err: unknown): Response | null {
+  if (!(err instanceof RenderOcupadoError)) return null;
+  return new Response(err.message, {
+    status: err.status,
+    headers: {
+      "Retry-After": String(err.retryAfterSegundos),
+      "Content-Type": "text/plain; charset=utf-8",
+    },
+  });
+}

@@ -602,6 +602,7 @@ test("CalendarGrid (escala Dia) — sem violações axe", async () => {
       abertura="08:00"
       fechamento="10:00"
       passoMin={60}
+      fuso="America/Sao_Paulo"
     />,
   );
 });
