@@ -59,15 +59,21 @@ GRANT EXECUTE ON FUNCTION public.app_session_profissional_responsavel(uuid) TO a
 
 -- ─── Leitura da sessão: o substituto lê e atualiza a própria sessão ──────────
 -- Forma da 0085, com o ramo de dono trocado por `terapeuta_id OU atendido_por_id`
--- e o cast cru de `app.user_id` trocado por `app_user_id_exigido()` (D23/0093:
--- P0001 diagnosticável em vez de 22P02/42704). Papéis e `app_is_on_team`
--- inalterados.
+-- e os casts crus de `app.user_id`/`app.user_role` trocados por
+-- `app_user_id_exigido()`/`app_user_role_exigido()` (D23/0093: P0001
+-- diagnosticável em vez de 22P02/42704). Papéis e `app_is_on_team` inalterados.
+--
+-- `session_update` NÃO muda (revisão pós-PR de 02/09): estendê-la ao
+-- substituto deixaria ele remarcar/cancelar/reatribuir `terapeuta_id` e
+-- `patient_id` — bem além de "documentar a sessão que atendeu". A única
+-- escrita em `session` que documentar exige (o número sequencial) vai por
+-- `app_session_definir_numero_sequencial`, abaixo.
 
 ALTER POLICY session_select ON session
   USING (
     clinic_id = app_clinic_id_exigido()
     AND (
-      current_setting('app.user_role') IN ('coordenador', 'admin_recepcao')
+      app_user_role_exigido() IN ('coordenador', 'admin_recepcao')
       OR terapeuta_id = app_user_id_exigido()
       OR atendido_por_id = app_user_id_exigido()
       OR app_is_on_team(patient_id)
@@ -75,31 +81,66 @@ ALTER POLICY session_select ON session
   );
 --> statement-breakpoint
 
--- `session_update`: `consolidarSessao` grava `numero_sequencial_paciente` com
--- UPDATE em `session`. Sem este ramo o UPDATE do substituto afeta 0 linhas em
--- silêncio (USING filtra) e a sessão fica sem número — sem erro nenhum.
-ALTER POLICY session_update ON session
-  USING (
-    clinic_id = app_clinic_id_exigido()
-    AND (
-      current_setting('app.user_role') IN ('coordenador', 'admin_recepcao')
-      OR terapeuta_id = app_user_id_exigido()
-      OR atendido_por_id = app_user_id_exigido()
-    )
-    AND NOT app_prontuario_somente_leitura(patient_id)
-  )
-  WITH CHECK (
-    clinic_id = app_clinic_id_exigido()
-    AND (
-      current_setting('app.user_role') IN ('coordenador', 'admin_recepcao')
-      OR terapeuta_id = app_user_id_exigido()
-      OR atendido_por_id = app_user_id_exigido()
-    )
-    AND app_patient_in_clinic(patient_id)
-    AND app_user_in_clinic(terapeuta_id)
-    AND (atendido_por_id IS NULL OR app_user_in_clinic(atendido_por_id))
-    AND NOT app_prontuario_somente_leitura(patient_id)
-  );
+-- ─── Número sequencial: a ÚNICA escrita em `session` que documentar exige ───
+-- `consolidarSessao` fazia `UPDATE session SET numero_sequencial_paciente`
+-- direto, sob `session_update` (coordenação/recepção/titular). Para o
+-- substituto o UPDATE afetava 0 linhas em silêncio (USING filtra, sem erro) e
+-- a sessão ficava sem número — e sem número não há `evidence.session_numero`.
+--
+-- SECURITY DEFINER com guard interno como fronteira (CLAUDE.md §Migrações,
+-- item 5): tenant por `app_clinic_id_exigido()` e dono por
+-- `app_session_profissional_responsavel(p_session)` — a mesma régua das
+-- policies de escrita de documentação. Dentro do DEFINER a função INVOKER lê
+-- `session` com os direitos do dono, então o predicado dela É o guard, não a
+-- RLS. Sessão de outro tenant ou de outro profissional: devolve NULL, não
+-- escreve, não nomeia a linha (fail-closed).
+--
+-- Idempotente e à prova da corrida de duas consolidações concorrentes: o
+-- UPDATE só grava se ainda NULL; a colisão em `uq_session_numero_por_paciente`
+-- (23505) é capturada aqui dentro (subtransação do bloco) e relemos o número
+-- que a outra transação já gravou — antes esse catch vivia em TS e relia com a
+-- transação já abortada.
+CREATE OR REPLACE FUNCTION public.app_session_definir_numero_sequencial(p_session uuid)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_patient uuid;
+  v_numero integer;
+BEGIN
+  SELECT s.patient_id INTO v_patient
+    FROM session s
+   WHERE s.id = p_session
+     AND s.clinic_id = app_clinic_id_exigido()
+     AND app_session_profissional_responsavel(p_session);
+  IF v_patient IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  BEGIN
+    UPDATE session
+       SET numero_sequencial_paciente = app_proximo_numero_sequencial(v_patient)
+     WHERE id = p_session
+       AND numero_sequencial_paciente IS NULL
+    RETURNING numero_sequencial_paciente INTO v_numero;
+  EXCEPTION WHEN unique_violation THEN
+    v_numero := NULL;
+  END;
+
+  IF v_numero IS NULL THEN
+    SELECT s.numero_sequencial_paciente INTO v_numero
+      FROM session s WHERE s.id = p_session;
+  END IF;
+  RETURN v_numero;
+END;
+$$;
+--> statement-breakpoint
+
+REVOKE ALL ON FUNCTION public.app_session_definir_numero_sequencial(uuid) FROM PUBLIC;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.app_session_definir_numero_sequencial(uuid) TO app_role;
 --> statement-breakpoint
 
 -- `app_session_clinica_visivel` (0087 → 0093) é o predicado de LEITURA de
@@ -127,10 +168,10 @@ AS $$
 $$;
 --> statement-breakpoint
 
--- `app_session_disciplina_liberada` (0121, #119): quem lê nota `discipline_only`
+-- `app_session_disciplina_liberada` (0122_sigilo_helpers, #119): quem lê nota `discipline_only`
 -- é o autor da sessão ou colega da mesma disciplina na equipe. O substituto que
 -- escreveu a nota sob sigilo precisa lê-la — mesma régua. Corpo idêntico ao da
--- 0121 fora o `IN (...)`.
+-- 0122 fora o `IN (...)`.
 CREATE OR REPLACE FUNCTION public.app_session_disciplina_liberada(p_session uuid)
 RETURNS boolean
 LANGUAGE sql

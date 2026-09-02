@@ -18,7 +18,8 @@
  *     designado.
  *   - `capturarDiario` e `consolidarSessao` funcionam no contexto do
  *     substituto, com `autor_id` = substituto e `numero_sequencial_paciente`
- *     populado (prova que `session_update` também entrou na régua).
+ *     populado via `app_session_definir_numero_sequencial` (DEFINER com guard
+ *     da mesma régua — `session_update` NÃO foi estendida ao substituto).
  *   - Fila (`lib/sessao/fila.ts`): a sessão travada aparece para a titular E
  *     para o substituto (`minha = true` nos dois), nunca para terapeuta alheio.
  *   - `ehDono` em `/sessoes/[id]` e `/revisao/[sessionId]` é verdadeiro para os
@@ -336,8 +337,8 @@ describe.skipIf(!hasDb)("#539 · profissional responsável pela sessão", () => 
     const nota =
       await owner`SELECT autor_id FROM session_note WHERE session_id = ${S_SUB_LOGIC} AND tipo = 'nota_consolidada'`;
     expect(nota[0]!.autor_id).toBe(U_SUB);
-    // `session_update` entrou na régua: o UPDATE do número não foi filtrado
-    // em silêncio pelo USING.
+    // O número veio por `app_session_definir_numero_sequencial` (DEFINER):
+    // sob `session_update` o UPDATE do substituto afetava 0 linhas em silêncio.
     const sess =
       await owner`SELECT numero_sequencial_paciente FROM session WHERE id = ${S_SUB_LOGIC}`;
     expect(sess[0]!.numero_sequencial_paciente).toBe(1);

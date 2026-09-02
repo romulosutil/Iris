@@ -665,14 +665,16 @@ async function consolidarSessaoCore(
         });
 
       // 2) popula numero_sequencial_paciente só se ainda nulo (idempotente):
-      //    próximo inteiro por paciente, resolvido via helper SECURITY DEFINER
-      //    (app_proximo_numero_sequencial) — precisa enxergar TODAS as sessões
-      //    do paciente na clínica, não só as que o RLS deixa este terapeuta
-      //    ver (um terapeuta de cobertura, fora da equipe, subestimaria o
-      //    MAX() se calculado sob o próprio RLS). O índice único
-      //    `uq_session_numero_por_paciente` fecha a corrida remanescente
-      //    entre duas consolidações concorrentes: se o UPDATE colidir, relemos
-      //    o número já gravado pela outra transação (idempotente).
+      //    `app_session_definir_numero_sequencial` (0142, #539) é SECURITY
+      //    DEFINER com guard interno — tenant + `app_session_profissional_
+      //    responsavel` (titular OU substituto). Sai daqui o UPDATE direto em
+      //    `session`: sob `session_update` o substituto afetava 0 linhas em
+      //    silêncio, e a alternativa (estender a policy) deixaria ele
+      //    remarcar/cancelar/reatribuir a sessão. O DEFINER também enxerga
+      //    TODAS as sessões do paciente para o MAX() (cobertura fora da equipe
+      //    subestimaria sob a própria RLS) e resolve a corrida de duas
+      //    consolidações concorrentes (23505 em `uq_session_numero_por_paciente`)
+      //    relendo o número já gravado, na subtransação certa.
       const [sess] = await tx
         .select({
           patientId: session.patientId,
@@ -682,32 +684,10 @@ async function consolidarSessaoCore(
         .where(eq(session.id, sid));
       let numero = sess!.numero ?? null;
       if (numero === null) {
-        try {
-          const upd = await tx.execute(sql`
-            UPDATE session SET numero_sequencial_paciente =
-              app_proximo_numero_sequencial(${sess!.patientId})
-            WHERE id = ${sid} AND numero_sequencial_paciente IS NULL
-            RETURNING numero_sequencial_paciente AS numero`);
-          const row = (upd as unknown as Array<{ numero: number }>)[0];
-          numero = row?.numero ?? sess!.numero ?? null;
-        } catch (err) {
-          // Corrida: outra consolidação concorrente já gravou o número
-          // (violação de uq_session_numero_por_paciente). Relemos o valor
-          // já persistido — mantém a operação idempotente.
-          if (
-            err instanceof Error &&
-            "code" in err &&
-            (err as { code?: string }).code === "23505"
-          ) {
-            const [atual] = await tx
-              .select({ numero: session.numeroSequencialPaciente })
-              .from(session)
-              .where(eq(session.id, sid));
-            numero = atual?.numero ?? null;
-          } else {
-            throw err;
-          }
-        }
+        const upd = await tx.execute(sql`
+          SELECT app_session_definir_numero_sequencial(${sid}::uuid) AS numero`);
+        const row = (upd as unknown as Array<{ numero: number | null }>)[0];
+        numero = row?.numero ?? null;
       }
 
       // 3) #174 regra 6: a nota consolidada é registro clínico — se o paciente

@@ -259,7 +259,7 @@ async function comoDono(tx: postgres.TransactionSql) {
  * `clinic`, `clinic_id = ...` puro, com papel, e com FK de paciente).
  */
 /**
- * As 23 funções que resolvem o tenant pelo helper (`0087`, resíduo do D16; `0142` #529; `0143` #539).
+ * As 24 funções que resolvem o tenant pelo helper (`0087`, resíduo do D16; `0142` #529; `0143` #539).
  *
  * Todas são `SECURITY DEFINER` menos nenhuma — e é justamente por isso que elas
  * importam: uma função DEFINER roda com os direitos do dono, ou seja, IGNORA a
@@ -304,6 +304,11 @@ const FUNCOES_COM_HELPER = [
   // #262 (0095) — grava dados cadastrais/fiscais da clínica (página Dados).
   "app_salvar_dados_clinica",
   "app_session_clinica_visivel",
+  // #539 (0143, revisão pós-PR) — DEFINER que grava o número sequencial da
+  // sessão para titular OU substituto; guard interno = tenant +
+  // app_session_profissional_responsavel. Substitui o UPDATE direto em
+  // `session` sem estender `session_update` ao substituto.
+  "app_session_definir_numero_sequencial",
   // #539 (0143, D-AUD-7) — régua única de "profissional responsável":
   // `terapeuta_id OU atendido_por_id`. SECURITY INVOKER (lê `session` sob a
   // RLS de quem chama); o guard de tenant é redundante com a RLS e está lá
@@ -524,7 +529,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.relname)).toEqual([]);
   });
 
-  test("as 23 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
+  test("as 24 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
     // Mesmo raciocínio do literal de policies: o oráculo é escrito à mão para
     // que uma função NOVA que entre no regime (ou uma que saia) precise de uma
     // linha aqui, no diff, e não passe por osmose.
@@ -537,7 +542,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_HELPER);
-    expect(FUNCOES_COM_HELPER.length).toBe(23);
+    expect(FUNCOES_COM_HELPER.length).toBe(24);
   });
 
   // ─── 2d. Q-05 (#529): oráculo SISTÊMICO de definers ───────────────────────
