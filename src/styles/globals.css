@@ -351,8 +351,8 @@
   --status-ia-fg: #45286e;
   --status-ia-border: #6a4c93;
 
-  /* Candidato a domínio (DS §3.C): fato derivado de decisão humana — nível de
-     ajuda caindo em sessões consecutivas — ainda não consolidado. Âmbar-neutro
+  /* Candidato a domínio (DS §3.C): candidatura OFICIAL registrada
+     (goal_candidacy / milestone_candidacy), ainda não dominada. Âmbar-neutro
      com borda sólida fina. NUNCA o violeta/tracejado: aquele é "sugerido pela
      IA, ainda não é fato" (DS-02, #538). Contraste medido (WCAG 2.1):
      fg/bg 7.45:1 · fg/surface-card 8.94:1 · borda/bg 4.09:1 ·

@@ -51,7 +51,9 @@ const META_CONQ = "44444444-4444-4444-4444-444444444444";
 const META_CAND = "55555555-5555-5555-5555-555555555555";
 const PROTO = "66666666-6666-6666-6666-666666666666";
 
-// Forma REAL do snapshot (materializar.ts): indexado por META, snake_case.
+// Forma REAL do snapshot (materializar.ts / anamnese): indexado por META,
+// snake_case; `metrica` ora objeto, ora string. O ESTADO do marco, porém, vem
+// do status oficial (`estadoDasMetas` + `candidatoOficial`), não do snapshot.
 const dados: TimelineData = {
   snapshots: [
     {
@@ -61,7 +63,7 @@ const dados: TimelineData = {
         [META_CONQ]: {
           nivel_ajuda_recente: 0,
           contagem: 3,
-          is_candidata: false,
+          is_candidata: true,
         },
         [META_CAND]: {
           nivel_ajuda_recente: 1,
@@ -75,6 +77,13 @@ const dados: TimelineData = {
             tipo_estrutura: "marco_simples",
             rotulo: "evolucao",
             metrica: { eixo: "nivel_ajuda", ordinalRecente: 0 },
+          },
+        },
+        [META_CAND]: {
+          [PROTO]: {
+            tipo_estrutura: "marco_simples",
+            rotulo: "Pede com duas palavras",
+            metrica: "nivel_ajuda",
           },
         },
       },
@@ -102,8 +111,11 @@ const dados: TimelineData = {
       espectro: { eixos: [], naoClassificados: 0 },
     },
   ],
+  estadoDasMetas: {
+    [META_CONQ]: { estado: "dominada", candidataOficial: false },
+    [META_CAND]: { estado: "ativa", candidataOficial: true },
+  },
   metasAtivas: [
-    { id: META_CONQ, descricao: "Pedir água", disciplina: "ABA" },
     { id: META_CAND, descricao: "Pedir com duas palavras", disciplina: "ABA" },
   ],
   protocolosAtivos: [{ id: PROTO, nome: "VB-MAPP", disciplina: "ABA" }],
@@ -117,6 +129,7 @@ const dados: TimelineData = {
       tipoEstrutura: "marco",
       ordem: 1,
       goalIds: [META_CONQ],
+      candidatoOficial: false,
     },
     {
       id: M_CAND,
@@ -127,6 +140,7 @@ const dados: TimelineData = {
       tipoEstrutura: "marco",
       ordem: 2,
       goalIds: [META_CAND],
+      candidatoOficial: false,
     },
     {
       id: M_NAO,
@@ -137,6 +151,7 @@ const dados: TimelineData = {
       tipoEstrutura: "marco",
       ordem: 3,
       goalIds: [],
+      candidatoOficial: false,
     },
   ],
 };
@@ -150,8 +165,8 @@ test("TimelineClient — vista 'No tempo' (marcos conquistado/candidato/não ati
       vista="tempo"
     />,
   );
-  // A-06: o estado vem do snapshot REAL (por meta, snake_case), não de campos
-  // camelCase inexistentes — antes tudo caía em "não atingido".
+  // Estado pelo status OFICIAL (meta dominada / candidatura registrada), não
+  // pela heurística do snapshot — revisão da PR #556.
   expect(screen.getByRole("img", { name: "Conquistado" })).not.toBeNull();
   expect(
     screen.getByRole("img", { name: "Candidato a domínio" }),

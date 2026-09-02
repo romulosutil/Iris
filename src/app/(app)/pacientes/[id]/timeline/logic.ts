@@ -1,3 +1,5 @@
+import type { MarcoStatusEstado } from "@/components/ui/patterns/marco-status";
+
 /** Espelha `RepertorioEntry` de `snapshot-schema.ts` (A-06) — fonte única da forma. */
 interface RepertorioItem {
   nivel_ajuda_recente: number | null;
@@ -149,4 +151,46 @@ export function verificarProtocoloMudou(
   }
 
   return false;
+}
+
+/* ───────────────────────── Estado epistêmico do marco ───────────────────────── */
+
+/** Estado OFICIAL de uma meta: `goal.estado` + `goal_candidacy.is_candidate_dominada`. */
+export type EstadoMetaOficial = {
+  estado: "rascunho" | "ativa" | "dominada" | "pausada" | "descontinuada";
+  candidataOficial: boolean;
+};
+
+export type EstadoDasMetas = Record<string, EstadoMetaOficial>;
+
+/**
+ * Estado epistêmico de um MARCO (revisão da PR #556, 03/09/2026):
+ *
+ * - `conquistado` só quando alguma meta mapeada ao marco está `dominada` —
+ *   status oficial, critério de domínio cumprido (`criterio_dominio`).
+ *   `nivel_ajuda_recente === 0` NÃO basta: é só a última observação
+ *   independente (`espectro.ts`); domínio exige N consecutivas.
+ * - `candidato` só pela candidatura OFICIAL (`goal_candidacy` ou
+ *   `milestone_candidacy`). `repertorio_state.is_candidata` é placeholder
+ *   heurístico (`contagem >= 3`, `segmentacao.ts`) e não entra aqui.
+ * - senão `nao_atingido`.
+ *
+ * Marco com várias metas herda o MELHOR estado nessa escala
+ * (dominada > candidata > nada). Decisão a ratificar pelo Rômulo.
+ */
+export function estadoDoMarco(
+  metas: EstadoDasMetas,
+  goalIds: string[],
+  marcoCandidatoOficial = false,
+): MarcoStatusEstado {
+  let estado: MarcoStatusEstado = marcoCandidatoOficial
+    ? "candidato"
+    : "nao_atingido";
+  for (const goalId of goalIds) {
+    const meta = metas[goalId];
+    if (!meta) continue;
+    if (meta.estado === "dominada") return "conquistado";
+    if (meta.candidataOficial) estado = "candidato";
+  }
+  return estado;
 }

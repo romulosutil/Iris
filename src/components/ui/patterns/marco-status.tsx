@@ -6,12 +6,15 @@ import { surface } from "@/components/ui/primitives/surface";
  * Estado epistêmico de um marco do protocolo numa sessão (princípio 4 do DS:
  * "candidato" ≠ "conquistado").
  *
- * - `conquistado`: fato consolidado — preenchimento sólido menta + borda cheia.
- * - `candidato`: candidato a domínio. É fato derivado de decisão HUMANA (nível
- *   de ajuda caindo em sessões consecutivas), só ainda não consolidado — por
- *   isso usa o par `--status-progresso-*` (âmbar-neutro, borda sólida fina,
- *   hachura suave) e NUNCA o violeta/tracejado de "sugerido pela IA" (DS-02).
- * - `nao_atingido`: sem evidência de domínio — contorno tracejado neutro.
+ * - `conquistado`: a meta mapeada ao marco está `dominada` — status OFICIAL
+ *   (`goal.estado`, critério de domínio cumprido). Preenchimento sólido menta
+ *   + borda cheia. Nível de ajuda 0 numa sessão NÃO basta.
+ * - `candidato`: candidatura OFICIAL registrada (`goal_candidacy` /
+ *   `milestone_candidacy`), ainda não dominada. Fato derivado de decisão
+ *   humana — por isso o par `--status-progresso-*` (âmbar-neutro, borda
+ *   sólida fina, hachura suave) e NUNCA o violeta/tracejado de "sugerido pela
+ *   IA" (DS-02). A heurística `is_candidata` do snapshot não entra.
+ * - `nao_atingido`: nem dominada nem candidata — contorno tracejado neutro.
  */
 export type MarcoStatusEstado = "conquistado" | "candidato" | "nao_atingido";
 

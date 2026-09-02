@@ -7,6 +7,7 @@ import {
   goal,
   goalCandidacy,
   goalMilestoneMapping,
+  milestoneCandidacy,
   milestone,
   patientProtocol,
   protocol,
@@ -24,6 +25,7 @@ import {
   calcularDelta,
   verificarProtocoloMudou,
   type DeltaSessao,
+  type EstadoDasMetas,
 } from "./logic";
 import { z } from "zod";
 import {
@@ -45,6 +47,12 @@ export interface TimelineSnapshot {
 
 export interface TimelineData {
   snapshots: TimelineSnapshot[];
+  /**
+   * Estado OFICIAL de cada meta (`goal.estado` + `goal_candidacy`) — é daqui,
+   * e não do `repertorio_state` (heurístico), que `estadoDoMarco` decide
+   * conquistado/candidato (revisão da PR #556). Inclui metas não ativas.
+   */
+  estadoDasMetas: EstadoDasMetas;
   metasAtivas: Array<{
     id: string;
     descricao: string;
@@ -62,6 +70,8 @@ export interface TimelineData {
     /** Metas mapeadas a este marco (`goal_milestone_mapping`). O snapshot é
      * indexado por META; é por aqui que a tela resolve o estado de um MARCO. */
     goalIds: string[];
+    /** `milestone_candidacy.is_candidate` — candidatura oficial do marco. */
+    candidatoOficial: boolean;
   }>;
 }
 
@@ -155,6 +165,29 @@ export async function carregarTimeline(
           .where(inArray(goalCandidacy.goalId, metaIds))
       : [];
 
+    // Candidatura oficial do MARCO (`milestone_candidacy`), par da candidatura
+    // da meta acima — as duas alimentam `estadoDoMarco`.
+    const candidaturasMarco = milestones.length
+      ? await tx
+          .select({
+            milestoneId: milestoneCandidacy.milestoneId,
+            isCandidate: milestoneCandidacy.isCandidate,
+          })
+          .from(milestoneCandidacy)
+          .where(
+            and(
+              eq(milestoneCandidacy.patientId, patientId),
+              inArray(
+                milestoneCandidacy.milestoneId,
+                milestones.map((m) => m.id),
+              ),
+            ),
+          )
+      : [];
+    const candidaturaMarcoMap = new Map(
+      candidaturasMarco.map((c) => [c.milestoneId, c.isCandidate]),
+    );
+
     // Inverso do mapeamento: marco → metas. A tela usa para ler o estado de
     // um marco no `repertorio_state` (indexado por meta).
     const metasDoMarco = new Map<string, string[]>();
@@ -168,6 +201,19 @@ export async function carregarTimeline(
     const milestoneMap = new Map(milestones.map((m) => [m.id, m]));
     const candidaturaMap = new Map(
       candidaturas.map((c) => [c.goalId, c.isCandidata]),
+    );
+
+    // Estado OFICIAL por meta (goal.estado + goal_candidacy) — base do
+    // `estadoDoMarco` (revisão da PR #556). Depois de `candidaturaMap`, que
+    // ele consome.
+    const estadoDasMetas: EstadoDasMetas = Object.fromEntries(
+      metas.map((m) => [
+        m.id,
+        {
+          estado: m.estado as EstadoDasMetas[string]["estado"],
+          candidataOficial: candidaturaMap.get(m.id) ?? false,
+        },
+      ]),
     );
 
     // Uma meta pode mapear vários marcos; o primeiro que resolve domínio define
@@ -238,10 +284,12 @@ export async function carregarTimeline(
         tipoEstrutura: m.tipoEstrutura,
         ordem: m.ordem,
         goalIds: metasDoMarco.get(m.id) ?? [],
+        candidatoOficial: candidaturaMarcoMap.get(m.id) ?? false,
       }));
 
     return {
       snapshots,
+      estadoDasMetas,
       metasAtivas,
       protocolosAtivos,
       milestonesAtivos,

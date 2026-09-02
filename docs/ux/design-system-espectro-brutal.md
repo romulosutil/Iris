@@ -171,9 +171,13 @@ este modo já existe como variante de tema, não como retrabalho.
     `--pattern-progresso-hachura` (listras a 30% da borda, baixo contraste de
     propósito — §5 proíbe padrão repetitivo de alto contraste). Classes:
     `bg/text/border-status-progresso-*`.
-  - **Semântica:** "candidato a domínio" é **fato derivado de decisão humana**
-    (nível de ajuda caindo em sessões consecutivas), só ainda não consolidado.
-    Por isso é âmbar-neutro com **borda sólida fina** — nunca o
+  - **Semântica:** "conquistado" = meta **`dominada`** (status oficial,
+    critério de domínio cumprido); "candidato a domínio" = **candidatura
+    oficial registrada** (`goal_candidacy` / `milestone_candidacy`), ainda não
+    dominada. Nem nível de ajuda 0 numa sessão nem a heurística `is_candidata`
+    do snapshot bastam. Marco com várias metas herda o melhor estado
+    (dominada > candidata > nada). O candidato é fato derivado de decisão
+    humana, por isso é âmbar-neutro com **borda sólida fina** — nunca o
     violeta/tracejado de `--status-ia-*`, que significa "sugerido pela IA,
     ainda não é fato". Três estados, três formas: círculo cheio menta
     (conquistado), quadrado hachurado âmbar (candidato), círculo tracejado
