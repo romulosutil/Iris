@@ -90,20 +90,24 @@ export async function executarExportacao(url, token, deps = {}) {
       signal: controller.signal,
     });
     const corpo = await resposta.text();
-    if (!resposta.ok) {
-      return {
-        ok: false,
-        falha: "status",
-        erro: `HTTP ${resposta.status}`,
-        corpo,
-      };
-    }
+    // O corpo é lido ANTES do status: a rota responde 500 justamente quando há
+    // bundle `falhou` (Q-07), então classificar por status primeiro deixaria o
+    // modo `bundle` inalcançável em produção e o log diria "HTTP 500" onde a
+    // causa é "2 bundles falharam". JSON ilegível conta 0 e cai no `status`.
     const bundlesFalhos = contarBundlesFalhos(corpo);
     if (bundlesFalhos > 0) {
       return {
         ok: false,
         falha: "bundle",
-        erro: `${bundlesFalhos} bundle(s) falharam na montagem`,
+        erro: `${bundlesFalhos} bundle(s) falharam na montagem (HTTP ${resposta.status})`,
+        corpo,
+      };
+    }
+    if (!resposta.ok) {
+      return {
+        ok: false,
+        falha: "status",
+        erro: `HTTP ${resposta.status}`,
         corpo,
       };
     }
