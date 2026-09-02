@@ -1044,6 +1044,13 @@
       "when": 1788190231804,
       "tag": "0148_metricas_extracao_view",
       "breakpoints": true
+    },
+    {
+      "idx": 149,
+      "version": "7",
+      "when": 1788190232804,
+      "tag": "0149_session_sob_sigilo_guard_tenant",
+      "breakpoints": true
     }
   ]
 }

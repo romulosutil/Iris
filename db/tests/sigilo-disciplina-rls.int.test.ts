@@ -1,11 +1,13 @@
 /**
  * #119 — Sigilo profissional por disciplina dentro do prontuário multidisciplinar.
  * Objeto sob teste: migrações 0120 (schema), 0121 (helpers DEFINER), 0122 (policies RLS),
- * 0123 (grant UPDATE coluna) e 0124 (revoke SELECT trecho_fonte).
+ * 0123 (grant UPDATE coluna), 0124 (revoke SELECT trecho_fonte), 0142 (#529, guard de tenant
+ * em `app_alerta_trecho_fonte`) e 0149 (#552, guard de tenant em `app_session_sob_sigilo`).
  *
  * Régua de mutação por comportamento (AGENTS.md §5.2 ponto 5):
- * 13 asserções independentes cobrindo barreira de leitura, escrita, herança de extração/áudio,
- * mascaramento de trecho_fonte em alertas e trilho de escalonamento.
+ * 18 asserções independentes cobrindo barreira de leitura, escrita, herança de extração/áudio,
+ * mascaramento de trecho_fonte em alertas, trilho de escalonamento e a fronteira de tenant
+ * DENTRO dos dois definers.
  *
  * Roda com `pnpm test:rls`. Gate de env em `integration-env.ts`.
  */
@@ -285,6 +287,57 @@ describe.skipIf(!hasDb)("#119 · Sigilo por disciplina no prontuário sob RLS", 
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]!.trecho_fonte).toBe("Citação Literal RPD Sem Sessão");
+  });
+
+  // ─── #552: fronteira de tenant DENTRO de app_session_sob_sigilo ─────────────
+  //
+  // `app_session_sob_sigilo` é SECURITY DEFINER com EXECUTE para `app_role` e,
+  // até a 0149, sem predicado de clínica: qualquer app_role de qualquer tenant
+  // que conhecesse o UUID de uma sessão descobria se ela tem nota
+  // `discipline_only`. É 1 bit sem conteúdo — mas é um bit que fala de sigilo
+  // clínico. A chamada é feita SEM `FROM session` de propósito: passar pela
+  // tabela deixaria a RLS filtrar a linha antes e o teste ficaria verde pelo
+  // motivo errado, sem exercitar o definer.
+
+  test("16. app_session_sob_sigilo: coordenadora de OUTRA clínica -> false (nunca o bit de sigilo)", async () => {
+    const rows = await withTenant(ctx("coordenador", U_COORD_B, CLINIC_B), (db) =>
+      db.execute(sql`SELECT app_session_sob_sigilo(${SESS_SIGILOSA}::uuid) AS sob_sigilo`),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.sob_sigilo).toBe(false);
+  });
+
+  test("17. app_session_sob_sigilo: in-tenant intacto — sigilosa true, pública false (contraprova)", async () => {
+    // Sem esta contraprova, um definer que devolvesse false SEMPRE passaria no
+    // caso 16 e desligaria o sigilo por disciplina do produto inteiro.
+    const rows = await withTenant(ctx("coordenador", U_COORD), (db) =>
+      db.execute(sql`
+        SELECT app_session_sob_sigilo(${SESS_SIGILOSA}::uuid) AS sigilosa,
+               app_session_sob_sigilo(${SESS_PUBLICA}::uuid) AS publica`),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.sigilosa).toBe(true);
+    expect(rows[0]!.publica).toBe(false);
+  });
+
+  test("18. app_session_conteudo_visivel: resultado idêntico ao de antes do guard (contraprova do Design §2)", async () => {
+    // O guard novo faz `NOT app_session_sob_sigilo(x)` virar true para sessão
+    // alheia, mas o `AND app_session_clinica_visivel(x)` já era false: o
+    // composto continua false cross-tenant. In-tenant nada muda.
+    const alheia = await withTenant(ctx("coordenador", U_COORD_B, CLINIC_B), (db) =>
+      db.execute(sql`SELECT app_session_conteudo_visivel(${SESS_SIGILOSA}::uuid) AS v`),
+    );
+    expect(alheia[0]!.v).toBe(false);
+
+    // Coordenadora de A não é da disciplina da sessão sigilosa: continua sem
+    // ver o conteúdo dela e continua vendo o da sessão pública.
+    const propria = await withTenant(ctx("coordenador", U_COORD), (db) =>
+      db.execute(sql`
+        SELECT app_session_conteudo_visivel(${SESS_SIGILOSA}::uuid) AS sigilosa,
+               app_session_conteudo_visivel(${SESS_PUBLICA}::uuid) AS publica`),
+    );
+    expect(propria[0]!.sigilosa).toBe(false);
+    expect(propria[0]!.publica).toBe(true);
   });
 });
 

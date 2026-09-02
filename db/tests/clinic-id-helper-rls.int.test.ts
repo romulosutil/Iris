@@ -259,7 +259,7 @@ async function comoDono(tx: postgres.TransactionSql) {
  * `clinic`, `clinic_id = ...` puro, com papel, e com FK de paciente).
  */
 /**
- * As 24 funções que resolvem o tenant pelo helper (`0087`, resíduo do D16; `0142` #529; `0143` #539).
+ * As 25 funções que resolvem o tenant pelo helper (`0087`, resíduo do D16; `0142` #529; `0143` #539; `0149` #552).
  *
  * Todas são `SECURITY DEFINER` menos nenhuma — e é justamente por isso que elas
  * importam: uma função DEFINER roda com os direitos do dono, ou seja, IGNORA a
@@ -314,6 +314,11 @@ const FUNCOES_COM_HELPER = [
   // RLS de quem chama); o guard de tenant é redundante com a RLS e está lá
   // por disciplina D16.
   "app_session_profissional_responsavel",
+  // #552 (0149) — saiu de DEFINERS_GLOBAIS_JUSTIFICADOS: o bit "esta sessão tem
+  // nota discipline_only" era legível por qualquer app_role de qualquer tenant
+  // que conhecesse o UUID. O guard interno é a única fronteira (DEFINER ignora
+  // a RLS de `session_note`) e espelha o predicado de tenant das policies dela.
+  "app_session_sob_sigilo",
   "app_session_terapeuta_id",
   "app_user_in_clinic",
   // #407/T05 — definer de validação da anamnese: resolve tenant por
@@ -421,8 +426,6 @@ const DEFINERS_GLOBAIS_JUSTIFICADOS: Record<string, string> = {
     "RETURNS void: UPSERT em job_heartbeat (0146, #536) — tabela sem clinic_id e sem PHI (só job, dois timestamptz e detalhe truncado a 200, que os helpers preenchem só com contagens/name+code). Valida por dentro o mapa job→role com pg_has_role(session_user, …): app_role só grava billing/conciliacao/exportacao/asr/asr-sweeper; retencao/arquivamento/escalonamento/expurgo-audit-log exigem a role de job; fora do mapa é P0001. Provado em db/tests/job-heartbeat-rls.int.test.ts (casos 5, 6, 7 e 10).",
   app_materializar_snapshot:
     "DEPRECATED (#392): corpo é só RAISE NOTICE, não lê nem escreve tabela alguma. Mantida por compatibilidade de assinatura; remover a função é migração própria, fora do #529.",
-  app_session_sob_sigilo:
-    "Devolve boolean 'esta sessão tem nota discipline_only' (0122, #119). 1 bit por uuid de sessão, sem conteúdo. Só é lida dentro de app_session_conteudo_visivel, que a coloca em AND com app_session_clinica_visivel (guard de tenant). Candidata a ganhar guard próprio — proposta registrada na PR do #529.",
 };
 
 const TABELAS_COM_DADO = [
@@ -531,7 +534,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.relname)).toEqual([]);
   });
 
-  test("as 24 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
+  test("as 25 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
     // Mesmo raciocínio do literal de policies: o oráculo é escrito à mão para
     // que uma função NOVA que entre no regime (ou uma que saia) precise de uma
     // linha aqui, no diff, e não passe por osmose.
@@ -544,12 +547,12 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_HELPER);
-    expect(FUNCOES_COM_HELPER.length).toBe(24);
+    expect(FUNCOES_COM_HELPER.length).toBe(25);
   });
 
   // ─── 2d. Q-05 (#529): oráculo SISTÊMICO de definers ───────────────────────
   //
-  // O caso acima é uma allowlist POSITIVA: "estas 22 funções usam o helper".
+  // O caso acima é uma allowlist POSITIVA: "estas 25 funções usam o helper".
   // Ele acusa quem SAI do regime, mas não quem nunca entrou — um DEFINER novo
   // sem guard nenhum não aparece em lista nenhuma e passa limpo. Foi assim que
   // `app_alerta_trecho_fonte` (0122, S-02) e o PR #422 atravessaram o CI.
@@ -679,7 +682,10 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
         20,
       );
     }
-    expect(Object.keys(DEFINERS_GLOBAIS_JUSTIFICADOS).length).toBe(6);
+    // #552 (0149): 6 → 5. `app_session_sob_sigilo` ganhou guard próprio e
+    // migrou para FUNCOES_COM_HELPER; manter a justificativa aqui faria o
+    // laço acima falhar em `${fn} já tem guard — tirar da allowlist`.
+    expect(Object.keys(DEFINERS_GLOBAIS_JUSTIFICADOS).length).toBe(5);
   });
 
   // ─── 2c. D23: guards de papel e identidade (0093) ──────────────────────────
