@@ -6,13 +6,17 @@ import { describe, expect, test } from "vitest";
  * `.env.example` é o mapa obrigatório de configuração (CLAUDE.md, AGENTS.md
  * §5.5): quem sobe um serviço novo no Easypanel ou monta um mock lê dali.
  * A auditoria 360 (DX-01) achou 17 variáveis lidas no código sem linha no
- * arquivo — um agente que confiasse no mapa nasceria sem `INTERNAL_JOB_TOKEN`
- * ou sem `ALARME_DATABASE_URL`. Este guard estático compara os dois conjuntos.
+ * arquivo (14 de configuração real; as outras 3 — `NODE_ENV`, `CI_BASE_REF`,
+ * `ALVO` — são do runtime/CI e estão na allowlist abaixo) — um agente que
+ * confiasse no mapa nasceria sem `ALARME_DATABASE_URL`. Este guard estático
+ * compara os dois conjuntos.
  *
- * Regra: toda variável lida via `process.env.<NOME>` em `src|scripts|infra`
- * tem uma linha `<NOME>=` ou `# <NOME>=` no `.env.example` (comentada vale —
- * documenta nome, default e onde vai). Fora da regra só o que não é
- * configuração do produto (allowlist abaixo, cada item com o porquê).
+ * Regra: toda variável lida via `process.env.<NOME>` ou `process.env["<NOME>"]`
+ * em `src|scripts|infra` tem uma linha `<NOME>=` ou `# <NOME>=` no
+ * `.env.example` (comentada vale — documenta nome, default e onde vai). Fora
+ * da regra só o que não é configuração do produto (allowlist abaixo, cada item
+ * com o porquê). Limite declarado: acesso dinâmico (`process.env[nome]` com
+ * variável) não é rastreável estaticamente e fica fora do guard.
  */
 
 const RAIZ = path.resolve(__dirname, "..");
@@ -25,6 +29,10 @@ const ALLOWLIST: ReadonlyMap<string, string> = new Map([
   [
     "ALVO",
     "parâmetro interno de scripts/ci/verificar-deps-imagem.mjs (roda dentro da imagem, no CI)",
+  ],
+  [
+    "INTERNAL_JOB_TOKEN",
+    "fallback da rota de exportação que a PR #545 remove (A-05); não documentar no .env.example. Quando #545 mergear, o teste de allowlist órfã abaixo obriga a tirar esta linha",
   ],
 ]);
 /** Prefixos inteiros fora da regra (variáveis do runner de CI). */
@@ -49,8 +57,10 @@ export function variaveisLidasNoCodigo(raiz = RAIZ): Map<string, string[]> {
   for (const pasta of PASTAS) {
     for (const arquivo of listarArquivos(path.join(raiz, pasta))) {
       const conteudo = readFileSync(arquivo, "utf8");
-      for (const m of conteudo.matchAll(/process\.env\.([A-Z][A-Z0-9_]*)/g)) {
-        const nome = m[1];
+      for (const m of conteudo.matchAll(
+        /process\.env(?:\.([A-Z][A-Z0-9_]*)|\[["']([A-Z][A-Z0-9_]*)["']\])/g,
+      )) {
+        const nome = m[1] ?? m[2];
         if (!nome) continue;
         const lista = usos.get(nome) ?? [];
         const rel = path.relative(raiz, arquivo).replaceAll("\\", "/");
