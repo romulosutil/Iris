@@ -9,11 +9,16 @@ import {
   clinic,
   extraction,
   goal,
+  patient,
   session,
   sessionNote,
   sessionProtocolScope,
 } from "@/db/schema";
 import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
+import {
+  assertPodeDocumentar,
+  ProntuarioIncompletoError,
+} from "@/lib/patient/assert-pode-documentar";
 import { resolveProvider } from "@/lib/extraction/provider";
 import type { ExtractionDraft } from "@/lib/extraction/provider";
 import type { AlertaRiscoAgente } from "@/lib/extraction/agent-output-schema";
@@ -105,6 +110,43 @@ async function capturarDiarioCore(
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
   try {
     const row = await withTenant(ctx, async (tx) => {
+      // T07/T07b — extensão da MESMA leitura que já existia (antes só para o
+      // desarquivamento, #174 regra 6): resolve paciente + modalidade ANTES
+      // de qualquer escrita, na mesma transação da régua e do INSERT. A régua
+      // (`assertPodeDocumentar`) precisa correr aqui dentro, e não na action:
+      // a action é alcançável sem passar pela página `/sessoes/[id]`, então
+      // era a única leitura da regra e nenhuma escrita.
+      //
+      // `leftJoin`, não `innerJoin`, DE PROPÓSITO: `session.patientId` vem da
+      // própria tabela `session` (sempre visível a quem pode gravar a nota —
+      // é a mesma leitura que já existia), mas `patient` tem RLS por EQUIPE
+      // (`patient_select`, 0001) — um terapeuta de COBERTURA (dono da sessão,
+      // fora da care team, #506/D8) não enxerga a linha do paciente. Com
+      // `innerJoin`, essa combinação (sessão existe, paciente ilegível) faria
+      // o SELECT inteiro devolver zero linhas: `sess` viraria `undefined`, o
+      // `if (sess)` abaixo pularia a régua por inteiro, e a escrita passaria
+      // SEM checagem nenhuma — o oposto exato do que esta task existe para
+      // fechar. Com `leftJoin`, `sess` continua populado (`clinicalModality`
+      // vem `null`) e a régua roda mesmo assim: sem enxergar a modalidade,
+      // `montarProntidao` cai no degrau "modalidade" (bloqueante) e RECUSA —
+      // fail-closed, nunca fail-open.
+      const [sess] = await tx
+        .select({
+          patientId: session.patientId,
+          clinicalModality: patient.clinicalModality,
+        })
+        .from(session)
+        .leftJoin(patient, eq(patient.id, session.patientId))
+        .where(eq(session.id, parsed.data.sessionId));
+      if (sess) {
+        await assertPodeDocumentar(
+          ctx,
+          tx,
+          sess.patientId,
+          sess.clinicalModality ?? null,
+        );
+      }
+
       const [nota] = await tx
         .insert(sessionNote)
         .values({
@@ -129,10 +171,6 @@ async function capturarDiarioCore(
 
       // #174 regra 6, na MESMA transação da nota: ou o registro clínico e o
       // desarquivamento existem juntos, ou nenhum dos dois existe.
-      const [sess] = await tx
-        .select({ patientId: session.patientId })
-        .from(session)
-        .where(eq(session.id, parsed.data.sessionId));
       if (sess) {
         await desarquivarPacienteSeArquivado(
           tx,
@@ -146,6 +184,10 @@ async function capturarDiarioCore(
     });
     return { id: row!.id };
   } catch (err) {
+    // Repassa intacto para o `actions.ts` traduzir: é recusa de regra de
+    // negócio, não falha de infra — `mensagemDeConsentimento` não a explica
+    // (não é RLS de consentimento) e `console.error` a trataria como bug.
+    if (err instanceof ProntuarioIncompletoError) throw err;
     const msg = await mensagemDeConsentimento(ctx, err, {
       sessionId: parsed.data.sessionId,
     });
@@ -627,6 +669,38 @@ async function consolidarSessaoCore(
     // ── Fase A (transação): grava nota + número, coleta o estado necessário
     //    para decidir a re-extração e monta o contexto canônico do agente.
     const prep = await withTenant(ctx, async (tx) => {
+      // T07/T07b — a MESMA leitura que o passo 2) abaixo já fazia (patientId
+      // + numero), estendida com a modalidade e adiantada para ANTES de
+      // qualquer escrita: a régua (`assertPodeDocumentar`) precisa correr
+      // aqui dentro, na mesma transação da nota, para que uma meta
+      // descontinuada entre a checagem e o INSERT não passe pela régua.
+      //
+      // `leftJoin`, não `innerJoin` — mesmo motivo de `capturarDiarioCore`
+      // acima: `patient_select` é RLS por equipe, e um terapeuta de cobertura
+      // (dono da sessão, fora da care team) não enxergaria a linha do
+      // paciente. Um `innerJoin` faria `sess` vir `undefined` mesmo com a
+      // sessão existindo, e o código abaixo (`sess!.numero`, `sess!.patientId`)
+      // sempre assumiu `sess` presente — undefined ali é `TypeError`, não
+      // recusa controlada. Com `leftJoin`, `sess.patientId` (coluna de
+      // `session`, não de `patient`) permanece populado, e
+      // `clinicalModality` vem `null` quando ilegível — a régua RECUSA
+      // (degrau "modalidade") em vez de estourar.
+      const [sess] = await tx
+        .select({
+          patientId: session.patientId,
+          numero: session.numeroSequencialPaciente,
+          clinicalModality: patient.clinicalModality,
+        })
+        .from(session)
+        .leftJoin(patient, eq(patient.id, session.patientId))
+        .where(eq(session.id, sid));
+      await assertPodeDocumentar(
+        ctx,
+        tx,
+        sess!.patientId,
+        sess!.clinicalModality ?? null,
+      );
+
       // texto anterior (antes do upsert) → sabemos se o diário mudou
       const [notaAntiga] = await tx
         .select({ texto: sessionNote.texto })
@@ -670,13 +744,7 @@ async function consolidarSessaoCore(
       //    `uq_session_numero_por_paciente` fecha a corrida remanescente
       //    entre duas consolidações concorrentes: se o UPDATE colidir, relemos
       //    o número já gravado pela outra transação (idempotente).
-      const [sess] = await tx
-        .select({
-          patientId: session.patientId,
-          numero: session.numeroSequencialPaciente,
-        })
-        .from(session)
-        .where(eq(session.id, sid));
+      //    `sess` já foi lido acima, antes de qualquer escrita (T07b) — reusa.
       let numero = sess!.numero ?? null;
       if (numero === null) {
         try {
@@ -961,6 +1029,8 @@ async function consolidarSessaoCore(
     }
     return { numeroSequencial: prep.numero ?? undefined, aviso: avisoExtracao };
   } catch (err) {
+    // Ver capturarDiarioCore: recusa de regra de negócio, repassada intacta.
+    if (err instanceof ProntuarioIncompletoError) throw err;
     const msg = await mensagemDeConsentimento(ctx, err, { sessionId: sid });
     if (msg) return { error: msg };
     console.error("consolidarSessao:", err);

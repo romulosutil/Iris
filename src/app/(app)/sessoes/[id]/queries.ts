@@ -17,7 +17,7 @@ import {
 } from "@/lib/sessao/estado";
 import { podeAutoValidar } from "@/lib/sessao/aprovacao";
 import { montarProntidao, type Prontidao } from "@/lib/patient/prontidao";
-import { obterFatosProntidao } from "@/app/(app)/pacientes/[id]/prontidao-queries";
+import { obterFatosProntidaoNaTx } from "@/app/(app)/pacientes/[id]/prontidao-queries";
 
 export type ProtocoloOpcao = { id: string; nome: string; disciplina: string };
 
@@ -184,7 +184,13 @@ export async function carregarSessao(
     // resultado que essa régua existe para impedir. Uma leitura que falhou
     // nunca pode ler como "livre para documentar": deixa o erro propagar e
     // `SessaoPage` estoura como qualquer outra falha de carregamento.
-    const fatosProntidao = await obterFatosProntidao(ctx, sess.patientId);
+    // `NaTx`, não a porta que abre `withTenant` própria: já estamos DENTRO da
+    // transação aberta por este `withTenant` — chamar a porta de fora
+    // aninharia uma segunda transação como SAVEPOINT do Drizzle (mesmo tenant
+    // hoje, mas uma armadilha à espreita — ver prontidao-queries.ts) e
+    // pagaria uma viagem extra ao banco sem necessidade. Mesma imagem do
+    // banco, uma transação só.
+    const fatosProntidao = await obterFatosProntidaoNaTx(tx, sess.patientId);
     const prontidao = montarProntidao({
       modalidade: pac?.clinicalModality,
       fatos: fatosProntidao,
