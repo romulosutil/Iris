@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireRole, RoleError } from "@/auth/require-role";
@@ -90,9 +91,51 @@ type ExtracaoAprovadaRow = {
   id: string;
   sessionId: string;
   subtipo: string;
-  payload: unknown;
-  payloadEditado: unknown;
+  /** Conteúdo EFETIVO já resolvido por `transicionar` (ver `conteudoEfetivo`). */
+  conteudo: unknown;
+  /** A transição saiu de `erro_validacao` (reaprovação depois do DLQ, #532). */
+  reaprovacaoDeErro: boolean;
 };
+
+// ─── Recusas explícitas da transição (#532, Q-01/Q-03) ─────────────────────
+// Lançadas DENTRO da transação: desfazem tudo (a extração volta ao estado e à
+// versão de antes) e chegam ao cliente como código, sem passar pelo DLQ —
+// não são quebra de pipeline, são pré-condição de negócio não atendida.
+// Diferente da falha genérica (que vira `erro_validacao`), aqui o terapeuta
+// tem o que fazer: consolidar a sessão, ou editar a extração com o alvo.
+export type CodigoRecusa = "EVIDENCIA_VAZIA" | "SESSAO_SEM_NUMERO";
+
+class TransicaoRecusada extends Error {
+  constructor(readonly codigo: CodigoRecusa) {
+    super(codigo);
+    this.name = "TransicaoRecusada";
+  }
+}
+
+/**
+ * O payload gravado em `extraction` é o objeto FLAT do subtipo
+ * (`LlmExtractionProvider.payloadDoSubtipo` → `e.evidencia`, e o stub demo
+ * grava `{alvos, polaridade}`), mas os leitores on-approve nasceram lendo a
+ * forma ANINHADA `{evidencia: {...}}` dos seeds de teste — em produção
+ * `alvos` saía sempre vazio e nenhuma `evidence` nascia na aprovação (achado
+ * ao fechar #532). Aceita as duas formas: chave do subtipo presente e objeto
+ * → aninhado; chave presente e `null` → sem conteúdo; ausente → o próprio
+ * payload é o conteúdo.
+ */
+function conteudoDoSubtipo(
+  payload: unknown,
+  subtipo: string,
+): Record<string, unknown> | null {
+  if (!payload || typeof payload !== "object") return null;
+  const p = payload as Record<string, unknown>;
+  if (subtipo in p) {
+    const aninhado = p[subtipo];
+    return aninhado && typeof aninhado === "object"
+      ? (aninhado as Record<string, unknown>)
+      : null;
+  }
+  return p;
+}
 
 // ─── Inserção de `reinforcer_profile` on-approve (Fase 4 · 4C.1) ───────────
 // Perfil vivo de reforçadores (modelo-de-dados.md §1.4): 1 linha por
@@ -119,10 +162,10 @@ async function inserirReforcadoresOnApprove(
   if (row.subtipo !== "preferencia_reforcador") return;
   if (sess.numero == null) return; // mesma trava de session ainda não consolidada (ver evidence acima)
 
-  const conteudo = (row.payloadEditado ?? row.payload) as {
-    preferencia_reforcador?: PreferenciaReforcadorConteudo;
-  };
-  const pref = conteudo?.preferencia_reforcador;
+  const pref = conteudoDoSubtipo(
+    row.conteudo,
+    "preferencia_reforcador",
+  ) as PreferenciaReforcadorConteudo;
   const itemAtividade = pref?.item_atividade?.trim();
   const valenciaBruta = pref?.valencia;
   if (!itemAtividade || !valenciaBruta) return;
@@ -177,28 +220,33 @@ async function inserirEvidenciasOnApprove(
   );
 
   if (sess.numero == null) {
-    // TODO(Fase 4): sessão ainda não consolidada (numero_sequencial_paciente
-    // nulo) — `evidence.session_numero` é NOT NULL, não dá pra inserir agora.
-    // A aprovação pode acontecer antes da consolidação da sessão (revisão
-    // assíncrona); quando a sessão for consolidada depois, o backfill
-    // (scripts/backfill-evidence.ts) cobre a lacuna retroativamente. Não
-    // falha a aprovação por causa disso — só registra e segue.
-    console.warn(
-      `evidence: extração ${row.id} aprovada, mas sessão ${row.sessionId} ainda sem numero_sequencial_paciente — evidence/reinforcer_profile NÃO inseridos agora (backfill cobre evidence depois).`,
-    );
-    return;
+    // Sessão ainda não consolidada (numero_sequencial_paciente nulo) —
+    // `evidence.session_numero` é NOT NULL. Até #532 (Q-03) isto só avisava
+    // no log e a extração virava `aprovada` sem evidence, contando com um
+    // backfill futuro — o mesmo silêncio que a auditoria apontou. Agora a
+    // aprovação é RECUSADA e desfeita: consolidar a nota primeiro.
+    throw new TransicaoRecusada("SESSAO_SEM_NUMERO");
   }
 
   await inserirReforcadoresOnApprove(tx, ctx, row, sess);
 
   if (row.subtipo !== "evidencia") return;
 
-  const conteudo = (row.payloadEditado ?? row.payload) as {
-    evidencia?: EvidenciaConteudo | null;
-  };
-  const evidenciaObj = conteudo?.evidencia;
+  const evidenciaObj = conteudoDoSubtipo(
+    row.conteudo,
+    "evidencia",
+  ) as EvidenciaConteudo | null;
   const alvos = Array.isArray(evidenciaObj?.alvos) ? evidenciaObj!.alvos! : [];
-  if (alvos.length === 0) return;
+  if (alvos.length === 0) {
+    // Reaprovação depois de um `erro_validacao` (#532, Q-01): uma `evidencia`
+    // que passou pelo DLQ e não tem alvo NÃO pode virar `aprovada` em
+    // silêncio — era exatamente assim que o `{error}` no `payload_editado`
+    // apagava a evidência. Aprovação direta de `sugerida` sem alvo segue
+    // permitida (o schema do agente deixa `alvos` opcional; R8 pode não
+    // mapear) — decisão registrada na PR, a validar com o Rômulo.
+    if (row.reaprovacaoDeErro) throw new TransicaoRecusada("EVIDENCIA_VAZIA");
+    return;
+  }
 
   const resolverQueries = drizzleResolverQueries(tx);
   const { alvos: _omit, ...evidenciaSemAlvos } = evidenciaObj ?? {};
@@ -307,10 +355,20 @@ async function transicionar(
 ): Promise<ReviewResult> {
   requireRole(ctx, "terapeuta", "coordenador");
   let success = false;
-  let errorMsg = "";
 
   try {
-    const rows = await withTenant(ctx, async (tx) => {
+    await withTenant(ctx, async (tx) => {
+      // Estado de ONDE a transição parte. A leitura não precisa de lock: a
+      // versão anda a cada transição, então se o estado mudar entre este
+      // SELECT e o UPDATE abaixo, o CAS de `versao` devolve 0 linhas de
+      // qualquer forma (a escolha de conteúdo nunca é aplicada a uma linha
+      // que não seja exatamente a que o cliente viu).
+      const [atual] = await tx
+        .select({ estado: extraction.estado })
+        .from(extraction)
+        .where(eq(extraction.id, extractionId));
+      const reaprovacaoDeErro = atual?.estado === "erro_validacao";
+
       // ⚠️ OCC: A query de mutação incrementa a versão de forma atômica e confere com a versão vista pelo cliente
       const updated = await tx
         .update(extraction)
@@ -319,6 +377,8 @@ async function transicionar(
           revisadoPor: ctx.userId,
           revisadoEm: new Date(),
           versao: sql`${extraction.versao} + 1`,
+          // sair de `erro_validacao` limpa o diagnóstico do DLQ (#532)
+          erroValidacaoDetalhe: null,
         })
         .where(
           and(
@@ -336,43 +396,126 @@ async function transicionar(
         });
 
       if (updated.length === 0) {
-        return [];
+        return;
       }
+      const row = updated[0]!;
+
+      // Conteúdo EFETIVO da aprovação (#532, Q-01):
+      //  - edição (`set.payloadEditado`) → o que acabou de ser gravado;
+      //  - reaprovação a partir de `erro_validacao` → o `payload` ORIGINAL da
+      //    IA. O `payload_editado` de uma linha que passou pelo DLQ nunca é
+      //    edição humana (a edição que falhou foi desfeita junto com a
+      //    transação) — no máximo é o `{error}` que o DLQ antigo deixou;
+      //  - demais → `payloadEditado ?? payload`, a regra do resto do produto.
+      const conteudo =
+        set.payloadEditado !== undefined
+          ? set.payloadEditado
+          : reaprovacaoDeErro
+            ? row.payload
+            : (row.payloadEditado ?? row.payload);
 
       const novoEstado = set.estado;
       if (novoEstado === "aprovada" || novoEstado === "editada") {
-        await inserirEvidenciasOnApprove(tx, ctx, updated[0]!, colapso);
+        await inserirEvidenciasOnApprove(
+          tx,
+          ctx,
+          {
+            id: row.id,
+            sessionId: row.sessionId,
+            subtipo: row.subtipo,
+            conteudo,
+            reaprovacaoDeErro,
+          },
+          colapso,
+        );
       }
       success = true;
-      return updated;
     });
 
     if (!success) {
       return { ok: false, error: "CONCURRENCY_ERROR" };
     }
     return { ok: true };
-  } catch (err: any) {
-    console.error("Erro na transição da extração:", err);
-    errorMsg = err instanceof Error ? err.message : String(err);
+  } catch (err: unknown) {
+    // Recusa explícita: a transação já foi desfeita (extração intacta, mesma
+    // versão). Não é quebra de pipeline — não vai para o DLQ.
+    if (err instanceof TransicaoRecusada) {
+      return { ok: false, error: err.codigo };
+    }
 
-    // DLQ / Dead-Letter State: Se o pipeline quebrar, movemos a extração para 'erro_validacao' de forma autônoma
+    // Nunca logar o erro inteiro: `DrizzleQueryError.message` carrega o SQL
+    // com os params (= dado clínico). Só nome + SQLSTATE + hash da message,
+    // que é o mesmo hash gravado no DLQ abaixo — correlação sem PHI.
+    const detalhe = detalheDoErro(err);
+    console.error("Erro na transição da extração:", {
+      extractionId,
+      ...detalhe,
+    });
+
+    // DLQ / Dead-Letter State (#532, Q-01): a extração vai para
+    // `erro_validacao` com o diagnóstico em coluna PRÓPRIA — `payload_editado`
+    // (conteúdo clínico efetivo) fica intacto, senão a reaprovação leria
+    // `{error}` e viraria `aprovada` sem `evidence`. Guard de `versao`: a
+    // transação que falhou foi desfeita, logo a linha ainda está na versão
+    // que o cliente viu — se não estiver, outra transição venceu a corrida e
+    // NÃO pode ser sobrescrita (uma `descartada` voltaria a `erro_validacao`).
     try {
       await withTenant(ctx, async (tx) => {
-        await tx
+        const dlq = await tx
           .update(extraction)
           .set({
             estado: "erro_validacao",
-            payloadEditado: { error: errorMsg },
+            erroValidacaoDetalhe: detalhe,
             versao: sql`${extraction.versao} + 1`,
           })
-          .where(eq(extraction.id, extractionId));
+          .where(
+            and(
+              eq(extraction.id, extractionId),
+              eq(extraction.versao, versaoCliente),
+            ),
+          )
+          .returning({ id: extraction.id });
+        if (dlq.length === 0) {
+          console.warn(
+            `DLQ não gravado: extração ${extractionId} já saiu da versão ${versaoCliente} (transição concorrente venceu).`,
+          );
+        }
       });
     } catch (dbErr) {
-      console.error("Falha ao persistir erro de validação (DLQ):", dbErr);
+      console.error(
+        "Falha ao persistir erro de validação (DLQ):",
+        detalheDoErro(dbErr),
+      );
     }
 
-    return { error: `Erro de validação clínica: ${errorMsg}` };
+    return {
+      error: `Erro de validação clínica (${detalhe.codigo} · ref ${detalhe.hash}). A extração foi marcada como erro de validação; a equipe pode reaprovar depois de corrigida a causa.`,
+    };
   }
+}
+
+/**
+ * Diagnóstico gravado em `extraction.erro_validacao_detalhe` (#532):
+ * `codigo` = SQLSTATE do driver quando houver (é o que diz "grant faltando",
+ * "NOT NULL violada"…), senão o `name` do erro; `hash` = sha256 curto da
+ * message, para casar com o log sem copiar a message (SQL + params = PHI).
+ */
+function detalheDoErro(err: unknown): {
+  codigo: string;
+  hash: string;
+  quando: string;
+} {
+  const e = err as { code?: unknown; name?: unknown; message?: unknown };
+  const codigo =
+    typeof e?.code === "string" && e.code
+      ? e.code
+      : typeof e?.name === "string" && e.name
+        ? e.name
+        : "ERRO_DESCONHECIDO";
+  const message =
+    typeof e?.message === "string" ? e.message : String(err ?? "");
+  const hash = createHash("sha256").update(message).digest("hex").slice(0, 12);
+  return { codigo, hash, quando: new Date().toISOString() };
 }
 
 // ─── Guard de escrita por situação da conta (#163+#159) ────────────────────
