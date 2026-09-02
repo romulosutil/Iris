@@ -1,3 +1,4 @@
+/** Espelha `RepertorioEntry` de `snapshot-schema.ts` (A-06) — fonte única da forma. */
 interface RepertorioItem {
   nivel_ajuda_recente: number | null;
   contagem: number;
@@ -119,8 +120,8 @@ export function calcularDelta(
  * O segmentacao é formatado como: { goal_id: { protocol_id: { tipo_estrutura, ... } } }
  */
 export function verificarProtocoloMudou(
-  segA: Record<string, Record<string, any>> | null,
-  segB: Record<string, Record<string, any>> | null,
+  segA: Record<string, Record<string, unknown>> | null,
+  segB: Record<string, Record<string, unknown>> | null,
 ): boolean {
   const safeA = segA || {};
   const safeB = segB || {};

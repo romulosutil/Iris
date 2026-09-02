@@ -12,7 +12,12 @@ import {
   carregarEvidenciasAction,
 } from "./actions";
 import { rotuloAte, rotuloPonto } from "./rotulos";
-import type { TimelineSnapshot, TimelineData } from "./queries";
+import type {
+  TimelineSnapshot,
+  TimelineData,
+  ResumoEvidenciaTrecho,
+} from "./queries";
+import type { RepertorioState } from "@/lib/evidence/snapshot-schema";
 import type { DeltaSessao as DeltaSessaoType } from "./logic";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -39,6 +44,27 @@ interface ComparacaoData {
   protocoloMudou: boolean;
   metas: DeltaMeta[];
   milestones: DeltaMilestone[];
+}
+
+/**
+ * Estado epistêmico de um MARCO a partir do `repertorio_state`, que é
+ * indexado por META (`materializar.ts`): o marco herda o melhor estado entre
+ * as metas mapeadas a ele. Antes a tela indexava pelo id do marco e lia
+ * `nivelAjudaRecente`/`isCandidata` (camelCase) — dois motivos para nunca
+ * achar nada e pintar tudo como "não atingido" (A-06, #538).
+ */
+function estadoDoMarco(
+  repertorio: RepertorioState,
+  goalIds: string[],
+): MarcoStatusEstado {
+  let estado: MarcoStatusEstado = "nao_atingido";
+  for (const goalId of goalIds) {
+    const entry = repertorio[goalId];
+    if (!entry) continue;
+    if (entry.nivel_ajuda_recente === 0) return "conquistado";
+    if (entry.is_candidata) estado = "candidato";
+  }
+  return estado;
 }
 
 /**
@@ -128,7 +154,9 @@ export function TimelineClient({
     targetId: string;
     targetNome: string;
   } | null>(null);
-  const [drilldownEvidencias, setDrilldownEvidencias] = useState<any[]>([]);
+  const [drilldownEvidencias, setDrilldownEvidencias] = useState<
+    ResumoEvidenciaTrecho[]
+  >([]);
   const [carregandoEvidencias, setCarregandoEvidencias] = useState(false);
   // Falha de carregamento é estado próprio, NUNCA lista vazia: `[]` renderiza
   // "Nenhuma evidência registrada para este trecho", que é uma afirmação
@@ -163,14 +191,12 @@ export function TimelineClient({
       let conquistados = 0;
       let candidatos = 0;
       for (const m of items) {
-        const entry = snapSelecionado?.repertorioState?.[m.id];
-        if (entry) {
-          if (entry.nivelAjudaRecente === 0) {
-            conquistados++;
-          } else if (entry.isCandidata) {
-            candidatos++;
-          }
-        }
+        const estado = estadoDoMarco(
+          snapSelecionado?.repertorioState ?? {},
+          m.goalIds,
+        );
+        if (estado === "conquistado") conquistados++;
+        else if (estado === "candidato") candidatos++;
       }
       stats[dom] = {
         total: items.length,
@@ -236,10 +262,32 @@ export function TimelineClient({
   const getTrajetoriaChunks = (targetId: string) => {
     if (!targetId) return [];
 
+    // O snapshot é indexado por META (`segmentacao[goal_id][protocol_id]`).
+    // Meta: a própria; marco: as metas mapeadas a ele. Primeiro par
+    // (meta, protocolo) em ordem de id que tiver dado define o trecho —
+    // rateio entre protocolos exigiria um peso que ninguém declarou.
+    const goalIdsAlvo = initialData.metasAtivas.some((m) => m.id === targetId)
+      ? [targetId]
+      : (initialData.milestonesAtivos.find((m) => m.id === targetId)?.goalIds ??
+        []);
+
     const trajetoriaSessoes = snapshots
       .map((s) => {
-        const seg = (s.segmentacao ?? {}) as Record<string, any>;
-        const resSessao = seg[targetId]; // ResultadoSessao
+        let resSessao:
+          | {
+              rotulo: string;
+              metrica?: { ordinalRecente?: number | null } | null;
+            }
+          | undefined;
+        for (const goalId of [...goalIdsAlvo].sort()) {
+          const porProtocolo = s.segmentacao[goalId];
+          if (!porProtocolo) continue;
+          const protocolId = Object.keys(porProtocolo).sort()[0];
+          if (protocolId) {
+            resSessao = porProtocolo[protocolId];
+            break;
+          }
+        }
         return {
           sessionNumero: s.sessionNumero,
           rotulo: resSessao?.rotulo ?? "sem_dado",
@@ -620,15 +668,10 @@ export function TimelineClient({
                       `title` nem por cor sozinha (AC-01/U-03). */}
                   <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6">
                     {items.map((m) => {
-                      const entry = snapSelecionado.repertorioState?.[m.id];
-                      let estado: MarcoStatusEstado = "nao_atingido";
-                      if (entry) {
-                        if (entry.nivelAjudaRecente === 0) {
-                          estado = "conquistado";
-                        } else if (entry.isCandidata) {
-                          estado = "candidato";
-                        }
-                      }
+                      const estado = estadoDoMarco(
+                        snapSelecionado.repertorioState,
+                        m.goalIds,
+                      );
 
                       return (
                         <li key={m.id} className="min-w-0">
@@ -829,7 +872,7 @@ export function TimelineClient({
               selecionadas.
             </div>
           ) : (
-            drilldownEvidencias.map((ev: any) => (
+            drilldownEvidencias.map((ev) => (
               <div
                 key={ev.id}
                 /* Sem acento lateral: o DS baniu a faixa esquerda, e a
