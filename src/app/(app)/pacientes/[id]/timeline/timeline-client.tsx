@@ -17,8 +17,8 @@ import type {
   TimelineData,
   ResumoEvidenciaTrecho,
 } from "./queries";
-import type { RepertorioState } from "@/lib/evidence/snapshot-schema";
-import type { DeltaSessao as DeltaSessaoType } from "./logic";
+import type { ResultadoSegmentacao } from "@/lib/evidence/snapshot-schema";
+import { estadoDoMarco, type DeltaSessao as DeltaSessaoType } from "./logic";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PatientProgressIllustration } from "@/components/ui/illustrations";
@@ -44,27 +44,6 @@ interface ComparacaoData {
   protocoloMudou: boolean;
   metas: DeltaMeta[];
   milestones: DeltaMilestone[];
-}
-
-/**
- * Estado epistêmico de um MARCO a partir do `repertorio_state`, que é
- * indexado por META (`materializar.ts`): o marco herda o melhor estado entre
- * as metas mapeadas a ele. Antes a tela indexava pelo id do marco e lia
- * `nivelAjudaRecente`/`isCandidata` (camelCase) — dois motivos para nunca
- * achar nada e pintar tudo como "não atingido" (A-06, #538).
- */
-function estadoDoMarco(
-  repertorio: RepertorioState,
-  goalIds: string[],
-): MarcoStatusEstado {
-  let estado: MarcoStatusEstado = "nao_atingido";
-  for (const goalId of goalIds) {
-    const entry = repertorio[goalId];
-    if (!entry) continue;
-    if (entry.nivel_ajuda_recente === 0) return "conquistado";
-    if (entry.is_candidata) estado = "candidato";
-  }
-  return estado;
 }
 
 /**
@@ -181,7 +160,9 @@ export function TimelineClient({
     return grupos;
   }, [initialData.milestonesAtivos]);
 
-  // Estatísticas de conquistas e candidatos na sessão atual
+  // Contagem por domínio pelo estado OFICIAL (meta dominada / candidatura
+  // registrada) — é o estado atual, não o da sessão selecionada (revisão da
+  // PR #556: o snapshot só carrega heurística).
   const estatisticasDominio = React.useMemo(() => {
     const stats: Record<
       string,
@@ -192,8 +173,9 @@ export function TimelineClient({
       let candidatos = 0;
       for (const m of items) {
         const estado = estadoDoMarco(
-          snapSelecionado?.repertorioState ?? {},
+          initialData.estadoDasMetas,
           m.goalIds,
+          m.candidatoOficial,
         );
         if (estado === "conquistado") conquistados++;
         else if (estado === "candidato") candidatos++;
@@ -205,7 +187,7 @@ export function TimelineClient({
       };
     }
     return stats;
-  }, [milestonesPorDominio, snapSelecionado]);
+  }, [milestonesPorDominio, initialData.estadoDasMetas]);
 
   const buscarEvidencias = async (alvo: {
     inicio: number;
@@ -266,6 +248,8 @@ export function TimelineClient({
     // Meta: a própria; marco: as metas mapeadas a ele. Primeiro par
     // (meta, protocolo) em ordem de id que tiver dado define o trecho —
     // rateio entre protocolos exigiria um peso que ninguém declarou.
+    // Decisão pendente de ratificação (PR #556, revisão 03/09), junto da
+    // régua de `estadoDoMarco` em ./logic.ts.
     const goalIdsAlvo = initialData.metasAtivas.some((m) => m.id === targetId)
       ? [targetId]
       : (initialData.milestonesAtivos.find((m) => m.id === targetId)?.goalIds ??
@@ -273,12 +257,7 @@ export function TimelineClient({
 
     const trajetoriaSessoes = snapshots
       .map((s) => {
-        let resSessao:
-          | {
-              rotulo: string;
-              metrica?: { ordinalRecente?: number | null } | null;
-            }
-          | undefined;
+        let resSessao: ResultadoSegmentacao | undefined;
         for (const goalId of [...goalIdsAlvo].sort()) {
           const porProtocolo = s.segmentacao[goalId];
           if (!porProtocolo) continue;
@@ -291,7 +270,11 @@ export function TimelineClient({
         return {
           sessionNumero: s.sessionNumero,
           rotulo: resSessao?.rotulo ?? "sem_dado",
-          nivel: resSessao?.metrica?.ordinalRecente ?? null,
+          // `metrica` pode ser string (legado / sinais.ts) — só o objeto tem nível.
+          nivel:
+            typeof resSessao?.metrica === "object"
+              ? (resSessao.metrica?.ordinalRecente ?? null)
+              : null,
         };
       })
       .sort((a, b) => a.sessionNumero - b.sessionNumero);
@@ -601,8 +584,9 @@ export function TimelineClient({
             Acompanhamento de Marcos e Protocolos
           </h3>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            Estatísticas e progresso de marcos por domínio do protocolo ativo na{" "}
-            {rotuloPonto(sessaoAtiva ?? 0)}.
+            Estado oficial dos marcos por domínio: dominado (meta com critério
+            de domínio cumprido), candidato (candidatura registrada) ou não
+            atingido. É o estado atual, não o da sessão selecionada.
           </p>
         </div>
 
@@ -669,8 +653,9 @@ export function TimelineClient({
                   <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 md:grid-cols-6">
                     {items.map((m) => {
                       const estado = estadoDoMarco(
-                        snapSelecionado.repertorioState,
+                        initialData.estadoDasMetas,
                         m.goalIds,
+                        m.candidatoOficial,
                       );
 
                       return (

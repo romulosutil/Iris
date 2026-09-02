@@ -82,7 +82,36 @@ describe("DS-05 — regra ds/sem-paleta-crua (unidade)", () => {
   });
 });
 
+/**
+ * Conjunto FECHADO (revisão da PR #556): acrescentar um arquivo ao baseline
+ * desligaria a regra nele sem ninguém notar. A lista só pode PERDER itens —
+ * para tirar um arquivo daqui, ele precisa sair do baseline (zerar a paleta).
+ */
+const ARQUIVOS_BASELINE_ESPERADOS = [
+  "src/app/(app)/agenda/semana/combobox-entidade.tsx",
+  "src/app/(app)/pacientes/[id]/equipe/page.tsx",
+  "src/app/(app)/pacientes/[id]/metas/nova-meta-form.tsx",
+  "src/app/(app)/pacientes/[id]/tcc/grafico-evolucao-crencas.tsx",
+  "src/app/(app)/pacientes/[id]/tcc/page.tsx",
+  "src/components/ui/alert.tsx",
+  "src/components/ui/availability-grid.tsx",
+  "src/components/ui/calendar/calendar-grid.tsx",
+  "src/components/ui/dialog.tsx",
+  "src/components/ui/drawer.tsx",
+  "src/components/ui/qr-code.tsx",
+  "src/components/ui/radio-cards.tsx",
+];
+
 describe("DS-05 — baseline (arquivos ainda fora da Regra 0)", () => {
+  it("é conjunto fechado: nenhum arquivo novo entra no baseline (só sai)", () => {
+    for (const arquivo of Object.keys(baseline)) {
+      expect(
+        ARQUIVOS_BASELINE_ESPERADOS,
+        `${arquivo} não estava no baseline original — troque a paleta crua por token em vez de baselinar`,
+      ).toContain(arquivo);
+    }
+  });
+
   it("todo arquivo do baseline existe e tem contagem positiva", () => {
     for (const [arquivo, n] of Object.entries(baseline)) {
       expect(existsSync(path.join(RAIZ, arquivo)), arquivo).toBe(true);
@@ -149,7 +178,7 @@ describe("DS-05 — baseline (arquivos ainda fora da Regra 0)", () => {
     expect(ESCOPO_DS.length).toBeGreaterThan(0);
     expect(FORA_DO_ESCOPO_DS).toContain("**/*.test.{ts,tsx}");
     expect(comoGlobLiteral("src/app/(app)/pacientes/[id]/page.tsx")).toBe(
-      "src/app/(app)/pacientes/\\[id\\]/page.tsx",
+      "src/app/\\(app\\)/pacientes/\\[id\\]/page\\.tsx",
     );
   });
 });

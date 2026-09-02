@@ -1,17 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   lerRepertorioState,
   lerSegmentacao,
   RepertorioStateSchema,
   SegmentacaoSchema,
+  type AvisoSnapshot,
 } from "./snapshot-schema";
 
 const GOAL = "00000000-0000-0000-0000-000000009001";
 const PROTO = "00000000-0000-0000-0000-000000008001";
 
 describe("snapshot-schema (A-06, #538)", () => {
-  it("aceita exatamente o que materializar.ts grava", () => {
-    // Espelha `materializar.ts`: snake_case, indexado por goal_id.
+  it("aceita exatamente o que materializar.ts grava (metrica objeto)", () => {
     const repertorio = {
       [GOAL]: { nivel_ajuda_recente: 0, contagem: 3, is_candidata: true },
     };
@@ -26,6 +26,33 @@ describe("snapshot-schema (A-06, #538)", () => {
     };
     expect(RepertorioStateSchema.parse(repertorio)).toEqual(repertorio);
     expect(SegmentacaoSchema.parse(segmentacao)).toEqual(segmentacao);
+  });
+
+  it("aceita exatamente o que anamnese/logic.ts grava no marco-zero (metrica STRING) — o vermelho do CI test-rls", () => {
+    // Cópia literal de `anamnese/logic.ts` (app_validar_anamnese, 0115):
+    // metrica é a string "nivel_ajuda" e rotulo é o NOME do marco.
+    const segmentacao = {
+      [GOAL]: {
+        [PROTO]: {
+          tipo_estrutura: "marco_simples",
+          metrica: "nivel_ajuda",
+          rotulo: "Pede item preferido",
+        },
+      },
+    };
+    const repertorio = {
+      [GOAL]: {
+        nivel_ajuda_recente: 2,
+        contagem: 0,
+        is_candidata: false,
+        origem: "anamnese",
+        procedencia: "relato_familia",
+      },
+    };
+    const avisar = vi.fn();
+    expect(lerSegmentacao(segmentacao, avisar)).toEqual(segmentacao);
+    expect(lerRepertorioState(repertorio, avisar)).toEqual(repertorio);
+    expect(avisar).not.toHaveBeenCalled();
   });
 
   it("null/undefined/string JSON viram objeto tipado", () => {
@@ -46,12 +73,57 @@ describe("snapshot-schema (A-06, #538)", () => {
     expect(comExtra[GOAL]?.origem).toBe("legado");
   });
 
-  it("forma errada estoura com erro nomeado, não vira 'sem progresso'", () => {
-    expect(() => lerRepertorioState({ [GOAL]: "conquistado" })).toThrow();
-    expect(() =>
-      lerSegmentacao({ [GOAL]: { [PROTO]: { rotulo: 1 } } }),
-    ).toThrow();
-    expect(() => lerSegmentacao([])).toThrow();
+  it("entrada fora da forma é ignorada com aviso de categoria fechada — a tela nunca fica vazia nem muda", () => {
+    const avisos: AvisoSnapshot[] = [];
+    const avisar = (a: AvisoSnapshot) => avisos.push(a);
+    const OUTRA = "00000000-0000-0000-0000-000000009002";
+
+    const rep = lerRepertorioState(
+      { [GOAL]: "conquistado", [OUTRA]: { nivel_ajuda_recente: 1 } },
+      avisar,
+    );
+    expect(Object.keys(rep)).toEqual([OUTRA]);
+
+    const seg = lerSegmentacao(
+      {
+        [GOAL]: { [PROTO]: { rotulo: 1 } },
+        [OUTRA]: {
+          [PROTO]: { tipo_estrutura: "x", rotulo: "estagnacao" },
+        },
+      },
+      avisar,
+    );
+    expect(seg[GOAL]).toEqual({});
+    expect(seg[OUTRA]?.[PROTO]?.rotulo).toBe("estagnacao");
+
+    expect(avisos).toEqual([
+      { categoria: "repertorio_entrada_invalida", quantidade: 1 },
+      { categoria: "segmentacao_entrada_invalida", quantidade: 1 },
+    ]);
+    // Nunca id nem conteúdo clínico no aviso.
+    expect(JSON.stringify(avisos)).not.toContain(GOAL);
+  });
+
+  it("valor que nem é objeto (array, número, JSON quebrado) vira {} com aviso, nunca exceção", () => {
+    const avisar = vi.fn();
+    expect(lerSegmentacao([], avisar)).toEqual({});
+    expect(lerRepertorioState(42, avisar)).toEqual({});
+    expect(lerRepertorioState("{nao é json", avisar)).toEqual({});
+    expect(avisar.mock.calls.map(([a]) => a.categoria)).toEqual([
+      "segmentacao_nao_objeto",
+      "repertorio_nao_objeto",
+      "json_invalido",
+    ]);
+  });
+
+  it("o emissor padrão escreve só categoria e quantidade no console", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    lerRepertorioState({ [GOAL]: "x" });
+    expect(warn).toHaveBeenCalledTimes(1);
+    const msg = String(warn.mock.calls[0]?.[0]);
+    expect(msg).toContain("repertorio_entrada_invalida");
+    expect(msg).not.toContain(GOAL);
+    warn.mockRestore();
   });
 
   it("o tipo é snake_case: camelCase não é o campo que o banco tem", () => {

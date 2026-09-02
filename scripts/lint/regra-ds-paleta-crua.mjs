@@ -151,5 +151,8 @@ export const FORA_DO_ESCOPO_DS = [
  * acusa. Parênteses de `(app)` não são especiais fora de extglob.
  */
 export function comoGlobLiteral(caminho) {
-  return caminho.replace(/[[\]]/g, "\\$&");
+  // Escape completo (CodeQL js/incomplete-sanitization): colchetes E barra
+  // invertida, mais os demais metacaracteres — minimatch aceita `\x` para
+  // qualquer `x`, então escapar a mais é inócuo.
+  return caminho.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
