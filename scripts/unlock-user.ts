@@ -119,16 +119,28 @@ async function main() {
       RETURNING id
     `;
 
-    // 3. Limpar auth_throttle
+    // 3. Limpar auth_throttle. Formato real da chave (src/lib/throttle.ts e
+    //    chamadores em src/app/(auth)/*/logic.ts): `<fluxo>:email:<email>`
+    //    (`cadastro:email:…`, `esqueci-senha:email:…`); as chaves `:ip:` não
+    //    são do usuário e ficam. Casamos o SUFIXO exato `:email:<email>`, com
+    //    `%`, `_` e `\` do e-mail escapados — `_` cru em LIKE casa qualquer
+    //    caractere e apagaria o throttle de um e-mail parecido.
+    const emailEscapado = email.replace(/[\\%_]/g, (c) => "\\" + c);
     const throttleRemovidos = await tx`
       DELETE FROM auth_throttle
-      WHERE chave LIKE ${"%" + email + "%"}
+      WHERE chave LIKE ${"%:email:" + emailEscapado} ESCAPE '\\'
       RETURNING chave
     `;
 
     // 4. Trilha: um evento por clínica em que o usuário existe. `ator_id`
     //    nulo = ação de script (mesma convenção dos jobs, 0049). O detalhe
     //    não carrega e-mail nem nome — só o que foi feito.
+    //    Este INSERT só passa porque a conexão é a de MIGRATION_DATABASE_URL:
+    //    a role dona (`iris`, superuser + BYPASSRLS, medido em pg_roles).
+    //    `audit_log` é FORCE ROW LEVEL SECURITY e só tem policies para
+    //    `app_role` e `iris_auth` (pg_policies) — não existe policy para o
+    //    dono; ele simplesmente não passa pela RLS. Com DATABASE_URL
+    //    (app_role) sem `app.clinic_id` no contexto, a policy negaria.
     const detalhe = {
       origem: "scripts/unlock-user.ts",
       email_verificado: true,

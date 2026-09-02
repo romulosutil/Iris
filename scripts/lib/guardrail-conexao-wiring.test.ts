@@ -12,10 +12,10 @@ import { describe, expect, it } from "vitest";
  *
  * Aqui a régua não é o nome do script, é o que ele FAZ: todo arquivo em
  * `scripts/**` que abre conexão Postgres (`postgres(`, `new Pool(`,
- * `drizzle(`) precisa invocar o guard de ambiente (`assertSeedAllowed` ou
- * `assertScriptRemotoPermitido`) ANTES, no texto, do primeiro ponto de
- * conexão. Sem isso, um script novo com a role dona apontado para produção
- * roda em silêncio.
+ * `drizzle(`, ou importa o client da aplicação `@/db/client`) precisa invocar
+ * o guard de ambiente (`assertSeedAllowed` ou `assertScriptRemotoPermitido`)
+ * ANTES, no texto, do primeiro ponto de conexão. Sem isso, um script novo com
+ * a role dona apontado para produção roda em silêncio.
  *
  * A exceção é explícita e justificada item a item (`JOBS_DE_PRODUCAO`): jobs
  * que rodam em produção POR DESENHO, cada um sob uma role de login própria
@@ -53,11 +53,21 @@ const PADROES_DE_CONEXAO = [
   /\bdrizzle\s*\(/,
 ];
 
+/**
+ * Importar o client da aplicação (`@/db/client` ou `…/src/db/client`) também
+ * é capacidade de conexão: `db`/`authDb`/`sql` abrem o pool no primeiro uso
+ * (`lazy(...)`). Para a ordem, o ponto de conexão é o primeiro USO de um nome
+ * importado — não a linha do import, que sempre vem antes do guard.
+ */
+const PADRAO_DE_IMPORT_DO_CLIENT =
+  /import\s*\{([^}]*)\}\s*from\s*["'](?:@\/|(?:\.\.?\/)+(?:src\/)?)db\/client["']/;
+
 const PADRAO_DE_GUARD =
   /\b(assertSeedAllowed|assertScriptRemotoPermitido)\s*\(/;
 
+/** Aceita script em subpasta: `./lib/`, `../lib/`, `../../lib/`. */
 const PADRAO_DE_IMPORT_DO_GUARD =
-  /import\s*\{[^}]*\b(assertSeedAllowed|assertScriptRemotoPermitido)\b[^}]*\}\s*from\s*["'](\.\/lib\/guardrail-seed|\.\/lib\/guardrail-conexao\.mjs|\.\/guardrail-seed|\.\/guardrail-conexao\.mjs)["']/;
+  /import\s*\{[^}]*\b(assertSeedAllowed|assertScriptRemotoPermitido)\b[^}]*\}\s*from\s*["'](?:\.\.?\/)+(?:lib\/)?guardrail-(?:seed|conexao\.mjs)["']/;
 
 /** Remove comentários de bloco e de linha — a régua é sobre código, não prosa. */
 function semComentarios(fonte: string): string {
@@ -84,15 +94,43 @@ function listarScripts(dir: string): string[] {
 }
 
 function abreConexao(fonte: string): boolean {
-  return PADROES_DE_CONEXAO.some((p) => p.test(fonte));
+  return (
+    PADROES_DE_CONEXAO.some((p) => p.test(fonte)) ||
+    PADRAO_DE_IMPORT_DO_CLIENT.test(fonte)
+  );
+}
+
+/** Primeiro uso, fora do import, de um nome importado de `db/client`. */
+function primeiroUsoDoClient(
+  fonte: string,
+): { pos: number; padrao: RegExp } | null {
+  const m = PADRAO_DE_IMPORT_DO_CLIENT.exec(fonte);
+  if (!m) return null;
+  const nomes = m[1]!
+    .split(",")
+    .map((n) => n.trim())
+    .filter((n) => n.length > 0 && !n.startsWith("type "))
+    .map((n) => n.split(/\s+as\s+/).pop()!);
+  if (nomes.length === 0) return null;
+  const padrao = new RegExp(`\\b(${nomes.join("|")})\\b`);
+  const depoisDoImport = m.index + m[0].length;
+  const rel = fonte.slice(depoisDoImport).search(padrao);
+  if (rel === -1) return null;
+  return { pos: depoisDoImport + rel, padrao };
 }
 
 function primeiraConexao(fonte: string): { pos: number; padrao: RegExp } {
+  const candidatos = PADROES_DE_CONEXAO.map((padrao) => ({
+    pos: fonte.search(padrao),
+    padrao,
+  }));
+  const usoDoClient = primeiroUsoDoClient(fonte);
+  if (usoDoClient) candidatos.push(usoDoClient);
+
   let melhor = { pos: -1, padrao: PADROES_DE_CONEXAO[0]! };
-  for (const padrao of PADROES_DE_CONEXAO) {
-    const pos = fonte.search(padrao);
-    if (pos === -1) continue;
-    if (melhor.pos === -1 || pos < melhor.pos) melhor = { pos, padrao };
+  for (const c of candidatos) {
+    if (c.pos === -1) continue;
+    if (melhor.pos === -1 || c.pos < melhor.pos) melhor = c;
   }
   return melhor;
 }
@@ -118,6 +156,58 @@ describe("guardrail de conexão — fiação por capacidade (#534)", () => {
     expect(nomes).toContain("unlock-user.ts");
     expect(nomes).toContain("backfill-evidence.ts");
     expect(nomes).toContain("smoke-alerta-risco.mjs");
+    // Capacidade via client da aplicação (`@/db/client`), não só `postgres(`.
+    expect(nomes).toContain("seed-super-admin.ts");
+  });
+
+  it("reconhece import do client da aplicação como capacidade de conexão", () => {
+    const fonte = [
+      'import { authDb } from "@/db/client";',
+      'import { assertSeedAllowed } from "../lib/guardrail-seed";',
+      "assertSeedAllowed(url);",
+      "await authDb.select();",
+    ].join("\n");
+    expect(abreConexao(fonte)).toBe(true);
+    expect(PADRAO_DE_IMPORT_DO_GUARD.test(fonte)).toBe(true);
+    // A conexão conta no primeiro USO de `authDb`, depois do guard.
+    expect(primeiraConexao(fonte).pos).toBeGreaterThan(
+      fonte.search(PADRAO_DE_GUARD),
+    );
+
+    // Guard depois do uso → ordem errada.
+    const invertido = [
+      'import { db } from "../../src/db/client";',
+      'import { assertSeedAllowed } from "../../lib/guardrail-seed";',
+      "await db.select();",
+      "assertSeedAllowed(url);",
+    ].join("\n");
+    expect(abreConexao(invertido)).toBe(true);
+    expect(primeiraConexao(invertido).pos).toBeLessThan(
+      invertido.search(PADRAO_DE_GUARD),
+    );
+
+    expect(abreConexao('import { x } from "./lib/outro";')).toBe(false);
+  });
+
+  it("aceita o import do guard a partir de subpasta (../lib/, ../../lib/)", () => {
+    for (const caminho of [
+      "./lib/guardrail-conexao.mjs",
+      "../lib/guardrail-seed",
+      "../../lib/guardrail-conexao.mjs",
+    ]) {
+      expect(
+        PADRAO_DE_IMPORT_DO_GUARD.test(
+          `import { assertScriptRemotoPermitido } from "${caminho}";`,
+        ),
+        caminho,
+      ).toBe(true);
+    }
+    // Alias `@/` não é o guard de scripts/lib — não vale.
+    expect(
+      PADRAO_DE_IMPORT_DO_GUARD.test(
+        'import { assertSeedAllowed } from "@/lib/guardrail-seed";',
+      ),
+    ).toBe(false);
   });
 
   it.each(Object.keys(JOBS_DE_PRODUCAO))(
