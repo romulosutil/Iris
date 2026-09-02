@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { PageHeader } from "./page-header";
 import { Button } from "./button";
-import { StatusBadge } from "./status-badge";
+import { StatusBadge } from "./patterns/status-badge";
 
 const meta = {
   title: "04. UI COMPONENTS/Layout/PageHeader",

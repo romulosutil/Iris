@@ -165,6 +165,30 @@ este modo já existe como variante de tema, não como retrabalho.
 - Par de tokens dedicado para "candidato" vs. "conquistado" (princípio 4):
   preenchimento sólido + borda cheia (conquistado) vs. contorno + hachura
   leve, nunca cor sozinha (candidato).
+  - **Tokens (`globals.css`, #538 / DS-02):** `--status-progresso-bg`
+    `#f3ead2`, `--status-progresso-fg` `#5b4708`, `--status-progresso-border`
+    `#8a6d1d` (par escuro: `rgba(122,90,20,.4)` / `#f3dfa0` / `#c9a227`) +
+    `--pattern-progresso-hachura` (listras a 30% da borda, baixo contraste de
+    propósito — §5 proíbe padrão repetitivo de alto contraste). Classes:
+    `bg/text/border-status-progresso-*`.
+  - **Semântica:** "conquistado" = meta **`dominada`** (status oficial,
+    critério de domínio cumprido); "candidato a domínio" = **candidatura
+    oficial registrada** (`goal_candidacy` / `milestone_candidacy`), ainda não
+    dominada. Nem nível de ajuda 0 numa sessão nem a heurística `is_candidata`
+    do snapshot bastam. Marco com várias metas herda o melhor estado
+    (dominada > candidata > nada). O candidato é fato derivado de decisão
+    humana, por isso é âmbar-neutro com **borda sólida fina** — nunca o
+    violeta/tracejado de `--status-ia-*`, que significa "sugerido pela IA,
+    ainda não é fato". Três estados, três formas: círculo cheio menta
+    (conquistado), quadrado hachurado âmbar (candidato), círculo tracejado
+    vazio neutro (não atingido).
+  - **Contraste medido (WCAG 2.1):** fg/bg 7.45:1 · fg/`surface-card` 8.94:1 ·
+    borda/bg 4.09:1 · borda/`surface-card` 4.90:1 · borda/`surface-muted`
+    4.26:1; escuro fg/bg 9.44:1 · borda/bg 5.16:1.
+  - **Componentes canônicos:** `ui/patterns/marco-status.tsx` (`MarcoStatus`,
+    glifo com `role="img"` + `aria-label`, nunca `title` como único canal) e
+    `ui/patterns/barra-progresso-epistemica.tsx` (barra empilhada com leitura
+    completa em `aria-label`).
 - `prefers-reduced-motion` respeitado explicitamente: o deslocamento no
   clique vira troca instantânea de sombra sem transição quando o SO pede
   menos movimento.
@@ -226,6 +250,15 @@ deveria fazer, independente de quem está olhando. Usar barra sólida de cor
 - **Gate a11y automatizado**: `pnpm test` roda axe (WCAG 2.x A/AA) sobre todos
   os componentes; zero violação é condição de merge. Complementa o painel
   `addon-a11y` manual do Storybook (contraste, que o jsdom não computa).
+- **Gate da Regra 0 (DS-05, #538)**: `pnpm lint` roda `ds/sem-paleta-crua`
+  (`scripts/lint/regra-ds-paleta-crua.mjs`) em `src/app/(app)` e
+  `src/components/{ui,app}`: paleta crua do Tailwind (`bg-slate-*`,
+  `text-gray-*`, `border-black`, `bg-white`…) e `text-[Npx]` com N < 12 em
+  literal de classe viram erro. Arquivos herdados ficam em
+  `scripts/lint/ds-paleta-crua.baseline.json` com a contagem atual — o teste
+  `scripts/lint/ds-paleta-crua.test.ts` (no `pnpm test`) falha se a contagem
+  subir e pede para abaixar o baseline quando ela cai
+  (`node scripts/lint/gerar-baseline-ds.mjs`). O baseline só desce.
 - Métrica de validação de produto definida antes de gerar código final:
   recomenda-se medir tempo até "aprovação sem edição" na tela de revisão
   do terapeuta antes/depois do novo sistema visual — é o número que já

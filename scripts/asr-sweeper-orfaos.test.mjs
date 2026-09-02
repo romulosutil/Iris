@@ -552,10 +552,15 @@ describe("main — a fiação da checagem de estado chega até varrer", () => {
 
     await main(["--once"]);
 
-    expect(espiao.consultas).toHaveLength(1);
-    expect(espiao.consultas[0].texto).toContain("app_asr_objetos_em_uso");
+    // #536 — o heartbeat também passa pelo mesmo `sql`; aqui só interessa a
+    // pergunta de estado ao banco.
+    const consultasDeEstado = espiao.consultas.filter(
+      (c) => !c.texto.includes("app_job_heartbeat_gravar"),
+    );
+    expect(consultasDeEstado).toHaveLength(1);
+    expect(consultasDeEstado[0].texto).toContain("app_asr_objetos_em_uso");
     // Só o vencido vai à consulta — o mtime continua sendo o primeiro filtro.
-    expect(espiao.consultas[0].valores).toEqual([["lote:orfao"]]);
+    expect(consultasDeEstado[0].valores).toEqual([["lote:orfao"]]);
     expect(espiao.apagados).toEqual(["lote:orfao"]);
   });
 
@@ -585,5 +590,50 @@ describe("main — a fiação da checagem de estado chega até varrer", () => {
 
     expect(espiao.sqlEncerrado).toBe(true);
     expect(espiao.clientDestruido).toBe(true);
+  });
+
+  // ─── #536: heartbeat no banco ──────────────────────────────────────────────
+  const heartbeats = () =>
+    espiao.consultas
+      .filter((c) => c.texto.includes("app_job_heartbeat_gravar"))
+      .map((c) => c.valores);
+
+  test("#536: varredura real grava heartbeat ok=true com só contagens (nenhuma chave de objeto)", async () => {
+    espiao.paginas = [
+      { Contents: [{ Key: "lote:orfao", LastModified: antigo }] },
+    ];
+
+    await main(["--once"]);
+
+    expect(heartbeats()).toEqual([
+      [
+        "asr-sweeper",
+        true,
+        "inspecionados=1 apagados=1 seriamApagados=0 emUso=0",
+      ],
+    ]);
+    expect(heartbeats()[0][2]).not.toContain("lote:");
+  });
+
+  test("#536: --dry-run NÃO grava heartbeat", async () => {
+    espiao.paginas = [
+      { Contents: [{ Key: "lote:orfao", LastModified: antigo }] },
+    ];
+
+    await main(["--once", "--dry-run"]);
+
+    expect(heartbeats()).toEqual([]);
+  });
+
+  test("#536: varredura que explode grava heartbeat ok=false (name, sem a message) e propaga", async () => {
+    espiao.erroList = true;
+
+    await expect(main(["--once"])).rejects.toThrow(/MinIO indisponível/);
+
+    const [linha] = heartbeats();
+    expect(linha[0]).toBe("asr-sweeper");
+    expect(linha[1]).toBe(false);
+    expect(linha[2]).toMatch(/^erro=/);
+    expect(linha[2]).not.toContain("MinIO indisponível");
   });
 });

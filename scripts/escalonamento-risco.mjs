@@ -47,10 +47,28 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import postgres from "postgres";
+import {
+  detalheDoErro,
+  detalheSemPii,
+  gravarHeartbeat as gravarHeartbeatNoBanco,
+} from "./lib/heartbeat.mjs";
 import { enviarEmailRt } from "./lib/resend-rt.mjs";
 
-const HEARTBEAT_DIR = process.env.ESCALONAMENTO_HEARTBEAT_DIR ?? "/heartbeat";
-const HEARTBEAT_FILE = path.join(HEARTBEAT_DIR, ".ultima-varredura");
+// Nome deste job em `job_heartbeat` (0146). O detector de alarme continua
+// medindo o escalonamento pelo EFEITO (alerta vencido sem escalar, 0129) — o
+// heartbeat aqui é sinal complementar, legível no banco, não a checagem.
+const JOB = "escalonamento";
+
+// Lido NA CHAMADA, não no import (mesmo desenho de retencao/arquivamento):
+// lido no import, o teste que aponta ESCALONAMENTO_HEARTBEAT_DIR para um
+// diretório temporário não tem efeito e `gravarHeartbeat()` tenta criar
+// `/heartbeat` na raiz do runner do CI (EACCES) — passou local no Windows,
+// onde `/heartbeat` vira `C:\heartbeat` gravável, e caiu no CI (PR #551).
+const HEARTBEAT_ARQUIVO = ".ultima-varredura";
+
+function heartbeatDir() {
+  return process.env.ESCALONAMENTO_HEARTBEAT_DIR ?? "/heartbeat";
+}
 
 function log(msg) {
   console.log(`[escalonamento] ${new Date().toISOString()} ${msg}`);
@@ -67,8 +85,13 @@ function log(msg) {
  * externo, não de uma ausência de erro.
  */
 async function gravarHeartbeat() {
-  await mkdir(HEARTBEAT_DIR, { recursive: true });
-  await writeFile(HEARTBEAT_FILE, `${new Date().toISOString()}\n`, "utf8");
+  const dir = heartbeatDir();
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    path.join(dir, HEARTBEAT_ARQUIVO),
+    `${new Date().toISOString()}\n`,
+    "utf8",
+  );
 }
 
 /**
@@ -241,6 +264,36 @@ export async function varrer(sql) {
   return linhas.length;
 }
 
+/**
+ * Exportada para o teste (#536): é aqui que mora a regra "heartbeat só em
+ * varredura real bem-sucedida" — nem em dry-run, nem em falha — nas duas
+ * formas (arquivo do container e linha em `job_heartbeat`).
+ */
+export async function executar(sql, { modoDryRun = false } = {}) {
+  if (modoDryRun) {
+    await dryRun(sql);
+    // Dry-run NÃO grava heartbeat: heartbeat significa "o motor escalonou o
+    // que havia para escalonar". Gravá-lo aqui faria uma inspeção manual
+    // mascarar um motor parado.
+    return;
+  }
+  let escalados;
+  try {
+    escalados = await varrer(sql);
+  } catch (err) {
+    await gravarHeartbeatNoBanco(sql, JOB, {
+      ok: false,
+      detalhe: detalheDoErro(err),
+    });
+    throw err;
+  }
+  await gravarHeartbeat();
+  await gravarHeartbeatNoBanco(sql, JOB, {
+    ok: true,
+    detalhe: detalheSemPii({ escalados }),
+  });
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const modoDryRun = args.includes("--dry-run");
@@ -265,15 +318,7 @@ async function main() {
   // segurar pool ocioso num container que fica de pé o tempo todo.
   const sql = postgres(url, { max: 1 });
   try {
-    if (modoDryRun) {
-      await dryRun(sql);
-      // Dry-run NÃO grava heartbeat: heartbeat significa "o motor escalonou o
-      // que havia para escalonar". Gravá-lo aqui faria uma inspeção manual
-      // mascarar um motor parado.
-      return;
-    }
-    await varrer(sql);
-    await gravarHeartbeat();
+    await executar(sql, { modoDryRun });
   } finally {
     await sql.end();
   }

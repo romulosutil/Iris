@@ -7,9 +7,20 @@ import {
   aprovarExtracao,
   descartarExtracao,
   editarExtracao,
+  type CodigoRecusa,
   type ReviewResult,
 } from "./logic";
 import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+
+// Recusas explícitas do core (#532): o código é o contrato com os testes; a
+// UI recebe a frase. `CONCURRENCY_ERROR` segue passando cru — a tela já o
+// distingue para oferecer "recarregar".
+const COPY_RECUSA: Record<CodigoRecusa, string> = {
+  SESSAO_SEM_NUMERO:
+    "Esta sessão ainda não foi consolidada. Consolide a nota da sessão antes de revisar as extrações.",
+  EVIDENCIA_VAZIA:
+    "Esta evidência não tem alvo mapeado e não pode ser reaprovada assim. Edite a extração informando o alvo, ou descarte.",
+};
 
 // ─── Wrappers para `useActionState` (resolvem o tenant do request) ────────────
 // O CORE acima recebe `ctx` (testável); estes wrappers re-derivam o tenant do
@@ -46,7 +57,7 @@ async function comCtx(
       if (r.error === "CONCURRENCY_ERROR") {
         return { error: "CONCURRENCY_ERROR" };
       }
-      return { error: r.error };
+      return { error: COPY_RECUSA[r.error as CodigoRecusa] ?? r.error };
     }
     if (!r.ok) return { error: "Extração não encontrada ou já revisada." };
     if (sessionId) {

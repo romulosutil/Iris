@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { cn } from "@/lib/cn";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { StatusBadge } from "@/components/ui/patterns/status-badge";
 
 export interface CollapsibleClusterProps extends React.HTMLAttributes<HTMLDivElement> {
   titulo: string;

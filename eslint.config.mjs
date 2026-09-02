@@ -1,6 +1,25 @@
+import { readFileSync } from "node:fs";
 import next from "eslint-config-next";
 import prettier from "eslint-config-prettier";
 import storybook from "eslint-plugin-storybook";
+import {
+  ESCOPO_DS,
+  FORA_DO_ESCOPO_DS,
+  comoGlobLiteral,
+  pluginDS,
+} from "./scripts/lint/regra-ds-paleta-crua.mjs";
+
+// DS-05 (#538): arquivos que ainda carregam paleta crua, com a contagem
+// atual. A regra fica desligada neles aqui; `scripts/lint/ds-paleta-crua.test.ts`
+// (roda no `pnpm test`) reativa a regra sobre eles e falha se a contagem
+// subir — e pede para abaixar o baseline quando ela cai. Regenerar com
+// `node scripts/lint/gerar-baseline-ds.mjs` só quando a contagem CAI.
+const baselineDS = JSON.parse(
+  readFileSync(
+    new URL("./scripts/lint/ds-paleta-crua.baseline.json", import.meta.url),
+    "utf8",
+  ),
+);
 
 const config = [
   {
@@ -63,6 +82,21 @@ const config = [
         },
       ],
     },
+  },
+  {
+    // Regra 0 do DS (AGENTS.md) com enforcement — DS-05 (#538): paleta crua
+    // do Tailwind e fonte < 12px em literais de classe viram erro de lint em
+    // src/app/(app) e src/components/{ui,app}. Plugin inline de propósito:
+    // `no-restricted-syntax` já é usada em src/app/** por outro bloco e as
+    // opções não se somam entre blocos.
+    files: ESCOPO_DS,
+    // `[id]` das rotas precisa de escape: num glob é classe de caracteres.
+    ignores: [
+      ...FORA_DO_ESCOPO_DS,
+      ...Object.keys(baselineDS).map(comoGlobLiteral),
+    ],
+    plugins: { ds: pluginDS },
+    rules: { "ds/sem-paleta-crua": "error" },
   },
 ];
 

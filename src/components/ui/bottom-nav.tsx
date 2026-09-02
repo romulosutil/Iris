@@ -80,7 +80,7 @@ export function BottomNav({ items, onAbrirMenu, renderLink }: BottomNavProps) {
 
   const classeSlot =
     "relative flex min-h-11 min-w-11 flex-1 flex-col items-center justify-center gap-0.5 " +
-    "px-1 py-2 font-display text-[11px] font-semibold leading-tight text-center " +
+    "px-1 py-2 font-display text-xs font-semibold leading-tight text-center " +
     "focus-visible:outline-focus";
 
   const classeItem = (item: NavItem) =>
@@ -97,7 +97,7 @@ export function BottomNav({ items, onAbrirMenu, renderLink }: BottomNavProps) {
       {item.badge !== undefined && item.badge > 0 ? (
         <span
           className={cn(
-            "absolute top-1 right-1/4 rounded-[var(--radius-pill)] border px-1.5 font-mono text-[10px] font-bold",
+            "absolute top-1 right-1/4 rounded-[var(--radius-pill)] border px-1.5 font-mono text-xs font-bold",
             badgeTomClasse[item.badgeTom ?? "neutro"],
           )}
         >

@@ -1,4 +1,5 @@
 import postgres from "postgres";
+import { assertScriptRemotoPermitido } from "./lib/guardrail-conexao.mjs";
 
 /**
  * #122 — Smoke test do motor de escalonamento de alerta de risco clínico.
@@ -55,6 +56,11 @@ if (process.env.SMOKE_AMBIENTE_TESTE !== "1") {
   );
   process.exit(1);
 }
+
+// Segunda tranca, por capacidade (#534): a role dona fora de localhost exige
+// ALLOW_SEED_REMOTE=true além do aceite acima. `SMOKE_AMBIENTE_TESTE` diz "é
+// teste"; o guard diz "é remoto" — são perguntas diferentes.
+assertScriptRemotoPermitido(dbUrl, { rotulo: "smoke-alerta-risco" });
 
 const isDryRun = process.argv.includes("--dry-run");
 const sql = postgres(dbUrl, { max: 1 });

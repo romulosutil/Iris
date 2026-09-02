@@ -92,7 +92,10 @@ const cadeiaSchema = z.object({
     .optional(),
 });
 
-const registroAbcSchema = z.object({
+// Exportado para o Briefing (#532): `payload_editado` só vence o `payload`
+// original quando tem a forma de um registro ABC — um objeto fora do formato
+// (ex.: o `{error}` que o DLQ antigo gravava) é ignorado, não lido como dado.
+export const registroAbcSchema = z.object({
   antecedente: z.string().optional(),
   comportamento: z.string().optional(),
   duracao_segundos: z.number().int().nullable().optional(),
