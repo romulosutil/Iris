@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { withTenant, type Tx, type TenantContext } from "@/db/rls";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 /**
  * DIAGNÓSTICO A POSTERIORI — NÃO É AUTORIZAÇÃO.
@@ -120,7 +121,7 @@ export async function diagnosticarBloqueioDeConsentimentoSeguro(
       diagnosticarBloqueioDeConsentimento(tx, alvo),
     );
   } catch (err) {
-    console.error("diagnosticarBloqueioDeConsentimento falhou:", err);
+    logarErroSemPII("diagnosticarBloqueioDeConsentimento falhou:", err);
     return null;
   }
 }

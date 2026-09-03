@@ -10,6 +10,7 @@ import {
   type CodigoRecusa,
   type ReviewResult,
 } from "./logic";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 // Recusas explícitas do core (#532): o código é o contrato com os testes; a
 // UI recebe a frase. `CONCURRENCY_ERROR` segue passando cru — a tela já o
@@ -69,7 +70,7 @@ async function comCtx(
     if (err instanceof RoleError) {
       return { error: "Só o terapeuta da sessão revisa as extrações." };
     }
-    console.error("wrapper revisão:", err);
+    logarErroSemPII("wrapper revisão:", err);
     return { error: "Não foi possível registrar a revisão." };
   }
 }

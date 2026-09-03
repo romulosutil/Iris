@@ -7,6 +7,7 @@ import { goal, goalMilestoneMapping } from "@/db/schema";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
 import { atualizarSchema, criarSchema } from "./schemas";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 /**
  * Toda escrita de meta passa pelo guard de conta somente-leitura (#163+#159) —
@@ -75,7 +76,7 @@ async function criarMetaCore(
       return { id: row!.id };
     });
   } catch (err) {
-    console.error("criarMeta:", err);
+    logarErroSemPII("criarMeta:", err);
     return { error: "Não foi possível criar a meta." };
   }
 }
@@ -113,7 +114,7 @@ async function atualizarMetaCore(
     );
     return {};
   } catch (err) {
-    console.error("atualizarMeta:", err);
+    logarErroSemPII("atualizarMeta:", err);
     return { error: "Não foi possível salvar a meta." };
   }
 }
@@ -151,7 +152,7 @@ async function transicionarEstadoMetaCore(
     );
     return {};
   } catch (err) {
-    console.error("transicionarEstadoMeta:", err);
+    logarErroSemPII("transicionarEstadoMeta:", err);
     return { error: "Não foi possível mudar o estado da meta." };
   }
 }
@@ -186,7 +187,7 @@ async function marcarDominadaCore(
     );
     return {};
   } catch (err) {
-    console.error("marcarDominada:", err);
+    logarErroSemPII("marcarDominada:", err);
     return { error: "Não foi possível marcar a meta como dominada." };
   }
 }
@@ -224,7 +225,7 @@ async function manterMetaAtivaCore(
     });
     return {};
   } catch (err) {
-    console.error("manterMetaAtiva:", err);
+    logarErroSemPII("manterMetaAtiva:", err);
     return { error: "Não foi possível reagendar a revisão." };
   }
 }

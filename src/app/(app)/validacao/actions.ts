@@ -13,6 +13,7 @@ import {
   type ValidacaoResult,
   type ValidacaoState,
 } from "./logic";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 // Re-export do tipo público consumido por `validacao-fila.tsx` (moveu p/ logic).
 export type { ValidacaoState };
 
@@ -30,7 +31,7 @@ async function comCtx(
     return { ok: true, aprovadas: r.aprovadas };
   } catch (err) {
     if (err instanceof RoleError) return { error: "Só o coordenador valida." };
-    console.error("wrapper validação:", err);
+    logarErroSemPII("wrapper validação:", err);
     return { error: "Não foi possível registrar a validação." };
   }
 }

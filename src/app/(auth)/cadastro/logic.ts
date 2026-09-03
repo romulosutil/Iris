@@ -7,6 +7,7 @@ import { enviarEmailTransacional } from "@/lib/email/transacional";
 import { getAppBaseUrl } from "@/lib/app-url";
 import { criarTemplateTentativaCadastroExistente } from "@/lib/email/templates";
 import { VERSAO_TERMO } from "@/lib/legal";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 export type EstadoCadastro = { error?: string };
 
@@ -268,10 +269,10 @@ function descreverErro(err: unknown): string {
       (err as any).body?.code ||
       (err as any).statusCode ||
       (err as any).status;
-    const msg = err.message || (err as any).body?.message || "";
+    // #531: a `message` ficava aqui apesar do JSDoc dizer o contrário — e a
+    // do driver carrega o e-mail/nome nos params. Só nome + code + causa.
     const parts = [err.name];
     if (code) parts.push(`code=${code}`);
-    if (msg) parts.push(`msg="${msg}"`);
     if ((err as any).cause) {
       parts.push(`cause=${descreverErro((err as any).cause)}`);
     }
@@ -496,7 +497,7 @@ export async function executarCadastro(
         texto: template.texto,
         html: template.html,
       }).catch((e) => {
-        console.error(
+        logarErroSemPII(
           "executarCadastro: falha ao notificar conta existente:",
           e,
         );

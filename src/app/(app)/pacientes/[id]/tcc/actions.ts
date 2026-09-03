@@ -6,6 +6,7 @@ import { RoleError } from "@/auth/require-role";
 import { salvarInstrumentoAplicacao } from "./instrumento-logic";
 import { salvarRPD } from "./logic";
 import { aprovarRPDSugestao, descartarRPDSugestao } from "./sugestoes";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 export type SalvarRpdState = { error?: string; ok?: boolean };
 
@@ -104,7 +105,7 @@ export async function salvarRPDAction(
         error: "Apenas terapeutas e coordenadores podem salvar um RPD.",
       };
     }
-    console.error("salvarRPDAction:", err);
+    logarErroSemPII("salvarRPDAction:", err);
     return { error: "Erro ao salvar o Registro de Pensamentos Distorcidos." };
   }
 }
@@ -159,7 +160,7 @@ export async function aprovarRPDSugestaoAction(
           "Apenas terapeutas e coordenadores podem aprovar uma sugestão de RPD.",
       };
     }
-    console.error("aprovarRPDSugestaoAction:", err);
+    logarErroSemPII("aprovarRPDSugestaoAction:", err);
     return { error: "Não foi possível aprovar a sugestão de RPD." };
   }
 }
@@ -187,7 +188,7 @@ export async function descartarRPDSugestaoAction(
           "Apenas terapeutas e coordenadores podem descartar uma sugestão de RPD.",
       };
     }
-    console.error("descartarRPDSugestaoAction:", err);
+    logarErroSemPII("descartarRPDSugestaoAction:", err);
     return { error: "Não foi possível descartar a sugestão de RPD." };
   }
 }
@@ -257,7 +258,7 @@ export async function salvarInstrumentoAplicacaoAction(
           "Apenas terapeutas e coordenadores podem salvar a aplicação de um instrumento.",
       };
     }
-    console.error("salvarInstrumentoAplicacaoAction:", err);
+    logarErroSemPII("salvarInstrumentoAplicacaoAction:", err);
     return { error: "Erro ao salvar a aplicação do instrumento." };
   }
 }

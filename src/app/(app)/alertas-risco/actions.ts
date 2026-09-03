@@ -10,6 +10,8 @@ import {
   resolverAlertaRisco,
   type RiscoResult,
 } from "./logic";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+import { textoErroInterno } from "@/lib/copy/erros";
 
 /**
  * #122 — só WRAPPERS aqui. O core ctx-accepting vive em `logic.ts`
@@ -34,8 +36,8 @@ async function comCtx(
     return { error: r.error };
   } catch (err) {
     if (err instanceof RoleError) return { error: err.message };
-    console.error("wrapper alertas-risco:", err);
-    return { error: "Erro interno no servidor." };
+    const correlacaoId = logarErroSemPII("wrapper alertas-risco:", err);
+    return { error: textoErroInterno(correlacaoId) };
   }
 }
 

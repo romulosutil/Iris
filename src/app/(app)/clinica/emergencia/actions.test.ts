@@ -71,10 +71,20 @@ describe("salvarEmergenciaAction (error handling)", () => {
 
     const result = await salvarEmergenciaAction({}, fd);
 
-    expect(result).toEqual({ error: "Erro interno no servidor." });
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "wrapper clinica/emergencia:",
-      boom,
+    // #531 (S-03/U-01): o log recebe só nome + code + correlação — nunca o
+    // objeto (a `message` de um erro de driver carrega SQL + params) — e a
+    // tela recebe copy do dicionário com o MESMO código de correlação.
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+    const [rotulo, resumo] = consoleErrorSpy.mock.calls[0]! as [
+      string,
+      { correlacaoId: string; nome: string },
+    ];
+    expect(rotulo).toBe("wrapper clinica/emergencia:");
+    expect(resumo).not.toBe(boom);
+    expect(JSON.stringify(resumo)).not.toContain("Banco de dados offline");
+    expect(resumo.nome).toBe("Error");
+    expect(result.error).toBe(
+      `Não foi possível concluir. Tente de novo; se repetir, avise a coordenação (código ${resumo.correlacaoId}).`,
     );
   });
 
