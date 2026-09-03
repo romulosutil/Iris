@@ -3,6 +3,7 @@
 // todo número no draft precisa vir do dossiê factual (PayloadConvenioBruto).
 // `validarDraftContraDossie` é o numeric-guard que garante isso em runtime
 // para o provider real; o stub garante por construção (nunca inventa número).
+import { relatorioConvenioLlmHabilitado } from "@/lib/flags";
 import type { PayloadConvenioBruto } from "../convenio-bruto/types";
 import { GeminiConvenioNarrativoProvider } from "./gemini-provider";
 import { StubConvenioNarrativoProvider } from "./stub-provider";
@@ -74,10 +75,7 @@ export function resolveConvenioNarrativoProvider(clinic: {
   isDemo: boolean;
 }): ConvenioNarrativoProvider {
   if (clinic.isDemo) return new StubConvenioNarrativoProvider();
-  if (
-    process.env.CONVENIO_REPORT_LLM_ENABLED === "true" &&
-    process.env.GOOGLE_API_KEY
-  ) {
+  if (relatorioConvenioLlmHabilitado() && process.env.GOOGLE_API_KEY) {
     return new GeminiConvenioNarrativoProvider();
   }
   return new StubConvenioNarrativoProvider();
