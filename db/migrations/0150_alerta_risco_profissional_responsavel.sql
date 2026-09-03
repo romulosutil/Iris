@@ -90,7 +90,7 @@ AS $$
   FROM alerta_risco_clinico a
   WHERE a.id = p_alerta
     -- predicado de alerta_risco_scope (0085), forma D23 (0093), régua do
-    -- profissional responsável (0143/#539) adotada na 0149 (#554):
+    -- profissional responsável (0143/#539) adotada na 0150 (#554):
     AND a.deletado_em IS NULL
     AND a.clinic_id = app_clinic_id_exigido()
     AND (

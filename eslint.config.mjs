@@ -51,6 +51,44 @@ const config = [
   ...storybook.configs["flat/recommended"],
   prettier,
   {
+    // #531 (S-03): `console.error(rotulo, err)` imprime a `message` do
+    // `DrizzleQueryError` — "Failed query: <sql>\nparams: <params>" — no
+    // stdout do container, e no diário os params são a nota clínica. O
+    // helper `logarErroSemPII` registra só nome + SQLSTATE + hash. Testes e
+    // stories ficam fora: lá o "erro" é dublê.
+    //
+    // Limite da regra (sintática, não de fluxo de dados): ela casa o
+    // IDENTIFICADOR do erro como argumento direto ou como propriedade de
+    // objeto literal. `console.error(rotulo, err.message)`,
+    // `console.error(String(err))`, um alias (`const falha = err`) ou o erro
+    // dentro de template string passam. A revisão de PR cobre esse resto; a
+    // regra existe para o padrão que estava em 85 lugares.
+    //
+    // Os seletores casam uma FORMA de AST, e um seletor que deixa de casar não
+    // vira erro de config — vira silêncio verde. `scripts/lint/
+    // console-erro-sem-pii.test.ts` (roda no `pnpm test`) mede este arquivo
+    // pela API do ESLint e fica vermelho se a regra parar de acusar.
+    files: ["src/app/**/*.{ts,tsx}", "src/lib/**/*.{ts,tsx}"],
+    ignores: ["**/*.test.{ts,tsx}", "**/*.stories.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "CallExpression[callee.object.name='console'][callee.property.name='error'] > Identifier.arguments[name=/^(err|e|error|erro|dbErr|exception)$/]",
+          message:
+            "Não passe o erro ao console.error: a message do DrizzleQueryError carrega SQL + params (PHI). Use logarErroSemPII(rotulo, err, extra?) de @/lib/observabilidade/logar-erro.",
+        },
+        {
+          selector:
+            "CallExpression[callee.object.name='console'][callee.property.name='error'] ObjectExpression > Property[value.name=/^(err|e|error|erro|dbErr|exception)$/]",
+          message:
+            "Não embuta o erro num objeto do console.error: a message do DrizzleQueryError carrega SQL + params (PHI). Use logarErroSemPII(rotulo, err, extra?) de @/lib/observabilidade/logar-erro.",
+        },
+      ],
+    },
+  },
+  {
     // Regra 0 do DS (AGENTS.md) com enforcement — DS-05 (#538): paleta crua
     // do Tailwind e fonte < 12px em literais de classe viram erro de lint em
     // src/app/(app) e src/components/{ui,app}. Plugin inline de propósito:

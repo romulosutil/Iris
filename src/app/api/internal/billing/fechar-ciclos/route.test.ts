@@ -170,6 +170,18 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/**
+ * #531 (S-03): o discriminador de etapa vai no CORPO da resposta, e o script
+ * que dispara o job loga o corpo no stdout do container (painel do Easypanel,
+ * em HTTP puro). Ele pode nomear o tipo do erro e a correlacao — nunca a
+ * `message`, que num `DrizzleQueryError` e "Failed query: <sql> params: <os
+ * valores vinculados>".
+ */
+function esperarDiagnosticoSemMensagem(valor: unknown, mensagem: string): void {
+  expect(valor).toMatch(/^Error correlacao=[0-9a-f]{8}$/);
+  expect(String(valor)).not.toContain(mensagem);
+}
+
 describe("POST /api/internal/billing/fechar-ciclos — ordem das etapas", () => {
   it("varre a carência DEPOIS de fechar os ciclos (D-1 da #319)", async () => {
     const resposta = await POST(requisicao());
@@ -612,18 +624,49 @@ describe("POST /api/internal/billing/fechar-ciclos — falha que aborta a passad
     // Falha ANTES de o faturamento terminar: não há cobrança emitida para
     // relatar, e os TRÊS discriminadores vão `null` — "nem chegou a ser
     // tentada", que é diferente de "tentou e caiu".
-    expect(await resposta.json()).toEqual({
-      ok: false,
-      retentativaAbortada: null,
-      carenciaAbortada: null,
-      backstopAbortado: null,
-      error: "connection terminated unexpectedly",
-    });
+    const corpo = await resposta.json();
+    expect(Object.keys(corpo).sort()).toEqual([
+      "backstopAbortado",
+      "carenciaAbortada",
+      "error",
+      "ok",
+      "retentativaAbortada",
+    ]);
+    expect(corpo.ok).toBe(false);
+    expect(corpo.retentativaAbortada).toBeNull();
+    expect(corpo.carenciaAbortada).toBeNull();
+    expect(corpo.backstopAbortado).toBeNull();
+    esperarDiagnosticoSemMensagem(
+      corpo.error,
+      "connection terminated unexpectedly",
+    );
     // Consequência da ordem, e o lado seguro: se o fechamento morreu, ninguém
     // sabe quais recusas o dia produziria, então ninguém é cortado.
     expect(dubles.comandarRetentativasPendentes).not.toHaveBeenCalled();
     expect(dubles.cancelarAssinaturasComCarenciaVencida).not.toHaveBeenCalled();
     expect(dubles.aplicarBackstopDePrazo).not.toHaveBeenCalled();
+  });
+
+  it("o codigo do corpo e o mesmo do log — o operador acha a linha", async () => {
+    // Sem a message, o corpo so serve para diagnostico se o `correlacao=` dele
+    // for o MESMO id que o helper registrou no stdout. Um id gerado de novo na
+    // resposta seria um numero decorativo.
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    dubles.fecharCiclosVencendo.mockResolvedValue([fechamento()]);
+    dubles.cancelarAssinaturasComCarenciaVencida.mockRejectedValue(
+      new Error("timeout ao revogar vínculo"),
+    );
+
+    const corpo = await (await POST(requisicao())).json();
+
+    const chamada = log.mock.calls.find(
+      ([rotulo]) => rotulo === "[billing-fechamento] etapa de carência abortou",
+    );
+    const registrado = (chamada?.[1] ?? {}) as { correlacaoId?: string };
+    expect(registrado.correlacaoId).toMatch(/^[0-9a-f]{8}$/);
+    expect(corpo.carenciaAbortada).toBe(
+      `Error correlacao=${registrado.correlacaoId}`,
+    );
   });
 
   it("preserva `resultados` no corpo quando o corte por carência lança (D38)", async () => {
@@ -655,7 +698,10 @@ describe("POST /api/internal/billing/fechar-ciclos — falha que aborta a passad
     expect(resposta.status).toBe(500);
     expect(corpo.ok).toBe(false);
     // A etapa que caiu é nomeada, com a mensagem de raiz.
-    expect(corpo.carenciaAbortada).toBe("timeout ao revogar vínculo");
+    esperarDiagnosticoSemMensagem(
+      corpo.carenciaAbortada,
+      "timeout ao revogar vínculo",
+    );
     expect(corpo.backstopAbortado).toBeNull();
     expect(dubles.fecharCiclosVencendo).toHaveBeenCalledTimes(1);
   });
@@ -682,7 +728,10 @@ describe("POST /api/internal/billing/fechar-ciclos — falha que aborta a passad
     // A carência que caiu não vira "zero avaliadas" em silêncio: quem separa
     // "não havia ninguém a cortar" de "a varredura estourou" é este campo.
     expect(corpo.carenciaAvaliadas).toBe(0);
-    expect(corpo.carenciaAbortada).toBe("timeout ao revogar vínculo");
+    esperarDiagnosticoSemMensagem(
+      corpo.carenciaAbortada,
+      "timeout ao revogar vínculo",
+    );
     expect(resposta.status).toBe(500);
   });
 
@@ -697,7 +746,10 @@ describe("POST /api/internal/billing/fechar-ciclos — falha que aborta a passad
 
     const corpo = await (await POST(requisicao())).json();
 
-    expect(corpo.backstopAbortado).toBe("gateway 503 na reconsulta");
+    esperarDiagnosticoSemMensagem(
+      corpo.backstopAbortado,
+      "gateway 503 na reconsulta",
+    );
     expect(corpo.carenciaAbortada).toBeNull();
     // O trabalho da carência, que correu inteiro, continua relatado.
     expect(corpo.carenciaCortadas).toBe(1);
@@ -716,8 +768,14 @@ describe("POST /api/internal/billing/fechar-ciclos — falha que aborta a passad
     const resposta = await POST(requisicao());
     const corpo = await resposta.json();
 
-    expect(corpo.carenciaAbortada).toBe("timeout ao revogar vínculo");
-    expect(corpo.backstopAbortado).toBe("gateway 503 na reconsulta");
+    esperarDiagnosticoSemMensagem(
+      corpo.carenciaAbortada,
+      "timeout ao revogar vínculo",
+    );
+    esperarDiagnosticoSemMensagem(
+      corpo.backstopAbortado,
+      "gateway 503 na reconsulta",
+    );
     expect(resposta.status).toBe(500);
     expect(corpo.resultados).toHaveLength(1);
   });
@@ -892,7 +950,8 @@ describe("POST /api/internal/billing/fechar-ciclos — retentativa extradia (#32
     // O alarme sobe (D34: o job já sai `exit 0` demais)…
     expect(resposta.status).toBe(500);
     expect(corpo.ok).toBe(false);
-    expect(corpo.retentativaAbortada).toBe(
+    esperarDiagnosticoSemMensagem(
+      corpo.retentativaAbortada,
       "gateway 503 ao consultar instrução",
     );
     // …sem contaminar os outros discriminadores.
@@ -941,12 +1000,27 @@ describe("POST /api/internal/billing/fechar-ciclos — retentativa extradia (#32
     const resposta = await POST(requisicao());
     const corpo = await resposta.json();
 
-    expect(corpo.retentativaAbortada).toBe(
+    esperarDiagnosticoSemMensagem(
+      corpo.retentativaAbortada,
       "gateway 503 ao consultar instrução",
     );
-    expect(corpo.carenciaAbortada).toBe("timeout ao revogar vínculo");
-    expect(corpo.backstopAbortado).toBe("gateway 503 na reconsulta");
+    esperarDiagnosticoSemMensagem(
+      corpo.carenciaAbortada,
+      "timeout ao revogar vínculo",
+    );
+    esperarDiagnosticoSemMensagem(
+      corpo.backstopAbortado,
+      "gateway 503 na reconsulta",
+    );
     expect(resposta.status).toBe(500);
     expect(corpo.resultados).toHaveLength(1);
+    // Uma correlacao POR etapa: tres ids distintos, tres linhas de log.
+    expect(
+      new Set([
+        corpo.retentativaAbortada,
+        corpo.carenciaAbortada,
+        corpo.backstopAbortado,
+      ]).size,
+    ).toBe(3);
   });
 });

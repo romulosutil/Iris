@@ -39,6 +39,9 @@ const U_SUB = "00000000-0000-0000-0000-0000000072e5";
 const U_OUTRO = "00000000-0000-0000-0000-0000000073e5";
 const PAC = "00000000-0000-0000-0000-00000000ace5";
 
+const PROTO = "00000000-0000-0000-0000-00000070c0e5";
+const GOAL = "00000000-0000-0000-0000-0000000690e5";
+
 // Titular = U_TITULAR nas três. Substituto (`atendido_por_id`) = U_SUB nas duas
 // primeiras; a terceira não tem substituto — é o controle negativo de U_SUB.
 const S_SUB_RLS = "00000000-0000-0000-0000-00000005e1e5";
@@ -88,8 +91,10 @@ describe.skipIf(!hasDb)("#539 · profissional responsável pela sessão", () => 
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
 
     await owner`TRUNCATE clinic, app_user, user_role, patient, care_team_membership,
-      session, session_note, audio_capture, extraction RESTART IDENTITY CASCADE`;
+      session, session_note, audio_capture, extraction, protocol, patient_protocol,
+      goal RESTART IDENTITY CASCADE`;
 
+    await owner`INSERT INTO protocol_familia_catalogo (id, nome) VALUES ('aba_marcos_desenvolvimento', 'Marcos de desenvolvimento (ABA)') ON CONFLICT DO NOTHING`;
     await owner`INSERT INTO clinic (id, nome, is_demo) VALUES (${CLINIC}, 'Clínica substituto', false)`;
     await owner`INSERT INTO app_user (id, name, email) VALUES
       (${U_COORD}, 'Coord', 'coord.sub539@t.com'),
@@ -113,6 +118,27 @@ describe.skipIf(!hasDb)("#539 · profissional responsável pela sessão", () => 
       (${S_SUB_RLS},   ${CLINIC}, ${PAC}, ${U_TITULAR}, ${U_SUB}, ${H48_ATRAS}, 'realizada', 'aba'),
       (${S_SUB_LOGIC}, ${CLINIC}, ${PAC}, ${U_TITULAR}, ${U_SUB}, ${H48_ATRAS}, 'realizada', 'aba'),
       (${S_SEM_SUB},   ${CLINIC}, ${PAC}, ${U_TITULAR}, NULL,     ${H48_ATRAS}, 'realizada', 'aba')`;
+
+    // T07b/T07c — `capturarDiario`/`consolidarSessao` passaram a correr a
+    // régua única de documentação (`assertPodeDocumentar`) ANTES da escrita.
+    // `PAC` nasce sem `clinical_modality`, e o default do schema é
+    // `protocol_driven`, cujos degraus BLOQUEANTES são protocolo e meta
+    // (`modalidade.ts`). Sem os dois, as escritas deste arquivo são recusadas
+    // com `ProntuarioIncompletoError` antes de exercitarem o que provam.
+    //
+    // O substituto ENXERGA esses fatos, e é por construção: o recorte de
+    // cobertura de `app_fatos_prontidao` (0144) é
+    // `session.terapeuta_id OU session.atendido_por_id` — o MESMO par que
+    // `app_session_profissional_responsavel` (0143) usa. As duas frentes
+    // chegaram ao mesmo recorte de forma independente. `U_SUB` segue FORA da
+    // `care_team_membership`: é o cenário que este arquivo existe para provar,
+    // e a leitura clínica dele vem da sessão, não do vínculo de equipe.
+    await owner`INSERT INTO protocol (id, clinic_id, nome, disciplina, familia) VALUES
+      (${PROTO}, ${CLINIC}, 'VB-MAPP', 'ABA', 'aba_marcos_desenvolvimento')`;
+    await owner`INSERT INTO patient_protocol (patient_id, protocol_id, ativado_por, ativado_em, desativado_em)
+      VALUES (${PAC}, ${PROTO}, ${U_TITULAR}, now()::date, NULL)`;
+    await owner`INSERT INTO goal (id, patient_id, clinic_id, descricao, estado, criterio_dominio, criado_por)
+      VALUES (${GOAL}, ${PAC}, ${CLINIC}, 'Pedir água sozinho', 'ativa', '{"tipo":"frequencia","valor":3}', ${U_TITULAR})`;
   });
 
   afterAll(async () => {

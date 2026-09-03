@@ -333,7 +333,7 @@ describe.skipIf(!hasDb)("alerta_risco_clinico — RLS e privilégios", () => {
    * alerta de risco: a policy `alerta_risco_scope` (0085),
    * `app_alerta_risco_visivel` (0093) e `app_alerta_trecho_fonte` (0142/#529).
    *
-   * Antes da 0149 os três usavam `app_session_terapeuta_id(session_id) = <eu>`:
+   * Antes da 0150 os três usavam `app_session_terapeuta_id(session_id) = <eu>`:
    * o substituto que atendeu a sessão e não está na equipe NÃO via o alerta que
    * a extração daquela sessão gerou — enquanto a titular, que não estava lá,
    * via. Estes casos medem comportamento sob `app_role`, não o texto do `.sql`.

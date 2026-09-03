@@ -41,10 +41,39 @@
  * manual "confirmar antes" (ver CLAUDE.md) — nunca automatizar contra dado real
  * sem aval explícito.
  *
+ * ─── MEDIÇÃO ANTES/DEPOIS (#553, item 3 — NÃO executar em produção sem aval
+ * explícito do Rômulo; a decisão de rodar o backfill e quem assina segue
+ * ABERTA na issue). Conta as extrações que decisão humana já aprovou e que
+ * mesmo assim não têm nenhuma linha em `evidence` — o buraco que a deriva de
+ * forma do payload abriu em silêncio. Roda como owner (bypassa RLS), por isso
+ * agrega por clínica:
+ *
+ *   SELECT e.clinic_id,
+ *          c.nome                                  AS clinica,
+ *          count(*)                                AS aprovadas_sem_evidence,
+ *          min(e.criado_em)                        AS primeira,
+ *          max(e.criado_em)                        AS ultima
+ *     FROM extraction e
+ *     JOIN clinic c ON c.id = e.clinic_id
+ *    WHERE e.estado = 'aprovada'
+ *      AND e.subtipo = 'evidencia'
+ *      AND NOT EXISTS (
+ *            SELECT 1 FROM evidence ev WHERE ev.extraction_id = e.id
+ *          )
+ *    GROUP BY e.clinic_id, c.nome
+ *    ORDER BY aprovadas_sem_evidence DESC;
+ *
+ * Rodar a MESMA query depois do backfill: a diferença é o efeito medido, e é
+ * ela que vai para o `BACKLOG.md`. O que sobrar são os skips legítimos
+ * (sessão sem número, sem revisor, `alvos` vazio) — não resíduo da deriva.
+ *
  * Uso:  pnpm backfill:evidence
  */
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 import { assertScriptRemotoPermitido } from "./lib/guardrail-conexao.mjs";
+import { conteudoDoSubtipo } from "@/lib/extraction/conteudo-subtipo";
 import {
   type Alvo,
   postgresResolverQueries,
@@ -73,16 +102,22 @@ type Evidencia = {
   [key: string]: unknown;
 };
 
-async function main() {
-  const url = process.env.MIGRATION_DATABASE_URL;
-  if (!url) throw new Error("MIGRATION_DATABASE_URL não definida");
-  // Conexão owner (bypassa RLS) — backfill é operação administrativa
-  // cross-clinic, mesmo padrão de acesso usado pelas migrations/seed do owner.
-  // Por isso mesmo, fail-closed fora de localhost: banco remoto só com
-  // ALLOW_SEED_REMOTE=true explícito (#534).
-  assertScriptRemotoPermitido(url, { rotulo: "backfill-evidence" });
-  const sql = postgres(url, { max: 1 });
+export type BackfillResumo = {
+  elegiveis: number;
+  inseridas: number;
+  puladas: number;
+  extractionIdsTocados: string[];
+};
 
+/**
+ * Núcleo do backfill, isolado da leitura de env / abertura de conexão para
+ * poder ser exercitado em teste com um `sql` dublê (ver
+ * `scripts/backfill-evidence.test.ts`). O guard de ambiente (#534) fica em
+ * `main()`, junto do único ponto que de fato abre conexão.
+ */
+export async function executarBackfill(
+  sql: postgres.Sql,
+): Promise<BackfillResumo> {
   const extracoes = await sql<ExtractionRow[]>`
     SELECT id, session_id, clinic_id, estado, subtipo, payload, payload_editado, revisado_por
     FROM extraction
@@ -107,10 +142,15 @@ async function main() {
       continue;
     }
 
-    const conteudo = (ext.payload_editado ?? ext.payload) as {
-      evidencia?: Evidencia | null;
-    };
-    const evidencia = conteudo?.evidencia;
+    // FONTE ÚNICA com o leitor on-approve (`inserirEvidenciasOnApprove`):
+    // o payload real de produção é FLAT (`{alvos}`) desde a D57, os seeds e o
+    // dado anterior são ANINHADOS (`{evidencia:{alvos}}`). Ler à mão só uma
+    // das formas — como este script fazia — é a deriva da #553: o backfill
+    // não encontrava nenhuma das aprovações reais.
+    const evidencia = conteudoDoSubtipo(
+      ext.payload_editado ?? ext.payload,
+      "evidencia",
+    ) as Evidencia | null;
     const alvos = Array.isArray(evidencia?.alvos) ? evidencia!.alvos! : [];
     if (alvos.length === 0) {
       puladas++;
@@ -181,10 +221,31 @@ async function main() {
     }
   }
 
+  return {
+    elegiveis: extracoes.length,
+    inseridas,
+    puladas,
+    extractionIdsTocados,
+  };
+}
+
+async function main() {
+  const url = process.env.MIGRATION_DATABASE_URL;
+  if (!url) throw new Error("MIGRATION_DATABASE_URL não definida");
+  // Conexão owner (bypassa RLS) — backfill é operação administrativa
+  // cross-clinic, mesmo padrão de acesso usado pelas migrations/seed do owner.
+  // Por isso mesmo, fail-closed fora de localhost: banco remoto só com
+  // ALLOW_SEED_REMOTE=true explícito (#534).
+  assertScriptRemotoPermitido(url, { rotulo: "backfill-evidence" });
+  const sql = postgres(url, { max: 1 });
+
+  const { elegiveis, inseridas, puladas, extractionIdsTocados } =
+    await executarBackfill(sql);
+
   console.log(
     [
       `Backfill de evidence concluído.`,
-      `  Extrações elegíveis: ${extracoes.length}`,
+      `  Extrações elegíveis: ${elegiveis}`,
       `  Evidências inseridas: ${inseridas}`,
       `  Extrações puladas (sem alvo/sem número/sem revisor): ${puladas}`,
       extractionIdsTocados.length > 0
@@ -196,7 +257,23 @@ async function main() {
   await sql.end();
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+// Só executa quando invocado como script (`pnpm backfill:evidence`); importar
+// o módulo em teste não pode disparar o backfill nem abrir conexão.
+// Compara o alvo da invocação com o caminho DESTE módulo (e não com um nome de
+// arquivo literal): sobrevive a renomear/mover o script sem falhar em silêncio.
+function normalizarCaminho(caminho: string) {
+  const posix = resolve(caminho).split("\\").join("/");
+  // Windows varia a caixa do drive entre `process.argv[1]` e `import.meta.url`.
+  return process.platform === "win32" ? posix.toLowerCase() : posix;
+}
+
+const alvoDaInvocacao = process.argv[1]
+  ? normalizarCaminho(process.argv[1])
+  : "";
+const esteModulo = normalizarCaminho(fileURLToPath(import.meta.url));
+if (alvoDaInvocacao === esteModulo) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

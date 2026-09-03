@@ -6,9 +6,9 @@ import { DOCUMENTOS_LEGAIS, VERSAO_TERMO } from "@/lib/legal";
  * Rota pública `/termos`.
  *
  * Fica fora do grupo `(app)` de propósito: o guard de sessão do produto está em
- * `src/app/(app)/layout.tsx` (`getTenantContext`), então tudo que mora aqui na
- * raiz — como `src/app/sobre` — é acessível sem sessão. É requisito: a tela de
- * cadastro linka este documento para quem ainda não tem conta.
+ * `src/app/(app)/layout.tsx` (`getTenantContext`), então tudo que mora no
+ * grupo `(publico)` — como `sobre` — é acessível sem sessão. É requisito: a
+ * tela de cadastro linka este documento para quem ainda não tem conta.
  *
  * `force-static` também é requisito de deploy, não otimização — ver o comentário
  * em `DocumentoLegal` sobre `docs/` não existir no estágio `runner` da imagem.

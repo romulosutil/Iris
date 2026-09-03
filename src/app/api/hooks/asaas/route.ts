@@ -8,6 +8,10 @@ import {
 } from "@/lib/billing/erro-aplicacao";
 import { AsaasProvider } from "@/lib/billing/provider";
 import {
+  descreverErroSemPII,
+  logarErroSemPII,
+} from "@/lib/observabilidade/logar-erro";
+import {
   aplicarStatusProvider,
   avisarRecusaQueNaoConciliou,
   conciliarPagamentoDeCiclo,
@@ -143,10 +147,9 @@ export async function POST(request: Request): Promise<Response> {
   } catch (err) {
     // Falha real de infraestrutura (banco fora) DEVE ser 5xx: aí a reentrega
     // do Asaas é justamente o comportamento desejado.
-    console.error("[asaas-webhook] falha ao registrar evento", {
+    logarErroSemPII("[asaas-webhook] falha ao registrar evento", err, {
       asaasEventId,
       evento,
-      err,
     });
     return Response.json(
       { error: "falha ao registrar evento" },
@@ -239,13 +242,16 @@ export async function POST(request: Request): Promise<Response> {
   } catch (err) {
     // Efeito não aplicado, entrega preservada: `aplicado_em` continua NULL e a
     // varredura de pendentes tenta de novo. Registrar o erro e responder 200.
-    console.error("[asaas-webhook] falha ao aplicar efeito", {
-      asaasEventId,
+    const correlacaoId = logarErroSemPII(
+      "[asaas-webhook] falha ao aplicar efeito",
       err,
-    });
+      { asaasEventId },
+    );
     try {
+      // Nome + SQLSTATE + correlação, nunca `err.message` (#531): um erro de
+      // driver carrega os params da query, e esta coluna é lida no painel.
       await marcar(eventoId, {
-        erroAplicacao: err instanceof Error ? err.message : String(err),
+        erroAplicacao: descreverErroSemPII(err, correlacaoId),
       });
     } catch {
       // Se nem o registro do erro grava, o banco está fora — o 200 já é a

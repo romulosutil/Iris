@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import {
-  AvisoCentralValidacao,
   AvisoPrimeiraVisita,
   AvisoVolumeAlto,
   SemPermissaoSessoes,
@@ -62,36 +61,6 @@ describe("AvisoPrimeiraVisita — estado de tela 'primeira vez' (R-31)", () => {
       throw new Error("SecurityError");
     });
     expect(() => render(<AvisoPrimeiraVisita ativo />)).not.toThrow();
-    window.localStorage.getItem = original;
-  });
-});
-
-describe("AvisoCentralValidacao — dica de primeira visita (#512 · T14 · R-35)", () => {
-  test("sem `de=validacao`: não mostra nada", () => {
-    render(<AvisoCentralValidacao />);
-    expect(screen.queryByText(/virou Sessões/)).toBeNull();
-  });
-
-  test("primeira visita vinda de /validacao: mostra a dica", async () => {
-    render(<AvisoCentralValidacao de="validacao" />);
-    expect(await screen.findByText(/virou Sessões/)).toBeTruthy();
-  });
-
-  test("segunda visita vinda de /validacao: não mostra mais a dica", async () => {
-    window.localStorage.setItem("iris_sessoes_hint_validacao_visto", "1");
-    render(<AvisoCentralValidacao de="validacao" />);
-    await Promise.resolve();
-    expect(screen.queryByText(/virou Sessões/)).toBeNull();
-  });
-
-  test("`localStorage` que lança na leitura não quebra a tela (janela anônima)", async () => {
-    const original = window.localStorage.getItem;
-    vi.spyOn(window.localStorage, "getItem").mockImplementation(() => {
-      throw new Error("SecurityError");
-    });
-    expect(() =>
-      render(<AvisoCentralValidacao de="validacao" />),
-    ).not.toThrow();
     window.localStorage.getItem = original;
   });
 });

@@ -1,5 +1,11 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Auto detect text files and perform LF normalization.
+# `eol=lf` (auditoria 360, DX-04): o índice já é 100% LF (`git ls-files --eol`
+# → `i/lf` em todo arquivo); o CRLF que aparece em `.env.example`/`BACKLOG.md`
+# é só o working copy do Windows com `core.autocrlf=true`. Forçar LF no
+# checkout elimina a deriva de hash das migrações medida do working tree
+# (memória `deriva-de-hash-e-eol-nao-conteudo`) e a diferença Windows × CI.
+# Esta regra NÃO renormaliza conteúdo commitado: nada muda no índice.
+* text=auto eol=lf
 
 # Scripts de shell e Dockerfiles rodam DENTRO de container Linux. Com `text=auto`
 # acima, um checkout no Windows os traria em CRLF — e aí o `\r` entra no shebang

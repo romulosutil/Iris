@@ -26,7 +26,7 @@ describe("RootLayout (src/app/layout.tsx)", () => {
     expect(metadata.openGraph?.locale).toBe("pt_BR");
   });
 
-  it("renderiza provedores globais e filhos corretamente", () => {
+  it("renderiza os filhos SEM nenhum SDK de terceiro (S-01/S-08, #530)", () => {
     const { container } = render(
       <RootLayout>
         <main data-testid="test-child">Conteúdo da Aplicação</main>
@@ -34,9 +34,15 @@ describe("RootLayout (src/app/layout.tsx)", () => {
     );
 
     expect(screen.getByTestId("test-child")).not.toBeNull();
-    expect(screen.getByTestId("mock-clarity")).not.toBeNull();
-    expect(screen.getByTestId("mock-google-analytics")).not.toBeNull();
-    expect(screen.getByTestId("mock-webmcp")).not.toBeNull();
+    // Clarity (session replay), GA e WebMCP montam SÓ em
+    // `src/app/(publico)/layout.tsx`. O root layout envolve `/sessoes/[id]`,
+    // `/pacientes/[id]` e `/alertas-risco`: um `<Clarity/>` aqui grava DOM
+    // com texto clínico de menor e manda para terceiro nos EUA. Os mocks
+    // continuam registrados de propósito — se alguém recolocar o import, o
+    // test-id aparece e esta asserção cai.
+    expect(screen.queryByTestId("mock-clarity")).toBeNull();
+    expect(screen.queryByTestId("mock-google-analytics")).toBeNull();
+    expect(screen.queryByTestId("mock-webmcp")).toBeNull();
 
     // React 19 iça os atributos de <html> para o document.documentElement do
     // jsdom, então `container.querySelector("html")` devolve `null` sempre. Ler

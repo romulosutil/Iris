@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getTenantContext } from "@/auth/tenant";
 import { obterHistoricoExportacoes } from "@/lib/export/acervo/motor";
+import { textoErroInterno } from "@/lib/copy/erros";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,9 +19,12 @@ export async function GET() {
       ctx.role,
     );
     return NextResponse.json(dados);
-  } catch (err: any) {
+  } catch (err: unknown) {
+    // S-10 (#531): nunca `err.message` na resposta — erro de driver carrega
+    // SQL + params. Copy + código de correlação do log.
+    const correlacaoId = logarErroSemPII("[exportacao/estado] leitura:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : String(err) },
+      { error: textoErroInterno(correlacaoId) },
       { status: 500 },
     );
   }
