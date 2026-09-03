@@ -13,11 +13,12 @@ const TOKEN = "token-secreto-de-teste-nao-deve-vazar";
 // arrow para algo usado com `new` estoura, cai no catch do código sob teste e o
 // teste passa PELO CAMINHO ERRADO. Aqui o contrato é só "chamável e devolve uma
 // Response-like", então o dublê é minimamente compatível de propósito.
-function fetchDe({ status = 200, corpo = "{}" } = {}) {
+function fetchDe({ status = 200, corpo = "{}", headers = {} } = {}) {
   return vi.fn(async () => ({
     ok: status >= 200 && status < 300,
     status,
     text: async () => corpo,
+    headers: { get: (nome) => headers[nome.toLowerCase()] ?? null },
   }));
 }
 
@@ -97,6 +98,44 @@ describe("fechamento-ciclo-billing — executarFechamento", () => {
     expect(res.corpo).toBe("erro: conexao com asaas recusada");
     expect(res.erro).toContain("erro: conexao com asaas recusada");
     expect(res.falha).toBe("status");
+    expect(res.provavelmenteProxy404).toBe(false);
+  });
+
+  // Regressão: um 404 do proxy (Traefik) não pode ser reportado como se fosse
+  // a aplicação dizendo "rota não existe" — a evidência também é compatível
+  // com "App fora do ar", que pede reação bem diferente.
+  it("404 de proxy (Traefik): sinaliza provavelmenteProxy404 e não afirma causa da app", async () => {
+    const fetchImpl = fetchDe({
+      status: 404,
+      corpo: "404 page not found\n",
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
+
+    const res = await executarFechamento(fetchImpl, {
+      url: URL_ALVO,
+      token: TOKEN,
+    });
+
+    expect(res.ok).toBe(false);
+    expect(res.status).toBe(404);
+    expect(res.provavelmenteProxy404).toBe(true);
+    expect(res.erro).toContain("PROXY");
+  });
+
+  it("404 legítimo da aplicação (JSON): não confunde com proxy", async () => {
+    const fetchImpl = fetchDe({
+      status: 404,
+      corpo: '{"error":"rota não encontrada"}',
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await executarFechamento(fetchImpl, {
+      url: URL_ALVO,
+      token: TOKEN,
+    });
+
+    expect(res.provavelmenteProxy404).toBe(false);
+    expect(res.erro).not.toContain("PROXY");
   });
 
   it("erro de rede: ok false, falha=rede, sem lançar para fora", async () => {
