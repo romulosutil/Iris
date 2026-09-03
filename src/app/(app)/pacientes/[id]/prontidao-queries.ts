@@ -1,8 +1,28 @@
 import "server-only";
 import { sql } from "drizzle-orm";
 import { withTenant, type TenantContext, type Tx } from "@/db/rls";
+import { codigoPg } from "@/db/pg-error";
+import { logarAvisoSemPII } from "@/lib/observabilidade/logar-erro";
 import type { FatosProntidao } from "@/lib/patient/prontidao";
 import type { ModalidadeClinica } from "./modalidade";
+
+/**
+ * SQLSTATE das DUAS guardas de `app_fatos_prontidao` (migração `0152`).
+ *
+ * Por que código dedicado e não `catch (P0001) → null`: `P0001` é o default
+ * de TODO `RAISE` do repositório — `app_clinic_id_exigido()` (`0085`),
+ * `app_user_role_exigido()` (`0093`), `app_conta_somente_leitura()` (`0073`).
+ * Casar por `P0001` transformaria "o helper de tenant quebrou" em
+ * "Aguardando coordenação" na tela: o exato defeito que o achado R-1 da
+ * auditoria de 02/09 (memória `erro-renderizado-como-empty-state`) existe
+ * para matar. Casar por TEXTO também está fora: em `DrizzleQueryError` a
+ * `.message` é o SQL que nós mandamos com os `params`, não a exceção do banco
+ * (ver `mensagemPg`, `@/db/pg-error`).
+ *
+ * O CÓDIGO é o contrato; a mensagem segue sendo só diagnóstico humano.
+ */
+export const ERRCODE_PRONTIDAO_FORA_DO_TENANT = "IR001";
+export const ERRCODE_PRONTIDAO_SEM_AUTORIZACAO = "IR002";
 
 /**
  * Formato cru de uma linha de `app_fatos_prontidao` (colunas `snake_case` do
@@ -114,10 +134,54 @@ export async function obterFatosProntidaoNaTx(
   };
 }
 
-/** Porta para quem AINDA NÃO tem transação aberta (páginas, layouts). */
+/**
+ * Porta para quem AINDA NÃO tem transação aberta (páginas, layouts).
+ *
+ * `ProntidaoLida | null` — o contrato da §4a da spec
+ * (`docs/superpowers/specs/2026-09-01-jornada-admissao-paciente-design.md`).
+ * `null` cobre DOIS casos e só dois, reconhecidos pelo SQLSTATE que a `0152`
+ * deu a cada guarda do definer:
+ *
+ * - `IR001` — paciente de outra clínica OU inexistente. A spec junta os dois
+ *   de propósito: distinguir "não existe" de "existe noutra clínica" já seria
+ *   vazamento de existência cross-tenant. Vai para o log COM rótulo de
+ *   segurança — é tentativa de leitura fora do tenant e tem valor de
+ *   auditoria.
+ * - `IR002` — fora da equipe e sem recorte de cobertura por sessão. NÃO vai
+ *   para o log: é rotina, não incidente.
+ *
+ * Qualquer outro SQLSTATE PROPAGA. Falha real de leitura tem que continuar
+ * chegando ao chamador como exceção, para o cartão SUMIR em vez de afirmar
+ * "Aguardando coordenação" sobre um prontuário que ninguém conseguiu ler.
+ *
+ * O `try` envolve o `withTenant` INTEIRO, não o `tx.execute` lá dentro: uma
+ * exceção do Postgres aborta a transação, e engolir o erro dentro dela
+ * deixaria as consultas seguintes estourando `25P02`. É a mesma razão pela
+ * qual `obterFatosProntidaoNaTx` NÃO faz este mapeamento — ela não é dona da
+ * transação, então não tem como devolver `null` em estado consistente. Quem
+ * chama a porta `NaTx` (`assertPodeDocumentar`, `carregarSessao`) segue
+ * recebendo a exceção crua, que ali é fail-closed correto: leitura que falhou
+ * nunca pode ler como "livre para documentar".
+ */
 export async function obterFatosProntidao(
   ctx: TenantContext,
   patientId: string,
-): Promise<ProntidaoLida> {
-  return withTenant(ctx, (tx) => obterFatosProntidaoNaTx(tx, patientId));
+): Promise<ProntidaoLida | null> {
+  try {
+    return await withTenant(ctx, (tx) =>
+      obterFatosProntidaoNaTx(tx, patientId),
+    );
+  } catch (erro: unknown) {
+    const codigo = codigoPg(erro);
+    if (codigo === ERRCODE_PRONTIDAO_FORA_DO_TENANT) {
+      // `patientId` como correlação, nunca a mensagem nem o erro inteiro:
+      // em `DrizzleQueryError` a `.message` é o SQL com os `params`.
+      logarAvisoSemPII("[prontidao] leitura fora do tenant", erro, {
+        patientId,
+      });
+      return null;
+    }
+    if (codigo === ERRCODE_PRONTIDAO_SEM_AUTORIZACAO) return null;
+    throw erro;
+  }
 }

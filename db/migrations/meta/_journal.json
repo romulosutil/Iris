@@ -1065,6 +1065,13 @@
       "when": 1788190234804,
       "tag": "0151_session_sob_sigilo_guard_tenant",
       "breakpoints": true
+    },
+    {
+      "idx": 152,
+      "version": "7",
+      "when": 1788190235804,
+      "tag": "0152_fatos_prontidao_errcodes",
+      "breakpoints": true
     }
   ]
 }

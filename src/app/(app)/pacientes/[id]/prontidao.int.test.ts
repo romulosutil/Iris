@@ -29,6 +29,14 @@ vi.mock("server-only", () => ({}));
  * seis casos da tabela de prova — mora em
  * `db/tests/fatos-prontidao-definer.int.test.ts`, que exercita o definer
  * direto, sem a camada `obterFatosProntidao`.
+ *
+ * #559 — a PORTA deixou de repassar as duas exceções de guarda: elas viram
+ * `null`, que é o contrato da §4a da spec ("não visível" ≠ "não existe", e
+ * nenhum dos dois é escada de `false`s). O reconhecimento é por SQLSTATE
+ * dedicado (`IR001`/`IR002`, migração `0152`) — nunca por `P0001`, que é o
+ * default de todo `RAISE` do repo, nem por texto de mensagem. Qualquer outro
+ * código PROPAGA, e há teste para isso: sem ele, um `catch` largo passaria
+ * verde transformando falha de infraestrutura em afirmação clínica falsa.
  */
 
 const CLINIC_A = "00000000-0000-0000-0000-0000000000a1";
@@ -38,6 +46,8 @@ const U_T1 = "00000000-0000-0000-0000-0000000071a1"; // na equipe de PAC
 const U_T2 = "00000000-0000-0000-0000-0000000072a1"; // NÃO na equipe de PAC
 const PAC = "00000000-0000-0000-0000-0000000ac1a1";
 const PAC_CLINICA_B = "00000000-0000-0000-0000-0000000ac1b1";
+/** Uuid sem linha em `patient` — o caso "não existe" da §6 da spec. */
+const PAC_INEXISTENTE = "00000000-0000-0000-0000-00000000dead";
 const PROTOCOLO = "00000000-0000-0000-0000-000000007c01";
 
 const ctxCoord = {
@@ -158,20 +168,20 @@ describe.skipIf(!hasDb)("obterFatosProntidao (Task 3)", () => {
 
   describe("obterFatosProntidao", () => {
     test("reflete o estado real: sem protocolo e sem meta, ambos false", async () => {
-      const { fatos } = await Q.obterFatosProntidao(ctxCoord, PAC);
+      const { fatos } = (await Q.obterFatosProntidao(ctxCoord, PAC))!;
       expect(fatos.temProtocoloAtivo).toBe(false);
       expect(fatos.temMetaAtiva).toBe(false);
     });
 
     test("meta em rascunho NÃO conta como meta ativa", async () => {
       await inserirMeta(PAC, "rascunho");
-      const { fatos } = await Q.obterFatosProntidao(ctxCoord, PAC);
+      const { fatos } = (await Q.obterFatosProntidao(ctxCoord, PAC))!;
       expect(fatos.temMetaAtiva).toBe(false);
     });
 
     test("meta ativa conta", async () => {
       await inserirMeta(PAC, "ativa");
-      const { fatos } = await Q.obterFatosProntidao(ctxCoord, PAC);
+      const { fatos } = (await Q.obterFatosProntidao(ctxCoord, PAC))!;
       expect(fatos.temMetaAtiva).toBe(true);
     });
 
@@ -179,24 +189,51 @@ describe.skipIf(!hasDb)("obterFatosProntidao (Task 3)", () => {
     // default do schema é `protocol_driven`: a porta devolve o enum REAL da
     // linha `patient`, não `null`.
     test("devolve a modalidade do paciente junto dos fatos", async () => {
-      const { modalidade } = await Q.obterFatosProntidao(ctxCoord, PAC);
+      const { modalidade } = (await Q.obterFatosProntidao(ctxCoord, PAC))!;
       expect(modalidade).toBe("protocol_driven");
     });
 
     test("protocolo desativado NÃO conta", async () => {
       await inserirProtocolo(PAC, { desativado: true });
-      const { fatos } = await Q.obterFatosProntidao(ctxCoord, PAC);
+      const { fatos } = (await Q.obterFatosProntidao(ctxCoord, PAC))!;
       expect(fatos.temProtocoloAtivo).toBe(false);
     });
 
-    // Task 7c (0144): a leitura passou a sair por `app_fatos_prontidao`
-    // (`SECURITY DEFINER`), cujo guard RAISE em isolamento cross-tenant
-    // (D-A13) — não devolve mais `false` silencioso. `false` aqui seria
-    // ambíguo com "não existe"; exceção nomeada não é.
-    test("cross-tenant: paciente de outra clínica lança exceção de isolamento", async () => {
+    // §4a da spec: "não visível" ≠ "não existe", e NENHUM dos dois é escada
+    // de `false`s. O definer segue distinguindo os dois casos por RAISE
+    // (`db/tests/fatos-prontidao-definer.int.test.ts` prova isso no SQL); a
+    // PORTA os traduz para `null`, porque é o que a tela precisa: cartão
+    // ausente, sem afirmação clínica. `false` aqui seria ambíguo com "não
+    // existe"; `null` não afirma nada.
+    //
+    // O mapeamento é por SQLSTATE dedicado (`IR001`/`IR002`, migração
+    // `0152`), NUNCA por `P0001` nem por texto de mensagem — ver
+    // `ERRCODE_PRONTIDAO_*` em `prontidao-queries.ts`.
+    test("cross-tenant: paciente de outra clínica devolve null, não escada de false", async () => {
       await inserirMeta(PAC_CLINICA_B, "ativa", CLINIC_B);
-      const msg = await erroDe(Q.obterFatosProntidao(ctxCoord, PAC_CLINICA_B));
-      expect(msg).toMatch(/fora da clínica do chamador/);
+      expect(await Q.obterFatosProntidao(ctxCoord, PAC_CLINICA_B)).toBeNull();
+    });
+
+    // §6 da spec, caso exigido: paciente que NÃO EXISTE. `app_patient_in_clinic`
+    // devolve `false` para uuid sem linha, então cai na MESMA guarda de
+    // isolamento — de propósito: distinguir "não existe" de "existe noutra
+    // clínica" já seria vazamento de existência cross-tenant.
+    test("paciente inexistente devolve null", async () => {
+      expect(await Q.obterFatosProntidao(ctxCoord, PAC_INEXISTENTE)).toBeNull();
+    });
+
+    // A simétrica que fecha o contrato: SQLSTATE que NÃO é de guarda tem que
+    // PROPAGAR. Sem esta afirmação, um `catch` largo (`catch { return null }`,
+    // ou casar `P0001`) passaria verde e transformaria falha real de leitura
+    // em "sem prontidão" na tela — o achado R-1 (memória
+    // `erro-renderizado-como-empty-state`). `app.clinic_id` inválido faz
+    // `app_clinic_id_exigido()` levantar `P0001`, o MESMO código que as
+    // guardas usavam antes da `0152`.
+    test("falha de infraestrutura (P0001 do helper de tenant) PROPAGA, não vira null", async () => {
+      const msg = await erroDe(
+        Q.obterFatosProntidao({ ...ctxCoord, clinicId: "nao-e-uuid" }, PAC),
+      );
+      expect(msg).not.toBe("");
     });
   });
 
@@ -214,27 +251,31 @@ describe.skipIf(!hasDb)("obterFatosProntidao (Task 3)", () => {
     });
 
     test("coordenador enxerga a meta que existe", async () => {
-      const { fatos } = await Q.obterFatosProntidao(ctxCoord, PAC);
+      const { fatos } = (await Q.obterFatosProntidao(ctxCoord, PAC))!;
       expect(fatos.temMetaAtiva).toBe(true);
     });
 
     test("terapeuta NA equipe enxerga a meta que existe", async () => {
-      const { fatos } = await Q.obterFatosProntidao(ctxTerapeutaNaEquipe, PAC);
+      const { fatos } = (await Q.obterFatosProntidao(
+        ctxTerapeutaNaEquipe,
+        PAC,
+      ))!;
       expect(fatos.temMetaAtiva).toBe(true);
     });
 
-    // Documenta o comportamento REAL do guard, seja ele qual for. Task 7c
-    // (0144) trocou "false silencioso" por exceção nomeada (D-A13): um
+    // Documenta o comportamento REAL do guard, seja ele qual for. Um
     // terapeuta sem vínculo de equipe E sem sessão de cobertura para PAC não
     // tem autorização clínica nenhuma — nem por `app_is_on_team`, nem pelo
-    // recorte de cobertura da `0092`. Se este teste ficar vermelho, a régua
-    // de equipe/cobertura da feature está errada — não "conserta" afrouxando
-    // o guard; leva o achado ao Rômulo.
-    test("terapeuta FORA da equipe e sem sessão de cobertura lança exceção", async () => {
-      const msg = await erroDe(
-        Q.obterFatosProntidao(ctxTerapeutaForaDaEquipe, PAC),
-      );
-      expect(msg).toMatch(/fora da equipe ou cobertura do chamador/);
+    // recorte de cobertura da `0092`. O definer segue levantando exceção
+    // (agora com `IR002`); a PORTA traduz para `null`, que é o "não visível"
+    // da §4a — nunca uma escada de `false`s, que afirmaria "falta meta" sobre
+    // uma meta que existe. Se este teste ficar vermelho, a régua de
+    // equipe/cobertura da feature está errada — não "conserta" afrouxando o
+    // guard; leva o achado ao Rômulo.
+    test("terapeuta FORA da equipe e sem sessão de cobertura devolve null", async () => {
+      expect(
+        await Q.obterFatosProntidao(ctxTerapeutaForaDaEquipe, PAC),
+      ).toBeNull();
     });
   });
 });

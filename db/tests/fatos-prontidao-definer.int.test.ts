@@ -115,6 +115,32 @@ async function erroDe(p: Promise<unknown>): Promise<string> {
   );
 }
 
+/** SQLSTATE REAL do Postgres de uma promise que tem de rejeitar.
+ *
+ * O par com `erroDe` é deliberado: a MENSAGEM é diagnóstico humano, o CÓDIGO
+ * é o contrato. `obterFatosProntidao` (`src/lib/patient/prontidao-queries.ts`)
+ * decide `null` vs. propagar lendo SÓ o código — casar por texto está fora
+ * porque em `DrizzleQueryError` a `.message` é o SQL que nós mandamos, com os
+ * `params` interpolados. Sem esta afirmação aqui, a `0152` poderia perder o
+ * `USING ERRCODE` e a suíte de mensagem seguiria verde enquanto a porta
+ * passaria a propagar tudo (cartão sumindo onde deveria dizer "não visível"). */
+async function codigoDe(p: Promise<unknown>): Promise<string | undefined> {
+  try {
+    await p;
+  } catch (e) {
+    let atual: unknown = e;
+    while (atual && typeof atual === "object") {
+      const o = atual as { code?: unknown; cause?: unknown };
+      if (typeof o.code === "string") return o.code;
+      atual = o.cause;
+    }
+    return undefined;
+  }
+  throw new Error(
+    "esperava rejeição do Postgres, mas a operação foi bem-sucedida",
+  );
+}
+
 type LinhaCrua = {
   patient_id: string;
   tem_ficha_clinica: boolean;
@@ -245,5 +271,30 @@ describe.skipIf(!hasDb)("Task 7c · app_fatos_prontidao (0144)", () => {
     expect(msg).toMatch(
       /fora da clínica do chamador \(isolamento multi-tenant\)/,
     );
+  });
+
+  // ── O CÓDIGO é o contrato (migração `0152`) ────────────────────────────
+  // Antes da `0152` as duas guardas caíam no `P0001` default do PL/pgSQL — o
+  // MESMO código de `app_clinic_id_exigido()` (`0085`),
+  // `app_user_role_exigido()` (`0093`) e `app_conta_somente_leitura()`
+  // (`0073`). Um `catch (P0001) → null` na porta transformaria "o helper de
+  // tenant quebrou" em "sem prontidão" na tela (achado R-1, memória
+  // `erro-renderizado-como-empty-state`). Código dedicado por guarda é o que
+  // torna esse mapeamento seguro — e estes dois testes são o que impede a
+  // regressão silenciosa de volta ao `P0001`.
+  test("guarda de isolamento multi-tenant carrega o ERRCODE IR001", async () => {
+    expect(await codigoDe(chamar(ctxCoord, [PAC_B]))).toBe("IR001");
+  });
+
+  test("guarda de autorização cross-team carrega o ERRCODE IR002", async () => {
+    expect(await codigoDe(chamar(ctxFora, [PAC]))).toBe("IR002");
+    expect(await codigoDe(chamar(ctxRecepcao, [PAC]))).toBe("IR002");
+  });
+
+  test("os dois ERRCODEs são DISTINTOS entre si e nenhum é P0001", async () => {
+    const tenant = await codigoDe(chamar(ctxCoord, [PAC_B]));
+    const autz = await codigoDe(chamar(ctxFora, [PAC]));
+    expect(tenant).not.toBe(autz);
+    expect([tenant, autz]).not.toContain("P0001");
   });
 });

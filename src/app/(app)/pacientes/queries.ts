@@ -124,7 +124,31 @@ export async function listarTodosPacientes(
     // função quando há alguém a perguntar E algum papel que ela responde.
     const fatosPorPaciente = new Map<string, FatosProntidao>();
     if (podeLerProntidao && linhas.length > 0) {
-      const ids = linhas.map((linha) => linha.id);
+      // ── PRÉ-FILTRO, e ele é CONTRATO, não acidente ───────────────────────
+      // `app_fatos_prontidao` valida paciente a paciente num `FOREACH` e
+      // RAISE no PRIMEIRO que não autoriza: um único id invisível no lote
+      // derruba a chamada INTEIRA — a pill de prontidão sumiria da lista
+      // toda, não da linha ofensora. Não há ramo "pula este e segue" no
+      // definer, e não deve haver: guard que devolve `false` silencioso para
+      // linha não autorizada é o defeito que a `0149` foi escrita para tirar.
+      //
+      // Por isso o lote SÓ pode conter ids que este chamador já provou poder
+      // ler. É o caso aqui, e por construção: `linhas` saiu de um `SELECT`
+      // sobre `patient` na MESMA transação `withTenant`, ou seja sob
+      // `patient_select` (`0085:224` — `clinic_id = app_clinic_id_exigido()`
+      // AND papel IN (coordenador, admin_recepcao) OR `app_is_on_team(id)`).
+      // Esse predicado é SUBCONJUNTO do guard do definer para os dois papéis
+      // que chegam aqui: `coordenador` passa na primeira alternativa dos
+      // dois; `terapeuta` só lê a linha `patient` via `app_is_on_team`, que é
+      // literalmente a segunda alternativa do guard. `admin_recepcao` — o
+      // papel que `patient_select` deixa entrar e o definer recusa (D-A11) —
+      // já foi barrado por `podeLerProntidao`.
+      //
+      // O nome diz de onde vêm: quem mudar a origem desta lista (um `UNION`,
+      // um definer que alargue a leitura de `patient`) precisa reavaliar a
+      // inclusão antes de alimentar o lote. `prontidao-lote.int.test.ts`
+      // fixa o contrato medindo.
+      const idsVisiveisSobRls = linhas.map((linha) => linha.id);
       // Uma chamada só, com o array de ids da página — não uma por paciente.
       // `app_fatos_prontidao` (migração `0144`, D-A12) lê pelo MESMO
       // predicado que `obterFatosProntidaoNaTx` (`prontidao-queries.ts`): as
@@ -137,7 +161,7 @@ export async function listarTodosPacientes(
       // (`src/lib/risco/notificacao.ts`) e `tiposEstruturaDosMarcos`
       // (`src/lib/evidence/materializar.ts`).
       const cruas = (await tx.execute<LinhaFatosProntidaoCrua>(
-        sql`SELECT * FROM app_fatos_prontidao(${sql.param(ids)}::uuid[])`,
+        sql`SELECT * FROM app_fatos_prontidao(${sql.param(idsVisiveisSobRls)}::uuid[])`,
       )) as unknown as LinhaFatosProntidaoCrua[];
 
       // `crua.modalidade` (8ª coluna, Task 7c) é IGNORADA de propósito aqui: a
