@@ -8,6 +8,11 @@ import {
   comoGlobLiteral,
   pluginDS,
 } from "./scripts/lint/regra-ds-paleta-crua.mjs";
+import {
+  ESCOPO_RSC,
+  FORA_DO_ESCOPO_RSC,
+  pluginRSC,
+} from "./scripts/lint/regra-use-client-obrigatorio.mjs";
 
 // DS-05 (#538): arquivos que ainda carregam paleta crua, com a contagem
 // atual. A regra fica desligada neles aqui; `scripts/lint/ds-paleta-crua.test.ts`
@@ -147,6 +152,23 @@ const config = [
         },
       ],
     },
+  },
+  {
+    // #583: módulo que usa hook de cliente do React precisa declarar
+    // `"use client"`. A diretiva é do MÓDULO e propaga por importação, então a
+    // ausência dela não quebra enquanto todos os importadores forem client —
+    // blindagem acidental, que some no primeiro refactor para RSC. Piso é ZERO
+    // (sem baseline): a varredura de `src/**` fechou em 2 achados, ambos
+    // corrigidos na mesma PR — e um deles, `protocol-dashboard-charts.tsx`,
+    // era falha viva renderizada por duas `page.tsx` `async`.
+    //
+    // `scripts/lint/use-client-obrigatorio.test.ts` (roda no `pnpm test`) mede
+    // ESTE arquivo pela API do ESLint: se a regra sair do config ou parar de
+    // acusar, o teste fica vermelho em vez de o lint ficar verde em silêncio.
+    files: ESCOPO_RSC,
+    ignores: FORA_DO_ESCOPO_RSC,
+    plugins: { rsc: pluginRSC },
+    rules: { "rsc/use-client-obrigatorio": "error" },
   },
 ];
 

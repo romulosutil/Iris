@@ -24,8 +24,9 @@ function eixos(valores: Array<Partial<DadosEixoRadar>>): DadosEixoRadar[] {
 function espectro(
   lista: Array<Partial<DadosEixoRadar>>,
   naoClassificados = 0,
+  niveisNaoClassificados = 0,
 ): ResultadoEspectro {
-  return { eixos: eixos(lista), naoClassificados };
+  return { eixos: eixos(lista), naoClassificados, niveisNaoClassificados };
 }
 
 const meta: Meta<typeof GraficoEspectro> = {

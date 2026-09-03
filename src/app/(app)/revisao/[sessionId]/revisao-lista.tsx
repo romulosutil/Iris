@@ -25,6 +25,11 @@ import {
   type RevisaoState,
 } from "./actions";
 import { mensagemDeErro } from "@/lib/copy/erros";
+import {
+  camposEditaveisDe,
+  ROTULO_CAMPO_EDITAVEL,
+  type CampoEditavel,
+} from "@/lib/extraction/campos-editaveis";
 
 const dataFmt = new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium" });
 
@@ -183,6 +188,13 @@ function DialogoEditar({
     {},
   );
 
+  // #582: o diálogo só oferece os campos que o subtipo REALMENTE guarda na
+  // raiz do payload (camposEditaveisDe — fonte única com actions.ts). Um
+  // subtipo fora dessa lista (ex.: `cadeia`, nível de ajuda por ETAPA, não na
+  // raiz) não vê o form — recusa explícita em vez de "salvo com sucesso" que
+  // ninguém lê depois.
+  const campos = camposEditaveisDe(ex.subtipo);
+
   // Sem auto-close via efeito: ao salvar, o revalidate re-renderiza a lista sem
   // esta extração (estado vira `editada`, some do filtro `sugerida`) e o cartão
   // — com o diálogo — desmonta. O usuário pode fechar manualmente antes disso.
@@ -193,55 +205,56 @@ function DialogoEditar({
       </Button>
       <DialogContent>
         <DialogTitle>Editar sugestão</DialogTitle>
-        <DialogDescription>
-          A sugestão original da IA é preservada para auditoria — sua correção é
-          registrada como a classificação final.
-        </DialogDescription>
-        <form action={formAction} className="mt-4 flex flex-col gap-4">
-          <input type="hidden" name="sessionId" value={sessionId} />
-          <input type="hidden" name="extractionId" value={ex.id} />
-          <input
-            type="hidden"
-            name="payloadOriginal"
-            value={JSON.stringify(payloadOriginalDe(ex))}
-          />
-          <label className="flex flex-col gap-1">
-            <span className="text-sm font-semibold text-[var(--text-primary)]">
-              Função
-            </span>
-            <input
-              name="funcao"
-              defaultValue={valorDe(ex, "funcao")}
-              className={campoClasses}
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-sm font-semibold text-[var(--text-primary)]">
-              Nível de ajuda
-            </span>
-            <input
-              name="nivel_ajuda"
-              defaultValue={valorDe(ex, "nivel_ajuda")}
-              className={campoClasses}
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-sm font-semibold text-[var(--text-primary)]">
-              Resultado
-            </span>
-            <input
-              name="resultado"
-              defaultValue={valorDe(ex, "resultado")}
-              className={campoClasses}
-            />
-          </label>
-          {state.error ? (
-            <Alert severidade="erro">{mensagemDeErro(state.error)}</Alert>
-          ) : null}
-          <Button type="submit" disabled={pending}>
-            {pending ? "Salvando…" : "Salvar correção"}
-          </Button>
-        </form>
+        {campos.length === 0 ? (
+          <>
+            <DialogDescription>
+              Extrações do tipo &quot;{rotuloSubtipo(ex.subtipo)}&quot; ainda
+              não podem ser corrigidas por aqui.
+            </DialogDescription>
+            <p className="mt-4 text-sm text-[var(--text-primary)]">
+              Se os dados estiverem certos, aprove esta sugestão. Se não
+              estiverem, descarte-a e registre a correção diretamente na sessão.
+            </p>
+            <Button
+              type="button"
+              variante="neutra"
+              className="mt-4"
+              onClick={() => setAberto(false)}
+            >
+              Entendi
+            </Button>
+          </>
+        ) : (
+          <>
+            <DialogDescription>
+              A sugestão original da IA é preservada para auditoria — sua
+              correção é registrada como a classificação final.
+            </DialogDescription>
+            <form action={formAction} className="mt-4 flex flex-col gap-4">
+              <input type="hidden" name="sessionId" value={sessionId} />
+              <input type="hidden" name="extractionId" value={ex.id} />
+              <input type="hidden" name="subtipo" value={ex.subtipo} />
+              {campos.map((campo) => (
+                <label key={campo} className="flex flex-col gap-1">
+                  <span className="text-sm font-semibold text-[var(--text-primary)]">
+                    {ROTULO_CAMPO_EDITAVEL[campo]}
+                  </span>
+                  <input
+                    name={campo}
+                    defaultValue={valorDe(ex, campo)}
+                    className={campoClasses}
+                  />
+                </label>
+              ))}
+              {state.error ? (
+                <Alert severidade="erro">{mensagemDeErro(state.error)}</Alert>
+              ) : null}
+              <Button type="submit" disabled={pending}>
+                {pending ? "Salvando…" : "Salvar correção"}
+              </Button>
+            </form>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -253,26 +266,10 @@ const campoClasses =
 // A UI de edição expõe os campos clínicos mais corrigidos (função/nível de
 // ajuda/resultado). O resumo já vem pronto do servidor; recuperamos os valores
 // crus a partir das linhas para pré-preencher o form.
-function valorDe(ex: ExtracaoRevisavel, campo: string): string {
-  const mapa: Record<string, string> = {
-    funcao: "Função",
-    nivel_ajuda: "Nível de ajuda",
-    resultado: "Resultado",
-  };
-  const rotulo = mapa[campo];
+function valorDe(ex: ExtracaoRevisavel, campo: CampoEditavel): string {
+  const rotulo = ROTULO_CAMPO_EDITAVEL[campo];
   const linha = ex.resumo.find((l) => l.rotulo === rotulo);
   return linha?.valor ?? "";
-}
-
-// Reconstrói um payload mínimo com os campos editáveis para o merge server-side
-// preservar o resto. O payload original imutável fica no banco (coluna payload).
-function payloadOriginalDe(ex: ExtracaoRevisavel): Record<string, string> {
-  const p: Record<string, string> = {};
-  for (const campo of ["funcao", "nivel_ajuda", "resultado"]) {
-    const v = valorDe(ex, campo);
-    if (v) p[campo] = v;
-  }
-  return p;
 }
 
 function CartaoRevisao({

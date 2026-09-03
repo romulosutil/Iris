@@ -8,6 +8,22 @@ import {
   type AvisoSnapshot,
 } from "./snapshot-schema";
 
+/**
+ * #558 — todo snapshot gravado ANTES desta feature não tem
+ * `niveis_nao_classificados`; o schema aplica default 0 na leitura. Este
+ * helper deixa isso explícito nos oráculos em vez de espalhar o literal.
+ */
+function comContagemPadrao(
+  repertorio: Record<string, Record<string, unknown>>,
+): Record<string, Record<string, unknown>> {
+  return Object.fromEntries(
+    Object.entries(repertorio).map(([id, entrada]) => [
+      id,
+      { niveis_nao_classificados: 0, ...entrada },
+    ]),
+  );
+}
+
 const GOAL = "00000000-0000-0000-0000-000000009001";
 const PROTO = "00000000-0000-0000-0000-000000008001";
 
@@ -25,7 +41,11 @@ describe("snapshot-schema (A-06, #538)", () => {
         },
       },
     };
-    expect(RepertorioStateSchema.parse(repertorio)).toEqual(repertorio);
+    // #558: `niveis_nao_classificados` tem default 0 — entrada sem o campo
+    // continua válida e sai com a contagem zerada, nunca ausente.
+    expect(RepertorioStateSchema.parse(repertorio)).toEqual(
+      comContagemPadrao(repertorio),
+    );
     expect(SegmentacaoSchema.parse(segmentacao)).toEqual(segmentacao);
   });
 
@@ -52,7 +72,9 @@ describe("snapshot-schema (A-06, #538)", () => {
     };
     const avisar = vi.fn();
     expect(lerSegmentacao(segmentacao, avisar)).toEqual(segmentacao);
-    expect(lerRepertorioState(repertorio, avisar)).toEqual(repertorio);
+    expect(lerRepertorioState(repertorio, avisar)).toEqual(
+      comContagemPadrao(repertorio),
+    );
     expect(avisar).not.toHaveBeenCalled();
   });
 
@@ -63,7 +85,13 @@ describe("snapshot-schema (A-06, #538)", () => {
       lerRepertorioState(
         JSON.stringify({ [GOAL]: { nivel_ajuda_recente: null } }),
       ),
-    ).toEqual({ [GOAL]: { nivel_ajuda_recente: null, contagem: 0 } });
+    ).toEqual({
+      [GOAL]: {
+        nivel_ajuda_recente: null,
+        contagem: 0,
+        niveis_nao_classificados: 0,
+      },
+    });
   });
 
   it("campo extra não quebra a leitura (snapshot antigo segue legível)", () => {

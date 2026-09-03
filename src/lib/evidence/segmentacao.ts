@@ -37,6 +37,15 @@ export type Observacao = {
   polaridade: Polaridade;
   /** V1e: evidência com EvidenceQuery aberta não conta na segmentação. */
   temQueryAberta: boolean;
+  /**
+   * #558 G-6 (a) — a observação DECLAROU um nível de ajuda, e ele NÃO pertence
+   * à `taxonomia_ajuda` do protocolo (`indexOf` devolveu -1). Distingue as duas
+   * causas de `nivelAjudaOrdinal === null`, que sem isto se confundem:
+   * "não havia nível" e "havia um nível que não sabemos ler". A segunda é um
+   * fato sobre o dado e precisa ser CONTADA — registrar sem exibir devolveria o
+   * silêncio por outra porta. Nunca vira `0`: zero significa "independente".
+   */
+  nivelAjudaNaoClassificado?: boolean;
 };
 
 type Rotulo =
@@ -179,6 +188,13 @@ export type RepertorioEntry = {
   nivelAjudaRecente: number | null;
   contagem: number;
   /**
+   * #558 G-6 (a) — quantas observações computadas trouxeram um nível de ajuda
+   * que NÃO pertence à taxonomia do protocolo. Vive ao lado da contagem porque
+   * é a mesma pergunta vista pelo avesso: de tudo que foi registrado, quanto a
+   * régua do protocolo não conseguiu ler.
+   */
+  niveisNaoClassificados: number;
+  /**
    * Placeholder informativo (NÃO é a escrita oficial de candidatura — essa
    * vive em `milestone_candidacy`/`goal_candidacy`, avaliada em
    * materializar.ts contra `Goal.criterio_dominio` / critério de Milestone).
@@ -219,6 +235,9 @@ export function computarRepertorio(
       .sort((a, b) => a.sessionNumero - b.sessionNumero);
 
     const contagem = obs.length;
+    const niveisNaoClassificados = obs.filter(
+      (o) => o.nivelAjudaNaoClassificado === true,
+    ).length;
     let nivelAjudaRecente: number | null = null;
     for (let i = obs.length - 1; i >= 0; i--) {
       const o = obs[i]!;
@@ -231,6 +250,7 @@ export function computarRepertorio(
     saida[id] = {
       nivelAjudaRecente,
       contagem,
+      niveisNaoClassificados,
       isCandidata: contagem >= minContagem,
     };
   }

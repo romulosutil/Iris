@@ -112,16 +112,48 @@ function tryListMainMetaFiles(): string[] | null {
   }
 }
 
+/**
+ * `schema.ts` mudou vs. `origin/main` de um jeito que EXIGE snapshot novo?
+ *
+ * O que gera drift de snapshot é DDL modelada (tabela, coluna, enum, índice,
+ * FK, constraint) — nunca comentário. Um diff só de comentário/linha em branco
+ * responde `No schema changes, nothing to migrate` no `pnpm db:generate`
+ * (medido em 03/09/2026, #558), logo não há `.sql` nem snapshot para commitar
+ * e exigir um travaria a PR pedindo um artefato que não existe.
+ *
+ * Por isso o guard não olha o NOME do arquivo, e sim as LINHAS do diff: ignora
+ * comentário de linha, abertura/corpo/fecho de comentário de bloco e linha
+ * vazia, e só acusa se sobrar linha de código. Continua fail-closed no que
+ * importa — qualquer DDL sobrevive ao filtro.
+ */
+export function linhasDeCodigoNoDiff(diff: string): string[] {
+  return (
+    diff
+      .split("\n")
+      // só as linhas adicionadas/removidas do CONTEÚDO — o cabeçalho
+      // `+++`/`---` e as âncoras `@@` não são conteúdo
+      .filter(
+        (l) =>
+          (l.startsWith("+") || l.startsWith("-")) &&
+          !l.startsWith("+++") &&
+          !l.startsWith("---"),
+      )
+      .map((l) => l.slice(1).trim())
+      .filter((l) => l.length > 0)
+      .filter(
+        (l) =>
+          !l.startsWith("//") &&
+          !l.startsWith("/*") &&
+          !l.startsWith("*") &&
+          l !== "*/",
+      )
+  );
+}
+
 function trySchemaChangedVsMain(): boolean | null {
   try {
-    const raw = git([
-      "diff",
-      "--name-only",
-      MAIN_REF,
-      "--",
-      "src/db/schema.ts",
-    ]);
-    return raw.trim().length > 0;
+    const raw = git(["diff", "-U0", MAIN_REF, "--", "src/db/schema.ts"]);
+    return linhasDeCodigoNoDiff(raw).length > 0;
   } catch {
     return null;
   }
@@ -205,4 +237,43 @@ describe("integridade de db/migrations contra origin/main", () => {
       ).toBeGreaterThan(0);
     },
   );
+});
+
+// ─── #558 — o filtro do Guard 2, medido diretamente ──────────────────────────
+// O guard passou a olhar linhas em vez do nome do arquivo. O risco de um filtro
+// é ficar largo demais e engolir DDL de verdade; estes casos travam os dois
+// lados: comentário NÃO exige snapshot, código exige.
+describe("linhasDeCodigoNoDiff (#558)", () => {
+  const cabecalho = ["--- a/src/db/schema.ts", "+++ b/src/db/schema.ts", "@@"];
+  const diff = (linhas: string[]) => [...cabecalho, ...linhas].join("\n");
+
+  it("diff só de comentário não conta como mudança de schema", () => {
+    expect(
+      linhasDeCodigoNoDiff(
+        diff([
+          "+    // posição do alvo (base 0); discriminador de idempotência",
+          "+    /**",
+          "+     * semântica dupla desde a #558",
+          "+     */",
+          "+",
+          "-    // comentário antigo",
+        ]),
+      ),
+    ).toEqual([]);
+  });
+
+  it("DDL sobrevive ao filtro — coluna nova continua exigindo snapshot", () => {
+    expect(
+      linhasDeCodigoNoDiff(
+        diff([
+          "+    // nova coluna",
+          '+    ordemEtapa: integer("ordem_etapa").notNull(),',
+        ]),
+      ),
+    ).toEqual(['ordemEtapa: integer("ordem_etapa").notNull(),']);
+  });
+
+  it("cabeçalho e âncora do próprio diff nunca contam como código", () => {
+    expect(linhasDeCodigoNoDiff(diff([]))).toEqual([]);
+  });
 });

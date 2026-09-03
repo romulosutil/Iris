@@ -63,11 +63,13 @@ const dados: TimelineData = {
         [META_CONQ]: {
           nivel_ajuda_recente: 0,
           contagem: 3,
+          niveis_nao_classificados: 0,
           is_candidata: true,
         },
         [META_CAND]: {
           nivel_ajuda_recente: 1,
           contagem: 2,
+          niveis_nao_classificados: 0,
           is_candidata: true,
         },
       },
@@ -87,7 +89,7 @@ const dados: TimelineData = {
           },
         },
       },
-      espectro: { eixos: [], naoClassificados: 0 },
+      espectro: { eixos: [], naoClassificados: 0, niveisNaoClassificados: 0 },
     },
     {
       sessionNumero: 1,
@@ -96,6 +98,7 @@ const dados: TimelineData = {
         [META_CONQ]: {
           nivel_ajuda_recente: 2,
           contagem: 1,
+          niveis_nao_classificados: 0,
           is_candidata: false,
         },
       },
@@ -108,7 +111,7 @@ const dados: TimelineData = {
           },
         },
       },
-      espectro: { eixos: [], naoClassificados: 0 },
+      espectro: { eixos: [], naoClassificados: 0, niveisNaoClassificados: 0 },
     },
   ],
   estadoDasMetas: {

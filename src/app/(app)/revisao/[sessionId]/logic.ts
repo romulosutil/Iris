@@ -20,6 +20,10 @@ import {
 import { podeAutoValidar } from "@/lib/sessao/aprovacao";
 import { conteudoDoSubtipo } from "@/lib/extraction/conteudo-subtipo";
 import { avaliarFriccao } from "@/lib/extraction/review-policy";
+import {
+  CAMPO_EDITAVEL,
+  camposEditaveisDe,
+} from "@/lib/extraction/campos-editaveis";
 import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 import { textoErroInterno } from "@/lib/copy/erros";
 
@@ -90,6 +94,33 @@ type EvidenciaConteudo = {
   alvos?: Alvo[];
   [key: string]: unknown;
 };
+
+// ─── `cadeia` (#558) ───────────────────────────────────────────────────────
+// Rotina de vida diária (lavar mãos, vestir, lanche) com nível de ajuda POR
+// ETAPA (regra R9 do agente). Desde a #558 a cadeia declara UMA âncora para a
+// rotina inteira (`alvo`, G-1 (a)) — nunca uma por etapa — e cada etapa vira
+// UMA linha em `evidence`, com `alvo_ordinal` = índice da etapa no array
+// (G-2 (a) e G-3 (a)).
+type EtapaCadeia = {
+  descricao?: string | null;
+  nivel_ajuda?: string | null;
+};
+
+type CadeiaConteudo = {
+  nome?: string | null;
+  alvo?: Alvo | null;
+  etapas?: EtapaCadeia[];
+  [key: string]: unknown;
+};
+
+// Subtipos com destino em `evidence`. Até a #558 o corte era `!== "evidencia"`,
+// um literal solto no meio da função — e uma cadeia aprovada não deixava
+// rastro estruturado nenhum. Os demais subtipos barrados aqui
+// (`registro_abc`, `ausencia_comportamento`, `registro_pensamento`,
+// `aplicacao_escala_relatada`, `tarefa_casa`) têm semântica clínica própria e
+// ficam FORA de propósito — cada um é issue sua. `preferencia_reforcador` tem
+// destino próprio (`reinforcer_profile`), gravado antes deste ponto.
+const SUBTIPOS_COM_EVIDENCE: readonly string[] = ["evidencia", "cadeia"];
 
 type ExtracaoAprovadaRow = {
   id: string;
@@ -214,8 +245,175 @@ async function inserirEvidenciasOnApprove(
 
   await inserirReforcadoresOnApprove(tx, ctx, row, sess);
 
-  if (row.subtipo !== "evidencia") return;
+  if (!SUBTIPOS_COM_EVIDENCE.includes(row.subtipo)) return;
 
+  // `sess.numero` já foi provado não-nulo acima (`SESSAO_SEM_NUMERO`); o
+  // estreitamento não atravessa a fronteira da função, então o fato viaja
+  // num tipo próprio em vez de `!` em cada chamada.
+  const sessao: SessaoConsolidada = {
+    patientId: sess.patientId,
+    numero: sess.numero,
+  };
+
+  const inseriu =
+    row.subtipo === "cadeia"
+      ? await inserirEtapasDeCadeia(tx, ctx, row, sessao, colapso)
+      : await inserirAlvosDeEvidencia(tx, ctx, row, sessao, colapso);
+  if (!inseriu) return;
+
+  // Materialização real (4B — segmentação/repertório em TS puro, ver
+  // src/lib/evidence/materializar.ts). Recompute a partir de `sess.numero`
+  // (a sessão recém-aprovada) em diante, na mesma transação da inserção de
+  // evidence acima e sob o advisory lock adquirido no topo desta função.
+  await materializarSnapshot(
+    drizzleMaterializarQueries(tx),
+    sess.patientId,
+    sess.numero,
+  );
+}
+
+type SessaoConsolidada = { patientId: string; numero: number };
+
+/**
+ * Carimbo do colapso da aprovação (R-07/R-10/R-11, §3.5): coordenador ===
+ * terapeuta da sessão → o MESMO gesto já grava o `evidence_revision`
+ * ("confirmar") que só nasceria numa segunda visita a /validacao.
+ *
+ * Só roda quando `evidence` foi de fato inserida agora: sem `evidenceId`, ou é
+ * reaprovação idempotente, ou a linha nem chegou a existir — nos dois casos
+ * não há evidência nova para carimbar, e carimbar de novo violaria R-11 ("não
+ * registrar duas vezes o mesmo julgamento").
+ */
+async function carimbarColapso(
+  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  ctx: TenantContext,
+  colapso: ColapsoAprovacao,
+  evidenceId: string | undefined,
+  classificacaoOriginal: unknown,
+): Promise<void> {
+  if (!evidenceId || !colapso.colapsa) return;
+  await tx.execute(sql`
+    INSERT INTO evidence_revision (evidence_id, acao, classificacao_anterior, classificacao_nova, justificativa, autor_id)
+    VALUES (${evidenceId}, 'confirmar', ${JSON.stringify(classificacaoOriginal)}::jsonb, NULL, ${
+      colapso.justificativa ??
+      "Aprovado e confirmado pelo mesmo profissional (terapeuta e coordenador da sessão) — carimbo único."
+    }, ${ctx.userId}::uuid)
+  `);
+}
+
+/**
+ * `cadeia` (#558 · T2) — uma linha de `evidence` por ETAPA da rotina.
+ *
+ * A âncora é ÚNICA e vive no nível da cadeia (G-1 (a)): os FKs são resolvidos
+ * UMA vez e replicados em todas as etapas. `alvo_ordinal` = índice da etapa no
+ * array (G-2 (a)) — o que faz de `uq_evidence_alvo (extraction_id,
+ * alvo_ordinal)` o discriminador de idempotência sob reaprovação, exatamente
+ * como no caminho de `evidencia`.
+ *
+ * ⚠️ Cadeia SEM âncora resolvível **não é erro** (R2.5): grava com as FKs
+ * nulas e fica fora da materialização (que descarta evidência sem `goal_id`).
+ * Transformar em erro um fluxo que hoje funciona quebraria US-1 — o terapeuta
+ * continua podendo narrar a rotina sem apontar meta.
+ *
+ * `nivel_ajuda` da etapa vai para a RAIZ de `classificacao_original` porque é
+ * de lá que `rowParaObservacao` (materializar.ts) o lê. `alvo_ordinal` ganha
+ * uma segunda semântica (etapa de rotina, não alvo de evidência); quem
+ * desambigua é o `subtipo` gravado dentro do próprio jsonb.
+ *
+ * Devolve `true` quando há etapas a materializar.
+ */
+async function inserirEtapasDeCadeia(
+  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  ctx: TenantContext,
+  row: ExtracaoAprovadaRow,
+  sess: SessaoConsolidada,
+  colapso: ColapsoAprovacao,
+): Promise<boolean> {
+  const cadeiaObj = conteudoDoSubtipo(
+    row.conteudo,
+    "cadeia",
+  ) as CadeiaConteudo | null;
+  const etapas = Array.isArray(cadeiaObj?.etapas) ? cadeiaObj.etapas : [];
+  if (etapas.length === 0) return false;
+
+  const alvo = cadeiaObj?.alvo ?? null;
+  const fks = alvo
+    ? await resolverAlvoParaFks(
+        drizzleResolverQueries(tx),
+        { clinicId: ctx.clinicId, patientId: sess.patientId },
+        alvo,
+      )
+    : {
+        protocolId: null,
+        goalId: null,
+        milestoneId: null,
+        protocolSlug: null,
+        dominioId: null,
+        goalRef: null,
+      };
+
+  const nome = typeof cadeiaObj?.nome === "string" ? cadeiaObj.nome : null;
+
+  for (let ordinal = 0; ordinal < etapas.length; ordinal++) {
+    const etapa = etapas[ordinal] ?? {};
+    const classificacaoOriginal = {
+      subtipo: "cadeia",
+      nome,
+      etapa_ordinal: ordinal,
+      descricao: typeof etapa.descricao === "string" ? etapa.descricao : null,
+      // Lido por `rowParaObservacao` (materializar.ts) na RAIZ do jsonb.
+      // String LIVRE do agente: se não pertencer à `taxonomia_ajuda` do
+      // protocolo, a conversão a ordinal devolve `null` (nunca `0`) e a etapa
+      // conta como NÃO CLASSIFICADA — G-6 (a), ver `ordinalDe`.
+      nivel_ajuda:
+        typeof etapa.nivel_ajuda === "string" ? etapa.nivel_ajuda : null,
+      alvo,
+    };
+
+    const [inserida] = await tx
+      .insert(evidence)
+      .values({
+        extractionId: row.id,
+        patientId: sess.patientId,
+        sessionId: row.sessionId,
+        sessionNumero: sess.numero,
+        alvoOrdinal: ordinal,
+        protocolSlug: fks.protocolSlug,
+        dominioId: fks.dominioId,
+        goalRef: fks.goalRef,
+        protocolId: fks.protocolId,
+        goalId: fks.goalId,
+        milestoneId: fks.milestoneId,
+        classificacaoOriginal,
+        aprovadoPor: ctx.userId,
+      })
+      // idempotente: (extraction_id, alvo_ordinal) é a chave — re-aprovar (ou
+      // reprocessar) não duplica etapa.
+      .onConflictDoNothing({
+        target: [evidence.extractionId, evidence.alvoOrdinal],
+      })
+      .returning({ id: evidence.id });
+
+    await carimbarColapso(
+      tx,
+      ctx,
+      colapso,
+      inserida?.id,
+      classificacaoOriginal,
+    );
+  }
+
+  return true;
+}
+
+/** `evidencia` — 1 linha por item de `alvos[]` (Fase 4, comportamento original). */
+async function inserirAlvosDeEvidencia(
+  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  ctx: TenantContext,
+  row: ExtracaoAprovadaRow,
+  sess: SessaoConsolidada,
+  colapso: ColapsoAprovacao,
+): Promise<boolean> {
   const evidenciaObj = conteudoDoSubtipo(
     row.conteudo,
     "evidencia",
@@ -229,7 +427,7 @@ async function inserirEvidenciasOnApprove(
     // permitida (o schema do agente deixa `alvos` opcional; R8 pode não
     // mapear) — decisão registrada na PR, a validar com o Rômulo.
     if (row.reaprovacaoDeErro) throw new TransicaoRecusada("EVIDENCIA_VAZIA");
-    return;
+    return false;
   }
 
   const resolverQueries = drizzleResolverQueries(tx);
@@ -278,33 +476,16 @@ async function inserirEvidenciasOnApprove(
       })
       .returning({ id: evidence.id });
 
-    // Colapso da aprovação (R-07/R-10/R-11, §3.5): coordenador === terapeuta
-    // da sessão → o mesmo gesto já grava o carimbo de `evidence_revision`
-    // ("confirmar") que hoje só nasceria numa segunda visita a /validacao.
-    // Só roda quando `evidence` foi de fato inserida agora (sem `inserida`,
-    // ou é reaprovação idempotente, ou a linha nem chegou a existir — nos
-    // dois casos não há evidência nova para carimbar, e carimbar de novo
-    // violaria R-11: "não registrar duas vezes o mesmo julgamento").
-    if (inserida && colapso.colapsa) {
-      await tx.execute(sql`
-        INSERT INTO evidence_revision (evidence_id, acao, classificacao_anterior, classificacao_nova, justificativa, autor_id)
-        VALUES (${inserida.id}, 'confirmar', ${JSON.stringify(classificacaoOriginal)}::jsonb, NULL, ${
-          colapso.justificativa ??
-          "Aprovado e confirmado pelo mesmo profissional (terapeuta e coordenador da sessão) — carimbo único."
-        }, ${ctx.userId}::uuid)
-      `);
-    }
+    await carimbarColapso(
+      tx,
+      ctx,
+      colapso,
+      inserida?.id,
+      classificacaoOriginal,
+    );
   }
 
-  // Materialização real (4B — segmentação/repertório em TS puro, ver
-  // src/lib/evidence/materializar.ts). Recompute a partir de `sess.numero`
-  // (a sessão recém-aprovada) em diante, na mesma transação da inserção de
-  // evidence acima.
-  await materializarSnapshot(
-    drizzleMaterializarQueries(tx),
-    sess.patientId,
-    sess.numero,
-  );
+  return true;
 }
 
 // Revisão humana das extrações sugeridas pela IA (Fase 3 Plano 2). Cada ação
@@ -582,6 +763,57 @@ async function editarExtracaoCore(
 ): Promise<ReviewResult> {
   const p = editarSchema.safeParse(input);
   if (!p.success) return { error: p.error.issues[0]!.message };
+
+  // Merge autoritativo (#582 review): `payload_editado` é gravado INTEIRO (o
+  // `set` de `transicionar` substitui a coluna, e é ele que vira o `conteudo`
+  // efetivo lido por `inserirEvidenciasOnApprove`). O chamador só conhece as
+  // chaves que ele mesmo edita — o form manda três campos, o caminho direto de
+  // `preferencia_reforcador` manda item_atividade/valencia. Se o core gravasse
+  // esse objeto parcial, todo o resto do conteúdo clínico (alvos, descricao,
+  // etapas…) sumiria da versão efetiva — inclusive `alvos`, deixando a
+  // inserção em `evidence` sem alvo nenhum. A base do merge é sempre o estado
+  // do BANCO (`payload_editado ?? payload`), nunca nada vindo do cliente.
+  //
+  // Guard de subtipo: o subtipo de VERDADE também só existe no banco — um POST
+  // forjado pode alegar "evidencia" numa extração `cadeia` e escrever
+  // funcao/nivel_ajuda/resultado na raiz do payload errado. Os três campos de
+  // `CAMPO_EDITAVEL` só passam se `camposEditaveisDe(subtipo real)` os permite.
+  // Chaves fora desses três não são filtradas: o core também serve edições
+  // diretas fora do diálogo genérico (`preferencia_reforcador`) — a recusa por
+  // "subtipo sem campo editável" é responsabilidade do `actions.ts` (que sabe
+  // que a requisição veio do diálogo dos três campos), não deste core.
+  const [row] = await withTenant(ctx, (tx) =>
+    tx
+      .select({
+        subtipo: extraction.subtipo,
+        payload: extraction.payload,
+        payloadEditado: extraction.payloadEditado,
+      })
+      .from(extraction)
+      .where(eq(extraction.id, p.data.extractionId)),
+  );
+
+  const base = row?.payloadEditado ?? row?.payload;
+  const payloadEditado: Record<string, unknown> =
+    base && typeof base === "object" && !Array.isArray(base)
+      ? { ...(base as Record<string, unknown>) }
+      : {};
+  const camposPermitidos = row
+    ? camposEditaveisDe(row.subtipo)
+    : CAMPO_EDITAVEL;
+  for (const [chave, valor] of Object.entries(p.data.payloadEditado)) {
+    const ehCampoDoDialogo = (CAMPO_EDITAVEL as readonly string[]).includes(
+      chave,
+    );
+    if (
+      ehCampoDoDialogo &&
+      !camposPermitidos.includes(chave as (typeof CAMPO_EDITAVEL)[number])
+    ) {
+      continue;
+    }
+    payloadEditado[chave] = valor;
+  }
+
   const colapso = await resolverColapso(
     ctx,
     p.data.extractionId,
@@ -594,7 +826,7 @@ async function editarExtracaoCore(
     p.data.versao,
     {
       estado: "editada",
-      payloadEditado: p.data.payloadEditado,
+      payloadEditado,
     },
     colapso,
   );
