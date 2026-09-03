@@ -21,7 +21,7 @@ import {
   type FatosProntidao,
   type Prontidao,
 } from "@/lib/patient/prontidao";
-import { obterFatosProntidaoNaTx } from "@/app/(app)/pacientes/[id]/prontidao-queries";
+import { obterFatosProntidaoNaTx } from "@/lib/patient/prontidao-queries";
 
 /**
  * `montarProntidao` descarta `fatos` sem olhar para qualquer papel fora de
@@ -217,7 +217,7 @@ export async function carregarSessao(
     // `NaTx`, não a porta que abre `withTenant` própria: já estamos DENTRO da
     // transação aberta por este `withTenant` — chamar a porta de fora
     // aninharia uma segunda transação como SAVEPOINT do Drizzle (mesmo tenant
-    // hoje, mas uma armadilha à espreita — ver prontidao-queries.ts) e
+    // hoje, mas uma armadilha à espreita — ver @/lib/patient/prontidao-queries) e
     // pagaria uma viagem extra ao banco sem necessidade. Mesma imagem do
     // banco, uma transação só.
     //

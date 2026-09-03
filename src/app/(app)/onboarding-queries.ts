@@ -2,7 +2,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { clinic, janelaTrabalho, patient, userRole } from "@/db/schema";
-import type { LinhaFatosProntidaoCrua } from "@/app/(app)/pacientes/[id]/prontidao-queries";
+import type { LinhaFatosProntidaoCrua } from "@/lib/patient/prontidao-queries";
 import type { PassoId } from "@/lib/onboarding/passos";
 import { montarProntidao } from "@/lib/patient/prontidao";
 

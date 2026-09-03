@@ -23,7 +23,7 @@ import { obterInstrumentoAplicacoes } from "./tcc/instrumento-logic";
 import { vistaValida } from "./timeline/vista-nav";
 import { montarProntidao } from "@/lib/patient/prontidao";
 import { codigoPg } from "@/db/pg-error";
-import { obterFatosProntidao } from "./prontidao-queries";
+import { obterFatosProntidao } from "@/lib/patient/prontidao-queries";
 import { EvolucaoVazia } from "./evolucao-vazia";
 
 interface PacientePageProps {

@@ -14,7 +14,7 @@ import { obterSituacaoConta } from "../../queries";
 import { capacidadesDaModalidade } from "./modalidade";
 import { montarProntidao } from "@/lib/patient/prontidao";
 import { codigoPg } from "@/db/pg-error";
-import { obterFatosProntidao } from "./prontidao-queries";
+import { obterFatosProntidao } from "@/lib/patient/prontidao-queries";
 import { CartaoProntidao } from "@/components/app/cartao-prontidao";
 
 /**

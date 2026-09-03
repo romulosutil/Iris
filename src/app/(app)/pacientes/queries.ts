@@ -2,7 +2,7 @@ import "server-only";
 import { and, asc, eq, exists, isNull, sql } from "drizzle-orm";
 import { withTenant, type TenantContext } from "@/db/rls";
 import * as schema from "@/db/schema";
-import type { LinhaFatosProntidaoCrua } from "@/app/(app)/pacientes/[id]/prontidao-queries";
+import type { LinhaFatosProntidaoCrua } from "@/lib/patient/prontidao-queries";
 import { montarProntidao, type FatosProntidao } from "@/lib/patient/prontidao";
 
 /**
@@ -151,7 +151,7 @@ export async function listarTodosPacientes(
       const idsVisiveisSobRls = linhas.map((linha) => linha.id);
       // Uma chamada só, com o array de ids da página — não uma por paciente.
       // `app_fatos_prontidao` (migração `0144`, D-A12) lê pelo MESMO
-      // predicado que `obterFatosProntidaoNaTx` (`prontidao-queries.ts`): as
+      // predicado que `obterFatosProntidaoNaTx` (`@/lib/patient/prontidao-queries`): as
       // duas portas passam a divergir zero, inclusive no recorte de
       // cobertura que faltava aqui antes da Task 7c.
       // `sql.param(ids)`, NÃO `ARRAY[${ids}]` interpolado: bind direto de

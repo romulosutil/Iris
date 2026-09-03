@@ -1,6 +1,6 @@
 import "server-only";
 import { montarProntidao } from "./prontidao";
-import { obterFatosProntidaoNaTx } from "@/app/(app)/pacientes/[id]/prontidao-queries";
+import { obterFatosProntidaoNaTx } from "./prontidao-queries";
 import type { Tx, TenantContext } from "@/db/rls";
 
 /** Erro de regra de negócio, não de infraestrutura: o chamador traduz em

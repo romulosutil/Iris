@@ -3,8 +3,8 @@ import { sql } from "drizzle-orm";
 import { withTenant, type TenantContext, type Tx } from "@/db/rls";
 import { codigoPg } from "@/db/pg-error";
 import { logarAvisoSemPII } from "@/lib/observabilidade/logar-erro";
-import type { FatosProntidao } from "@/lib/patient/prontidao";
-import type { ModalidadeClinica } from "./modalidade";
+import type { FatosProntidao } from "./prontidao";
+import type { ModalidadeClinica } from "@/app/(app)/pacientes/[id]/modalidade";
 
 /**
  * SQLSTATE das DUAS guardas de `app_fatos_prontidao` (migração `0152`).
@@ -81,7 +81,7 @@ export type ProntidaoLida = {
  * DEFINER`, migração `0144`) espelha `goal_select` MAIS o recorte de
  * cobertura que a `0092` (D8/#174) já reconhece como autorização clínica
  * legítima, e RAISE em vez de `false` silencioso quando nem isso autoriza.
- * `montarProntidao` (`src/lib/patient/prontidao.ts`) segue só montando
+ * `montarProntidao` (`./prontidao.ts`) segue só montando
  * escada para {coordenador, terapeuta}; esta função nunca decide papel
  * sozinha.
  *
