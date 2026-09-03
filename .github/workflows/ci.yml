@@ -283,8 +283,12 @@ jobs:
 
       # Piso medido em 23/08/2026, suíte local do zero: 10 arquivos (9 specs +
       # servidor.setup.ts), 17 testes, 0 falha, 0 pulado.
+      #
+      # `--flaky-baseline` (#542, Q-06): teto por arquivo de flake conhecido
+      # (só o projeto [mobile-360], ver comentário no .mjs) — qualquer flake
+      # novo, ou acima do teto, reprova o job em vez de passar em silêncio.
       - name: gate anti-pulo-silencioso (e2e)
-        run: node scripts/ci/verificar-cobertura-e2e.mjs e2e-report.json --min-tests=17 --min-files=10
+        run: node scripts/ci/verificar-cobertura-e2e.mjs e2e-report.json --min-tests=17 --min-files=10 --flaky-baseline=scripts/ci/e2e-flaky.baseline.json
 
   # NÃO é duplicata do `pnpm build` que o `test-e2e` roda (linha ~274) — e não
   # deve ser apagado como se fosse. A diferença é o AMBIENTE, não o comando:

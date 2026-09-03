@@ -1,9 +1,21 @@
 import { describe, expect, it } from "vitest";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import {
   ErroDeUso,
+  coletarFlaky,
+  formatarFlaky,
   parseArgs,
   verificarCoberturaE2E,
 } from "./verificar-cobertura-e2e.mjs";
+
+const RAIZ = path.resolve(import.meta.dirname, "..", "..");
+const ARQUIVO_BASELINE_FLAKY = path.join(
+  RAIZ,
+  "scripts",
+  "ci",
+  "e2e-flaky.baseline.json",
+);
 
 /**
  * Espelha `verificar-cobertura-testes.test.mjs`: o gate é a única coisa que
@@ -23,6 +35,47 @@ function relatorio({
     suites: Array.from({ length: arquivos }, (_, i) => ({
       file: `e2e/spec-${i}.spec.ts`,
     })),
+  };
+}
+
+/**
+ * Monta um relatório com a forma real do reporter JSON do Playwright:
+ * suites de arquivo -> (opcional) suites de describe aninhadas -> specs ->
+ * tests (um por projeto), cada um com `status`. `flakySpecs` descreve os
+ * testes que devem sair com `status: "flaky"`.
+ */
+function relatorioComSuites({
+  expected = 0,
+  skipped = 0,
+  unexpected = 0,
+  flaky = 0,
+  flakySpecs = [],
+} = {}) {
+  const porArquivo = new Map();
+  for (const espec of flakySpecs) {
+    const arquivo = espec.arquivo;
+    if (!porArquivo.has(arquivo)) porArquivo.set(arquivo, []);
+    porArquivo.get(arquivo).push(espec);
+  }
+  const suites = Array.from(porArquivo.entries()).map(
+    ([arquivo, specsDoArquivo]) => ({
+      title: arquivo,
+      file: arquivo,
+      specs: specsDoArquivo.map((espec) => ({
+        title: espec.titulo ?? "um teste flaky",
+        line: espec.linha ?? 1,
+        tests: [
+          {
+            projectName: espec.projeto ?? "mobile-360",
+            status: "flaky",
+          },
+        ],
+      })),
+    }),
+  );
+  return {
+    stats: { expected, skipped, unexpected, flaky },
+    suites,
   };
 }
 
@@ -119,9 +172,29 @@ describe("verificar-cobertura-e2e — gate anti-pulo-silencioso (#424)", () => {
   });
 
   it("parseArgs exige os dois pisos — piso ausente desligaria o gate", () => {
-    expect(() => parseArgs(["rel.json", "--min-tests=17"])).toThrow(ErroDeUso);
+    expect(() =>
+      parseArgs([
+        "rel.json",
+        "--min-tests=17",
+        "--flaky-baseline=b.json",
+      ]),
+    ).toThrow(ErroDeUso);
     expect(() => parseArgs(["rel.json"])).toThrow(ErroDeUso);
     expect(() => parseArgs([])).toThrow(ErroDeUso);
+  });
+
+  it("parseArgs exige --flaky-baseline — ausente ou vazio desligaria o gate de flake", () => {
+    expect(() =>
+      parseArgs(["rel.json", "--min-tests=17", "--min-files=10"]),
+    ).toThrow(ErroDeUso);
+    expect(() =>
+      parseArgs([
+        "rel.json",
+        "--min-tests=17",
+        "--min-files=10",
+        "--flaky-baseline=",
+      ]),
+    ).toThrow(ErroDeUso);
   });
 
   it("parseArgs rejeita piso não-inteiro, vazio ou negativo", () => {
@@ -148,7 +221,196 @@ describe("verificar-cobertura-e2e — gate anti-pulo-silencioso (#424)", () => {
 
   it("parseArgs devolve os pisos quando o uso está correto", () => {
     expect(
-      parseArgs(["e2e-report.json", "--min-tests=17", "--min-files=10"]),
-    ).toEqual({ reportPath: "e2e-report.json", minTests: 17, minFiles: 10 });
+      parseArgs([
+        "e2e-report.json",
+        "--min-tests=17",
+        "--min-files=10",
+        "--flaky-baseline=scripts/ci/e2e-flaky.baseline.json",
+      ]),
+    ).toEqual({
+      reportPath: "e2e-report.json",
+      minTests: 17,
+      minFiles: 10,
+      flakyBaselinePath: "scripts/ci/e2e-flaky.baseline.json",
+    });
+  });
+});
+
+/**
+ * Q-06 (#542): flaky nunca reprova o gate hoje — a PR anterior (#581) mitigou
+ * `represcricao-mv4.spec.ts` com `test.slow()`, mas se ele voltar a oscilar
+ * (ou qualquer outro spec ficar flaky pela primeira vez), o gate atual segue
+ * verde em silêncio. Estes testes cobrem o baseline por arquivo que fecha
+ * esse buraco.
+ */
+describe("verificar-cobertura-e2e — teto de flaky por arquivo (#542, Q-06)", () => {
+  const baselineTresConhecidos = {
+    "e2e/mobile-navegacao.spec.ts": 1,
+    "e2e/mobile-toque.spec.ts": 1,
+    "e2e/mobile-app.spec.ts": 1,
+  };
+
+  it("flaky DENTRO do baseline passa (arquivo conhecido, contagem igual ao teto)", () => {
+    const res = verificarCoberturaE2E(
+      relatorioComSuites({
+        expected: 58,
+        flaky: 1,
+        flakySpecs: [
+          {
+            arquivo: "e2e/mobile-navegacao.spec.ts",
+            titulo: "a barra de lote da validação não fica sob a BottomNav",
+            linha: 116,
+            projeto: "mobile-360",
+          },
+        ],
+      }),
+      { minTests: 17, minFiles: 1, baselineFlaky: baselineTresConhecidos },
+    );
+    expect(res.ok).toBe(true);
+    expect(res.problemas).toHaveLength(0);
+  });
+
+  it("flaky ABAIXO do baseline também passa — flake é estocástico, não força zerar o teto", () => {
+    const res = verificarCoberturaE2E(relatorioComSuites({ expected: 59 }), {
+      minTests: 17,
+      minFiles: 0,
+      baselineFlaky: baselineTresConhecidos,
+    });
+    expect(res.ok).toBe(true);
+    expect(res.problemas).toHaveLength(0);
+  });
+
+  it("flaky ACIMA do baseline reprova — flake novo ou piorado (falha contra o código atual sem o gate)", () => {
+    const res = verificarCoberturaE2E(
+      relatorioComSuites({
+        expected: 57,
+        flaky: 2,
+        flakySpecs: [
+          {
+            arquivo: "e2e/mobile-navegacao.spec.ts",
+            titulo: "a barra de lote da validação não fica sob a BottomNav",
+            linha: 116,
+            projeto: "mobile-360",
+          },
+          {
+            arquivo: "e2e/mobile-navegacao.spec.ts",
+            titulo: "outro teste do mesmo arquivo que também oscilou",
+            linha: 200,
+            projeto: "mobile-360",
+          },
+        ],
+      }),
+      { minTests: 17, minFiles: 1, baselineFlaky: baselineTresConhecidos },
+    );
+    expect(res.ok).toBe(false);
+    expect(res.problemas.join("\n")).toMatch(
+      /mobile-navegacao\.spec\.ts: 2 teste\(s\) flaky, baseline permite 1/,
+    );
+  });
+
+  it("qualquer flake em arquivo FORA do baseline reprova na hora — inclusive represcricao-mv4 se voltar a oscilar", () => {
+    const res = verificarCoberturaE2E(
+      relatorioComSuites({
+        expected: 58,
+        flaky: 1,
+        flakySpecs: [
+          {
+            arquivo: "e2e/represcricao-mv4.spec.ts",
+            titulo: "represcreve MV4 dentro do prazo",
+            linha: 40,
+            projeto: "desktop",
+          },
+        ],
+      }),
+      { minTests: 17, minFiles: 1, baselineFlaky: baselineTresConhecidos },
+    );
+    expect(res.ok).toBe(false);
+    expect(res.problemas.join("\n")).toMatch(
+      /represcricao-mv4\.spec\.ts: 1 teste\(s\) flaky, baseline permite 0/,
+    );
+  });
+
+  it("sem baselineFlaky (opts omitido), QUALQUER flaky reprova — piso implícito é zero", () => {
+    const res = verificarCoberturaE2E(
+      relatorioComSuites({
+        expected: 58,
+        flaky: 1,
+        flakySpecs: [
+          {
+            arquivo: "e2e/mobile-app.spec.ts",
+            titulo: "sem estouro horizontal em 360px — /relatorios",
+            linha: 33,
+            projeto: "mobile-360",
+          },
+        ],
+      }),
+      { minTests: 17, minFiles: 1 },
+    );
+    expect(res.ok).toBe(false);
+  });
+
+  it("coletarFlaky percorre suites aninhadas (describe blocks) e acha o teste flaky", () => {
+    const report = {
+      suites: [
+        {
+          title: "e2e/aninhado.spec.ts",
+          file: "e2e/aninhado.spec.ts",
+          specs: [],
+          suites: [
+            {
+              title: "descreve algo",
+              specs: [
+                {
+                  title: "um teste dentro do describe",
+                  line: 42,
+                  tests: [{ projectName: "mobile-360", status: "flaky" }],
+                },
+                {
+                  title: "um teste estável, não deve aparecer",
+                  line: 43,
+                  tests: [{ projectName: "mobile-360", status: "expected" }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const flaky = coletarFlaky(report);
+    expect(flaky).toHaveLength(1);
+    expect(flaky[0]).toMatchObject({
+      arquivo: "e2e/aninhado.spec.ts",
+      titulo: "um teste dentro do describe",
+      linha: 42,
+      projeto: "mobile-360",
+    });
+    expect(formatarFlaky(flaky[0])).toBe(
+      'e2e/aninhado.spec.ts:42 "um teste dentro do describe" [mobile-360]',
+    );
+  });
+
+  it("relatório sem suites/specs (fixtures antigas) não quebra a coleta de flaky", () => {
+    expect(coletarFlaky({})).toEqual([]);
+    expect(coletarFlaky({ suites: [{ file: "x.spec.ts" }] })).toEqual([]);
+  });
+});
+
+describe("verificar-cobertura-e2e — baseline de flaky (scripts/ci/e2e-flaky.baseline.json)", () => {
+  it("existe, é JSON válido e só tem os 3 arquivos [mobile-360] conhecidos em 02/09/2026", () => {
+    expect(existsSync(ARQUIVO_BASELINE_FLAKY)).toBe(true);
+    const baseline = JSON.parse(readFileSync(ARQUIVO_BASELINE_FLAKY, "utf8"));
+    expect(Object.keys(baseline).sort()).toEqual(
+      [
+        "e2e/mobile-navegacao.spec.ts",
+        "e2e/mobile-toque.spec.ts",
+        "e2e/mobile-app.spec.ts",
+      ].sort(),
+    );
+    for (const [arquivo, teto] of Object.entries(baseline)) {
+      expect(
+        Number.isInteger(teto) && teto > 0,
+        `${arquivo}: teto deve ser inteiro > 0 — zere removendo a entrada`,
+      ).toBe(true);
+    }
   });
 });
