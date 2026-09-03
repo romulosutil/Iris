@@ -43,6 +43,7 @@ const CRITERIO = { tipo: "n_acertos_m_sessoes", n: 3, m: 3 };
 
 let owner: ReturnType<typeof postgres>;
 let carregarSessao: typeof import("./queries").carregarSessao;
+let alterarModalidadeClinica: typeof import("@/app/(app)/pacientes/[id]/cadastro-clinico/modalidade-logic").alterarModalidadeClinica;
 let appSql: typeof import("@/db/client").sql;
 
 /** Meta direto pelo dono (bypassa RLS) — mesmo helper de `prontidao.int.test.ts`. */
@@ -69,12 +70,17 @@ async function inserirProtocolo(
 describe.skipIf(!hasDb)("bloqueio do passo Documentar", () => {
   beforeAll(async () => {
     ({ carregarSessao } = await import("./queries"));
+    ({ alterarModalidadeClinica } =
+      await import("@/app/(app)/pacientes/[id]/cadastro-clinico/modalidade-logic"));
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
     await owner`TRUNCATE clinic, app_user, user_role, patient, session,
       care_team_membership, goal, patient_protocol, protocol
       RESTART IDENTITY CASCADE`;
-    await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'A')`;
+    // `isento_trial`: `alterarModalidadeClinica` passa por `comEscrita`, que
+    // recusa escrita de conta em somente-leitura (mesmo motivo em
+    // `cadastro-clinico/modalidade.int.test.ts`).
+    await owner`INSERT INTO clinic (id, nome, isento_trial) VALUES (${CLINIC_A}, 'A', true)`;
     await owner`INSERT INTO app_user (id, email, name) VALUES
       (${U_COORD}, 'c@x.com', 'Coord'), (${U_T1}, 't1@x.com', 'T1')`;
     await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
@@ -88,7 +94,9 @@ describe.skipIf(!hasDb)("bloqueio do passo Documentar", () => {
     await seedProtocolFamiliaCatalogo(owner);
     await owner`INSERT INTO protocol (id, clinic_id, nome, disciplina, familia) VALUES
       (${PROTOCOLO}, ${CLINIC_A}, 'VB-MAPP', 'ABA', 'aba_marcos_desenvolvimento')`;
-  });
+    // 30s: o `import` de `modalidade-logic` arrasta a cadeia de billing/auth e
+    // estoura o `hookTimeout` padrão de 10s só transformando módulos.
+  }, 30_000);
 
   afterAll(async () => {
     await owner?.end();
@@ -100,7 +108,17 @@ describe.skipIf(!hasDb)("bloqueio do passo Documentar", () => {
   beforeEach(async () => {
     await owner`DELETE FROM goal WHERE patient_id IN (${PAC}, ${PAC_CONV})`;
     await owner`DELETE FROM patient_protocol WHERE patient_id IN (${PAC}, ${PAC_CONV})`;
+    // A modalidade é estado do paciente, não da meta/protocolo: o caso de
+    // troca abaixo a altera de verdade, então cada teste parte do valor
+    // declarado no `beforeAll`.
+    await owner`UPDATE patient SET clinical_modality = 'protocol_driven' WHERE id = ${PAC}`;
   });
+
+  /** Ids dos degraus em estado `bloqueante` — afirmar só o booleano deixaria
+   * passar um bloqueio pelo motivo errado. */
+  function bloqueantes(p: { degraus: { id: string; estado: string }[] }) {
+    return p.degraus.filter((d) => d.estado === "bloqueante").map((d) => d.id);
+  }
 
   test("paciente sem protocolo e sem meta: podeDocumentar false", async () => {
     const dados = await carregarSessao(ctxCoord, SESS, new Date());
@@ -127,5 +145,45 @@ describe.skipIf(!hasDb)("bloqueio do passo Documentar", () => {
     // protocolo nem meta, ainda assim `podeDocumentar` é `true`.
     const dados = await carregarSessao(ctxCoord, SESS_CONV, new Date());
     expect(dados?.prontidao.podeDocumentar).toBe(true);
+  });
+
+  // D-A4 — prontidão é DERIVADA, nunca coluna. O mesmo paciente, os mesmos
+  // fatos no banco, e a MESMA leitura muda de resposta só porque a modalidade
+  // mudou. Uma implementação que persistisse `podeDocumentar` (ou cacheasse a
+  // modalidade lida) continuaria verde aqui — é este caso que a impede.
+  test("modalidade trocada depois de pronta: volta a bloquear pelo instrumento", async () => {
+    await inserirProtocolo(PAC, { desativado: false });
+    await inserirMeta(PAC, "ativa");
+
+    const pronto = await carregarSessao(ctxCoord, SESS, new Date());
+    expect(pronto?.prontidao.podeDocumentar).toBe(true);
+    expect(bloqueantes(pronto!.prontidao)).toEqual([]);
+
+    const troca = await alterarModalidadeClinica(
+      ctxCoord,
+      PAC,
+      "cognitive_behavioral",
+    );
+    expect(troca.error).toBeUndefined();
+
+    // Protocolo e meta continuam lá — o que mudou foi QUAL degrau a modalidade
+    // considera bloqueante (`modalidade.ts`: `cognitive_behavioral` bloqueia
+    // por `instrumento`, que este paciente nunca aplicou).
+    const depois = await carregarSessao(ctxCoord, SESS, new Date());
+    expect(depois?.prontidao.podeDocumentar).toBe(false);
+    expect(bloqueantes(depois!.prontidao)).toEqual(["instrumento"]);
+
+    // Volta: a derivação acompanha nos dois sentidos, sem nenhuma escrita de
+    // protocolo/meta no meio.
+    const volta = await alterarModalidadeClinica(
+      ctxCoord,
+      PAC,
+      "protocol_driven",
+    );
+    expect(volta.error).toBeUndefined();
+
+    const devolta = await carregarSessao(ctxCoord, SESS, new Date());
+    expect(devolta?.prontidao.podeDocumentar).toBe(true);
+    expect(bloqueantes(devolta!.prontidao)).toEqual([]);
   });
 });
