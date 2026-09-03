@@ -132,11 +132,19 @@ export const pluginDS = {
   rules: { "sem-paleta-crua": semPaletaCrua },
 };
 
-/** Escopo da Regra 0 com enforcement (DS-05). Landing/admin ficam fora por ora. */
+/**
+ * Escopo da Regra 0 com enforcement (DS-05). O painel admin entrou na #566
+ * (DS-01): era a última superfície do produto inteiramente fora da regra —
+ * 159 classes de paleta crua — e ficava fora daqui por decisão explícita do
+ * W10, o que deixava o buraco aberto para o painel CRESCER com paleta crua.
+ * Fora do escopo segue só a landing.
+ */
 export const ESCOPO_DS = [
   "src/app/(app)/**/*.{ts,tsx}",
+  "src/app/(admin)/**/*.{ts,tsx}",
   "src/components/ui/**/*.{ts,tsx}",
   "src/components/app/**/*.{ts,tsx}",
+  "src/components/admin/**/*.{ts,tsx}",
 ];
 
 export const FORA_DO_ESCOPO_DS = [
