@@ -13,6 +13,20 @@ import { higienizarEventoSentry } from "@/lib/observabilidade/sentry-sem-pii";
  * GlitchTip roda no mesmo VPS (São Paulo), então o dado de erro não sai do país.
  */
 export async function register(): Promise<void> {
+  // #560 (F1): liga o transporte `pino` e o escopo de correlação por request.
+  // Só no runtime Node — `pino` e `node:async_hooks` não existem no edge, e o
+  // núcleo do logger (`logger.ts`) já funciona lá com o sink de `console`.
+  //
+  // O `import` é dinâmico porque `instrumentation.ts` é avaliado nos dois
+  // runtimes; a falha NÃO é engolida. Imagem sem `pino` (a dos jobs internos
+  // não herda as dependências do app) precisa quebrar aqui e ser vista, não
+  // degradar em silêncio para o `console`.
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { instalarLoggerNode } =
+      await import("@/lib/observabilidade/logger-node");
+    instalarLoggerNode();
+  }
+
   const dsn = process.env.SENTRY_DSN;
   if (!dsn) return;
 
