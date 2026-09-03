@@ -20,6 +20,9 @@ import {
   milestone,
   goal,
   patient,
+  patientAlvoDisciplina,
+  patientClinicalProfile,
+  anamnese,
   consent,
   patientProtocol,
   careTeamMembership,
@@ -115,7 +118,25 @@ export async function seedDemoClinic(
       hora: 12,
       spec: "validacao-coordenador",
     },
+    // #567-família — o ÚNICO paciente demo que nasce com a escada de
+    // prontidão ABERTA. Todos os outros recebem protocolo e meta aqui embaixo,
+    // e por isso nenhum deles pode provar o cartão de prontidão: para eles
+    // `montarProntidao` já devolve os dois degraus bloqueantes concluídos.
+    // Este nasce com ficha clínica e anamnese prontas (senão `proximo` seria
+    // um degrau ANTERIOR e o cartão apontaria outro gesto) e com a disciplina
+    // ABA prescrita (o protocolo é ENCAIXE de disciplina prescrita —
+    // `protocolos-secao.tsx`; sem prescrição a seção nem oferece o botão).
+    // Faltam, de propósito, exatamente os dois degraus que o e2e faz o
+    // coordenador fechar pela UI: protocolo vigente e meta ativa.
+    {
+      nome: "Paciente Prontidão E2E",
+      hora: 13,
+      spec: "prontidao-do-prontuario",
+    },
   ] as const;
+
+  // Specs cujo paciente NÃO recebe protocolo/meta no seed.
+  const ESCADA_ABERTA = new Set<string>(["prontidao-do-prontuario"]);
 
   console.log("📅 Agendando sessões de hoje para o terapeuta demo...");
   // "Hoje" tem que ser o dia NO FUSO DA CLÍNICA, não no fuso do processo. O
@@ -153,11 +174,43 @@ export async function seedDemoClinic(
       versaoTermo: "termo-v1",
     });
 
-    await ownerDb.insert(patientProtocol).values({
-      patientId: paciente.id,
-      protocolId: protocoloDemo.id,
-      ativadoPor: coordenadorId,
-    });
+    // Paciente da escada aberta: os pré-requisitos dos degraus ANTERIORES aos
+    // bloqueantes ficam prontos no seed, para que o `proximo` do cartão seja
+    // "Prescrever um protocolo" — que é o gesto sob teste. Ficha e anamnese
+    // são degraus de coordenação também, mas o e2e não pode exercitar todos
+    // sem virar um teste de cinco telas: o valor está na costura
+    // cartão → lista → passo Documentar, não em repetir o cadastro clínico.
+    if (ESCADA_ABERTA.has(spec)) {
+      await ownerDb.insert(patientClinicalProfile).values({
+        patientId: paciente.id,
+        diagnostico: "TEA — hipótese diagnóstica (dados fictícios)",
+      });
+      await ownerDb.insert(anamnese).values({
+        clinicId,
+        patientId: paciente.id,
+        estado: "validada",
+        observacoes: "Anamnese de demonstração (dados fictícios).",
+        criadoPor: coordenadorId,
+        validadaPor: coordenadorId,
+        validadaEm: new Date(),
+      });
+      // Prescrição vigente de ABA: é ela que faz `ProtocolosSecao` oferecer o
+      // VB-MAPP do catálogo ("+ Encaixar protocolo"). Sem ela a seção só
+      // mostra o alerta "Prescreva uma disciplina primeiro".
+      await ownerDb.insert(patientAlvoDisciplina).values({
+        clinicId,
+        patientId: paciente.id,
+        disciplina: "ABA",
+        horasAlvoSemana: "4.0",
+        vigenciaInicio: diaNaClinica,
+      });
+    } else {
+      await ownerDb.insert(patientProtocol).values({
+        patientId: paciente.id,
+        protocolId: protocoloDemo.id,
+        ativadoPor: coordenadorId,
+      });
+    }
 
     // Escada de prontidão: para `protocol_driven` os degraus bloqueantes são
     // Protocolo E Meta ativa (spec da jornada de admissão, §3.1). O protocolo
@@ -171,15 +224,17 @@ export async function seedDemoClinic(
     // vale para qualquer spec. Já a VISIBILIDADE da meta ao terapeuta segue
     // exigindo `app_is_on_team` (`goal_select`) — é o `careTeamMembership`
     // abaixo, e não esta linha, que faz `metasAtivas` deixar de vir vazia.
-    await ownerDb.insert(goal).values({
-      clinicId,
-      patientId: paciente.id,
-      descricao: "Pedir o item desejado com palavra ou gesto",
-      disciplina: "ABA",
-      estado: "ativa",
-      criterioDominio: { tipo: "acertos_consecutivos", valor: 3 },
-      criadoPor: coordenadorId,
-    });
+    if (!ESCADA_ABERTA.has(spec)) {
+      await ownerDb.insert(goal).values({
+        clinicId,
+        patientId: paciente.id,
+        descricao: "Pedir o item desejado com palavra ou gesto",
+        disciplina: "ABA",
+        estado: "ativa",
+        criterioDominio: { tipo: "acertos_consecutivos", valor: 3 },
+        criadoPor: coordenadorId,
+      });
+    }
 
     // #533 — SÓ o paciente do e2e do coordenador enxerga a meta pelo
     // terapeuta. O `DemoStubProvider` só põe alvo na sugestão quando
@@ -189,7 +244,12 @@ export async function seedDemoClinic(
     // `/validacao`. Os outros pacientes ficam sem o vínculo de propósito —
     // `diario-demo`/`revisao` contam cartões, não evidências, e não devem
     // mudar de comportamento.
-    if (spec === "validacao-coordenador") {
+    // `prontidao-do-prontuario` também precisa do vínculo: a meta que o
+    // coordenador cria DURANTE o teste só vira alvo de sugestão se o terapeuta
+    // conseguir lê-la (`goal_select` exige `app_is_on_team`), e sem alvo a
+    // evidência aprovada não materializa `session_snapshot` — o degrau
+    // "Documentar a primeira sessão" nunca fecharia e o cartão nunca sumiria.
+    if (spec === "validacao-coordenador" || ESCADA_ABERTA.has(spec)) {
       await ownerDb.insert(careTeamMembership).values({
         patientId: paciente.id,
         userId: terapeutaId,
