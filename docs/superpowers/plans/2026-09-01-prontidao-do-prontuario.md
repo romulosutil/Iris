@@ -5,6 +5,26 @@
 > `superpowers:executing-plans` para implementar tarefa a tarefa. Os passos usam
 > checkbox (`- [ ]`).
 
+## Estado em 03/09/2026
+
+Este plano **já foi executado e mergeado na `main`** pela **PR #557** (commit
+`a3142384`). Os checkboxes abaixo foram reconciliados contra o código medido na
+`main` em 03/09/2026: `[x]` = sustentado por arquivo que existe; `[ ]` = medido
+como ausente, ou não decidível sem rodar código (nenhum foi marcado por
+presunção).
+
+O que ficou aberto — 7 buracos de prova + 4 desvios de spec — está catalogado
+em [`../specs/sequela-557-provas-e-desvios.md`](../specs/sequela-557-provas-e-desvios.md),
+rascunho do corpo da issue-sequela. Relacionadas: **#559** (rota importando
+rota) e **#560** (idioma de log de erro).
+
+**Não marcados de propósito**, mesmo com a feature em produção: os passos de
+**prova de mutação** (Task 7 Step 5, Task 7b Step 6) e os de **rodar suíte**
+que não deixam artefato no repo — marcar "mutação provada" sem tê-la rodado é
+exatamente o defeito que a memória `teste-verde-que-nao-testa-nada` descreve.
+
+---
+
 **Goal:** Fazer o prontuário do paciente saber o próprio estado e nomear o gesto
 seguinte, bloqueando o passo "Documentar" da sessão enquanto faltar o que é
 causalmente necessário para gerar dado (protocolo prescrito + meta ativa).
@@ -47,7 +67,7 @@ divirja no primeiro modo novo (decisão D-A5 da spec).
 - Modify: `src/app/(app)/pacientes/[id]/modalidade.ts`
 - Test: `src/app/(app)/pacientes/[id]/modalidade.test.ts` (já existe)
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Acrescentar ao final de `src/app/(app)/pacientes/[id]/modalidade.test.ts`:
 
@@ -95,12 +115,12 @@ describe("degraus de prontidão", () => {
 });
 ```
 
-- [ ] **Step 2: Rodar o teste e confirmar que falha**
+- [x] **Step 2: Rodar o teste e confirmar que falha**
 
 Run: `pnpm test src/app/(app)/pacientes/[id]/modalidade.test.ts`
 Expected: FAIL — `degrausProntidao` é `undefined`.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 Em `src/app/(app)/pacientes/[id]/modalidade.ts`, acrescentar o tipo e os campos:
 
@@ -179,12 +199,12 @@ Preencher em cada `case` do `switch`:
       };
 ```
 
-- [ ] **Step 4: Rodar e confirmar verde**
+- [x] **Step 4: Rodar e confirmar verde**
 
 Run: `pnpm test src/app/(app)/pacientes/[id]/modalidade.test.ts`
 Expected: PASS, incluindo os testes que já existiam no arquivo.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add "src/app/(app)/pacientes/[id]/modalidade.ts" "src/app/(app)/pacientes/[id]/modalidade.test.ts"
@@ -200,7 +220,7 @@ git commit -m "feat(paciente): declare readiness ladder per clinical modality"
 - Create: `src/lib/patient/prontidao.ts`
 - Test: `src/lib/patient/prontidao.test.ts`
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Criar `src/lib/patient/prontidao.test.ts`:
 
@@ -368,12 +388,12 @@ describe("montarProntidao", () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e confirmar que falha**
+- [x] **Step 2: Rodar e confirmar que falha**
 
 Run: `pnpm test src/lib/patient/prontidao.test.ts`
 Expected: FAIL — `Cannot find module './prontidao'`.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 Criar `src/lib/patient/prontidao.ts`:
 
@@ -591,12 +611,12 @@ export function montarProntidao({
 }
 ```
 
-- [ ] **Step 4: Rodar e confirmar verde**
+- [x] **Step 4: Rodar e confirmar verde**
 
 Run: `pnpm test src/lib/patient/prontidao.test.ts`
 Expected: PASS, 11 testes.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/patient/prontidao.ts src/lib/patient/prontidao.test.ts
@@ -618,7 +638,7 @@ _(auditoria 02/09, R-6)_ — a query mora em `src/lib/patient/`, não em
 Rota importando rota é o achado `A-02`. O precedente `onboarding-queries.ts`
 fica em `src/app/(app)/` porque tem um consumidor só.
 
-- [ ] **Step 1: Escrever o teste de integração que falha**
+- [x] **Step 1: Escrever o teste de integração que falha**
 
 Criar `src/lib/patient/prontidao-queries.int.test.ts`. Copiar o arranjo de
 conexão e o `beforeAll`/`afterAll` de
@@ -722,13 +742,13 @@ describe("obterFatosProntidao — leitura por papel", () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e confirmar que falha**
+- [x] **Step 2: Rodar e confirmar que falha**
 
 Run: `pnpm test:rls src/lib/patient/prontidao-queries.int.test.ts`
 Expected: FAIL — módulo inexistente. **Conferir a contagem de testes coletados
 (10).** Zero coletado significa config errada, não sucesso.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 Criar `src/lib/patient/prontidao-queries.ts`:
 
@@ -846,12 +866,12 @@ mesmo valor que `withTenant` seta a partir de `ctx.role` — por isso a metade
 `null`, a policy mudou e a régua de visibilidade precisa ser revista (D-A10) —
 nunca "consertar" o teste.
 
-- [ ] **Step 4: Rodar e confirmar verde**
+- [x] **Step 4: Rodar e confirmar verde**
 
 Run: `pnpm test:rls src/lib/patient/prontidao-queries.int.test.ts`
 Expected: PASS, 10 testes coletados.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add "src/lib/patient/prontidao-queries.ts" "src/lib/patient/prontidao-queries.int.test.ts"
@@ -867,7 +887,7 @@ git commit -m "feat(paciente): read readiness facts in a single RLS-scoped trans
 - Create: `src/components/app/cartao-prontidao.tsx`
 - Test: `src/components/app/cartao-prontidao.test.tsx`
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Criar `src/components/app/cartao-prontidao.test.tsx`:
 
@@ -939,12 +959,12 @@ describe("CartaoProntidao", () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e confirmar que falha**
+- [x] **Step 2: Rodar e confirmar que falha**
 
 Run: `pnpm test src/components/app/cartao-prontidao.test.tsx`
 Expected: FAIL — módulo inexistente.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 Criar `src/components/app/cartao-prontidao.tsx`:
 
@@ -1043,12 +1063,12 @@ erro) e nunca o violeta de "sugerido pela IA" nem o verde de "aprovado" da
 revisão. O rótulo textual já está no snippet e é obrigatório — o teste
 "marca o degrau bloqueante de forma redundante ao texto" é o que trava isso.
 
-- [ ] **Step 4: Rodar e confirmar verde**
+- [x] **Step 4: Rodar e confirmar verde**
 
 Run: `pnpm test src/components/app/cartao-prontidao.test.tsx`
 Expected: PASS, 5 testes.
 
-- [ ] **Step 5: Story com os 7 estados da spec §4** _(auditoria 02/09, R-7)_
+- [x] **Step 5: Story com os 7 estados da spec §4** _(auditoria 02/09, R-7)_ — entregue na PR #572 (03/09/2026), com a correção de contraste do estado `pendente`
 
 Criar `src/components/app/cartao-prontidao.stories.tsx` (padrão de
 `src/components/ui/alert.stories.tsx`), uma story por estado: prontuário pronto
@@ -1061,7 +1081,7 @@ visível antes de chegar ao prontuário.
 Run: `pnpm storybook` e conferir as 7 a olho — cor e rótulo concordando em
 cada uma.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/components/app/cartao-prontidao.tsx src/components/app/cartao-prontidao.test.tsx src/components/app/cartao-prontidao.stories.tsx
@@ -1109,7 +1129,7 @@ Teste mínimo (`erro-sem-pii.test.ts`): um `Error` cuja `message` contém
 log que **não contém** `SELECT` e **contém** `42501`. É a única prova que
 importa: o que não pode sair, não sai.
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Acrescentar a `layout.test.tsx` um caso que afirme que o layout renderiza o
 cartão quando `obterFatosProntidao` devolve fatos incompletos. Seguir o padrão
@@ -1138,12 +1158,12 @@ it("mostra a escada de prontidão no topo do prontuário", async () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e confirmar que falha**
+- [x] **Step 2: Rodar e confirmar que falha**
 
 Run: `pnpm test src/app/(app)/pacientes/[id]/layout.test.tsx`
 Expected: FAIL — texto ausente.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 Em `layout.tsx`, acrescentar aos imports:
 
@@ -1199,12 +1219,12 @@ E, logo depois do bloco de `TabsNav` e antes do `Alert` de somente-leitura:
 }
 ```
 
-- [ ] **Step 4: Rodar e confirmar verde**
+- [x] **Step 4: Rodar e confirmar verde**
 
 Run: `pnpm test src/app/(app)/pacientes/[id]/layout.test.tsx`
 Expected: PASS, incluindo os testes já existentes.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/log/erro-sem-pii.ts src/lib/log/erro-sem-pii.test.ts "src/app/(app)/pacientes/[id]/layout.tsx" "src/app/(app)/pacientes/[id]/layout.test.tsx"
@@ -1223,7 +1243,7 @@ operador já podia fazer, não para a que falta.
 - Modify: `src/app/(app)/pacientes/[id]/page.tsx` (bloco `!temSnapshots`)
 - Test: `src/app/(app)/pacientes/[id]/evolucao-vazia.test.tsx` (criar)
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Criar `src/app/(app)/pacientes/[id]/evolucao-vazia.test.tsx` — extrair o bloco
 vazio para um componente próprio e testá-lo isolado (a `page.tsx` é um RSC com
@@ -1264,12 +1284,12 @@ describe("EvolucaoVazia", () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e confirmar que falha**
+- [x] **Step 2: Rodar e confirmar que falha**
 
 Run: `pnpm test src/app/(app)/pacientes/[id]/evolucao-vazia.test.tsx`
 Expected: FAIL — módulo inexistente.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 Criar `src/app/(app)/pacientes/[id]/evolucao-vazia.tsx`:
 
@@ -1313,12 +1333,12 @@ export function EvolucaoVazia({ prontidao }: { prontidao: Prontidao }) {
 Em `page.tsx`, trocar o bloco `!temSnapshots ? (...) : (...)` pelo componente,
 passando a prontidão montada (ler os fatos no mesmo `Promise.all` de `avisos`).
 
-- [ ] **Step 4: Rodar e confirmar verde**
+- [x] **Step 4: Rodar e confirmar verde**
 
 Run: `pnpm test src/app/(app)/pacientes/[id]/`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add "src/app/(app)/pacientes/[id]/evolucao-vazia.tsx" "src/app/(app)/pacientes/[id]/evolucao-vazia.test.tsx" "src/app/(app)/pacientes/[id]/page.tsx"
@@ -1339,7 +1359,7 @@ O ponto onde a jornada passa a ser obrigatória. Insere-se em `PassoEmFoco`, no
   devolver `prontidao`)
 - Test: `src/app/(app)/sessoes/[id]/bloqueio-documentar.int.test.ts`
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Criar `src/app/(app)/sessoes/[id]/bloqueio-documentar.int.test.ts`, no mesmo
 arranjo de `arquivamento.int.test.ts`:
@@ -1395,13 +1415,13 @@ describe("bloqueio do passo Documentar", () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e confirmar que falha**
+- [x] **Step 2: Rodar e confirmar que falha**
 
 Run: `pnpm test:rls src/app/(app)/sessoes/[id]/bloqueio-documentar.int.test.ts`
 Expected: FAIL — `prontidao` não existe no retorno. **Conferir 5 testes
 coletados.**
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 Em `src/app/(app)/sessoes/[id]/queries.ts`, dentro de `carregarSessao`,
 acrescentar a leitura da prontidão do paciente da sessão e devolvê-la no objeto:
@@ -1469,7 +1489,7 @@ Em `page.tsx`, no `case "documentar"`:
       );
 ```
 
-- [ ] **Step 4: Rodar e confirmar verde**
+- [x] **Step 4: Rodar e confirmar verde**
 
 Run: `pnpm test:rls src/app/(app)/sessoes/[id]/bloqueio-documentar.int.test.ts`
 Expected: PASS, 5 testes.
@@ -1487,7 +1507,7 @@ Expected: vermelho. Se continuar verde, o teste não está exercitando a guarda.
 que conta como prova do gate. Uma implementação que passe só por este Step 5
 tem uma leitura e zero imposições.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add "src/app/(app)/sessoes/[id]/page.tsx" "src/app/(app)/sessoes/[id]/queries.ts" "src/app/(app)/sessoes/[id]/bloqueio-documentar.int.test.ts"
@@ -1513,7 +1533,7 @@ jeito que a Task 7 termina, a feature tem uma leitura e zero imposições.
   `comEscrita`)
 - Test: `src/app/(app)/diario/[sessionId]/gate-documentar.int.test.ts`
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 ```ts
 describe("gate de documentação nas actions", () => {
@@ -1554,13 +1574,13 @@ describe("gate de documentação nas actions", () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e confirmar que falha**
+- [x] **Step 2: Rodar e confirmar que falha**
 
 Run: `pnpm test:rls "src/app/(app)/diario/[sessionId]/gate-documentar.int.test.ts"`
 Expected: FAIL — a captura passa hoje sem protocolo nem meta. **Conferir 5
 testes coletados.**
 
-- [ ] **Step 3: Implementar o assert**
+- [x] **Step 3: Implementar o assert**
 
 Criar `src/lib/patient/assert-pode-documentar.ts`:
 
@@ -1629,7 +1649,7 @@ com o corpo do `select`; `obterFatosProntidao(ctx, patientId)` passa a ser
 `withTenant(ctx, (tx) => obterFatosProntidaoNaTx(tx, patientId))`. Assim os dois
 caminhos leem exatamente o mesmo SQL.
 
-- [ ] **Step 4: Chamar nos dois cores**
+- [x] **Step 4: Chamar nos dois cores**
 
 Em `capturarDiarioCore` e `consolidarSessaoCore`, dentro do `withTenant` já
 aberto e **antes de qualquer escrita**:
@@ -1646,7 +1666,7 @@ if (erro instanceof ProntuarioIncompletoError) {
 }
 ```
 
-- [ ] **Step 5: Rodar e confirmar verde**
+- [x] **Step 5: Rodar e confirmar verde**
 
 Run: `pnpm test:rls "src/app/(app)/diario/[sessionId]/gate-documentar.int.test.ts"`
 Expected: PASS, 5 testes.
@@ -1667,7 +1687,7 @@ sessão sem protocolo/meta, vários vão ficar vermelhos — **e estarão certos
 Corrigir as fixtures (dar protocolo e meta ao paciente), nunca afrouxar a
 guarda.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/lib/patient/assert-pode-documentar.ts "src/app/(app)/diario/[sessionId]/logic.ts" "src/app/(app)/diario/[sessionId]/actions.ts" "src/lib/patient/prontidao-queries.ts" "src/app/(app)/diario/[sessionId]/gate-documentar.int.test.ts"
@@ -1684,7 +1704,7 @@ git commit -m "feat(sessao): enforce the documenting gate in the server action, 
 - Modify: `src/app/(app)/pacientes/lista-pacientes.tsx`
 - Test: `src/app/(app)/pacientes/lista-pacientes.test.tsx` (criar)
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Criar `src/app/(app)/pacientes/lista-pacientes.test.tsx`. O shape é
 `PacienteListItem` (`./queries.ts`) estendido com `proximoPasso`:
@@ -1762,12 +1782,12 @@ describe("listarTodosPacientes — terapeuta fora da equipe", () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e confirmar que falha**
+- [x] **Step 2: Rodar e confirmar que falha**
 
 Run: `pnpm test src/app/(app)/pacientes/lista-pacientes.test.tsx`
 Expected: FAIL — `proximoPasso` não existe em `PacienteListItem`.
 
-- [ ] **Step 3: Implementar a leitura**
+- [x] **Step 3: Implementar a leitura**
 
 Em `src/app/(app)/pacientes/queries.ts`, acrescentar a `PacienteListItem`:
 
@@ -1874,7 +1894,7 @@ return linhas.map(({ clinicalModality, naEquipe, ...resto }) => {
 });
 ```
 
-- [ ] **Step 4: Implementar o selo**
+- [x] **Step 4: Implementar o selo**
 
 Em `lista-pacientes.tsx`, logo depois do selo `Sem prescrição` (mesmo cluster de
 selos, mesma linha do nome):
@@ -1895,12 +1915,12 @@ selos, mesma linha do nome):
 O texto carrega o estado; a cor só reforça — mesma regra já aplicada ao selo
 `Sem prescrição` logo acima.
 
-- [ ] **Step 5: Rodar e confirmar verde**
+- [x] **Step 5: Rodar e confirmar verde**
 
 Run: `pnpm test src/app/(app)/pacientes/lista-pacientes.test.tsx && pnpm typecheck`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add "src/app/(app)/pacientes/queries.ts" "src/app/(app)/pacientes/lista-pacientes.tsx" "src/app/(app)/pacientes/lista-pacientes.test.tsx"
@@ -1941,7 +1961,7 @@ it("lista o quinto passo: deixar o primeiro paciente pronto", () => {
 Run: `pnpm test src/app/(app)/checklist-onboarding.test.tsx`
 Expected: FAIL — link ausente.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 Em `src/lib/onboarding/passos.ts`, estender `PassoId` com
 `"primeiroPacientePronto"` e acrescentar ao array:
@@ -1983,7 +2003,7 @@ E no retorno: `primeiroPacientePronto: Boolean(linha?.primeiroPacientePronto)`.
 Run: `pnpm test src/app/(app)/checklist-onboarding.test.tsx`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/onboarding/passos.ts "src/app/(app)/onboarding-queries.ts" "src/app/(app)/checklist-onboarding.test.tsx"
@@ -2016,7 +2036,7 @@ casos que a spec §6 passou a exigir e que nenhuma task acima cria sozinha:
 _(auditoria 02/09, R-5)_ — prova por papel e por alcance, que a matriz da
 função pura **não** substitui:
 
-- **Alcance de rota (rodar primeiro)**: `src/lib/patient/prontidao-rotas.test.ts`
+- ✅ **Alcance de rota (rodar primeiro)** — entregue na PR #571 (03/09/2026): 11 casos, nenhum botão morto encontrado, mutação provada nos dois sentidos. `src/lib/patient/prontidao-rotas.test.ts`
   — para cada `DegrauId`, `DEFINICOES[id].rota("p1")` é `null` ou um caminho
   que existe em `src/app/(app)/**/page.tsx` e **não** é um `redirect()`.
   `/diario/[id]` e `/revisao/[id]` viraram redirect na #512; um `href` para lá
