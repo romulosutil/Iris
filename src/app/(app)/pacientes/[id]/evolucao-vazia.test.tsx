@@ -48,4 +48,29 @@ describe("EvolucaoVazia", () => {
     render(<EvolucaoVazia prontidao={PRONTO} />);
     expect(screen.queryByText(/sem sessões registradas/i)).not.toBeNull();
   });
+
+  // §4a — escada vazia por FALTA DE LEITURA tem a mesma forma da escada
+  // cumprida (`proximo === null`). Antes do discriminante `situacao`, esta
+  // tela dizia "O prontuário está pronto" sobre um prontuário que o papel não
+  // consegue ler: afirmação falsa. No prontuário o estado honesto é ausência
+  // (D-A9) — quem mostra "Aguardando coordenação" é o passo Documentar.
+  it("fatos não visíveis: não afirma que o prontuário está pronto", () => {
+    const naoVisivel = montarProntidao({
+      modalidade: "protocol_driven",
+      fatos: {
+        temFichaClinica: true,
+        temAnamnese: true,
+        temProtocoloAtivo: true,
+        temMetaAtiva: true,
+        temInstrumentoAplicado: true,
+        temSessaoConsolidada: true,
+      },
+      role: "admin_recepcao",
+      patientId: "p1",
+    });
+    expect(naoVisivel.situacao).toBe("fatos_nao_visiveis");
+
+    const { container } = render(<EvolucaoVazia prontidao={naoVisivel} />);
+    expect(container.firstChild).toBeNull();
+  });
 });

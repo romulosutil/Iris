@@ -56,6 +56,9 @@ describe("montarProntidao", () => {
     });
     expect(p.proximo).toBeNull();
     expect(p.podeDocumentar).toBe(true);
+    // O `proximo === null` daqui é "escada cumprida" — o ÚNICO que autoriza o
+    // cartão a sumir sem mentir.
+    expect(p.situacao).toBe("pronto");
   });
 
   it("terapeuta não recebe rota para um degrau que é do coordenador", () => {
@@ -112,6 +115,9 @@ describe("montarProntidao", () => {
     });
     expect(p.podeDocumentar).toBe(false);
     expect(p.proximo?.id).toBe("modalidade");
+    // Bloqueado por FALTA DE DADO, com leitura clínica intacta: `pendente`,
+    // nunca `fatos_nao_visiveis`. Aqui a escada PODE nomear o degrau.
+    expect(p.situacao).toBe("pendente");
   });
 
   // D-A9: sob a RLS da recepção `goal_select` devolve zero linhas para metas
@@ -128,6 +134,10 @@ describe("montarProntidao", () => {
     expect(p.proximo).toBeNull();
     expect(p.podeDocumentar).toBe(false);
     expect(p.quemResolve).toBe("Coordenação");
+    // MESMA forma da escada cumprida (`degraus: []`, `proximo: null`) e estado
+    // OPOSTO. É o discriminante — não a forma — que impede a tela de tratar
+    // "não me deixam ver" como "não há nada a fazer" (§4a).
+    expect(p.situacao).toBe("fatos_nao_visiveis");
   });
 
   it("admissao nasce concluída — o paciente existe", () => {

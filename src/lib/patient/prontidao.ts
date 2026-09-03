@@ -46,14 +46,42 @@ export interface Degrau {
   papelQueResolve: PapelResolvedor;
 }
 
+/**
+ * POR QUE a escada não tem `proximo` — e por que isso não cabia num booleano
+ * implícito.
+ *
+ * `proximo === null` cobria DOIS estados que não são o mesmo estado:
+ *
+ * - `"pronto"` — a escada existe e está inteira concluída. Nada a fazer, e o
+ *   cartão pode sumir sem mentir.
+ * - `"fatos_nao_visiveis"` — a escada NÃO existe para este papel: os fatos
+ *   clínicos não são legíveis por ele (`PAPEIS_COM_LEITURA_CLINICA`), ou a
+ *   leitura devolveu `null` (`obterFatosProntidao`, `IR001`/`IR002`). Aqui
+ *   "nada a fazer" é falso — pode haver muito a fazer; só não dá para dizer
+ *   o quê sem vazar estado clínico a quem a política proíbe de lê-lo.
+ *
+ * Colapsados no mesmo `null`, os dois renderizavam idêntico — NADA — e a §4a
+ * da spec (`docs/superpowers/specs/2026-09-01-jornada-admissao-paciente-design.md`)
+ * ficava sem como ser cumprida: ela manda o passo Documentar mostrar
+ * "Aguardando coordenação" FIXO no segundo caso, sem nomear degrau clínico.
+ * O operador não distinguia "posso documentar" de "não me deixam ver por quê".
+ *
+ * A régua fica AQUI, num lugar só, e não em cada superfície redescobrindo o
+ * par (`podeDocumentar`, `degraus.length`) — que é a mesma dedução escrita
+ * três vezes, livre para divergir na quarta.
+ */
+export type SituacaoProntidao = "pendente" | "pronto" | "fatos_nao_visiveis";
+
 export interface Prontidao {
   degraus: Degrau[];
-  /** Primeiro degrau não concluído, na ordem da escada. `null` = prontuário
-   * pronto; o cartão some (nada a fazer não ocupa pixel). */
+  /** Primeiro degrau não concluído, na ordem da escada. `null` = não há gesto
+   * seguinte a nomear — leia `situacao` para saber POR QUÊ. */
   proximo: Degrau | null;
   podeDocumentar: boolean;
   /** Rótulo legível de quem resolve o `proximo`, quando não é o papel atual. */
   quemResolve: string | null;
+  /** Discriminante de estado. Ver `SituacaoProntidao`. */
+  situacao: SituacaoProntidao;
 }
 
 const ROTULO_PAPEL: Record<PapelResolvedor, string> = {
@@ -170,6 +198,10 @@ export function montarProntidao({
       proximo: null,
       podeDocumentar: false,
       quemResolve: ROTULO_PAPEL.coordenador,
+      // NÃO é "pronto": a escada vazia aqui é ausência de LEITURA, não
+      // ausência de trabalho. É este rótulo que o passo Documentar lê para
+      // mostrar "Aguardando coordenação" em vez de não mostrar nada (§4a).
+      situacao: "fatos_nao_visiveis",
     };
   }
 
@@ -203,5 +235,13 @@ export function montarProntidao({
       ? ROTULO_PAPEL[proximo.papelQueResolve]
       : null;
 
-  return { degraus, proximo, podeDocumentar, quemResolve };
+  return {
+    degraus,
+    proximo,
+    podeDocumentar,
+    quemResolve,
+    // Chegou aqui ⇒ os fatos SÃO visíveis para este papel. Então `proximo ===
+    // null` só pode querer dizer escada inteira concluída.
+    situacao: proximo === null ? "pronto" : "pendente",
+  };
 }

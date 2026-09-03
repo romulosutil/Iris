@@ -55,6 +55,7 @@ const prontidaoBloqueada: Prontidao = {
   },
   podeDocumentar: false,
   quemResolve: "Coordenação",
+  situacao: "pendente",
 };
 
 const prontidaoLiberada: Prontidao = {
@@ -62,6 +63,21 @@ const prontidaoLiberada: Prontidao = {
   proximo: null,
   podeDocumentar: true,
   quemResolve: null,
+  situacao: "pronto",
+};
+
+/**
+ * §4a — fatos não legíveis para o papel. Mesma FORMA de `prontidaoLiberada`
+ * (escada vazia, `proximo: null`), e é exatamente esse o ponto: o que separa
+ * os dois é `situacao`, não a forma. Enquanto o discriminante não existia, as
+ * duas renderizavam idêntico — nada — e esta superfície ficava muda.
+ */
+const prontidaoNaoVisivel: Prontidao = {
+  degraus: [],
+  proximo: null,
+  podeDocumentar: false,
+  quemResolve: "Coordenação",
+  situacao: "fatos_nao_visiveis",
 };
 
 function dadosBase(prontidao: Prontidao): DadosSessao {
@@ -114,4 +130,25 @@ test("gesto 'documentar' liberado: mostra o formulário, não o CartaoProntidao"
   expect(
     screen.queryByText("Esta sessão ainda não pode ser documentada"),
   ).toBeNull();
+});
+
+test("fatos não visíveis: selo fixo 'Aguardando coordenação', sem degrau clínico", async () => {
+  const ui = await PassoEmFoco({
+    sessionId: SESSION_ID,
+    ctx,
+    dados: dadosBase(prontidaoNaoVisivel),
+    resultado: resultadoDocumentar,
+  });
+  render(ui);
+
+  expect(
+    screen.getByText("Esta sessão ainda não pode ser documentada"),
+  ).toBeTruthy();
+  expect(screen.getByText(/Aguardando Coordenação/i)).toBeTruthy();
+  // Fixo: nada de degrau clínico emendado depois dos dois-pontos.
+  expect(screen.queryByText(/Aguardando Coordenação:/i)).toBeNull();
+  expect(screen.queryByText(/Ativar ao menos uma meta/)).toBeNull();
+  expect(screen.queryByTestId("gesto-primario")).toBeNull();
+  // Fail-closed continua fechado.
+  expect(screen.queryByText("Documentar")).toBeNull();
 });

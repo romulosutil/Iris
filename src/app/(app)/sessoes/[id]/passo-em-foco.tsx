@@ -60,6 +60,32 @@ export async function PassoEmFoco({
       // terapeuta gastaria a sessão inteira preenchendo um formulário cujo
       // resultado nunca chega à evolução.
       if (!dados.prontidao.podeDocumentar) {
+        // §4a / D-A9 — fail-closed SEM afirmação falsa. Quando os fatos não
+        // são legíveis para o papel atual, a escada vem VAZIA: `CartaoProntidao`
+        // cairia no seu `proximo === null → return null` e esta superfície não
+        // mostraria NADA — indistinguível do bom caso "prontuário pronto,
+        // formulário liberado". Quem olha não saberia se pode documentar, e o
+        // sistema não diria por quê.
+        //
+        // O texto é FIXO e não nomeia degrau clínico nenhum: nomeá-lo seria
+        // afirmação falsa (sob a RLS desse papel todo `EXISTS` clínico devolve
+        // `false` para linhas que EXISTEM) e vazamento de estado clínico no
+        // mesmo selo. `quemResolve` sai da própria régua — não é copy nova.
+        //
+        // Só aqui, e não dentro de `CartaoProntidao`: no PRONTUÁRIO o cartão
+        // continua sumindo ("nada a fazer não ocupa pixel"), e a recepção não
+        // pode receber selo nenhum lá. É nesta superfície — onde a régua morde
+        // e o formulário some — que a ausência precisa de razão.
+        if (dados.prontidao.situacao === "fatos_nao_visiveis") {
+          return (
+            <Alert
+              severidade="info"
+              titulo="Esta sessão ainda não pode ser documentada"
+            >
+              Aguardando {dados.prontidao.quemResolve ?? "Coordenação"}.
+            </Alert>
+          );
+        }
         return (
           <CartaoProntidao
             prontidao={dados.prontidao}
