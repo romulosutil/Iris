@@ -2,7 +2,7 @@
 
 > Issue [#558](https://github.com/romulosutil/Iris/issues/558) · Achado `PR-04` da auditoria 360 (`docs/produto/auditoria-360-relatorio-2026-09-01.md:290`) · Prioridade `P2 · Esforço M` · Modalidade: `protocol_driven` apenas.
 >
-> **Áreas cinzentas ainda ABERTAS**: [`context.md`](./context.md). Esta spec **não pode virar tarefa nem receber a label `jules`** antes que as 6 decisões de lá estejam fechadas (`AGENTS.md` §5.2).
+> **Áreas cinzentas ainda ABERTAS**: [`context.md`](./context.md). Esta spec **não pode virar tarefa nem receber a label `jules`** antes que as decisões de lá estejam fechadas (G-2 já resolvida por medição; 5 abertas) (`AGENTS.md` §5.2).
 >
 > Todas as citações `arquivo:linha` foram medidas em 03/09/2026 sobre `main@07fc7b11`.
 
@@ -91,7 +91,7 @@ Notação: `[NEEDS G-n]` marca requisito cuja forma final depende de decisão ab
 - **R1.1** `docs/agente/output-schema.json` e o Zod `cadeiaSchema` (`agent-output-schema.ts:83-92`) passam a permitir que a cadeia declare seu alvo, com os mesmos campos crus que os demais subtipos usam (`dominio_id`, `goal_ref`, `protocol_slug`). `[NEEDS G-1]` (âncora na cadeia inteira ou por etapa).
 - **R1.2** Os campos de âncora são **opcionais**. Cadeia sem âncora continua válida, aprovável e legível (US-1 não pode quebrar).
 - **R1.3** A regra R9 de `docs/agente/system-instructions.md` é reescrita para instruir a ancoragem, mantendo a proibição de inventar alvo quando o texto não permite inferir.
-- **R1.4** `etapas[]` ganha ordem explícita. `[NEEDS G-2]` (campo `ordem` no contrato × índice do array como fonte).
+- **R1.4** A ordem das etapas continua sendo o **índice do array** — `G-2` resolvida por medição: o diálogo de edição (`revisao-lista.tsx:195-244`, `actions.ts:113-117`) só sobrepõe `funcao`/`nivel_ajuda`/`resultado` na raiz e nunca toca `etapas[]`, então os índices não deslizam. Se a edição de etapa vier a existir, esta decisão é revisitada e o contrato ganha campo `ordem`.
 - **R1.5** A versão do prompt (`extraction.prompt_versao`) é incrementada, e o schema versionado — extrações antigas continuam validando.
 
 ### R2 · Persistência
@@ -144,7 +144,7 @@ Notação: `[NEEDS G-n]` marca requisito cuja forma final depende de decisão ab
 
 ## Definição de pronto
 
-- [ ] As 6 decisões de `context.md` fechadas e ratificadas **na própria spec** (comentário de issue não chega no diff do executor).
+- [ ] As 5 decisões abertas de `context.md` fechadas e ratificadas **na própria spec** (comentário de issue não chega no diff do executor).
 - [ ] Título e corpo da issue #558 corrigidos: "por etapa / nível de ajuda", não "por percentual".
 - [ ] R1–R5 implementados, com os `[NEEDS G-n]` resolvidos.
 - [ ] `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:rls` verdes — com a contagem de testes conferida (`vitest run` em `*.int.test.ts` coleta zero sem `--config vitest.integration.config.ts`).

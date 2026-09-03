@@ -2,7 +2,7 @@
 
 > Companheiro de [`spec.md`](./spec.md). Issue [#558](https://github.com/romulosutil/Iris/issues/558).
 >
-> **Nenhuma das 6 decisões abaixo está fechada.** Enquanto estiverem abertas, a spec não gera `tasks.md` e a issue não recebe a label `jules` — o executor escolheria por você, que é exatamente o pós-mortem do #285/PR #295 (`AGENTS.md` §5.2).
+> **Cinco das 6 decisões abaixo seguem abertas** (G-2 foi resolvida por medição em 03/09 — ver a seção). Enquanto estiverem abertas, a spec não gera `tasks.md` e a issue não recebe a label `jules` — o executor escolheria por você, que é exatamente o pós-mortem do #285/PR #295 (`AGENTS.md` §5.2).
 >
 > Cada área traz o que foi **medido**, as opções e a recomendação técnica. A escolha é do Rômulo.
 
@@ -33,9 +33,20 @@
 | **(a)** Índice do array é a fonte da verdade  | Zero mudança de contrato. Mas se a extração for **editada** (`payload_editado`) e uma etapa for removida, os índices deslizam e a reaprovação casa etapa nova com linha antiga. |
 | **(b)** Campo `ordem` explícito em cada etapa | Estável sob edição. Exige o agente preencher certo, e um guard para ordem duplicada/faltante.                                                                                   |
 
-**Recomendação técnica**: (b), **se** a edição de extração puder remover etapa. Verificar isso é parte da decisão: hoje `payload_editado` existe (`schema.ts:1241`) e o conteúdo efetivo é `payload_editado ?? payload`. Se a UI de edição não permite remover etapa, (a) é seguro e mais barato.
+### Resolvida por medição em 03/09/2026 → **(a)**
 
-**Pergunta direta**: o coordenador pode **remover** uma etapa ao editar a extração antes de aprovar? (Se sim → (b) obrigatório.)
+A pergunta que faltava era "o coordenador pode remover uma etapa ao editar?". **Não pode.** Medido:
+
+- O diálogo "Editar sugestão" (`revisao-lista.tsx:195-244`) tem exatamente **três campos de texto livre** — `funcao`, `nivel_ajuda`, `resultado` (`:212-236`) — e um hidden com o payload original (`:203-207`).
+- `editarExtracaoAction` (`actions.ts:97-125`) faz `{ ...base }` e sobrepõe **só** esses três campos, na **raiz** do payload (`:113-117`). `etapas[]` nunca é tocada: não há como remover, reordenar nem acrescentar etapa.
+
+Logo os índices não deslizam, e o índice do array é fonte estável. **(a)** é seguro e não exige mudança de contrato. Se algum dia a edição de etapa existir, esta decisão precisa ser revisitada — anotar em `spec.md` R1.4.
+
+### Achado colateral (não é desta feature — abrir issue própria)
+
+O mesmo diálogo é usado para **todos** os subtipos, e escreve os três campos na raiz do payload. Para uma extração `cadeia`, o campo "Nível de ajuda" do formulário grava `payload_editado.nivel_ajuda` na raiz — mas a cadeia guarda nível **por etapa**, dentro de `etapas[]`, e ninguém lê a chave da raiz (`resumo.ts:103-114` itera `p.etapas`).
+
+Ou seja: o coordenador corrige o nível de ajuda de uma cadeia, o sistema responde "Salvar correção" com sucesso, grava `payload_editado`, incrementa `versao` — e a correção **não aparece em lugar nenhum**. Mesma família de `#553`/`#567`: escrita e leitura discordando sobre a forma do jsonb, sem erro visível. Vale medir se o mesmo vale para `registro_abc` e os subtipos de TCC.
 
 ---
 
