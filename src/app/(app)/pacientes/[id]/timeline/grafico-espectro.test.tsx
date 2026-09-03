@@ -36,8 +36,9 @@ function eixo(
 function espectro(
   eixos: DadosEixoRadar[],
   naoClassificados = 0,
+  niveisNaoClassificados = 0,
 ): ResultadoEspectro {
-  return { eixos, naoClassificados };
+  return { eixos, naoClassificados, niveisNaoClassificados };
 }
 
 const SEIS = espectro([
@@ -234,5 +235,36 @@ describe("GraficoEspectro", () => {
     expect(screen.queryByText("0%")).toBeNull();
     // alert é reservado exclusivamente a risco clínico
     expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+});
+
+// ─── #558 T4 — nível fora da taxonomia é EXIBIDO, não só registrado ──────────
+// G-6 (a) exige que a contagem apareça: contar sem mostrar devolveria o
+// silêncio por outra porta, que é o defeito que a #558 fecha.
+describe("níveis de ajuda fora da taxonomia (#558 G-6)", () => {
+  it("mostra a contagem quando há registro que a taxonomia não lê", () => {
+    render(
+      <GraficoEspectro espectro={espectro(SEIS.eixos, 0, 3)} sessaoAtiva={4} />,
+    );
+    const aviso = screen.getByText(/fora da taxonomia do protocolo/i);
+    expect(aviso.textContent).toContain("3 registros");
+    // e o texto diz o que fazer, em vez de só constatar
+    expect(aviso.textContent).toMatch(/corrija o nível na revisão/i);
+  });
+
+  it("singular quando é um só", () => {
+    render(
+      <GraficoEspectro espectro={espectro(SEIS.eixos, 0, 1)} sessaoAtiva={4} />,
+    );
+    expect(
+      screen.getByText(/fora da taxonomia do protocolo/i).textContent,
+    ).toContain("1 registro com");
+  });
+
+  it("some quando não há nenhum — não vira ruído permanente", () => {
+    render(
+      <GraficoEspectro espectro={espectro(SEIS.eixos, 0, 0)} sessaoAtiva={4} />,
+    );
+    expect(screen.queryByText(/fora da taxonomia do protocolo/i)).toBeNull();
   });
 });

@@ -30,6 +30,7 @@ function mockSnapshot(sessionNumero: number): TimelineSnapshot {
         contagemEvidencias: 4,
       })),
       naoClassificados: 0,
+      niveisNaoClassificados: 0,
     },
   };
 }

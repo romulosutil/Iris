@@ -573,14 +573,22 @@ export async function materializarSnapshot(
   const tipoEstruturaPorMilestone =
     await queries.tiposEstruturaDosMarcos(milestoneIds);
 
+  // ⚠️ GUARD DE TAXONOMIA (#558 G-6 (a)): `indexOf` devolve -1 para nível que
+  // não pertence à `taxonomia_ajuda` do protocolo, e -1 NUNCA pode virar 0
+  // (0 é "independente" — o melhor resultado possível). Devolve `null`, e o
+  // segundo campo diz POR QUE: `naoClassificado` só é true quando havia um
+  // nível declarado e a régua do protocolo não soube lê-lo — o que é contado
+  // e exibido, em vez de sumir junto com "não havia nível nenhum".
   function ordinalDe(
     protocolId: string | null,
     nivelAjuda: string | null,
-  ): number | null {
-    if (!protocolId || !nivelAjuda) return null;
+  ): { ordinal: number | null; naoClassificado: boolean } {
+    if (!nivelAjuda) return { ordinal: null, naoClassificado: false };
+    if (!protocolId) return { ordinal: null, naoClassificado: true };
     const taxonomia = taxonomiaPorProtocolo.get(protocolId) ?? [];
     const idx = taxonomia.indexOf(nivelAjuda);
-    return idx >= 0 ? idx : null;
+    if (idx >= 0) return { ordinal: idx, naoClassificado: false };
+    return { ordinal: null, naoClassificado: true };
   }
 
   function tipoEstruturaDe(e: EvidenciaObservada): TipoEstrutura {
@@ -600,10 +608,12 @@ export async function materializarSnapshot(
 
   for (const e of evidencias) {
     if (!e.goalId) continue; // sem grão de meta — fora do escopo (achado #3)
+    const nivel = ordinalDe(e.protocolId, e.nivelAjuda);
     const obs: Observacao = {
       sessionNumero: e.sessionNumero,
       tipoEstrutura: tipoEstruturaDe(e),
-      nivelAjudaOrdinal: ordinalDe(e.protocolId, e.nivelAjuda),
+      nivelAjudaOrdinal: nivel.ordinal,
+      nivelAjudaNaoClassificado: nivel.naoClassificado,
       polaridade: e.polaridade ?? "positiva",
       temQueryAberta: e.temQueryAberta,
     };
@@ -659,6 +669,9 @@ export async function materializarSnapshot(
         repertorio[goalId] = {
           nivel_ajuda_recente: parcial.nivelAjudaRecente,
           contagem: parcial.contagem,
+          // #558 G-6 (a): a contagem é PERSISTIDA para poder ser EXIBIDA —
+          // registrar sem exibir devolveria o silêncio por outra porta.
+          niveis_nao_classificados: parcial.niveisNaoClassificados,
           is_candidata: parcial.isCandidata,
         };
       }
