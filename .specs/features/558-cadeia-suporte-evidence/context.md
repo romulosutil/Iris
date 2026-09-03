@@ -1,8 +1,17 @@
-# Cadeia de suporte por etapa — áreas cinzentas (ABERTAS)
+# Cadeia de suporte por etapa — áreas cinzentas (RATIFICADAS)
 
 > Companheiro de [`spec.md`](./spec.md). Issue [#558](https://github.com/romulosutil/Iris/issues/558).
 >
-> **Cinco das 6 decisões abaixo seguem abertas** (G-2 foi resolvida por medição em 03/09 — ver a seção). Enquanto estiverem abertas, a spec não gera `tasks.md` e a issue não recebe a label `jules` — o executor escolheria por você, que é exatamente o pós-mortem do #285/PR #295 (`AGENTS.md` §5.2).
+> **As 6 decisões estão FECHADAS** (ratificadas pelo Rômulo em 03/09/2026; G-2 resolvida por medição no mesmo dia). A spec está liberada para gerar `tasks.md` e a issue para receber a label `jules`.
+>
+> | Id  | Decisão ratificada                                                                                            |
+> | --- | ------------------------------------------------------------------------------------------------------------- |
+> | G-1 | **(a)** Âncora única na cadeia — `cadeia` ganha `dominio_id`/`goal_ref`/`protocol_slug`; uma rotina, uma meta |
+> | G-2 | **(a)** Ordem = índice do array (resolvida por medição: a edição não toca `etapas[]`)                         |
+> | G-3 | **(a)** Cada etapa é uma linha em `evidence`, com `alvo_ordinal` = ordem da etapa                             |
+> | G-4 | **(b)** Hexágono **+** bloco próprio de rotinas na aba Evolução (entregas separáveis)                         |
+> | G-5 | **(a)** Linha de corte — sem backfill; pacientes antigos não ganham histórico de rotina                       |
+> | G-6 | **(a)** Nível fora da taxonomia entra como **não classificado** e é reportado; nunca vira progresso           |
 >
 > Cada área traz o que foi **medido**, as opções e a recomendação técnica. A escolha é do Rômulo.
 
@@ -21,6 +30,8 @@
 **Recomendação técnica**: (a). É a menor mudança de contrato que destrava a feature, e o caso multi-domínio pode ser expresso hoje como duas cadeias. (b) só se você souber que a rotina cruzando domínios é frequente na prática clínica — isso é conhecimento seu, não do código.
 
 **Pergunta direta**: uma rotina de vida diária (lavar mãos, lanche, vestir) costuma pertencer a **uma** meta do PEI, ou as etapas se espalham por metas diferentes?
+
+**Ratificada pelo Rômulo em 03/09/2026 → (a) Âncora única na cadeia.**
 
 ---
 
@@ -64,6 +75,8 @@ Ou seja: o coordenador corrige o nível de ajuda de uma cadeia, o sistema respon
 
 **Pergunta direta**: aceita que uma etapa de cadeia seja, no banco, uma linha de `evidence` como qualquer outro alvo?
 
+**Ratificada pelo Rômulo em 03/09/2026 → (a) Cada etapa é uma linha em `evidence`.**
+
 ---
 
 ## G-4 · O que a cadeia muda na tela?
@@ -79,6 +92,8 @@ Ou seja: o coordenador corrige o nível de ajuda de uma cadeia, o sistema respon
 **Recomendação técnica**: (b), com o bloco de rotinas como entrega separável — a persistência (R2) e o hexágono (R3) podem mergear antes.
 
 **Pergunta direta**: o coordenador precisa **ver a rotina como rotina** (etapa a etapa, ao longo das sessões), ou basta ela empurrar o eixo do hexágono?
+
+**Ratificada pelo Rômulo em 03/09/2026 → (b) Hexágono + bloco próprio de rotinas.**
 
 ---
 
@@ -96,6 +111,8 @@ Ou seja: o coordenador corrige o nível de ajuda de uma cadeia, o sistema respon
 
 **Pergunta direta**: aceita que pacientes já em atendimento não tenham histórico de rotina, só do ponto de corte em diante?
 
+**Ratificada pelo Rômulo em 03/09/2026 → (a) Linha de corte, sem backfill.**
+
 ---
 
 ## G-6 · Nível de ajuda fora da taxonomia do protocolo
@@ -111,6 +128,8 @@ Ou seja: o coordenador corrige o nível de ajuda de uma cadeia, o sistema respon
 **Recomendação técnica**: (a). (c) é atraente e falso: a taxonomia é por protocolo, então o enum teria de ser dinâmico.
 
 **Pergunta direta**: onde o coordenador deve ver "3 etapas não classificadas" — no resumo da revisão, na aba Evolução, ou em nenhum dos dois?
+
+**Ratificada pelo Rômulo em 03/09/2026 → (a) Não classificado e reportado.**
 
 ---
 

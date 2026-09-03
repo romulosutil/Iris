@@ -2,7 +2,7 @@
 
 > Issue [#558](https://github.com/romulosutil/Iris/issues/558) · Achado `PR-04` da auditoria 360 (`docs/produto/auditoria-360-relatorio-2026-09-01.md:290`) · Prioridade `P2 · Esforço M` · Modalidade: `protocol_driven` apenas.
 >
-> **Áreas cinzentas ainda ABERTAS**: [`context.md`](./context.md). Esta spec **não pode virar tarefa nem receber a label `jules`** antes que as decisões de lá estejam fechadas (G-2 já resolvida por medição; 5 abertas) (`AGENTS.md` §5.2).
+> **Áreas cinzentas FECHADAS** (ratificadas pelo Rômulo em 03/09/2026): [`context.md`](./context.md) — G-1 (a), G-2 (a), G-3 (a), G-4 (b), G-5 (a), G-6 (a). Spec liberada para gerar `tasks.md` e a issue para receber a label `jules` (`AGENTS.md` §5.2).
 >
 > Todas as citações `arquivo:linha` foram medidas em 03/09/2026 sobre `main@07fc7b11`.
 
@@ -51,7 +51,7 @@ E a barra de marcos **não lê snapshot**: `renderGraficoProtocolo` (`timeline-c
 ## Goals
 
 - [ ] Uma extração `cadeia` aprovada deixa rastro estruturado e consultável, não só texto no resumo da revisão.
-- [ ] Uma cadeia ancorada em uma meta ABA participa da leitura de evolução da modalidade `protocol_driven` — hexágono e/ou repertório, conforme a decisão `G-3` de `context.md`.
+- [ ] Uma cadeia ancorada em uma meta ABA participa da leitura de evolução da modalidade `protocol_driven` — hexágono, repertório e o bloco de rotinas (G-3 (a) + G-4 (b)).
 - [ ] Nível de ajuda de etapa que não pertence à taxonomia do protocolo é **visível como não classificado**, nunca convertido em progresso por dedução.
 - [ ] A ordem das etapas é preservada e auditável (hoje é implícita no índice do array).
 - [ ] Cadeia sem âncora de meta continua sendo aprovável e legível — a feature **não pode** transformar em erro um fluxo que hoje funciona.
@@ -65,7 +65,7 @@ E a barra de marcos **não lê snapshot**: `renderGraficoProtocolo` (`timeline-c
 | `preferencia_reforcador`                                            | Já tem destino: `inserirReforcadoresOnApprove` grava em `reinforcer_profile` (`logic.ts:148-175,215`), antes do early-return.                                                                    |
 | Cadeia em `cognitive_behavioral` e `conventional`                   | `capacidadesDaModalidade` (`pacientes/[id]/modalidade.ts:54-116`): `conventional` tem `temEvolucao: false`; `cognitive_behavioral` lê evolução por `tcc`. ABLLS-R/AFLS é `protocol_driven`.      |
 | Reescrever `BarraProgressoEpistemica` para percentual real de etapa | A barra hoje conta metas (`total/conquistados/candidatos`), não etapas. Mudar a unidade da barra é decisão de UX separada.                                                                       |
-| Backfill de cadeias já aprovadas                                    | Depende de `G-5`. Se houver backfill, é PR própria com dry-run, como em #562.                                                                                                                    |
+| Backfill de cadeias já aprovadas                                    | **G-5 (a) ratificada**: linha de corte, sem backfill. Pacientes já em atendimento não ganham histórico de rotina — mesmo precedente da anamnese marco-zero.                                      |
 | Editar `resumo.ts` para outro formato de texto                      | A lista de etapas atual está correta para o que é. Só muda se `G-4` pedir procedência na tela.                                                                                                   |
 
 ---
@@ -84,11 +84,11 @@ E a barra de marcos **não lê snapshot**: `renderGraficoProtocolo` (`timeline-c
 
 ## Requirements
 
-Notação: `[NEEDS G-n]` marca requisito cuja forma final depende de decisão aberta em `context.md`.
+Todas as decisões de `context.md` estão ratificadas (03/09/2026) e aparecem inline no requisito que elas determinam.
 
 ### R1 · Contrato do agente
 
-- **R1.1** `docs/agente/output-schema.json` e o Zod `cadeiaSchema` (`agent-output-schema.ts:83-92`) passam a permitir que a cadeia declare seu alvo, com os mesmos campos crus que os demais subtipos usam (`dominio_id`, `goal_ref`, `protocol_slug`). `[NEEDS G-1]` (âncora na cadeia inteira ou por etapa).
+- **R1.1** `docs/agente/output-schema.json` e o Zod `cadeiaSchema` (`agent-output-schema.ts:83-92`) passam a permitir que a cadeia declare seu alvo, com os mesmos campos crus que os demais subtipos usam (`dominio_id`, `goal_ref`, `protocol_slug`). **G-1 (a) ratificada**: a âncora é **única, no nível da cadeia** (`cadeia.dominio_id` / `goal_ref` / `protocol_slug`), coerente com a regra R8. Rotina que cruze domínios é expressa como duas cadeias — não há âncora por etapa.
 - **R1.2** Os campos de âncora são **opcionais**. Cadeia sem âncora continua válida, aprovável e legível (US-1 não pode quebrar).
 - **R1.3** A regra R9 de `docs/agente/system-instructions.md` é reescrita para instruir a ancoragem, mantendo a proibição de inventar alvo quando o texto não permite inferir.
 - **R1.4** A ordem das etapas continua sendo o **índice do array** — `G-2` resolvida por medição: o diálogo de edição (`revisao-lista.tsx:195-244`, `actions.ts:113-117`) só sobrepõe `funcao`/`nivel_ajuda`/`resultado` na raiz e nunca toca `etapas[]`, então os índices não deslizam. Se a edição de etapa vier a existir, esta decisão é revisitada e o contrato ganha campo `ordem`.
@@ -97,7 +97,7 @@ Notação: `[NEEDS G-n]` marca requisito cuja forma final depende de decisão ab
 ### R2 · Persistência
 
 - **R2.1** `inserirEvidenciasOnApprove` deixa de descartar `cadeia`. O early-return de `logic.ts:217` passa a discriminar por subtipo com destino, não por igualdade a `"evidencia"`.
-- **R2.2** Cada etapa aprovada vira uma linha, com o índice/ordem da etapa preenchendo o discriminador de idempotência. A constraint `uq_evidence_alvo (extraction_id, alvo_ordinal)` (`schema.ts:1401-1413`) é o mecanismo natural: `alvo_ordinal` = ordem da etapa. `[NEEDS G-3]` (linha em `evidence` × tabela própria).
+- **R2.2** **G-3 (a) ratificada**: cada etapa aprovada vira **uma linha em `evidence`** — sem tabela nova. `alvo_ordinal` = índice da etapa, e a constraint `uq_evidence_alvo (extraction_id, alvo_ordinal)` (`schema.ts:1401-1413`) é o discriminador de idempotência. A dupla semântica de `alvo_ordinal` (alvo de evidência × etapa de rotina) é registrada em comentário no `schema.ts` e desambiguada pelo subtipo dentro de `classificacao_original`.
 - **R2.3** A inserção é idempotente sob reaprovação (`onConflictDoNothing` no mesmo par), como a de `evidencia`.
 - **R2.4** A escrita acontece **dentro da transação e do advisory lock já abertos** (`logic.ts:202-204`), antes de `materializarSnapshot` (`logic.ts:299`), para que a materialização enxergue as etapas na mesma imagem do banco.
 - **R2.5** Cadeia sem âncora resolvível **não é erro**: grava com FKs nulas e fica fora da materialização, exatamente como hoje — o comportamento novo é aditivo. A UI diz isso (R4.2).
@@ -105,10 +105,10 @@ Notação: `[NEEDS G-n]` marca requisito cuja forma final depende de decisão ab
 
 ### R3 · Leitura de evolução
 
-- **R3.1** Uma etapa com âncora resolvida a `goal_id` entra na materialização de `session_snapshot` pela mesma porta das demais evidências (`materializar.ts:601`). `[NEEDS G-3]`
-- **R3.2** `nivel_ajuda` de etapa é convertido a ordinal pela taxonomia do protocolo (`materializar.ts:576-584`). Valor fora da taxonomia **não** vira `0` nem progresso: a etapa conta como não classificada e é reportada. `[NEEDS G-6]`
+- **R3.1** Uma etapa com âncora resolvida a `goal_id` entra na materialização de `session_snapshot` pela mesma porta das demais evidências (`materializar.ts:601`) — consequência direta de G-3 (a): nada na pipeline precisa ser reescrito.
+- **R3.2** **G-6 (a) ratificada**: `nivel_ajuda` de etapa é convertido a ordinal pela taxonomia do protocolo (`materializar.ts:576-584`). Valor fora da taxonomia **não** vira `0` nem progresso — a etapa conta como **não classificada** e a contagem é **exibida**, não só registrada. Enum global de nível foi descartado: a taxonomia é por protocolo.
 - **R3.3** Etapa sem âncora nunca aparece no hexágono. Ausência de dado é `null` na tela, nunca `0` — regra herdada da spec de anamnese marco-zero.
-- **R3.4** A barra de marcos (`renderGraficoProtocolo`, `timeline-client.tsx:578-660`) continua contando metas. Se `G-4` decidir exibir cadeia ali, é uma unidade nova e rotulada, nunca somada aos marcos.
+- **R3.4** **G-4 (b) ratificada**: além do hexágono, a aba Evolução ganha um **bloco próprio de rotinas** (etapa a etapa ao longo das sessões). A barra de marcos (`renderGraficoProtocolo`, `timeline-client.tsx:578-660`) continua contando **metas** — cadeia nunca é somada aos marcos. O bloco de rotinas é entrega **separável**: R2 e R3.1 podem mergear antes dele.
 
 ### R4 · Superfície
 
@@ -144,9 +144,9 @@ Notação: `[NEEDS G-n]` marca requisito cuja forma final depende de decisão ab
 
 ## Definição de pronto
 
-- [ ] As 5 decisões abertas de `context.md` fechadas e ratificadas **na própria spec** (comentário de issue não chega no diff do executor).
+- [x] As 6 decisões de `context.md` fechadas e ratificadas **na própria spec** (03/09/2026).
 - [ ] Título e corpo da issue #558 corrigidos: "por etapa / nível de ajuda", não "por percentual".
-- [ ] R1–R5 implementados, com os `[NEEDS G-n]` resolvidos.
+- [ ] R1–R5 implementados conforme as decisões ratificadas (G-1 a, G-2 a, G-3 a, G-4 b, G-5 a, G-6 a).
 - [ ] `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:rls` verdes — com a contagem de testes conferida (`vitest run` em `*.int.test.ts` coleta zero sem `--config vitest.integration.config.ts`).
 - [ ] Migração (se houver) com entrada manual em `_journal.json`, `when` = anterior + 1000, e verificação **medindo** no Postgres (`information_schema`, `pg_proc`, `pg_policies`) — `git log` não prova execução.
 - [ ] Mutação de R5.7 registrada na descrição da PR.
