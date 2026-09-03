@@ -71,7 +71,13 @@ interface DefinicaoDegrau {
   concluido: (f: FatosProntidao) => boolean;
 }
 
-const DEFINICOES: Record<DegrauId, DefinicaoDegrau> = {
+/**
+ * Exportado para `prontidao-rotas.test.ts`: a prova de "alcance de rota"
+ * precisa varrer TODOS os degraus, inclusive os que nenhuma modalidade exibe
+ * hoje. Fora do teste, use `montarProntidao` — é ela que decide se o papel
+ * atual recebe a rota.
+ */
+export const DEFINICOES: Record<DegrauId, DefinicaoDegrau> = {
   admissao: {
     rotulo: "Admissão",
     descricao: "Cadastro, consentimento e modalidade clínica.",
