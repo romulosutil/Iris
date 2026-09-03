@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { alertasGraveDe, reforcadoresAtuaisDe } from "./logic";
+import {
+  alertasGraveDe,
+  linhasUltimaSessaoDe,
+  reforcadoresAtuaisDe,
+} from "./logic";
 
 describe("reforcadoresAtuaisDe", () => {
   test("mantém só a observação mais recente por item", () => {
@@ -149,5 +153,83 @@ describe("alertasGraveDe", () => {
 
   test("lista vazia não quebra", () => {
     expect(alertasGraveDe([])).toEqual([]);
+  });
+});
+
+describe("linhasUltimaSessaoDe (#567)", () => {
+  const GOAL = "00000000-0000-0000-0000-000000009001";
+  const PROTO = "00000000-0000-0000-0000-000000008001";
+
+  test("snapshot de sessão normal não renderiza [object Object]", () => {
+    const linhas = linhasUltimaSessaoDe({
+      repertorio: { [GOAL]: { contagem: 4, is_candidata: false } },
+      segmentacao: {
+        [GOAL]: {
+          [PROTO]: {
+            tipo_estrutura: "marco_simples",
+            metrica: { eixo: "nivel_ajuda", ordinalRecente: 3 },
+            rotulo: "estagnacao",
+          },
+        },
+      },
+      descricaoPorGoal: new Map([[GOAL, "Imitação de gestos"]]),
+    });
+
+    expect(linhas).toHaveLength(1);
+    expect(linhas[0]?.metrica).toBe("Nível de ajuda: 3");
+    expect(linhas[0]?.metrica).not.toContain("[object Object]");
+    expect(linhas[0]?.rotulo).toBe("Imitação de gestos");
+  });
+
+  test("ordinal nulo cai para o rótulo do eixo, não para 'sem métrica'", () => {
+    const linhas = linhasUltimaSessaoDe({
+      repertorio: { [GOAL]: {} },
+      segmentacao: {
+        [GOAL]: {
+          [PROTO]: {
+            tipo_estrutura: "marco_simples",
+            metrica: { eixo: "nivel_ajuda", ordinalRecente: null },
+            rotulo: "sem_dado",
+          },
+        },
+      },
+      descricaoPorGoal: new Map(),
+    });
+    expect(linhas[0]?.metrica).toBe("Nível de ajuda");
+  });
+
+  test("sem segmentação cai no repertório e depois na copy de ausência", () => {
+    const linhas = linhasUltimaSessaoDe({
+      repertorio: { [GOAL]: { contagem: 7, is_candidata: true } },
+      segmentacao: {},
+      descricaoPorGoal: new Map(),
+    });
+    expect(linhas[0]?.metrica).toBe("7");
+    expect(linhas[0]?.isCandidata).toBe(true);
+
+    const semNada = linhasUltimaSessaoDe({
+      repertorio: { [GOAL]: {} },
+      segmentacao: {},
+      descricaoPorGoal: new Map(),
+    });
+    expect(semNada[0]?.metrica).toBe("sem métrica registrada");
+  });
+
+  test("rótulo cai para o da segmentação quando a meta não foi resolvida", () => {
+    const linhas = linhasUltimaSessaoDe({
+      repertorio: { [GOAL]: {} },
+      segmentacao: {
+        [GOAL]: {
+          [PROTO]: {
+            tipo_estrutura: "marco_simples",
+            metrica: "nivel_ajuda",
+            rotulo: "Pede item preferido",
+          },
+        },
+      },
+      descricaoPorGoal: new Map(),
+    });
+    expect(linhas[0]?.rotulo).toBe("Pede item preferido");
+    expect(linhas[0]?.metrica).toBe("Nível de ajuda");
   });
 });
