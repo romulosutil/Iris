@@ -15,6 +15,7 @@ import {
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
 import { salvarRascunhoSchema, validarAnamneseSchema } from "./schemas";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 /**
  * #407 T09 — persistência de rascunho de anamnese (ANAM-02/ANAM-10).
@@ -71,7 +72,7 @@ async function salvarRascunhoAnamneseCore(
       return { id: row!.id };
     });
   } catch (err) {
-    console.error("salvarRascunhoAnamnese:", err);
+    logarErroSemPII("salvarRascunhoAnamnese:", err);
     return { error: "Não foi possível salvar o rascunho de anamnese." };
   }
 }
@@ -284,7 +285,7 @@ async function validarAnamneseCore(
       };
     }
 
-    console.error("validarAnamnese:", err);
+    logarErroSemPII("validarAnamnese:", err);
     return { error: "Não foi possível validar a anamnese." };
   }
 }

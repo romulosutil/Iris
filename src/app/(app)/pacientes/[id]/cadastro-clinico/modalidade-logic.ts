@@ -5,6 +5,7 @@ import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { auditLog, clinicalModalityEnum, patient } from "@/db/schema";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 export type ModalidadeClinicaState = {
   ok?: boolean;
@@ -88,7 +89,7 @@ async function alterarModalidadeClinicaCore(
       return { ok: true };
     });
   } catch (err) {
-    console.error("alterarModalidadeClinica:", err);
+    logarErroSemPII("alterarModalidadeClinica:", err);
     return { error: "Não foi possível alterar a modalidade clínica." };
   }
 }

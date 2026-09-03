@@ -71,7 +71,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
     await owner`TRUNCATE clinic, app_user, user_role, patient, protocol, session,
-      session_note, session_protocol_scope, audio_capture, care_team_membership, goal
+      session_note, session_protocol_scope, audio_capture, care_team_membership, goal,
+      patient_protocol
       RESTART IDENTITY CASCADE`;
     await owner`INSERT INTO protocol_familia_catalogo (id, nome) VALUES ('aba_marcos_desenvolvimento', 'Marcos de desenvolvimento (ABA)') ON CONFLICT DO NOTHING`;
     await owner`INSERT INTO clinic (id, nome) VALUES (${CLINIC_A}, 'A')`;
@@ -83,6 +84,11 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       (${U_T1}, ${CLINIC_A}, 'terapeuta'), (${U_T2}, ${CLINIC_A}, 'terapeuta'),
       (${U_COBERTURA}, ${CLINIC_A}, 'terapeuta'),
       (${U_SOLO}, ${CLINIC_A}, 'coordenador')`;
+    // Modalidade padrão do schema é `protocol_driven` (nenhuma foi passada
+    // aqui) — degraus bloqueantes: protocolo E meta (modalidade.ts). T07b
+    // fecha o gate de escrita nesta régua, então todo paciente com sessão
+    // usada em `capturarDiario`/`consolidarSessao` abaixo precisa dos dois
+    // desde o início, senão a PRIMEIRA chamada do arquivo já recusa.
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
       (${PAC}, ${CLINIC_A}, 'P'), (${PAC2}, ${CLINIC_A}, 'P2')`;
     await owner`INSERT INTO protocol (id, clinic_id, nome, disciplina, familia) VALUES
@@ -96,6 +102,17 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       (${SESS_SOLO}, ${CLINIC_A}, ${PAC2}, ${U_SOLO}, now(), 'realizada', 'aba')`;
     await owner`INSERT INTO care_team_membership (patient_id, user_id, papel_na_equipe, disciplina)
       VALUES (${PAC}, ${U_T1}, 'terapeuta_referencia', 'ABA')`;
+    // U_COBERTURA propositalmente FORA da care team: `app_fatos_prontidao`
+    // (migração `0144`, Task 7c) autoriza a leitura clínica pelo recorte de
+    // cobertura (`session.terapeuta_id = app.user_id`), não por vínculo de
+    // equipe. Uma linha de `care_team_membership` aqui mascararia a própria
+    // coisa que este describe prova.
+    await owner`INSERT INTO patient_protocol (patient_id, protocol_id, ativado_por, ativado_em, desativado_em) VALUES
+      (${PAC}, ${PROTO}, ${U_T1}, now()::date, NULL),
+      (${PAC2}, ${PROTO}, ${U_SOLO}, now()::date, NULL)`;
+    await owner`INSERT INTO goal (id, patient_id, clinic_id, descricao, estado, criterio_dominio, criado_por) VALUES
+      (${GOAL_PAC}, ${PAC}, ${CLINIC_A}, 'Pedir água sozinho', 'ativa', '{"tipo":"frequencia","valor":3}', ${U_T1}),
+      (${GOAL_PAC2}, ${PAC2}, ${CLINIC_A}, 'Meta de outro paciente', 'ativa', '{"tipo":"frequencia","valor":3}', ${U_T1})`;
   });
   afterAll(async () => {
     await owner?.end();
@@ -331,7 +348,15 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     expect(ex).toHaveLength(1);
     expect(ex[0]!.estado).toBe("pendente_reprocessamento");
     expect(ex[0]!.modelo).toBe("gemini-fake");
-    expect(ex[0]!.latencia_ms).toBeGreaterThanOrEqual(30);
+    // O que este teste prova é que a latência é REGISTRADA no caminho de
+    // falha — não quanto tempo o `setTimeout` do dublê dormiu. Amarrar o piso
+    // aos 30ms do timer mede o relógio, não a feature: `setTimeout(30)` e o
+    // relógio da latência são fontes diferentes, e o CI já observou 29
+    // (`expected 29 to be greater than or equal to 30`, run 33695343538),
+    // avermelhando uma PR que não tocava em extração. `> 0` continua matando
+    // o mutante que interessa: a linha `pendente_reprocessamento` gravada sem
+    // latência nenhuma.
+    expect(ex[0]!.latencia_ms).toBeGreaterThan(0);
     // não houve resposta: sem prompt/tokens — `null`, não zero
     expect(ex[0]!.prompt_versao).toBeNull();
     expect(ex[0]!.tokens_entrada).toBeNull();

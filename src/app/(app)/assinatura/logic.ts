@@ -10,6 +10,7 @@ import {
   type CobrancaDoDebito,
 } from "@/lib/billing/debito";
 import { BillingProviderError } from "@/lib/billing/provider";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 import type {
   AutorizacaoPendente,
   MetodoPagamento,
@@ -21,13 +22,22 @@ import type {
  * a falha real por outra, apagando o diagnóstico que esta função existe para
  * preservar.
  */
-function serializar(valor: unknown): string {
-  if (valor === undefined) return "";
-  try {
-    return JSON.stringify(valor) ?? String(valor);
-  } catch {
-    return String(valor);
-  }
+/**
+ * Do corpo de erro do gateway só sobrevive o que é conjunto fechado:
+ * `errors[].code` (Asaas/MP). `description`/`message` são texto livre que pode
+ * ecoar e-mail ou CPF do titular — nunca entram no log (#531, revisão da PR
+ * #546). O status HTTP já vai no resumo do helper (`httpStatus`).
+ */
+function codigosDoCorpoGateway(corpo: unknown): string | undefined {
+  if (!corpo || typeof corpo !== "object") return undefined;
+  const errors = (corpo as { errors?: unknown }).errors;
+  if (!Array.isArray(errors)) return undefined;
+  const codigos = errors
+    .map((e) =>
+      e && typeof e === "object" ? (e as { code?: unknown }).code : undefined,
+    )
+    .filter((c): c is string => typeof c === "string");
+  return codigos.length ? codigos.join(",") : undefined;
 }
 
 export type AtivacaoState = {
@@ -233,11 +243,12 @@ export async function iniciarAtivacaoAssinatura(
       };
     }
   } catch (e) {
-    console.error("[assinatura] falha no gate de débito de reativação", {
+    logarErroSemPII("[assinatura] falha no gate de débito de reativação", e, {
       clinicId: ctx.clinicId,
-      err: e,
-      corpoGateway:
-        e instanceof BillingProviderError ? serializar(e.corpo) : undefined,
+      codigosGateway:
+        e instanceof BillingProviderError
+          ? codigosDoCorpoGateway(e.corpo)
+          : undefined,
     });
     return {
       error:
@@ -267,15 +278,16 @@ export async function iniciarAtivacaoAssinatura(
   } catch (e) {
     // O texto real do gateway vai para o log, não para a tela: pode conter
     // identificador de conta. O usuário recebe orientação acionável.
-    // O corpo do gateway vai SERIALIZADO: `console.error` de objeto aninhado
-    // imprime `{ errors: [Array] }` (o `depth` default do Node), que é
-    // exatamente onde mora a mensagem do Asaas/MP. Um 400 logado assim não
-    // diagnostica nada — foi o que custou uma sessão inteira de investigação.
-    console.error("[assinatura] falha ao iniciar ativação", {
+    // Do gateway entram só o status (`httpStatus`, no resumo) e os
+    // `errors[].code` — o que diagnostica um 400 sem o texto livre do corpo,
+    // que pode trazer e-mail/CPF do titular (#531). O erro em si entra só como
+    // nome + code: a `message` de um erro de driver carrega params.
+    logarErroSemPII("[assinatura] falha ao iniciar ativação", e, {
       clinicId: ctx.clinicId,
-      err: e,
-      corpoGateway:
-        e instanceof BillingProviderError ? serializar(e.corpo) : undefined,
+      codigosGateway:
+        e instanceof BillingProviderError
+          ? codigosDoCorpoGateway(e.corpo)
+          : undefined,
     });
     return {
       error:

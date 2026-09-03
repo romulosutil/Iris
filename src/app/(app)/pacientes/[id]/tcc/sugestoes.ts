@@ -14,6 +14,7 @@ import {
   validarTaxonomiaDistorcoes,
   type TxDeTenant,
 } from "./logic";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 // #392 — ponte agente → RPD sugerido. Fila de validação vive dentro da aba
 // TCC do paciente (decisão de UX já fechada, ver spec.md) — `extraction`
@@ -301,7 +302,7 @@ async function aprovarRPDSugestaoCore(
     if (err instanceof ConcurrencyAbortError) {
       return { error: "CONCURRENCY_ERROR" };
     }
-    console.error("aprovarRPDSugestao:", err);
+    logarErroSemPII("aprovarRPDSugestao:", err);
     return { error: "Não foi possível aprovar a sugestão de RPD." };
   }
 }
@@ -360,7 +361,7 @@ async function descartarRPDSugestaoCore(
       return { ok: true };
     });
   } catch (err) {
-    console.error("descartarRPDSugestao:", err);
+    logarErroSemPII("descartarRPDSugestao:", err);
     return { error: "Não foi possível descartar a sugestão." };
   }
 }

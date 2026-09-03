@@ -22,6 +22,7 @@ import {
   type SupervisaoState,
 } from "./actions";
 import type { ItemSupervisao } from "./queries";
+import { mensagemDeErro } from "@/lib/copy/erros";
 
 /** Campos de identidade do alerta repetidos em cada formulário de mutação. */
 function CamposIdentidade({ item }: { item: ItemSupervisao }) {
@@ -83,10 +84,9 @@ function ItemCard({
   const errorMsg =
     reconhecerState.error || resolverState.error || descartarState.error;
 
-  const renderedError =
-    errorMsg === "CONCURRENCY_ERROR"
-      ? "Este alerta mudou. Recarregue a página."
-      : errorMsg;
+  // Fonte única de copy (#531, U-01): a sentinela `CONCURRENCY_ERROR` vira
+  // texto em `@/lib/copy/erros`, o mesmo que a revisão usa.
+  const renderedError = mensagemDeErro(errorMsg || undefined);
 
   // Enquanto o alerta é novo, a decisão pedida é reconhecê-lo; depois disso
   // (ou quando o sinal já cessou), a decisão pedida é resolvê-lo.
@@ -174,9 +174,7 @@ function ItemCard({
 
               {resolverState.error ? (
                 <Alert severidade="erro">
-                  {resolverState.error === "CONCURRENCY_ERROR"
-                    ? "Este alerta mudou. Recarregue a página."
-                    : resolverState.error}
+                  {mensagemDeErro(resolverState.error)}
                 </Alert>
               ) : null}
 
@@ -223,9 +221,7 @@ function ItemCard({
 
               {descartarState.error ? (
                 <Alert severidade="erro">
-                  {descartarState.error === "CONCURRENCY_ERROR"
-                    ? "Este alerta mudou. Recarregue a página."
-                    : descartarState.error}
+                  {mensagemDeErro(descartarState.error)}
                 </Alert>
               ) : null}
 

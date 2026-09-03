@@ -31,6 +31,7 @@ const esquemaEmail = z
  * Limita a 3 tentativas de reenvio a cada 15 minutos por e-mail para impedir abuso do Resend.
  */
 import { getAppBaseUrl } from "@/lib/app-url";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 export async function reenviarEmailVerificacao(
   _estadoAnterior: EstadoReenvio,
@@ -79,14 +80,14 @@ export async function reenviarEmailVerificacao(
         texto: template.texto,
         html: template.html,
       }).catch((err) => {
-        console.error(
+        logarErroSemPII(
           "reenviarEmailVerificacao: falha ao enviar e-mail transacional:",
           err,
         );
       });
     }
   } catch (err) {
-    console.error(
+    logarErroSemPII(
       "reenviarEmailVerificacao: exceção no banco/processamento:",
       err,
     );

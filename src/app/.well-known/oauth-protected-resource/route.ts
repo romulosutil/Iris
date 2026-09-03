@@ -6,7 +6,11 @@ export function GET() {
 
   const protectedResourceMetadata = {
     resource: `${baseUrl}/api/v1`,
-    authorization_servers: [baseUrl],
+    // Sem `authorization_servers` (opcional na RFC 9728): não há servidor de
+    // autorização — os manifestos `oauth-authorization-server` e
+    // `openid-configuration` foram removidos por não serem conformes
+    // (auditoria 360, DX-03). Listar o issuer aqui mandaria o cliente fazer
+    // discovery contra um 404.
     // Nenhum escopo de dado clínico até existir consentimento de agente e
     // o débito D57 (parecer jurídico sobre acesso de terceiro a dado de
     // paciente) estar fechado. Hoje só há login humano via Better-Auth.

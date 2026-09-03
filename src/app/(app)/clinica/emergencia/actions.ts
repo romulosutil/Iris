@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole, RoleError } from "@/auth/require-role";
 import { salvarConfigEmergencia } from "./logic";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+import { textoErroInterno } from "@/lib/copy/erros";
 
 /**
  * #122 Fatia 4 — só WRAPPERS aqui. O core ctx-accepting vive em `logic.ts`
@@ -36,7 +38,7 @@ export async function salvarEmergenciaAction(
     return { error: r.error };
   } catch (err) {
     if (err instanceof RoleError) return { error: err.message };
-    console.error("wrapper clinica/emergencia:", err);
-    return { error: "Erro interno no servidor." };
+    const correlacaoId = logarErroSemPII("wrapper clinica/emergencia:", err);
+    return { error: textoErroInterno(correlacaoId) };
   }
 }

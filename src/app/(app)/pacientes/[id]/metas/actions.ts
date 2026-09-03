@@ -10,6 +10,7 @@ import {
   TRANSICOES_EQUIPE,
 } from "./logic";
 import { DISCIPLINAS, type CriterioDominio } from "./schemas";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 // ─── Wrappers para `useActionState` / <form action> (resolvem o tenant) ───────
 
@@ -54,7 +55,7 @@ export async function criarMetaAction(
   } catch (err) {
     if (err instanceof RoleError)
       return { error: "Só coordenador ou terapeuta da equipe cria metas." };
-    console.error("criarMetaAction:", err);
+    logarErroSemPII("criarMetaAction:", err);
     return { error: "Não foi possível criar a meta." };
   }
 }
@@ -69,7 +70,7 @@ export async function marcarDominadaAction(
     revalidatePath(`/pacientes/${patientId}/metas`);
   } catch (err) {
     if (err instanceof RoleError) return; // botão só aparece p/ coordenador; ignora forja
-    console.error("marcarDominadaAction:", err);
+    logarErroSemPII("marcarDominadaAction:", err);
   }
 }
 
@@ -84,7 +85,7 @@ export async function manterMetaAtivaAction(
     });
     revalidatePath(`/pacientes/${patientId}/metas`);
   } catch (err) {
-    console.error("manterMetaAtivaAction:", err);
+    logarErroSemPII("manterMetaAtivaAction:", err);
   }
 }
 
@@ -102,6 +103,6 @@ export async function transicionarEstadoMetaAction(
     });
     revalidatePath(`/pacientes/${patientId}/metas`);
   } catch (err) {
-    console.error("transicionarEstadoMetaAction:", err);
+    logarErroSemPII("transicionarEstadoMetaAction:", err);
   }
 }

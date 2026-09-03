@@ -17,6 +17,8 @@ import {
 import type { BloqueioConta } from "@/lib/billing/guard-escrita";
 import { validarEMaterializarCPF } from "@/lib/cpf";
 import { gerarCpfHash } from "@/lib/security/cpf-hash";
+import { ErroComCopy, mensagemDeExcecao } from "@/lib/copy/erros";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 /**
  * Sinaliza conta em somente-leitura de dentro da transação. Precisa ser um
@@ -286,7 +288,7 @@ export async function criarPacienteEConsent(
         // parar de reconhecer a violação numa troca de versão — em silêncio,
         // devolvendo 500 opaco em vez da mensagem.
         if (codigoPg(e) === "23505") {
-          throw new Error("Este CPF já está cadastrado nesta clínica.");
+          throw new ErroComCopy("Este CPF já está cadastrado nesta clínica.");
         }
         throw e;
       }
@@ -359,7 +361,7 @@ export async function criarPacienteEConsent(
         // a #215 fechou. Erro próprio, não `trial_bloqueado_fraude`: acusar
         // fraude de quem tropeçou num defeito nosso é a mensagem errada.
         if (typeof usado !== "boolean") {
-          throw new Error(
+          throw new ErroComCopy(
             "Não foi possível verificar a elegibilidade do período de teste. Tente novamente.",
           );
         }
@@ -389,8 +391,10 @@ export async function criarPacienteEConsent(
         bloqueioConta: { estado: e.estado, mensagem: e.message },
       };
     }
-    return {
-      error: e instanceof Error ? e.message : "Falha ao cadastrar paciente.",
-    };
+    // S-10 (#531): só `ErroComCopy` atravessa com a própria message. Erro de
+    // driver (`DrizzleQueryError`: SQL + params = CPF/nome do paciente) vira
+    // copy do dicionário + código de correlação do log.
+    const correlacaoId = logarErroSemPII("cadastrarPaciente:", e);
+    return { error: mensagemDeExcecao(e, correlacaoId) };
   }
 }

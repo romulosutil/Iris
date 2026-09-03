@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import PacienteLayout from "./layout";
+import { getTenantContext } from "@/auth/tenant";
+import { obterFatosProntidao } from "./prontidao-queries";
 
 // Mock das dependências de tenant e billing
 vi.mock("next/navigation", () => ({
@@ -15,6 +17,21 @@ vi.mock("@/auth/tenant", () => ({
     userId: "user_1",
     role: "terapeuta",
   }),
+}));
+
+vi.mock("./prontidao-queries", () => ({
+  // Task 7c — a porta devolve `{ fatos, modalidade }`, não os fatos soltos.
+  obterFatosProntidao: vi.fn(async () => ({
+    fatos: {
+      temFichaClinica: false,
+      temAnamnese: false,
+      temProtocoloAtivo: false,
+      temMetaAtiva: false,
+      temInstrumentoAplicado: false,
+      temSessaoConsolidada: false,
+    },
+    modalidade: null,
+  })),
 }));
 
 vi.mock("../../queries", () => ({
@@ -134,5 +151,47 @@ describe("PacienteLayout - Abas do Prontuário", () => {
     expect(screen.queryByText("PEI & Metas")).toBeNull();
     expect(screen.queryByText("TCC")).toBeNull();
     expect(screen.queryByText("Temas")).toBeNull();
+  });
+
+  it("mostra a escada de prontidão no topo do prontuário", async () => {
+    mockModalidade("protocol_driven");
+    vi.mocked(getTenantContext).mockResolvedValueOnce({
+      clinicId: "clinic_1",
+      userId: "user_1",
+      role: "coordenador",
+    });
+
+    const LayoutComponent = await PacienteLayout({
+      children: <div data-testid="child-content">Conteúdo</div>,
+      params: Promise.resolve({ id: "pac_1" }),
+    });
+
+    render(LayoutComponent);
+
+    expect(
+      screen.getByText(/para este prontuário gerar dados/i),
+    ).not.toBeNull();
+  });
+
+  it("não consulta os fatos para a recepção", async () => {
+    // Limpa o histórico de chamadas: os testes anteriores usam o papel
+    // padrão "terapeuta" do mock de `getTenantContext`, que TAMBÉM aciona
+    // `obterFatosProntidao` — sem isto a asserção veria as chamadas deles.
+    vi.mocked(obterFatosProntidao).mockClear();
+    mockModalidade("protocol_driven");
+    vi.mocked(getTenantContext).mockResolvedValueOnce({
+      clinicId: "clinic_1",
+      userId: "user_1",
+      role: "admin_recepcao",
+    });
+
+    const LayoutComponent = await PacienteLayout({
+      children: <div data-testid="child-content">Conteúdo</div>,
+      params: Promise.resolve({ id: "pac_1" }),
+    });
+
+    render(LayoutComponent);
+
+    expect(obterFatosProntidao).not.toHaveBeenCalled();
   });
 });

@@ -44,12 +44,36 @@ export function montarRequisicao(url, token) {
 }
 
 /**
+ * Quantos bundles a rota reportou como `falhou` — lido do CORPO, não do status.
+ *
+ * Q-07 (#530): a rota agora responde 500 nesse caso, mas o script confere o
+ * corpo também. Um 200 com `ok:false` ou com bundle em `falhou` (rota antiga
+ * ainda no ar durante um deploy, ou regressão futura) NÃO pode sair `0`: foi
+ * exatamente o "exit 0 mentiroso" da #105. JSON inválido conta 0 — aí quem
+ * decide é o status HTTP, que já foi avaliado antes.
+ */
+export function contarBundlesFalhos(corpo) {
+  let json;
+  try {
+    json = JSON.parse(corpo);
+  } catch {
+    return 0;
+  }
+  if (json === null || typeof json !== "object") return 0;
+  const falhos = Array.isArray(json.processados)
+    ? json.processados.filter((p) => p && p.status === "falhou").length
+    : 0;
+  if (json.ok === false) return Math.max(1, falhos);
+  return falhos;
+}
+
+/**
  * Dispara a varredura e devolve o que REALMENTE aconteceu.
  *
- * Nunca lança. Os três modos de falha ficam separados de propósito
- * (`timeout` / `rede` / `status`): a mensagem deste job não pode afirmar UMA
- * causa quando a evidência não distingue — dizer "servidor fora do ar" para um
- * 500 do próprio app já custou um diagnóstico errado neste repo.
+ * Nunca lança. Os quatro modos de falha ficam separados de propósito
+ * (`timeout` / `rede` / `status` / `bundle`): a mensagem deste job não pode
+ * afirmar UMA causa quando a evidência não distingue — dizer "servidor fora do
+ * ar" para um 500 do próprio app já custou um diagnóstico errado neste repo.
  */
 export async function executarExportacao(url, token, deps = {}) {
   const doFetch = deps.fetch ?? globalThis.fetch;
@@ -66,6 +90,19 @@ export async function executarExportacao(url, token, deps = {}) {
       signal: controller.signal,
     });
     const corpo = await resposta.text();
+    // O corpo é lido ANTES do status: a rota responde 500 justamente quando há
+    // bundle `falhou` (Q-07), então classificar por status primeiro deixaria o
+    // modo `bundle` inalcançável em produção e o log diria "HTTP 500" onde a
+    // causa é "2 bundles falharam". JSON ilegível conta 0 e cai no `status`.
+    const bundlesFalhos = contarBundlesFalhos(corpo);
+    if (bundlesFalhos > 0) {
+      return {
+        ok: false,
+        falha: "bundle",
+        erro: `${bundlesFalhos} bundle(s) falharam na montagem (HTTP ${resposta.status})`,
+        corpo,
+      };
+    }
     if (!resposta.ok) {
       return {
         ok: false,

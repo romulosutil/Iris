@@ -10,6 +10,7 @@ import {
   motivoAltaSchema,
   motivoArquivamentoSchema,
 } from "./schemas";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 export type ArquivamentoState = {
   error?: string;
@@ -141,7 +142,7 @@ async function alternarArquivamento(
       return { ok: true };
     });
   } catch (err) {
-    console.error(`${operacao}Paciente:`, err);
+    logarErroSemPII(`${operacao}Paciente:`, err);
     return {
       error: arquivando
         ? "Não foi possível arquivar o paciente."
@@ -295,7 +296,7 @@ async function alternarAlta(
       return { ok: true };
     });
   } catch (err) {
-    console.error(`${operacao}Alta:`, err);
+    logarErroSemPII(`${operacao}Alta:`, err);
     return {
       error: registrando
         ? "Não foi possível registrar a alta."

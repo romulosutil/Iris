@@ -16,6 +16,35 @@ import {
   type ResultadoEstado,
 } from "@/lib/sessao/estado";
 import { podeAutoValidar } from "@/lib/sessao/aprovacao";
+import {
+  montarProntidao,
+  type FatosProntidao,
+  type Prontidao,
+} from "@/lib/patient/prontidao";
+import { obterFatosProntidaoNaTx } from "@/app/(app)/pacientes/[id]/prontidao-queries";
+
+/**
+ * `montarProntidao` descarta `fatos` sem olhar para qualquer papel fora de
+ * {coordenador, terapeuta} (`PAPEIS_COM_LEITURA_CLINICA`, `prontidao.ts`) —
+ * então nunca vale a pena LER de verdade para eles.
+ *
+ * Isso deixou de ser só otimização com a Task 7c (0144): `session_select`
+ * (`db/migrations/0006_fase2_rls.sql`) deixa `admin_recepcao` enxergar
+ * QUALQUER sessão da clínica — mas o guard de `app_fatos_prontidao` não a
+ * autoriza (D-A11) e RAISE quando reprova (D-A13), em vez do `false`
+ * silencioso que a leitura antiga devolvia. Chamar `obterFatosProntidaoNaTx`
+ * para `admin_recepcao` aqui — sem o `.catch` que `layout.tsx`/`page.tsx` de
+ * `pacientes/[id]` têm — derrubaria `/sessoes/[id]` inteira (exceção não
+ * tratada) pra recepção, onde antes ela só recebia `notFound()` (`podeVer`).
+ */
+const FATOS_VAZIOS: FatosProntidao = {
+  temFichaClinica: false,
+  temAnamnese: false,
+  temProtocoloAtivo: false,
+  temMetaAtiva: false,
+  temInstrumentoAplicado: false,
+  temSessaoConsolidada: false,
+};
 import { ehProfissionalResponsavel } from "@/lib/sessao/responsavel";
 
 export type ProtocoloOpcao = { id: string; nome: string; disciplina: string };
@@ -48,6 +77,13 @@ export type DadosSessao = {
   } | null;
   protocolos: ProtocoloOpcao[];
   protocolIdsPreSelecionados: string[];
+  /**
+   * T07 — mesma régua que já trava a aba central do paciente (Task 5,
+   * `layout.tsx`): sem protocolo vigente E meta ativa, `materializar.ts`
+   * descarta a evidência da sessão. `PassoEmFoco` lê `podeDocumentar` para
+   * substituir `PassoDocumentar` pelo `CartaoProntidao` quando bloqueado.
+   */
+  prontidao: Prontidao;
 };
 
 /**
@@ -78,6 +114,10 @@ export async function carregarSessao(
       .where(eq(session.id, sessionId));
     if (!sess) return null;
 
+    // Só `nome`, dado de EXIBIÇÃO (e `undefined` para quem não passa por
+    // `patient_select` — o cabeçalho fica sem nome, não quebra). Task 7c tirou
+    // `clinicalModality` daqui: ela é entrada de RÉGUA e passou a sair de
+    // `app_fatos_prontidao`, abaixo.
     const [pac] = await tx
       .select({ nome: patient.nome })
       .from(patient)
@@ -167,6 +207,46 @@ export async function carregarSessao(
       daDisciplina.length > 0 ? daDisciplina : protocolosAtivos
     ).map((p) => p.id);
 
+    // T07 — DELIBERADAMENTE sem `.catch` aqui, ao contrário de `layout.tsx`
+    // (Task 5). Lá uma falha de leitura vira "cartão não renderiza" (a aba do
+    // paciente continua útil sem ele). Aqui a mesma falha silenciosa
+    // significaria "sem prontidão conhecida ⇒ deixa documentar" — exatamente o
+    // resultado que essa régua existe para impedir. Uma leitura que falhou
+    // nunca pode ler como "livre para documentar": deixa o erro propagar e
+    // `SessaoPage` estoura como qualquer outra falha de carregamento.
+    // `NaTx`, não a porta que abre `withTenant` própria: já estamos DENTRO da
+    // transação aberta por este `withTenant` — chamar a porta de fora
+    // aninharia uma segunda transação como SAVEPOINT do Drizzle (mesmo tenant
+    // hoje, mas uma armadilha à espreita — ver prontidao-queries.ts) e
+    // pagaria uma viagem extra ao banco sem necessidade. Mesma imagem do
+    // banco, uma transação só.
+    //
+    // O guard de papel (`FATOS_VAZIOS` acima) continua sem `.catch`: só evita
+    // a chamada para quem `app_fatos_prontidao` nunca autoriza por desenho
+    // (`admin_recepcao`, D-A11). Para {coordenador, terapeuta} — os únicos
+    // papéis que `montarProntidao` de fato lê — uma exceção do definer
+    // continua subindo crua, porque aí ELA é sinal real de guard quebrado.
+    //
+    // Task 7c — a `modalidade` vem do definer, não de `pac?.clinicalModality`:
+    // `pac` é lido sob `patient_select` (RLS por equipe, sem recorte de
+    // cobertura), e para um terapeuta de cobertura ele vem `undefined` — a
+    // modalidade chegaria `null` e a régua recusaria por "modalidade ausente"
+    // uma sessão que ele está clinicamente autorizado a documentar. O ramo
+    // `FATOS_VAZIOS` fornece `modalidade: null` porque `montarProntidao`
+    // descarta a escada para papéis fora de {coordenador, terapeuta} de
+    // qualquer jeito. `pac.nome` continua saindo de `pac`: aquele é dado de
+    // exibição, não entrada de régua.
+    const prontidaoLida =
+      ctx.role === "coordenador" || ctx.role === "terapeuta"
+        ? await obterFatosProntidaoNaTx(tx, sess.patientId)
+        : { fatos: FATOS_VAZIOS, modalidade: null };
+    const prontidao = montarProntidao({
+      modalidade: prontidaoLida.modalidade,
+      fatos: prontidaoLida.fatos,
+      role: ctx.role,
+      patientId: sess.patientId,
+    });
+
     return {
       sessionId,
       patientId: sess.patientId,
@@ -190,6 +270,7 @@ export async function carregarSessao(
         : null,
       protocolos: protocolosAtivos,
       protocolIdsPreSelecionados,
+      prontidao,
     };
   });
 }

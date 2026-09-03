@@ -10,6 +10,8 @@ const U_COORD_A = "00000000-0000-0000-0000-00000036d103";
 const U_TERA_A = "00000000-0000-0000-0000-00000036d104";
 const U_COORD_B = "00000000-0000-0000-0000-00000036d105";
 const PAC_B = "00000000-0000-0000-0000-00000036d106";
+const PAC_A1 = "00000000-0000-0000-0000-00000036d107";
+const PAC_A2 = "00000000-0000-0000-0000-00000036d108";
 
 const ctxA = {
   clinicId: CLINIC_A,
@@ -55,12 +57,13 @@ describe.skipIf(!hasDb)("obterProgressoOnboarding", () => {
     await appSql?.end();
   });
 
-  test("clínica recém-criada tem os quatro passos pendentes", async () => {
+  test("clínica recém-criada tem os cinco passos pendentes", async () => {
     expect(await obterProgressoOnboarding(ctxA)).toEqual({
       clinica: false,
       equipe: false,
       agenda: false,
       paciente: false,
+      primeiroPacientePronto: false,
     });
   });
 
@@ -89,10 +92,43 @@ describe.skipIf(!hasDb)("obterProgressoOnboarding", () => {
     expect((await obterProgressoOnboarding(ctxA)).agenda).toBe(true);
   });
 
+  // O 5º passo sai de `montarProntidao().podeDocumentar` — a escada POR
+  // MODALIDADE de `capacidadesDaModalidade` (D-A5) — e NÃO de um `EXISTS` de
+  // "protocolo vigente E meta ativa". É este teste que separa as duas
+  // leituras: com os mesmos zero registros clínicos, o paciente
+  // `conventional` está pronto (não tem degrau bloqueante, D-A7) e o
+  // `protocol_driven` não (bloqueia em protocolo e meta).
+  test("o quinto passo sai da escada da modalidade, não de protocolo+meta", async () => {
+    await owner`INSERT INTO patient (id, clinic_id, nome, clinical_modality)
+      VALUES (${PAC_A1}, ${CLINIC_A}, 'Convencional A', 'conventional')`;
+    expect((await obterProgressoOnboarding(ctxA)).primeiroPacientePronto).toBe(
+      true,
+    );
+
+    await owner`DELETE FROM patient WHERE id = ${PAC_A1}`;
+    await owner`INSERT INTO patient (id, clinic_id, nome, clinical_modality)
+      VALUES (${PAC_A2}, ${CLINIC_A}, 'ABA A', 'protocol_driven')`;
+    expect((await obterProgressoOnboarding(ctxA)).primeiroPacientePronto).toBe(
+      false,
+    );
+  });
+
+  test("paciente sem modalidade resolvida não conta como pronto", async () => {
+    await owner`INSERT INTO patient (id, clinic_id, nome)
+      VALUES (${PAC_A1}, ${CLINIC_A}, 'Sem modalidade')`;
+    const p = await obterProgressoOnboarding(ctxA);
+    expect(p.paciente).toBe(true);
+    expect(p.primeiroPacientePronto).toBe(false);
+  });
+
   test("não enxerga o progresso da outra clínica", async () => {
     // B tem paciente; A não. Se o isolamento vazar, A marcaria concluído.
     await owner`INSERT INTO patient (id, clinic_id, nome)
       VALUES (${PAC_B}, ${CLINIC_B}, 'Paciente da B')`;
-    expect((await obterProgressoOnboarding(ctxA)).paciente).toBe(false);
+    const p = await obterProgressoOnboarding(ctxA);
+    expect(p.paciente).toBe(false);
+    // O `json_agg` do 5º passo lê `patient` sob a MESMA RLS: paciente da B
+    // não entra no array, então nem chega ao guard do definer.
+    expect(p.primeiroPacientePronto).toBe(false);
   });
 });

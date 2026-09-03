@@ -106,4 +106,49 @@ describe.skipIf(!hasDb)("listarFilaValidacao", () => {
     const { itens } = await listarFilaValidacao(ctxCoord);
     expect(itens.map((i) => i.evidenceId)).not.toContain(EV_OUTRA_CLINICA);
   });
+
+  // #533 (revisão pós-PR, 02/09) — `contarBadgesGovernanca` junta os dois
+  // badges da nav numa ida só ao banco. O predicado da fila é COPIADO de
+  // `contarFilaValidacao`; este teste é o que impede os dois de divergirem.
+  // Vive DENTRO deste describe: o `afterAll` acima fecha `owner`/`appSql`.
+  test("contarBadgesGovernanca: validacao = contarFilaValidacao; alertasAbertos conta só status 'aberto'", async () => {
+    const { contarBadgesGovernanca } =
+      await import("@/lib/governanca/contadores");
+    const { contarFilaValidacao } = await import("./queries");
+    const SESS_ALERTA = "00000000-0000-0000-0000-000000005e03";
+
+    await owner`DELETE FROM alerta_risco_clinico WHERE clinic_id = ${CLINIC}::uuid`;
+    await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, disciplina) VALUES
+      (${SESS_ALERTA}, ${CLINIC}, ${PAC}, ${U_COORD}, now(), 'realizada', 'desconhecida')
+      ON CONFLICT (id) DO NOTHING`;
+
+    // Os testes acima já tiraram os itens da fixture da fila (revisão/dúvida);
+    // um item próprio, ainda não tratado, garante que o cruzamento não passa
+    // por "0 === 0".
+    const EX_BADGE = "00000000-0000-0000-0000-00000000eb99";
+    const EV_BADGE = "00000000-0000-0000-0000-00000000eb98";
+    await owner`INSERT INTO extraction (id, session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, inconsistente_com_historico, payload) VALUES
+      (${EX_BADGE}, ${SESS}, ${CLINIC}, 'aprovada', 'evidencia', 'trecho do badge', 'baixa', false, '{"funcao":"tato"}')`;
+    await owner`INSERT INTO evidence (id, extraction_id, patient_id, session_id, session_numero, alvo_ordinal, classificacao_original, aprovado_por) VALUES
+      (${EV_BADGE}, ${EX_BADGE}, ${PAC}, ${SESS}, 1, 0, '{"funcao":"tato"}'::jsonb, ${U_COORD})`;
+
+    const antes = await contarBadgesGovernanca(ctxCoord);
+    const fila = await contarFilaValidacao(ctxCoord);
+    expect(fila.total).toBeGreaterThanOrEqual(1);
+    expect(antes.validacao).toBe(fila.total);
+    expect(antes.alertasAbertos).toBe(0);
+
+    await owner`INSERT INTO alerta_risco_clinico
+      (clinic_id, patient_id, session_id, categoria, severidade, certeza,
+       trecho_fonte, detalhe, status, prazo_minutos, prazo_reconhecimento, reconhecido_em, reconhecido_por)
+      VALUES
+      (${CLINIC}, ${PAC}, ${SESS_ALERTA}, 'ideacao_suicida', 'ideacao_passiva', 'explicito',
+       'trecho aberto', 'detalhe', 'aberto', 60, now() + interval '1 hour', NULL, NULL),
+      (${CLINIC}, ${PAC}, ${SESS_ALERTA}, 'ideacao_suicida', 'ideacao_passiva', 'explicito',
+       'trecho reconhecido', 'detalhe', 'reconhecido', 60, now() + interval '1 hour', now(), ${U_COORD})`;
+
+    const depois = await contarBadgesGovernanca(ctxCoord);
+    expect(depois.alertasAbertos).toBe(1);
+    expect(depois.validacao).toBe(fila.total);
+  });
 });

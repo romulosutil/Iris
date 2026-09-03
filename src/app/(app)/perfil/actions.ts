@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { getTenantContext } from "@/auth/tenant";
 import { declararEPsi } from "./logic";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+import { textoErroInterno } from "@/lib/copy/erros";
 
 /**
  * D56 — só WRAPPERS aqui. O core ctx-accepting vive em `logic.ts`
@@ -37,7 +39,7 @@ export async function declararEPsiAction(
     }
     return { error: r.error };
   } catch (err) {
-    console.error("wrapper perfil/e-psi:", err);
-    return { error: "Erro interno no servidor." };
+    const correlacaoId = logarErroSemPII("wrapper perfil/e-psi:", err);
+    return { error: textoErroInterno(correlacaoId) };
   }
 }

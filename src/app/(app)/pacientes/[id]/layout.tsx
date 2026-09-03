@@ -12,6 +12,10 @@ import { patient } from "@/db/schema";
 import { mensagemDeEstado } from "@/lib/billing/estado-conta";
 import { obterSituacaoConta } from "../../queries";
 import { capacidadesDaModalidade } from "./modalidade";
+import { montarProntidao } from "@/lib/patient/prontidao";
+import { codigoPg } from "@/db/pg-error";
+import { obterFatosProntidao } from "./prontidao-queries";
+import { CartaoProntidao } from "@/components/app/cartao-prontidao";
 
 /**
  * Casca comum de TODAS as telas de um paciente.
@@ -47,7 +51,7 @@ export default async function PacienteLayout({
 }: PacienteLayoutProps) {
   const { id } = await params;
   const ctx = await getTenantContext();
-  const [situacao, dadosPaciente] = await Promise.all([
+  const [situacao, dadosPaciente, fatos] = await Promise.all([
     obterSituacaoConta(ctx),
     withTenant(ctx, async (tx) => {
       const [p] = await tx
@@ -56,6 +60,28 @@ export default async function PacienteLayout({
         .where(eq(patient.id, id));
       return p;
     }),
+    // `admin_recepcao` não entra: sob a RLS dela todo EXISTS clínico devolve
+    // false para linhas que existem. `montarProntidao` já devolve a escada
+    // vazia para ela — não gastar a consulta é só a consequência.
+    ctx.role === "coordenador" || ctx.role === "terapeuta"
+      ? obterFatosProntidao(ctx, id).catch((erro: unknown) => {
+          // NUNCA `erro.message`: em `DrizzleQueryError` a `message` é o SQL
+          // inteiro com os `params` interpolados. `name` + código do Postgres
+          // localiza o caso sem despejar consulta no log.
+          //
+          // `codigoPg` e não `erro.cause.code` à mão: a posição do SQLSTATE
+          // depende de QUEM lançou — o Drizzle embrulha e joga o original em
+          // `.cause`, mas erro cru do driver expõe `.code` na raiz. Ler só o
+          // `.cause` registraria "sem-codigo" no caso em que o código existe.
+          const codigo = codigoPg(erro) ?? "sem-codigo";
+          console.warn(
+            `[prontidao] falha ao ler fatos (patientId=${id}, erro=${
+              erro instanceof Error ? erro.name : "desconhecido"
+            }, pg=${codigo})`,
+          );
+          return null;
+        })
+      : Promise.resolve(null),
   ]);
 
   const base = `/pacientes/${id}`;
@@ -137,6 +163,22 @@ export default async function PacienteLayout({
           </Tooltip>
         </div>
       </div>
+      {fatos ? (
+        <CartaoProntidao
+          prontidao={montarProntidao({
+            // Aqui a modalidade continua vindo da linha `patient`, e não da
+            // `fatos.modalidade` do definer: quem alcança a página do paciente
+            // passou por `patient_select` (é da equipe ou é coordenação), então
+            // a leitura é legítima. Diferente dos call sites de SESSÃO
+            // (`logic.ts`, `sessoes/[id]/queries.ts`), onde o chamador pode ser
+            // um terapeuta de cobertura que não lê a linha `patient` nenhuma.
+            modalidade: dadosPaciente?.clinicalModality,
+            fatos: fatos.fatos,
+            role: ctx.role,
+            patientId: id,
+          })}
+        />
+      ) : null}
       {!situacao.podeEscrever ? (
         <Alert severidade="info" destacado titulo="Conta em somente-leitura">
           <p>{mensagemDeEstado(situacao.estado)}</p>

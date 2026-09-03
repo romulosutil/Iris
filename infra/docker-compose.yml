@@ -27,7 +27,12 @@ services:
       retries: 5
 
   minio:
-    image: minio/minio:latest
+    # Tag datada, não `latest` (auditoria 360, DX-04): o `S3Client` já quebrou
+    # por mudança de comportamento do MinIO entre releases (#504, 31/08/2026).
+    # É a release que roda no dev local hoje (`docker inspect minio/minio`,
+    # label `version`); subir de versão é decisão explícita, com o teste de
+    # cópia real (`infra/backup`) rodado contra a nova tag.
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: iris

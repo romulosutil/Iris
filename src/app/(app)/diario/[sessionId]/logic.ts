@@ -14,6 +14,10 @@ import {
   sessionProtocolScope,
 } from "@/db/schema";
 import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
+import {
+  assertPodeDocumentar,
+  ProntuarioIncompletoError,
+} from "@/lib/patient/assert-pode-documentar";
 import { META_SEM_MODELO, resolveProvider } from "@/lib/extraction/provider";
 import type {
   ExtractionDraft,
@@ -35,6 +39,7 @@ import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { asrHabilitado } from "@/lib/flags";
 import { chaveClipe } from "@/lib/audio/local-store";
 import { guardar } from "@/lib/asr/storage";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 // ─── Guard de escrita por situação da conta (#163+#159) ────────────────────
 // Todo o diário é escrita clínica: conta em somente-leitura (trial expirado,
@@ -111,6 +116,34 @@ async function capturarDiarioCore(
   if (!parsed.success) return { error: parsed.error.issues[0]!.message };
   try {
     const row = await withTenant(ctx, async (tx) => {
+      // T07/T07b — a MESMA leitura que já existia (antes só para o
+      // desarquivamento, #174 regra 6): resolve o paciente ANTES de qualquer
+      // escrita, na mesma transação da régua e do INSERT. A régua
+      // (`assertPodeDocumentar`) precisa correr aqui dentro, e não na action:
+      // a action é alcançável sem passar pela página `/sessoes/[id]`, então
+      // era a única leitura da regra e nenhuma escrita.
+      //
+      // Task 7c — só colunas de `session` aqui. O `leftJoin` em `patient` que
+      // trazia `clinicalModality` SUMIU, e com ele a ambiguidade que ele
+      // criava: sob `patient_select` (RLS por equipe, sem recorte de
+      // cobertura) o terapeuta de COBERTURA não lê a linha `patient`, então a
+      // modalidade chegava `null` e a régua recusava por "modalidade
+      // ausente" um caso clinicamente autorizado. A modalidade agora sai por
+      // `app_fatos_prontidao` (migração `0144`), pela MESMA porta e sob o
+      // MESMO guard dos seis fatos — quem lê os fatos lê a modalidade, e
+      // ninguém mais.
+      const [sess] = await tx
+        .select({ patientId: session.patientId })
+        .from(session)
+        .where(eq(session.id, parsed.data.sessionId));
+      // Fail-closed. Sem o join, `sess` só falta quando a PRÓPRIA `session` é
+      // ilegível — e aí a escrita não pode seguir: o `if (sess)` que existia
+      // aqui pulava a régua e caía direto no `insert` abaixo. Erro genérico
+      // de propósito: quem não enxerga a sessão não deve aprender pela
+      // mensagem se ela existe.
+      if (!sess) throw new Error("capturarDiario: sessão ilegível ou ausente");
+      await assertPodeDocumentar(ctx, tx, sess.patientId);
+
       const [nota] = await tx
         .insert(sessionNote)
         .values({
@@ -134,29 +167,28 @@ async function capturarDiarioCore(
         .returning({ id: sessionNote.id });
 
       // #174 regra 6, na MESMA transação da nota: ou o registro clínico e o
-      // desarquivamento existem juntos, ou nenhum dos dois existe.
-      const [sess] = await tx
-        .select({ patientId: session.patientId })
-        .from(session)
-        .where(eq(session.id, parsed.data.sessionId));
-      if (sess) {
-        await desarquivarPacienteSeArquivado(
-          tx,
-          ctx,
-          sess.patientId,
-          "registro_clinico",
-        );
-      }
+      // desarquivamento existem juntos, ou nenhum dos dois existe. Sem
+      // `if (sess)`: o guard fail-closed acima já garantiu a sessão.
+      await desarquivarPacienteSeArquivado(
+        tx,
+        ctx,
+        sess.patientId,
+        "registro_clinico",
+      );
 
       return nota;
     });
     return { id: row!.id };
   } catch (err) {
+    // Repassa intacto para o `actions.ts` traduzir: é recusa de regra de
+    // negócio, não falha de infra — `mensagemDeConsentimento` não a explica
+    // (não é RLS de consentimento) e `console.error` a trataria como bug.
+    if (err instanceof ProntuarioIncompletoError) throw err;
     const msg = await mensagemDeConsentimento(ctx, err, {
       sessionId: parsed.data.sessionId,
     });
     if (msg) return { error: msg };
-    console.error("capturarDiario:", err);
+    logarErroSemPII("capturarDiario:", err);
     return { error: "Não foi possível salvar a captura." };
   }
 }
@@ -220,7 +252,7 @@ async function corrigirEscopoProtocoloCore(
       sessionId: parsed.data.sessionId,
     });
     if (msg) return { error: msg };
-    console.error("corrigirEscopoProtocolo:", err);
+    logarErroSemPII("corrigirEscopoProtocolo:", err);
     return { error: "Não foi possível ajustar os protocolos." };
   }
 }
@@ -277,7 +309,7 @@ async function registrarAudioLocalCore(
       sessionId: parsed.data.sessionId,
     });
     if (msg) return { error: msg };
-    console.error("registrarAudioLocal:", err);
+    logarErroSemPII("registrarAudioLocal:", err);
     return { error: "Não foi possível registrar o áudio." };
   }
 }
@@ -585,7 +617,7 @@ async function enviarLoteAsrCore(
   } catch (err) {
     const msg = await mensagemDeConsentimento(ctx, err, { sessionId });
     if (msg) return { error: msg };
-    console.error("enviarLoteAsr:", err);
+    logarErroSemPII("enviarLoteAsr:", err);
     return { error: "Não foi possível enviar o áudio para transcrição." };
   }
 }
@@ -634,6 +666,31 @@ async function consolidarSessaoCore(
     // ── Fase A (transação): grava nota + número, coleta o estado necessário
     //    para decidir a re-extração e monta o contexto canônico do agente.
     const prep = await withTenant(ctx, async (tx) => {
+      // T07/T07b — a MESMA leitura que o passo 2) abaixo já fazia (patientId
+      // + numero), adiantada para ANTES de qualquer escrita: a régua
+      // (`assertPodeDocumentar`) precisa correr aqui dentro, na mesma
+      // transação da nota, para que uma meta descontinuada entre a checagem e
+      // o INSERT não passe pela régua.
+      //
+      // Task 7c — mesmo movimento de `capturarDiarioCore` acima: o `leftJoin`
+      // em `patient` (que só existia para trazer `clinicalModality`) foi
+      // embora, e a ambiguidade que ele criava foi junto. Sob
+      // `patient_select` (RLS por equipe, sem recorte de cobertura) o
+      // terapeuta de cobertura não lê a linha `patient`; a modalidade chegava
+      // `null` e a régua recusava por "modalidade ausente" o que é cobertura
+      // clínica legítima. Agora ela sai de `app_fatos_prontidao` (`0144`),
+      // pela mesma porta e sob o mesmo guard dos seis fatos. O que sobra aqui
+      // são só colunas de `session` — sempre legíveis a quem pode gravar a
+      // nota, que é o motivo de o `sess!` abaixo continuar seguro.
+      const [sess] = await tx
+        .select({
+          patientId: session.patientId,
+          numero: session.numeroSequencialPaciente,
+        })
+        .from(session)
+        .where(eq(session.id, sid));
+      await assertPodeDocumentar(ctx, tx, sess!.patientId);
+
       // texto anterior (antes do upsert) → sabemos se o diário mudou
       const [notaAntiga] = await tx
         .select({ texto: sessionNote.texto })
@@ -679,13 +736,12 @@ async function consolidarSessaoCore(
       //    subestimaria sob a própria RLS) e resolve a corrida de duas
       //    consolidações concorrentes (23505 em `uq_session_numero_por_paciente`)
       //    relendo o número já gravado, na subtransação certa.
-      const [sess] = await tx
-        .select({
-          patientId: session.patientId,
-          numero: session.numeroSequencialPaciente,
-        })
-        .from(session)
-        .where(eq(session.id, sid));
+      //
+      //    MERGE (T07b + #539): a leitura de `sess` que ficava AQUI subiu para
+      //    antes da primeira escrita — a régua (`assertPodeDocumentar`) tem de
+      //    correr na mesma transação e ANTES do upsert da nota, senão uma meta
+      //    descontinuada entre a checagem e o INSERT passaria por ela. É a
+      //    MESMA leitura (`patientId` + `numero`), só adiantada; reusada aqui.
       let numero = sess!.numero ?? null;
       if (numero === null) {
         const upd = await tx.execute(sql`
@@ -790,13 +846,11 @@ async function consolidarSessaoCore(
       };
     } catch (err) {
       metaExtracao.latenciaMs = Date.now() - inicioExtracao;
-      // Só nome/status/código: a message de um erro de driver carrega SQL +
-      // params (PHI) e a de um SDK pode carregar o corpo da requisição.
-      const e = err as { name?: unknown; code?: unknown } | null;
-      console.error("extração falhou (marcando pendente):", {
-        name: typeof e?.name === "string" ? e.name : typeof err,
+      // #531 (S-03): nada da `message` entra no log — o helper reduz o erro a
+      // nome/SQLSTATE/hash. `status`, `modelo` e `latenciaMs` são o rastreio
+      // da chamada de IA (#555), conjunto fechado e sem PII.
+      logarErroSemPII("extração falhou (marcando pendente):", err, {
         status: statusHttpDoErro(err),
-        code: typeof e?.code === "string" ? e.code : null,
         modelo: metaExtracao.modelo,
         latenciaMs: metaExtracao.latenciaMs,
       });
@@ -968,7 +1022,10 @@ async function consolidarSessaoCore(
           if ("erro" in r) errosAlerta.push(r.erro);
         }
       } catch (err) {
-        console.error("deteccao/registro de risco (RPD sugerido) falhou:", err);
+        logarErroSemPII(
+          "deteccao/registro de risco (RPD sugerido) falhou:",
+          err,
+        );
         errosAlerta.push("Não foi possível avaliar o risco do RPD sugerido.");
       }
     }
@@ -982,9 +1039,11 @@ async function consolidarSessaoCore(
     }
     return { numeroSequencial: prep.numero ?? undefined, aviso: avisoExtracao };
   } catch (err) {
+    // Ver capturarDiarioCore: recusa de regra de negócio, repassada intacta.
+    if (err instanceof ProntuarioIncompletoError) throw err;
     const msg = await mensagemDeConsentimento(ctx, err, { sessionId: sid });
     if (msg) return { error: msg };
-    console.error("consolidarSessao:", err);
+    logarErroSemPII("consolidarSessao:", err);
     return { error: "Não foi possível consolidar a sessão." };
   }
 }

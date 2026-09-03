@@ -9,6 +9,8 @@ import { randomBytes } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { authDb } from "@/db/client";
 import { codigoPg, constraintPg } from "@/db/pg-error";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+import { ErroComCopy } from "@/lib/copy/erros";
 import { withTenant, type Tx } from "@/db/rls";
 import { sha256Hex } from "@/lib/report/hash";
 import { coletarAcervo } from "./coletor";
@@ -25,7 +27,11 @@ export const MOTIVOS_FALHA = new Set([
   "erro_interno",
 ]);
 
-export class ExportacaoEmAndamentoError extends Error {
+// As recusas do motor estendem `ErroComCopy`: a message É copy de usuário por
+// construção, e é por esse `instanceof` que `mensagemDeExcecao` (S-10, #531)
+// deixa o texto chegar à tela — qualquer outro `Error` vira dicionário +
+// código de correlação.
+export class ExportacaoEmAndamentoError extends ErroComCopy {
   constructor(
     message = "Já existe uma exportação em andamento para esta clínica.",
   ) {
@@ -34,7 +40,7 @@ export class ExportacaoEmAndamentoError extends Error {
   }
 }
 
-export class NaoAutorizadoExportacaoError extends Error {
+export class NaoAutorizadoExportacaoError extends ErroComCopy {
   constructor(
     message = "Apenas o responsável pela conta pode solicitar a exportação integral.",
   ) {
@@ -280,10 +286,10 @@ export async function processarProximo(): Promise<{
       ? (err.message as string)
       : "erro_interno";
     if (motivo === "erro_interno") {
-      console.error(
+      logarErroSemPII(
         "[exportacao-integral] falha não categorizada no bundle",
-        bundle.id,
         err,
+        { bundleId: bundle.id },
       );
     }
 
@@ -442,7 +448,9 @@ export async function gerarLinkDownload(
       `)) as unknown as { ok: boolean }[];
 
     if (rows[0]?.ok !== true) {
-      throw new Error(
+      // Copy de usuário: `ErroComCopy` é o que a faz atravessar a action
+      // (revisão da PR #546 — como `Error` cru virava "Não foi possível…").
+      throw new ErroComCopy(
         "Esta exportação não está mais disponível para download. Solicite uma nova.",
       );
     }

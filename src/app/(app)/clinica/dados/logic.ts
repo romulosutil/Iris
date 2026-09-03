@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { validarEMaterializarCpfCnpj } from "@/lib/documento";
 import { getProviderPorId } from "@/lib/billing/provider";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 /**
  * #262 — Dados da Clínica: razão social, CPF/CNPJ, endereço e e-mail
@@ -301,7 +302,7 @@ export async function salvarDadosClinica(
   } catch (err) {
     // Rollback já aconteceu (o throw atravessou a transação). Erro do gateway
     // ou do guard da função viram mensagem amigável; o detalhe fica no log.
-    console.error("salvarDadosClinica:", err);
+    logarErroSemPII("salvarDadosClinica:", err);
     const msg =
       err instanceof Error
         ? ((err.cause as Error | undefined)?.message ?? err.message)

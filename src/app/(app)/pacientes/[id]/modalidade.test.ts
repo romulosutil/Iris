@@ -37,3 +37,45 @@ describe("capacidadesDaModalidade", () => {
     expect(c.rotaDeEntrada).toBeNull();
   });
 });
+
+describe("degraus de prontidão", () => {
+  it("protocol_driven exige protocolo e meta, e recomenda ficha e anamnese", () => {
+    const c = capacidadesDaModalidade("protocol_driven");
+    expect(c.degrausProntidao).toEqual([
+      "admissao",
+      "ficha_clinica",
+      "anamnese",
+      "protocolo",
+      "meta",
+      "primeira_sessao",
+    ]);
+    expect(c.degrausBloqueantes).toEqual(["protocolo", "meta"]);
+  });
+
+  it("cognitive_behavioral exige instrumento, não protocolo nem meta", () => {
+    const c = capacidadesDaModalidade("cognitive_behavioral");
+    expect(c.degrausProntidao).toEqual([
+      "admissao",
+      "ficha_clinica",
+      "instrumento",
+      "primeira_sessao",
+    ]);
+    expect(c.degrausBloqueantes).toEqual(["instrumento"]);
+  });
+
+  it("conventional não bloqueia nada — acompanhamento é narrativo", () => {
+    const c = capacidadesDaModalidade("conventional");
+    expect(c.degrausProntidao).toEqual([
+      "admissao",
+      "ficha_clinica",
+      "primeira_sessao",
+    ]);
+    expect(c.degrausBloqueantes).toEqual([]);
+  });
+
+  it("modalidade não resolvida pede definir a modalidade primeiro", () => {
+    const c = capacidadesDaModalidade(null);
+    expect(c.degrausProntidao).toEqual(["admissao", "modalidade"]);
+    expect(c.degrausBloqueantes).toEqual(["modalidade"]);
+  });
+});

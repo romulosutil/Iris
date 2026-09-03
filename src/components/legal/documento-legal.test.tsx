@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import type { ReactElement } from "react";
-import PrivacidadePage from "@/app/privacidade/page";
-import TermosPage from "@/app/termos/page";
+import PrivacidadePage from "@/app/(publico)/privacidade/page";
+import TermosPage from "@/app/(publico)/termos/page";
 import { DOCUMENTOS_LEGAIS, type SlugLegal } from "@/lib/legal";
 import { DocumentoLegal } from "./documento-legal";
 
@@ -14,8 +14,8 @@ import { DocumentoLegal } from "./documento-legal";
  * mockado aqui: se alguém mover estas rotas para dentro do grupo `(app)` ou
  * introduzir um guard de sessão no caminho, o render passa a exigir contexto de
  * tenant e o teste quebra. O guard do produto vive em `src/app/(app)/layout.tsx`
- * — estas páginas moram na raiz de `src/app`, como `sobre`, justamente para
- * ficarem fora dele.
+ * — estas páginas moram no grupo `(publico)` de `src/app`, como `sobre`,
+ * justamente para ficarem fora dele.
  *
  * Nenhum teste aqui toca banco de dados.
  */
