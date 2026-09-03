@@ -42,7 +42,6 @@ export const HOOKS_DE_CLIENTE = new Set([
   "useOptimistic",
   "useActionState",
   "useFormStatus",
-  "useId",
 ]);
 
 /**
