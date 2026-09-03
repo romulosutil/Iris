@@ -24,7 +24,6 @@ import {
   CAMPO_EDITAVEL,
   camposEditaveisDe,
 } from "@/lib/extraction/campos-editaveis";
-import { rotuloSubtipo } from "./resumo";
 import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 import { textoErroInterno } from "@/lib/copy/erros";
 
@@ -594,30 +593,24 @@ async function editarExtracaoCore(
   // action escrever funcao/nivel_ajuda/resultado na raiz do payload errado.
   // O subtipo de VERDADE só existe no banco — relê aqui, dentro do core, e
   // filtra `payloadEditado` pelos campos que ELE realmente permite, nunca
-  // pelo que o cliente alegou.
+  // pelo que o cliente alegou. Não recusa a edição inteira quando o subtipo
+  // real não tem nenhum dos três: o core também serve edições diretas fora
+  // do diálogo genérico (ex.: `preferencia_reforcador` via item_atividade/
+  // valencia, que não é `CAMPO_EDITAVEL`) — a recusa por "sem campo editável"
+  // é responsabilidade do `actions.ts` (que já sabe que veio do diálogo dos
+  // três campos), não deste core genérico.
   const [row] = await withTenant(ctx, (tx) =>
     tx
       .select({ subtipo: extraction.subtipo })
       .from(extraction)
       .where(eq(extraction.id, p.data.extractionId)),
   );
-  if (!row) {
-    // Extração não encontrada — segue para `transicionar`, que devolve o
-    // erro de concorrência/CAS padrão sem duplicar essa checagem.
-    return transicionar(ctx, p.data.extractionId, p.data.versao, {
-      estado: "editada",
-      payloadEditado: p.data.payloadEditado,
-    });
-  }
-  const camposPermitidos = camposEditaveisDe(row.subtipo);
-  if (camposPermitidos.length === 0) {
-    return {
-      error: `Extrações do tipo "${rotuloSubtipo(row.subtipo as Parameters<typeof rotuloSubtipo>[0])}" ainda não podem ser editadas por aqui. Aprove se os dados estiverem certos, ou descarte esta sugestão e registre a correção diretamente na sessão.`,
-    };
-  }
   const payloadEditado = { ...p.data.payloadEditado };
-  for (const campo of CAMPO_EDITAVEL) {
-    if (!camposPermitidos.includes(campo)) delete payloadEditado[campo];
+  if (row) {
+    const camposPermitidos = camposEditaveisDe(row.subtipo);
+    for (const campo of CAMPO_EDITAVEL) {
+      if (!camposPermitidos.includes(campo)) delete payloadEditado[campo];
+    }
   }
 
   const colapso = await resolverColapso(
