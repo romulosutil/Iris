@@ -22,7 +22,7 @@ import { obterRPDEntries } from "./tcc/logic";
 import { obterInstrumentoAplicacoes } from "./tcc/instrumento-logic";
 import { vistaValida } from "./timeline/vista-nav";
 import { montarProntidao } from "@/lib/patient/prontidao";
-import { codigoPg } from "@/db/pg-error";
+import { logarAvisoSemPII } from "@/lib/observabilidade/logar-erro";
 import { obterFatosProntidao } from "@/lib/patient/prontidao-queries";
 import { EvolucaoVazia } from "./evolucao-vazia";
 
@@ -95,20 +95,27 @@ export default async function PacientePage({
     carregarAvisosArquivamento(ctx, id),
     ctx.role === "coordenador" || ctx.role === "terapeuta"
       ? obterFatosProntidao(ctx, id).catch((erro: unknown) => {
-          // NUNCA `erro.message`: em `DrizzleQueryError` a `message` é o SQL
-          // inteiro com os `params` interpolados. `name` + código do Postgres
-          // localiza o caso sem despejar consulta no log.
+          // §7 da spec: log por `logarErroSemPII`/`logarAvisoSemPII`, não por
+          // template montado à mão. O helper (`@/lib/observabilidade/logar-erro`)
+          // já emite o conjunto FECHADO — `nome`, `codigo` (via `codigoPg`,
+          // que lê raiz e `.cause`, porque a posição do SQLSTATE depende de
+          // quem lançou), `constraint`, `hashMensagem`, `correlacaoId` — e não
+          // tem caminho de dado da `message` para a saída. O template à mão
+          // tinha: bastava alguém trocar `erro.name` por `erro` num apuro e o
+          // SQL com os `params` (nota clínica inteira, numa escrita do diário)
+          // iria para o stdout do container.
           //
-          // `codigoPg` e não `erro.cause.code` à mão: a posição do SQLSTATE
-          // depende de QUEM lançou — o Drizzle embrulha e joga o original em
-          // `.cause`, mas erro cru do driver expõe `.code` na raiz. Ler só o
-          // `.cause` registraria "sem-codigo" no caso em que o código existe.
-          const codigo = codigoPg(erro) ?? "sem-codigo";
-          console.warn(
-            `[prontidao] falha ao ler fatos (patientId=${id}, erro=${
-              erro instanceof Error ? erro.name : "desconhecido"
-            }, pg=${codigo})`,
-          );
+          // `warn`, não `error`: aqui a falha DEGRADA uma faixa informativa —
+          // o cartão da prontidão some e a aba do paciente segue útil. Nível é
+          // sinal para quem lê o log, e `error` num cartão que não renderizou
+          // gasta atenção de plantão que outra coisa vai precisar.
+          //
+          // Só chega aqui SQLSTATE que não é de guarda: `IR001`/`IR002` já
+          // viraram `null` dentro de `obterFatosProntidao` (migração `0152`).
+          // Isto é falha REAL de leitura.
+          logarAvisoSemPII("[prontidao] falha ao ler fatos", erro, {
+            patientId: id,
+          });
           return null;
         })
       : Promise.resolve(null),
