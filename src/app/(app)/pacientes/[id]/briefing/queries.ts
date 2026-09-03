@@ -12,12 +12,15 @@ import {
 } from "@/db/schema";
 import {
   alertasGraveDe,
+  linhasUltimaSessaoDe,
   reforcadoresAtuaisDe,
   type AlertaManejo,
+  type LinhaUltimaSessao,
   type ReforcadorAtual,
 } from "./logic";
+import { lerSegmentacao } from "@/lib/evidence/snapshot-schema";
 
-export type { AlertaManejo, ReforcadorAtual };
+export type { AlertaManejo, LinhaUltimaSessao, ReforcadorAtual };
 
 type SessionEstado = (typeof sessionEstado.enumValues)[number];
 
@@ -26,13 +29,6 @@ type ProximaSessao = {
   agendadaPara: Date;
   estado: SessionEstado;
   numeroSequencial: number | null;
-};
-
-type LinhaUltimaSessao = {
-  chave: string;
-  rotulo: string;
-  metrica: string;
-  isCandidata: boolean;
 };
 
 export type UltimaSessao = {
@@ -123,13 +119,7 @@ export async function carregarBriefing(
           is_candidata?: boolean;
         }
       >;
-      const segmentacao = (snap.segmentacao ?? {}) as Record<
-        string,
-        Record<
-          string,
-          { tipo_estrutura?: string; metrica?: unknown; rotulo?: string }
-        >
-      >;
+      const segmentacao = lerSegmentacao(snap.segmentacao);
 
       const idsGoal = Object.keys(repertorio);
       const metas = idsGoal.length
@@ -140,23 +130,10 @@ export async function carregarBriefing(
         : [];
       const descricaoPorGoal = new Map(metas.map((m) => [m.id, m.descricao]));
 
-      const linhas: LinhaUltimaSessao[] = idsGoal.map((chave) => {
-        const estado = repertorio[chave] ?? {};
-        const segPorProtocolo = segmentacao[chave] ?? {};
-        const primeiroSeg = Object.values(segPorProtocolo)[0];
-        const rotulo =
-          descricaoPorGoal.get(chave) ?? primeiroSeg?.rotulo ?? chave;
-        const metricaBruta =
-          primeiroSeg?.metrica ?? estado.metrica_recente ?? estado.contagem;
-        return {
-          chave,
-          rotulo,
-          metrica:
-            metricaBruta != null
-              ? String(metricaBruta)
-              : "sem métrica registrada",
-          isCandidata: estado.is_candidata === true,
-        };
+      const linhas = linhasUltimaSessaoDe({
+        repertorio,
+        segmentacao,
+        descricaoPorGoal,
       });
 
       // Sessão correspondente ao número do snapshot (p/ contar episódios ABC).

@@ -160,3 +160,61 @@ export function lerSegmentacao(
   }
   return saida;
 }
+
+/**
+ * Rótulos de exibição dos eixos de `metrica`. Hoje a segmentação só computa o
+ * eixo de nível-de-ajuda (`segmentacao.ts` §escopo travado); eixo desconhecido
+ * atravessa como veio, em vez de virar linha vazia.
+ */
+const ROTULO_POR_EIXO: Record<string, string> = {
+  nivel_ajuda: "Nível de ajuda",
+};
+
+/**
+ * `ROTULO_POR_EIXO[chave]` cru resolveria pelo protótipo: um eixo gravado como
+ * `"constructor"` devolveria a FUNÇÃO `Object`, e o `??` não age sobre valor
+ * definido — a tela receberia uma função e o React quebraria com
+ * "Functions are not valid as a React child". O eixo vem do jsonb: é dado, não
+ * literal de código.
+ */
+function rotuloDoEixo(chave: string): string {
+  return Object.hasOwn(ROTULO_POR_EIXO, chave)
+    ? ROTULO_POR_EIXO[chave]!
+    : chave;
+}
+
+/**
+ * `metrica` → rótulo de exibição, decidido em UM lugar só (#567).
+ *
+ * O campo tem duas formas em produção (ver docblock do módulo) e três leitores
+ * a tratavam de jeitos diferentes: a fila de supervisão tipava `string` e o
+ * objeto sumia no guard do card; o briefing fazia `String(objeto)` e
+ * renderizava `[object Object]`. Nenhum dos dois era erro de tipo.
+ *
+ * Decisão de produto (03/09/2026, validada com o Rômulo): a forma objeto sai
+ * como `Nível de ajuda: 3` — `eixo` é constante hoje, só `ordinalRecente`
+ * carrega informação. `ordinalRecente` nulo cai para o rótulo do eixo sozinho:
+ * eixo registrado SEM medida é diferente de nada registrado (mesma régua de
+ * `espectro.ts` — ausência de dado nunca vira zero).
+ *
+ * Devolve `null` para "não há métrica" — nunca a string `"undefined"`/`"null"`,
+ * nunca `String(objeto)`. Vazio não vira linha na tela.
+ */
+export function formatarMetricaSegmentacao(
+  metrica: ResultadoSegmentacao["metrica"],
+): string | null {
+  if (metrica == null) return null;
+
+  if (typeof metrica === "string") {
+    const bruta = metrica.trim();
+    if (bruta === "") return null;
+    return rotuloDoEixo(bruta);
+  }
+
+  const eixo = metrica.eixo?.trim();
+  if (!eixo) return null;
+  const rotulo = rotuloDoEixo(eixo);
+  return typeof metrica.ordinalRecente === "number"
+    ? `${rotulo}: ${metrica.ordinalRecente}`
+    : rotulo;
+}

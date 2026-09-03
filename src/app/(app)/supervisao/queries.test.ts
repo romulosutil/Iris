@@ -57,8 +57,11 @@ function cenario(nAlertas: number) {
           tipo: "estagnacao",
           goal_id: x.goal,
           protocol_id: x.protocol,
+          // Linha ANTIGA do jsonb: `metrica` na forma objeto, como
+          // `materializar.ts` gravava antes do formatador (#567). Nada de
+          // backfill — a formatação roda na leitura.
           detalhe: JSON.stringify({
-            metrica: "nivel_ajuda",
+            metrica: { eixo: "nivel_ajuda", ordinalRecente: 2 },
             tipoEstrutura: "marco_simples",
             sessionNumero: 7,
           }),
@@ -114,7 +117,7 @@ describe("listarSupervisao — alertas reconhecidos sem sinal vivo (PF-01)", () 
       expect(item.goalNome).toBe(`Meta ${i}`);
       expect(item.protocolNome).toBe(`Protocolo ${i}`);
       expect(item.detalhe).toEqual({
-        metrica: "nivel_ajuda",
+        metrica: "Nível de ajuda: 2",
         tipoEstrutura: "marco_simples",
         sessionNumero: 7,
       });

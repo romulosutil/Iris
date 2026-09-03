@@ -10,6 +10,7 @@ import {
   sinaisDeSnapshot,
   sinaisDeFaltas,
   chaveNatural,
+  lerDetalheAlerta,
 } from "@/lib/supervisao/sinais";
 import { lerSegmentacao } from "@/lib/evidence/snapshot-schema";
 
@@ -290,11 +291,9 @@ export async function listarSupervisao(
 
     for (const alert of alertasCessados) {
       {
-        const det = (
-          typeof alert.detalhe === "string"
-            ? JSON.parse(alert.detalhe)
-            : alert.detalhe
-        ) as DetalheEstagnacao | DetalheFaltas;
+        // Linha antiga do jsonb pode guardar `metrica` como objeto — a
+        // formatação roda na LEITURA, sem backfill (#567).
+        const det = lerDetalheAlerta(alert.detalhe);
 
         itens.push({
           chaveNatural: alert.chave_natural,
