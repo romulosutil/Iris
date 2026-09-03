@@ -259,7 +259,7 @@ async function comoDono(tx: postgres.TransactionSql) {
  * `clinic`, `clinic_id = ...` puro, com papel, e com FK de paciente).
  */
 /**
- * As 24 funções que resolvem o tenant pelo helper (`0087`, resíduo do D16; `0142` #529; `0143` #539).
+ * As 25 funções que resolvem o tenant pelo helper (`0087`, resíduo do D16; `0142` #529; `0143` #539; `0144` T07c).
  *
  * Todas são `SECURITY DEFINER` menos nenhuma — e é justamente por isso que elas
  * importam: uma função DEFINER roda com os direitos do dono, ou seja, IGNORA a
@@ -289,6 +289,12 @@ const FUNCOES_COM_HELPER = [
   // #374 — cunha o token de download do bundle de exportação. É chamada por
   // `app_role`, então o guard interno copia o predicado da policy de leitura.
   "app_export_bundle_token_definir",
+  // Task 7c (0144) — lê os seis fatos de prontidão em lote (`uuid[]`).
+  // DEFINER porque `goal_select`/`pp_read` não reconhecem cobertura
+  // (`session.terapeuta_id`/`atendido_por_id`); o guard interno espelha
+  // `goal_select` MAIS o recorte de cobertura da `0092` (D8/#174), SEM
+  // `admin_recepcao` (D-A11: esta função devolve estado clínico).
+  "app_fatos_prontidao",
   "app_iniciar_trial",
   "app_paciente_expurgavel",
   // #352 (0128) — fila de elegíveis ao expurgo. DEFINER: o guard interno é a
@@ -322,7 +328,7 @@ const FUNCOES_COM_HELPER = [
 ];
 
 /**
- * As 16 funções que chamam app_user_role_exigido() (0093 + 0094, D23, 0128 #352, 0142 #529).
+ * As 17 funções que chamam app_user_role_exigido() (0093 + 0094, D23, 0128 #352, 0142 #529, 0144 T07c).
  */
 const FUNCOES_COM_USER_ROLE_HELPER = [
   "app_alerta_risco_visivel",
@@ -332,6 +338,10 @@ const FUNCOES_COM_USER_ROLE_HELPER = [
   "app_aplicar_candidatura",
   "app_aplicar_snapshot",
   "app_desarquivar_paciente",
+  // Task 7c (0144) — guard `coordenador OR app_is_on_team OR cobertura`.
+  // Segue o padrão pós-D23: helper, não `current_setting('app.user_role')`
+  // cru (o texto original da `0092`, já superado pela `0093` nela mesma).
+  "app_fatos_prontidao",
   // #352 (0128) — a fila é coordenador-only, reafirmado dentro do DEFINER.
   "app_pacientes_expurgaveis",
   "app_purgar_paciente",
@@ -350,7 +360,7 @@ const FUNCOES_COM_USER_ROLE_HELPER = [
 ];
 
 /**
- * As 11 funções que chamam app_user_id_exigido() (0093 + 0094, D23, 0112 #392, 0114 #393, 0115 #407, 0121 #119, 0142 #529, 0143 #539).
+ * As 12 funções que chamam app_user_id_exigido() (0093 + 0094, D23, 0112 #392, 0114 #393, 0115 #407, 0121 #119, 0142 #529, 0143 #539, 0144 T07c).
  */
 const FUNCOES_COM_USER_ID_EXIGIDO_HELPER = [
   "app_alerta_risco_visivel",
@@ -362,6 +372,9 @@ const FUNCOES_COM_USER_ID_EXIGIDO_HELPER = [
   // registro de outra pessoa.
   "app_declarar_e_psi",
   "app_desarquivar_paciente",
+  // Task 7c (0144) — `session.terapeuta_id`/`atendido_por_id` comparados
+  // contra `app_user_id_exigido()`, mesmo padrão pós-D23 da `0092`.
+  "app_fatos_prontidao",
   "app_is_on_team",
   // #352 (0128) — o `ator_id` da linha-fato passou a ser carimbado no corpo de
   // erasure COMPARTILHADO pelas duas vias, e não mais em `app_purgar_paciente`.
@@ -544,7 +557,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_HELPER);
-    expect(FUNCOES_COM_HELPER.length).toBe(24);
+    expect(FUNCOES_COM_HELPER.length).toBe(25);
   });
 
   // ─── 2d. Q-05 (#529): oráculo SISTÊMICO de definers ───────────────────────
@@ -722,7 +735,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_USER_ROLE_HELPER);
-    expect(FUNCOES_COM_USER_ROLE_HELPER.length).toBe(16);
+    expect(FUNCOES_COM_USER_ROLE_HELPER.length).toBe(17);
   });
 
   test("as 11 funções de autorização por identidade chamam app_user_id_exigido() — conjunto exato", async () => {
@@ -737,7 +750,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.proname)).toEqual(
       FUNCOES_COM_USER_ID_EXIGIDO_HELPER,
     );
-    expect(FUNCOES_COM_USER_ID_EXIGIDO_HELPER.length).toBe(11);
+    expect(FUNCOES_COM_USER_ID_EXIGIDO_HELPER.length).toBe(12);
   });
 
   test("as 3 funções com identidade leniente chamam app_user_id_atual() — conjunto exato", async () => {

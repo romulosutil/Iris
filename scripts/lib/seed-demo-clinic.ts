@@ -159,34 +159,42 @@ export async function seedDemoClinic(
       ativadoPor: coordenadorId,
     });
 
-    // #533 — SÓ o paciente do e2e do coordenador tem meta ativa. O
-    // `DemoStubProvider` só põe alvo na sugestão quando `metasAtivas[0]`
-    // existe, e `evidence` nasce POR ALVO (`revisao/logic.ts`, `alvo_ordinal`):
-    // sem meta, aprovar a sugestão não gera evidência nenhuma e nada entra
-    // na fila de `/validacao`. Os outros pacientes ficam sem meta de
-    // propósito — `diario-demo`/`revisao` contam cartões, não evidências, e
-    // não devem mudar de comportamento.
+    // Escada de prontidão: para `protocol_driven` os degraus bloqueantes são
+    // Protocolo E Meta ativa (spec da jornada de admissão, §3.1). O protocolo
+    // acima sozinho não destrava — sem meta `ativa`, `assertPodeDocumentar`
+    // recusa e a rota da sessão renderiza o cartão de bloqueio no lugar do
+    // formulário, e não existe campo "Anotação rápida" para o spec preencher.
+    // Uma clínica demo que não consegue documentar não demonstra o produto.
     //
-    // A meta só é VISÍVEL ao terapeuta com vínculo vigente na equipe do
-    // paciente (`goal_select` exige `app_is_on_team` para quem não é
-    // coordenador; a extração lê as metas sob o `withTenant` do terapeuta).
-    // Sem o vínculo, `metasAtivas` chega vazia e o efeito é o mesmo de não
-    // ter meta.
+    // A meta é de TODOS os pacientes demo porque `app_fatos_prontidao`
+    // (`0149`) é `SECURITY DEFINER` e lê `goal` sem exigir vínculo: a régua
+    // vale para qualquer spec. Já a VISIBILIDADE da meta ao terapeuta segue
+    // exigindo `app_is_on_team` (`goal_select`) — é o `careTeamMembership`
+    // abaixo, e não esta linha, que faz `metasAtivas` deixar de vir vazia.
+    await ownerDb.insert(goal).values({
+      clinicId,
+      patientId: paciente.id,
+      descricao: "Pedir o item desejado com palavra ou gesto",
+      disciplina: "ABA",
+      estado: "ativa",
+      criterioDominio: { tipo: "acertos_consecutivos", valor: 3 },
+      criadoPor: coordenadorId,
+    });
+
+    // #533 — SÓ o paciente do e2e do coordenador enxerga a meta pelo
+    // terapeuta. O `DemoStubProvider` só põe alvo na sugestão quando
+    // `metasAtivas[0]` existe, e `evidence` nasce POR ALVO
+    // (`revisao/logic.ts`, `alvo_ordinal`): sem meta visível, aprovar a
+    // sugestão não gera evidência nenhuma e nada entra na fila de
+    // `/validacao`. Os outros pacientes ficam sem o vínculo de propósito —
+    // `diario-demo`/`revisao` contam cartões, não evidências, e não devem
+    // mudar de comportamento.
     if (spec === "validacao-coordenador") {
       await ownerDb.insert(careTeamMembership).values({
         patientId: paciente.id,
         userId: terapeutaId,
         disciplina: "ABA",
         papelNaEquipe: "terapeuta_referencia",
-      });
-      await ownerDb.insert(goal).values({
-        patientId: paciente.id,
-        clinicId,
-        descricao: "Pedir o item desejado com palavra ou gesto",
-        disciplina: "ABA",
-        estado: "ativa",
-        criterioDominio: { tipo: "acertos_consecutivos", valor: 3 },
-        criadoPor: coordenadorId,
       });
     }
 

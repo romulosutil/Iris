@@ -5,6 +5,7 @@ import { getTenantContext } from "@/auth/tenant";
 import { RoleError } from "@/auth/require-role";
 import { withTenant } from "@/db/rls";
 import { sessionNote } from "@/db/schema";
+import { ProntuarioIncompletoError } from "@/lib/patient/assert-pode-documentar";
 import {
   capturarDiario,
   consolidarSessao,
@@ -44,6 +45,12 @@ export async function capturarDiarioAction(
   } catch (err) {
     if (err instanceof RoleError)
       return { error: "Só o terapeuta da sessão registra a captura." };
+    // T07b — a régua única de documentação (`assertPodeDocumentar`) recusou:
+    // é regra de negócio, não bug. `erro.motivo` já nomeia o que falta e quem
+    // resolve — repassar direto evita a segunda mentira de "erro interno".
+    if (err instanceof ProntuarioIncompletoError) {
+      return { error: err.motivo };
+    }
     logarErroSemPII("capturarDiarioAction:", err);
     return { error: "Não foi possível salvar a captura." };
   }
@@ -132,6 +139,10 @@ export async function consolidarSessaoAction(
   } catch (err) {
     if (err instanceof RoleError)
       return { error: "Só o terapeuta da sessão consolida." };
+    // T07b — ver capturarDiarioAction: recusa de regra de negócio, não bug.
+    if (err instanceof ProntuarioIncompletoError) {
+      return { error: err.motivo };
+    }
     logarErroSemPII("consolidarSessaoAction:", err);
     return { error: "Não foi possível consolidar." };
   }

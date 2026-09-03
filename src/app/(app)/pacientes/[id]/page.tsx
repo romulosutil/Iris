@@ -21,6 +21,10 @@ import { EvolucaoTcc } from "./timeline/evolucao-tcc";
 import { obterRPDEntries } from "./tcc/logic";
 import { obterInstrumentoAplicacoes } from "./tcc/instrumento-logic";
 import { vistaValida } from "./timeline/vista-nav";
+import { montarProntidao } from "@/lib/patient/prontidao";
+import { codigoPg } from "@/db/pg-error";
+import { obterFatosProntidao } from "./prontidao-queries";
+import { EvolucaoVazia } from "./evolucao-vazia";
 
 interface PacientePageProps {
   params: Promise<{ id: string }>;
@@ -81,8 +85,34 @@ export default async function PacientePage({
   }
 
   // Subiu para cá porque o ramo de TCC (abaixo) precisa dos avisos e sai antes
-  // de `carregarTimeline`. Não depende da timeline.
-  const avisos = await carregarAvisosArquivamento(ctx, id);
+  // de `carregarTimeline`. Não depende da timeline. `fatos` viaja junto num
+  // `Promise.all` só para não serializar duas idas independentes ao banco —
+  // mesmo raciocínio de `layout.tsx`. `requireRole` (linha 38) já restringiu
+  // `ctx.role` a {coordenador, terapeuta}; o guard abaixo é o mesmo de
+  // `layout.tsx` (que atende `admin_recepcao` também) por paridade — aqui
+  // sempre cai no `true`, mas divergir do padrão custaria mais do que segue.
+  const [avisos, fatos] = await Promise.all([
+    carregarAvisosArquivamento(ctx, id),
+    ctx.role === "coordenador" || ctx.role === "terapeuta"
+      ? obterFatosProntidao(ctx, id).catch((erro: unknown) => {
+          // NUNCA `erro.message`: em `DrizzleQueryError` a `message` é o SQL
+          // inteiro com os `params` interpolados. `name` + código do Postgres
+          // localiza o caso sem despejar consulta no log.
+          //
+          // `codigoPg` e não `erro.cause.code` à mão: a posição do SQLSTATE
+          // depende de QUEM lançou — o Drizzle embrulha e joga o original em
+          // `.cause`, mas erro cru do driver expõe `.code` na raiz. Ler só o
+          // `.cause` registraria "sem-codigo" no caso em que o código existe.
+          const codigo = codigoPg(erro) ?? "sem-codigo";
+          console.warn(
+            `[prontidao] falha ao ler fatos (patientId=${id}, erro=${
+              erro instanceof Error ? erro.name : "desconhecido"
+            }, pg=${codigo})`,
+          );
+          return null;
+        })
+      : Promise.resolve(null),
+  ]);
 
   // Paciente de TCC tem leitura de evolução PRÓPRIA: escore de instrumento
   // padronizado no tempo e reestruturação de crenças. Sai antes de
@@ -204,49 +234,24 @@ export default async function PacientePage({
 
         {/* Estado Vazio ou Timeline */}
         {!temSnapshots ? (
-          <div className="mx-auto my-8 max-w-2xl rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-12 text-center">
-            {/* Ícone de traço em currentColor, no mesmo estilo de
-                `timeline/estado-de-erro.tsx`. Emoji tem leitura imprevisível
-                em leitor de tela e não herda a cor do texto. */}
-            <svg
-              width="40"
-              height="40"
-              viewBox="0 0 24 24"
-              fill="none"
-              aria-hidden="true"
-              focusable="false"
-              className="mx-auto mb-4 text-[var(--text-secondary)]"
-            >
-              <path
-                d="M3 13h5l1.5 3h5L16 13h5"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="square"
-                strokeLinejoin="miter"
-              />
-              <path
-                d="M3 13l3-8h12l3 8v6H3v-6z"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="square"
-                strokeLinejoin="miter"
-              />
-            </svg>
-            <h2 className="mb-2 text-2xl font-black text-[var(--text-primary)]">
-              Sem sessões registradas
-            </h2>
-            <p className="mb-6 text-sm text-[var(--text-secondary)]">
-              Este paciente ainda não possui sessões registradas. Assim que a
-              primeira sessão for finalizada e consolidada, o histórico e
-              timeline de evolução aparecerão aqui.
-            </p>
-            <Link
-              href={`/agenda`}
-              className="focus-visible:outline-focus inline-flex items-center justify-center rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--action-primary)] px-4 py-2 text-sm font-bold text-[var(--action-primary-fg)] focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
-            >
-              Agendar Primeira Sessão &rarr;
-            </Link>
-          </div>
+          // `fatos === null` é falha de leitura (não "sem dado"): nesse caso
+          // não afirma nada — nem "falta meta" nem "está pronto" seria
+          // verdade garantida, e as duas mentem sob o mesmo risco que motivou
+          // esta troca. Nada na tela é o único estado honesto.
+          fatos ? (
+            <EvolucaoVazia
+              prontidao={montarProntidao({
+                // Modalidade da linha `patient`, não a do definer — mesmo
+                // motivo de `layout.tsx`: quem chega nesta página já passou
+                // por `patient_select`. Só os call sites de SESSÃO precisam da
+                // modalidade que sai por `app_fatos_prontidao`.
+                modalidade: paciente.clinicalModality,
+                fatos: fatos.fatos,
+                role: ctx.role,
+                patientId: id,
+              })}
+            />
+          ) : null
         ) : (
           <TimelineClient
             patientId={paciente.id}

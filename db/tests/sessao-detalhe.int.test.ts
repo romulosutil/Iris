@@ -30,6 +30,9 @@ const S_REALIZADA_SEM_NOTA = "00000000-0000-0000-0000-00000006d0d1";
 const S_DOCUMENTADA = "00000000-0000-0000-0000-00000006d0d2";
 const S_CAPTURA = "00000000-0000-0000-0000-00000006d0d3";
 
+const PROTO = "00000000-0000-0000-0000-00000070c0d1";
+const GOAL = "00000000-0000-0000-0000-0000000690d1";
+
 const ctxT1 = { clinicId: CLINIC, userId: U_T1, role: "terapeuta" } as const;
 const ctxCoord = {
   clinicId: CLINIC,
@@ -53,8 +56,10 @@ describe.skipIf(!hasDb)("T06 · /sessoes/[id] — queries de leitura", () => {
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
 
     await owner`TRUNCATE clinic, app_user, user_role, patient, care_team_membership,
-      session, session_note, extraction RESTART IDENTITY CASCADE`;
+      session, session_note, extraction, protocol, patient_protocol, goal
+      RESTART IDENTITY CASCADE`;
 
+    await owner`INSERT INTO protocol_familia_catalogo (id, nome) VALUES ('aba_marcos_desenvolvimento', 'Marcos de desenvolvimento (ABA)') ON CONFLICT DO NOTHING`;
     await owner`INSERT INTO clinic (id, nome, is_demo) VALUES (${CLINIC}, 'Clínica detalhe', false)`;
     await owner`INSERT INTO app_user (id, name, email) VALUES
       (${U_COORD}, 'Coord', 'coord.detalhe@t.com'),
@@ -76,6 +81,22 @@ describe.skipIf(!hasDb)("T06 · /sessoes/[id] — queries de leitura", () => {
       (${S_DOCUMENTADA}, ${CLINIC}, 'nota_consolidada', 'nota', ${U_T1})`;
     await owner`INSERT INTO extraction (session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload)
       VALUES (${S_DOCUMENTADA}, ${CLINIC}, 'sugerida', 'evidencia', 'trecho', 'alta', ${owner.json({})})`;
+
+    // T07b/T07c — o R-36 abaixo chama `capturarDiario`, que passou a correr a
+    // régua única de documentação (`assertPodeDocumentar`) ANTES da escrita.
+    // `PAC` nasce sem `clinical_modality`, e o default do schema é
+    // `protocol_driven`, cujos degraus BLOQUEANTES são protocolo e meta
+    // (`modalidade.ts`). Sem os dois, a primeira captura é recusada com
+    // `ProntuarioIncompletoError` e o R-36 nunca chega a testar o que existe
+    // para testar (idempotência da captura). Não é contorno: documentar passou
+    // a ter pré-condição clínica real, e um prontuário sem protocolo nem meta
+    // deixou de ser um estado a partir do qual se documenta.
+    await owner`INSERT INTO protocol (id, clinic_id, nome, disciplina, familia) VALUES
+      (${PROTO}, ${CLINIC}, 'VB-MAPP', 'ABA', 'aba_marcos_desenvolvimento')`;
+    await owner`INSERT INTO patient_protocol (patient_id, protocol_id, ativado_por, ativado_em, desativado_em)
+      VALUES (${PAC}, ${PROTO}, ${U_T1}, now()::date, NULL)`;
+    await owner`INSERT INTO goal (id, patient_id, clinic_id, descricao, estado, criterio_dominio, criado_por)
+      VALUES (${GOAL}, ${PAC}, ${CLINIC}, 'Pedir água sozinho', 'ativa', '{"tipo":"frequencia","valor":3}', ${U_T1})`;
   });
 
   afterAll(async () => {

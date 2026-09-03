@@ -80,6 +80,7 @@ test("lista de pacientes sem violações", async () => {
           criadoEm: new Date(),
           temPrescricao: true,
           arquivadoEm: null,
+          proximoPasso: null,
         },
         // Segundo paciente SEM prescrição: o selo `Sem prescrição` (#203) só é
         // renderizado neste ramo, e um fixture só com o caso feliz deixaria o
@@ -94,6 +95,10 @@ test("lista de pacientes sem violações", async () => {
           criadoEm: new Date(),
           temPrescricao: false,
           arquivadoEm: null,
+          // Cobre o pill de prontidão (#530) na mesma varredura do axe — sem
+          // este fixture o selo novo nunca entraria no contraste/texto que a
+          // suíte de a11y audita.
+          proximoPasso: "Ativar ao menos uma meta",
         },
         // Terceiro paciente ARQUIVADO (#174): o selo "Arquivado" é outro ramo
         // do mesmo lugar onde antes ficava um "Ativo" hardcoded para todo
@@ -108,6 +113,7 @@ test("lista de pacientes sem violações", async () => {
           criadoEm: new Date(),
           temPrescricao: true,
           arquivadoEm: new Date("2026-06-01T12:00:00Z"),
+          proximoPasso: null,
         },
       ]}
     />,
