@@ -18,6 +18,7 @@ import {
   resolverAlvoParaFks,
 } from "@/lib/evidence/resolver";
 import { podeAutoValidar } from "@/lib/sessao/aprovacao";
+import { conteudoDoSubtipo } from "@/lib/extraction/conteudo-subtipo";
 import { avaliarFriccao } from "@/lib/extraction/review-policy";
 import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 import { textoErroInterno } from "@/lib/copy/erros";
@@ -115,30 +116,10 @@ class TransicaoRecusada extends Error {
   }
 }
 
-/**
- * O payload gravado em `extraction` é o objeto FLAT do subtipo
- * (`LlmExtractionProvider.payloadDoSubtipo` → `e.evidencia`, e o stub demo
- * grava `{alvos, polaridade}`), mas os leitores on-approve nasceram lendo a
- * forma ANINHADA `{evidencia: {...}}` dos seeds de teste — em produção
- * `alvos` saía sempre vazio e nenhuma `evidence` nascia na aprovação (achado
- * ao fechar #532). Aceita as duas formas: chave do subtipo presente e objeto
- * → aninhado; chave presente e `null` → sem conteúdo; ausente → o próprio
- * payload é o conteúdo.
- */
-function conteudoDoSubtipo(
-  payload: unknown,
-  subtipo: string,
-): Record<string, unknown> | null {
-  if (!payload || typeof payload !== "object") return null;
-  const p = payload as Record<string, unknown>;
-  if (subtipo in p) {
-    const aninhado = p[subtipo];
-    return aninhado && typeof aninhado === "object"
-      ? (aninhado as Record<string, unknown>)
-      : null;
-  }
-  return p;
-}
+// A leitura tolerante das duas formas do payload (flat/aninhada) mora em
+// `@/lib/extraction/conteudo-subtipo` — FONTE ÚNICA, compartilhada com
+// `scripts/backfill-evidence.ts`. Foi a cópia divergente entre este leitor e o
+// backfill que produziu a deriva da #553.
 
 // ─── Inserção de `reinforcer_profile` on-approve (Fase 4 · 4C.1) ───────────
 // Perfil vivo de reforçadores (modelo-de-dados.md §1.4): 1 linha por
