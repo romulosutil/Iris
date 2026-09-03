@@ -70,6 +70,7 @@
  * Uso:  pnpm backfill:evidence
  */
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 import { assertScriptRemotoPermitido } from "./lib/guardrail-conexao.mjs";
 import { conteudoDoSubtipo } from "@/lib/extraction/conteudo-subtipo";
@@ -258,10 +259,19 @@ async function main() {
 
 // Só executa quando invocado como script (`pnpm backfill:evidence`); importar
 // o módulo em teste não pode disparar o backfill nem abrir conexão.
+// Compara o alvo da invocação com o caminho DESTE módulo (e não com um nome de
+// arquivo literal): sobrevive a renomear/mover o script sem falhar em silêncio.
+function normalizarCaminho(caminho: string) {
+  const posix = resolve(caminho).split("\\").join("/");
+  // Windows varia a caixa do drive entre `process.argv[1]` e `import.meta.url`.
+  return process.platform === "win32" ? posix.toLowerCase() : posix;
+}
+
 const alvoDaInvocacao = process.argv[1]
-  ? resolve(process.argv[1]).split("\\").join("/")
+  ? normalizarCaminho(process.argv[1])
   : "";
-if (alvoDaInvocacao.endsWith("/scripts/backfill-evidence.ts")) {
+const esteModulo = normalizarCaminho(fileURLToPath(import.meta.url));
+if (alvoDaInvocacao === esteModulo) {
   main().catch((e) => {
     console.error(e);
     process.exit(1);

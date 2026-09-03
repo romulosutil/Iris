@@ -201,3 +201,42 @@ describe("backfill-evidence · forma do payload (#553)", () => {
     expect(inserts.length).toBe(0);
   });
 });
+
+/**
+ * Guarda do gatilho de auto-execução (NIT da revisão da PR #562).
+ *
+ * O bloco no fim de `backfill-evidence.ts` decide se `main()` roda comparando
+ * `process.argv[1]` com o caminho DESTE módulo. A versão anterior comparava com
+ * o literal `"/scripts/backfill-evidence.ts"`: renomear ou mover o script faria
+ * `pnpm backfill:evidence` sair com código 0 sem executar NADA — falha
+ * silenciosa. Este teste invoca o script de verdade e afirma que ele chegou a
+ * `main()` (o erro de env ausente só existe lá dentro).
+ *
+ * A contraprova — importar o módulo NÃO dispara o backfill — é todo o resto do
+ * arquivo: os testes acima importam `executarBackfill` e nunca abrem conexão.
+ */
+describe("gatilho de auto-execução", () => {
+  it("executa main() quando invocado pela CLI", async () => {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const { fileURLToPath } = await import("node:url");
+    const { dirname, resolve: resolvePath } = await import("node:path");
+
+    const script = resolvePath(
+      dirname(fileURLToPath(import.meta.url)),
+      "backfill-evidence.ts",
+    );
+    const env = { ...process.env };
+    delete env.MIGRATION_DATABASE_URL;
+
+    const saida = await promisify(execFile)(
+      process.execPath,
+      [resolvePath(process.cwd(), "node_modules/tsx/dist/cli.mjs"), script],
+      { env },
+    ).catch((e: { stderr?: string; stdout?: string }) => e);
+
+    // `main()` é o único lugar que exige a env; ver a mensagem prova que o
+    // gatilho disparou. Se o gatilho falhar, o processo sai limpo e sem stderr.
+    expect(saida.stderr ?? "").toContain("MIGRATION_DATABASE_URL não definida");
+  }, 60_000);
+});
