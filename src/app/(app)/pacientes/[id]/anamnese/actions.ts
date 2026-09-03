@@ -6,6 +6,7 @@ import { getTenantContext } from "@/auth/tenant";
 import { RoleError } from "@/auth/require-role";
 import { salvarRascunhoAnamnese, validarAnamnese } from "./logic";
 import { salvarRascunhoSchema, validarAnamneseSchema } from "./schemas";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 export type AnamneseActionResult = {
   ok?: boolean;
@@ -33,7 +34,7 @@ export async function salvarRascunhoAnamneseAction(
           "Só coordenador ou terapeuta da equipe salva rascunho de anamnese.",
       };
     }
-    console.error("salvarRascunhoAnamneseAction:", err);
+    logarErroSemPII("salvarRascunhoAnamneseAction:", err);
     return { error: "Não foi possível salvar o rascunho de anamnese." };
   }
 }
@@ -63,7 +64,7 @@ export async function validarAnamneseAction(
         error: "Só coordenador valida a anamnese e define o marco zero.",
       };
     }
-    console.error("validarAnamneseAction:", err);
+    logarErroSemPII("validarAnamneseAction:", err);
     return { error: "Não foi possível validar a anamnese." };
   }
 }

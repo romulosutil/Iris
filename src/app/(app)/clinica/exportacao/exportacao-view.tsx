@@ -7,6 +7,8 @@ import { Chip } from "@/components/ui/chip";
 import { Banner } from "@/components/ui/banner";
 import type { ItemHistoricoExportacao } from "@/lib/export/acervo/motor";
 import { solicitarExportacaoAction, gerarLinkDownloadAction } from "./actions";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+import { textoErroInterno } from "@/lib/copy/erros";
 
 export interface ExportacaoViewProps {
   initialAtivo: ItemHistoricoExportacao | null;
@@ -76,7 +78,7 @@ export function ExportacaoView({
           }
         }
       } catch (err) {
-        console.error("Erro ao verificar estado da exportação", err);
+        logarErroSemPII("Erro ao verificar estado da exportação", err);
       }
     }, 10_000);
 
@@ -102,7 +104,7 @@ export function ExportacaoView({
         }
       }
     } catch (err) {
-      console.error("Erro ao atualizar estado", err);
+      logarErroSemPII("Erro ao atualizar estado", err);
     }
   };
 
@@ -130,8 +132,14 @@ export function ExportacaoView({
       } else {
         setErroSolicitacao(res.error);
       }
-    } catch (err: any) {
-      setErroSolicitacao(err?.message ?? "Erro desconhecido ao solicitar.");
+    } catch (err: unknown) {
+      // S-10 (#531): a exceção aqui é de rede/serialização da action — o
+      // texto dela não é copy. Dicionário + código de correlação do log.
+      setErroSolicitacao(
+        textoErroInterno(
+          logarErroSemPII("solicitarExportacao (cliente):", err),
+        ),
+      );
     } finally {
       setIsSolicitando(false);
     }

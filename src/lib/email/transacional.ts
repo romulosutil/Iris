@@ -1,4 +1,5 @@
 import "server-only";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 export type EmailTransacionalInput = {
   para: string;
@@ -42,12 +43,12 @@ export async function enviarEmailTransacional(
       html: input.html,
     });
     if (error) {
-      console.error("enviarEmailTransacional: erro do provedor:", error);
+      logarErroSemPII("enviarEmailTransacional: erro do provedor:", error);
       return { enviado: false };
     }
     return { enviado: true };
   } catch (err) {
-    console.error("enviarEmailTransacional: exceção capturada:", err);
+    logarErroSemPII("enviarEmailTransacional: exceção capturada:", err);
     return { enviado: false };
   }
 }

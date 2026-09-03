@@ -9,6 +9,7 @@ import {
   type ValidacaoResult,
   type ValidacaoState,
 } from "./logic";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 export type { ValidacaoState };
 
 // ─── Wrapper para `useActionState` ─────────────────────────────────────────
@@ -26,7 +27,7 @@ async function comCtx(
   } catch (err) {
     if (err instanceof RoleError)
       return { error: "Só terapeuta da equipe ou coordenador respondem." };
-    console.error("wrapper duvidas:", err);
+    logarErroSemPII("wrapper duvidas:", err);
     return { error: "Não foi possível registrar a resposta." };
   }
 }

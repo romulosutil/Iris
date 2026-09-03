@@ -39,6 +39,7 @@ import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { asrHabilitado } from "@/lib/flags";
 import { chaveClipe } from "@/lib/audio/local-store";
 import { guardar } from "@/lib/asr/storage";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 // ─── Guard de escrita por situação da conta (#163+#159) ────────────────────
 // Todo o diário é escrita clínica: conta em somente-leitura (trial expirado,
@@ -187,7 +188,7 @@ async function capturarDiarioCore(
       sessionId: parsed.data.sessionId,
     });
     if (msg) return { error: msg };
-    console.error("capturarDiario:", err);
+    logarErroSemPII("capturarDiario:", err);
     return { error: "Não foi possível salvar a captura." };
   }
 }
@@ -251,7 +252,7 @@ async function corrigirEscopoProtocoloCore(
       sessionId: parsed.data.sessionId,
     });
     if (msg) return { error: msg };
-    console.error("corrigirEscopoProtocolo:", err);
+    logarErroSemPII("corrigirEscopoProtocolo:", err);
     return { error: "Não foi possível ajustar os protocolos." };
   }
 }
@@ -308,7 +309,7 @@ async function registrarAudioLocalCore(
       sessionId: parsed.data.sessionId,
     });
     if (msg) return { error: msg };
-    console.error("registrarAudioLocal:", err);
+    logarErroSemPII("registrarAudioLocal:", err);
     return { error: "Não foi possível registrar o áudio." };
   }
 }
@@ -616,7 +617,7 @@ async function enviarLoteAsrCore(
   } catch (err) {
     const msg = await mensagemDeConsentimento(ctx, err, { sessionId });
     if (msg) return { error: msg };
-    console.error("enviarLoteAsr:", err);
+    logarErroSemPII("enviarLoteAsr:", err);
     return { error: "Não foi possível enviar o áudio para transcrição." };
   }
 }
@@ -845,13 +846,11 @@ async function consolidarSessaoCore(
       };
     } catch (err) {
       metaExtracao.latenciaMs = Date.now() - inicioExtracao;
-      // Só nome/status/código: a message de um erro de driver carrega SQL +
-      // params (PHI) e a de um SDK pode carregar o corpo da requisição.
-      const e = err as { name?: unknown; code?: unknown } | null;
-      console.error("extração falhou (marcando pendente):", {
-        name: typeof e?.name === "string" ? e.name : typeof err,
+      // #531 (S-03): nada da `message` entra no log — o helper reduz o erro a
+      // nome/SQLSTATE/hash. `status`, `modelo` e `latenciaMs` são o rastreio
+      // da chamada de IA (#555), conjunto fechado e sem PII.
+      logarErroSemPII("extração falhou (marcando pendente):", err, {
         status: statusHttpDoErro(err),
-        code: typeof e?.code === "string" ? e.code : null,
         modelo: metaExtracao.modelo,
         latenciaMs: metaExtracao.latenciaMs,
       });
@@ -1023,7 +1022,10 @@ async function consolidarSessaoCore(
           if ("erro" in r) errosAlerta.push(r.erro);
         }
       } catch (err) {
-        console.error("deteccao/registro de risco (RPD sugerido) falhou:", err);
+        logarErroSemPII(
+          "deteccao/registro de risco (RPD sugerido) falhou:",
+          err,
+        );
         errosAlerta.push("Não foi possível avaliar o risco do RPD sugerido.");
       }
     }
@@ -1041,7 +1043,7 @@ async function consolidarSessaoCore(
     if (err instanceof ProntuarioIncompletoError) throw err;
     const msg = await mensagemDeConsentimento(ctx, err, { sessionId: sid });
     if (msg) return { error: msg };
-    console.error("consolidarSessao:", err);
+    logarErroSemPII("consolidarSessao:", err);
     return { error: "Não foi possível consolidar a sessão." };
   }
 }

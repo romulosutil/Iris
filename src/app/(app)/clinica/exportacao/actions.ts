@@ -5,6 +5,21 @@ import {
   solicitarExportacao,
   gerarLinkDownload,
 } from "@/lib/export/acervo/motor";
+import { ErroComCopy, mensagemDeExcecao } from "@/lib/copy/erros";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+
+/**
+ * S-10 (#531): só `ErroComCopy` (as recusas do motor e o "não está mais
+ * disponível" do download estendem essa classe) chega à tela com a própria
+ * message; qualquer outra exceção (driver, storage) vira dicionário + código
+ * de correlação — `err.message` de `DrizzleQueryError` carrega SQL + params.
+ * Uma lista de classes aqui seria o defeito da revisão #546 de novo: a
+ * classe nova que ninguém lembra de acrescentar.
+ */
+function erroParaTela(rotulo: string, err: unknown): string {
+  if (err instanceof ErroComCopy) return err.message;
+  return mensagemDeExcecao(err, logarErroSemPII(rotulo, err));
+}
 
 export type ResultadoSolicitacao =
   | {
@@ -26,11 +41,8 @@ export async function solicitarExportacaoAction(): Promise<ResultadoSolicitacao>
     const ctx = await getTenantContext();
     const res = await solicitarExportacao(ctx.clinicId, ctx.userId, ctx.role);
     return { ok: true, bundleId: res.bundleId, status: res.status };
-  } catch (err: any) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-    };
+  } catch (err: unknown) {
+    return { ok: false, error: erroParaTela("solicitarExportacao:", err) };
   }
 }
 
@@ -56,9 +68,6 @@ export async function gerarLinkDownloadAction(
     );
     return { ok: true, url };
   } catch (err: unknown) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-    };
+    return { ok: false, error: erroParaTela("gerarLinkDownload:", err) };
   }
 }

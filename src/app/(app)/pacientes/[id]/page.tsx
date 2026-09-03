@@ -22,6 +22,7 @@ import { obterRPDEntries } from "./tcc/logic";
 import { obterInstrumentoAplicacoes } from "./tcc/instrumento-logic";
 import { vistaValida } from "./timeline/vista-nav";
 import { montarProntidao } from "@/lib/patient/prontidao";
+import { codigoPg } from "@/db/pg-error";
 import { obterFatosProntidao } from "./prontidao-queries";
 import { EvolucaoVazia } from "./evolucao-vazia";
 
@@ -97,10 +98,12 @@ export default async function PacientePage({
           // NUNCA `erro.message`: em `DrizzleQueryError` a `message` é o SQL
           // inteiro com os `params` interpolados. `name` + código do Postgres
           // localiza o caso sem despejar consulta no log.
-          const codigo =
-            erro && typeof erro === "object" && "cause" in erro
-              ? ((erro.cause as { code?: string })?.code ?? "sem-codigo")
-              : "sem-codigo";
+          //
+          // `codigoPg` e não `erro.cause.code` à mão: a posição do SQLSTATE
+          // depende de QUEM lançou — o Drizzle embrulha e joga o original em
+          // `.cause`, mas erro cru do driver expõe `.code` na raiz. Ler só o
+          // `.cause` registraria "sem-codigo" no caso em que o código existe.
+          const codigo = codigoPg(erro) ?? "sem-codigo";
           console.warn(
             `[prontidao] falha ao ler fatos (patientId=${id}, erro=${
               erro instanceof Error ? erro.name : "desconhecido"

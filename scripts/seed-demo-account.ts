@@ -14,7 +14,7 @@
  * - Alertas clínicos de supervisão e risco
  *
  * Uso:
- *   pnpm tsx --conditions=react-server --env-file=.env scripts/seed-demo-account.ts sutil.romulo@gmail.com
+ *   pnpm tsx --conditions=react-server --env-file=.env scripts/seed-demo-account.ts <email-do-coordenador>
  */
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -49,9 +49,15 @@ import {
 import { assertSeedAllowed } from "./lib/guardrail-seed";
 
 async function main() {
-  const targetEmail = (process.argv[2] || "sutil.romulo@gmail.com")
-    .toLowerCase()
-    .trim();
+  // E-mail é argumento obrigatório: sem default pessoal versionado
+  // (auditoria 360, S-09). Uso: pnpm seed:custom <email-do-coordenador>
+  const emailArg = process.argv[2]?.trim();
+  if (!emailArg) {
+    throw new Error(
+      "Informe o e-mail do coordenador alvo: pnpm seed:custom <email>",
+    );
+  }
+  const targetEmail = emailArg.toLowerCase();
   const senhaPadrao = "SenhaLocal123!";
 
   const migrationUrl =

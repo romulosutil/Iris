@@ -12,6 +12,8 @@ import {
   type SupervisaoResult,
   type SupervisaoState,
 } from "./logic";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+import { textoErroInterno } from "@/lib/copy/erros";
 // Re-export do tipo público consumido por `supervisao-fila.tsx` (moveu p/ logic).
 export type { SupervisaoState };
 
@@ -31,8 +33,8 @@ async function comCtx(
   } catch (err) {
     if (err instanceof RoleError)
       return { error: "Só o coordenador supervisiona." };
-    console.error("wrapper supervisao:", err);
-    return { error: "Erro interno no servidor." };
+    const correlacaoId = logarErroSemPII("wrapper supervisao:", err);
+    return { error: textoErroInterno(correlacaoId) };
   }
 }
 

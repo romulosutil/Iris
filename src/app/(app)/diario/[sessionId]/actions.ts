@@ -17,6 +17,7 @@ import {
   registrarAudioLocal,
   type EstadoClipeAsr,
 } from "./logic";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 // ─── Wrappers para `useActionState` (resolvem o tenant do request) ────────────
 
@@ -50,7 +51,7 @@ export async function capturarDiarioAction(
     if (err instanceof ProntuarioIncompletoError) {
       return { error: err.motivo };
     }
-    console.error("capturarDiarioAction:", err);
+    logarErroSemPII("capturarDiarioAction:", err);
     return { error: "Não foi possível salvar a captura." };
   }
 }
@@ -74,7 +75,7 @@ export async function corrigirEscopoProtocoloAction(
   } catch (err) {
     if (err instanceof RoleError)
       return { error: "Só o terapeuta da sessão ajusta os protocolos." };
-    console.error("corrigirEscopoProtocoloAction:", err);
+    logarErroSemPII("corrigirEscopoProtocoloAction:", err);
     return { error: "Não foi possível ajustar os protocolos." };
   }
 }
@@ -102,7 +103,7 @@ export async function registrarAudioLocalAction(
   } catch (err) {
     if (err instanceof RoleError)
       return { error: "Só o terapeuta da sessão registra o áudio." };
-    console.error("registrarAudioLocalAction:", err);
+    logarErroSemPII("registrarAudioLocalAction:", err);
     return { error: "Não foi possível registrar o áudio." };
   }
 }
@@ -142,7 +143,7 @@ export async function consolidarSessaoAction(
     if (err instanceof ProntuarioIncompletoError) {
       return { error: err.motivo };
     }
-    console.error("consolidarSessaoAction:", err);
+    logarErroSemPII("consolidarSessaoAction:", err);
     return { error: "Não foi possível consolidar." };
   }
 }
@@ -189,7 +190,7 @@ export async function enviarLoteAsrAction(input: {
   } catch (err) {
     if (err instanceof RoleError)
       return { error: "Só o terapeuta da sessão envia o ditado de voz." };
-    console.error("enviarLoteAsrAction:", err);
+    logarErroSemPII("enviarLoteAsrAction:", err);
     return { error: "Não foi possível enviar o áudio para transcrição." };
   }
 }
@@ -210,7 +211,7 @@ export async function obterEstadoLoteAction(
   } catch (err) {
     if (err instanceof RoleError)
       return { error: "Só o terapeuta da sessão acompanha a transcrição." };
-    console.error("obterEstadoLoteAction:", err);
+    logarErroSemPII("obterEstadoLoteAction:", err);
     return { error: "Não foi possível consultar o estado da transcrição." };
   }
 }
@@ -225,7 +226,7 @@ export async function obterLoteMaisRecenteAction(
   } catch (err) {
     if (err instanceof RoleError)
       return { error: "Só o terapeuta da sessão acompanha a transcrição." };
-    console.error("obterLoteMaisRecenteAction:", err);
+    logarErroSemPII("obterLoteMaisRecenteAction:", err);
     return { error: "Não foi possível consultar o lote da sessão." };
   }
 }
@@ -245,7 +246,7 @@ export async function aceitarTranscricaoLoteAction(
   } catch (err) {
     if (err instanceof RoleError)
       return { error: "Só o terapeuta da sessão usa a transcrição no diário." };
-    console.error("aceitarTranscricaoLoteAction:", err);
+    logarErroSemPII("aceitarTranscricaoLoteAction:", err);
     return { error: "Não foi possível usar a transcrição no diário." };
   }
 }
@@ -294,7 +295,7 @@ export async function reprocessarExtracaoAction(
     if (err instanceof RoleError) {
       return { error: "Só o terapeuta da sessão reprocessa a extração." };
     }
-    console.error("reprocessarExtracaoAction:", err);
+    logarErroSemPII("reprocessarExtracaoAction:", err);
     return { error: "Não foi possível reprocessar a extração." };
   }
 }

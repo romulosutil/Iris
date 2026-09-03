@@ -120,6 +120,20 @@ export const auth = betterAuth({
       });
     },
   },
+  // S-07 (#530): sessão curta para app clínico em desktop compartilhado.
+  // Default do Better-Auth era 7 dias com renovação diária — uma sessão
+  // esquecida na recepção expunha prontuário por uma semana. 12h = um turno
+  // de clínica; renovação a cada 1h de atividade, não a cada dia. MFA
+  // (getTenantContext) protege o LOGIN; isto protege a sessão ABERTA.
+  //
+  // `freshAge` fica no default: o Better-Auth só o aplica aos próprios
+  // endpoints com `freshSessionMiddleware`. Exigir sessão fresca na
+  // exportação/expurgo é checagem na action (`session.createdAt`), registrada
+  // como pendência na PR — não é só config.
+  session: {
+    expiresIn: 60 * 60 * 12,
+    updateAge: 60 * 60,
+  },
   // DB gera o id (uuid default) — não deixar o Better-Auth gerar string.
   advanced: {
     database: { generateId: false },

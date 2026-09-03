@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { Stack } from "@/components/ui/layout";
 import { Alert } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import { asrHabilitado } from "@/lib/flags";
 import { ReprocessarExtracao } from "../../diario/[sessionId]/reprocessar-extracao";
 import type { carregarSessao } from "./queries";
 import { ROTULO_GESTO, ROTULO_MOTIVO } from "./timeline";
 import { PassoDocumentar } from "./passo-documentar";
 import { PassoRevisar } from "./passo-revisar";
+import { PassoVerNoAcervo } from "./passo-ver-no-acervo";
 import { CartaoProntidao } from "@/components/app/cartao-prontidao";
 import type { getTenantContext } from "@/auth/tenant";
 
@@ -116,15 +116,15 @@ export async function PassoEmFoco({
       );
 
     case "ver_no_acervo":
+      // #533 — em `revisada`, o coordenador ganha "Abrir na fila de
+      // validação" (`/validacao?sessao=<id>`); ver `passo-ver-no-acervo.tsx`.
       return (
-        <Alert severidade="sucesso" titulo={ROTULO_GESTO.ver_no_acervo}>
-          {resultado.estado === "revisada"
-            ? "Revisada — falta só a coordenação encerrar o item na fila."
-            : "Toda a documentação desta sessão já está no acervo do paciente."}{" "}
-          <Button asChild variante="neutra">
-            <Link href={`/pacientes/${dados.patientId}`}>Ver no acervo</Link>
-          </Button>
-        </Alert>
+        <PassoVerNoAcervo
+          revisada={resultado.estado === "revisada"}
+          patientId={dados.patientId}
+          sessionId={sessionId}
+          ehCoordenador={ctx.role === "coordenador"}
+        />
       );
   }
 }

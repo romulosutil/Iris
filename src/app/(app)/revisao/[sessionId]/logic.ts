@@ -18,7 +18,10 @@ import {
   resolverAlvoParaFks,
 } from "@/lib/evidence/resolver";
 import { podeAutoValidar } from "@/lib/sessao/aprovacao";
+import { conteudoDoSubtipo } from "@/lib/extraction/conteudo-subtipo";
 import { avaliarFriccao } from "@/lib/extraction/review-policy";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+import { textoErroInterno } from "@/lib/copy/erros";
 
 // ─── Colapso da aprovação (T07, spec R-07/R-10/R-11, §3.5) ─────────────────
 // Quando `podeAutoValidar(ctx, sessão)` é true (coordenador === terapeuta da
@@ -113,30 +116,10 @@ class TransicaoRecusada extends Error {
   }
 }
 
-/**
- * O payload gravado em `extraction` é o objeto FLAT do subtipo
- * (`LlmExtractionProvider.payloadDoSubtipo` → `e.evidencia`, e o stub demo
- * grava `{alvos, polaridade}`), mas os leitores on-approve nasceram lendo a
- * forma ANINHADA `{evidencia: {...}}` dos seeds de teste — em produção
- * `alvos` saía sempre vazio e nenhuma `evidence` nascia na aprovação (achado
- * ao fechar #532). Aceita as duas formas: chave do subtipo presente e objeto
- * → aninhado; chave presente e `null` → sem conteúdo; ausente → o próprio
- * payload é o conteúdo.
- */
-function conteudoDoSubtipo(
-  payload: unknown,
-  subtipo: string,
-): Record<string, unknown> | null {
-  if (!payload || typeof payload !== "object") return null;
-  const p = payload as Record<string, unknown>;
-  if (subtipo in p) {
-    const aninhado = p[subtipo];
-    return aninhado && typeof aninhado === "object"
-      ? (aninhado as Record<string, unknown>)
-      : null;
-  }
-  return p;
-}
+// A leitura tolerante das duas formas do payload (flat/aninhada) mora em
+// `@/lib/extraction/conteudo-subtipo` — FONTE ÚNICA, compartilhada com
+// `scripts/backfill-evidence.ts`. Foi a cópia divergente entre este leitor e o
+// backfill que produziu a deriva da #553.
 
 // ─── Inserção de `reinforcer_profile` on-approve (Fase 4 · 4C.1) ───────────
 // Perfil vivo de reforçadores (modelo-de-dados.md §1.4): 1 linha por
@@ -448,7 +431,11 @@ async function transicionar(
     // com os params (= dado clínico). Só nome + SQLSTATE + hash da message,
     // que é o mesmo hash gravado no DLQ abaixo — correlação sem PHI.
     const detalhe = detalheDoErro(err);
-    console.error("Erro na transição da extração:", {
+    // S-10 (#531): nem no `erro_validacao_detalhe` nem na tela entra
+    // `err.message` — é aqui que o `DrizzleQueryError` carrega o INSERT de
+    // `evidence` com o conteúdo clínico nos params. O helper reduz o erro a
+    // nome + SQLSTATE + hash; `detalhe` já é conjunto fechado de primitivos.
+    logarErroSemPII("Erro na transição da extração:", err, {
       extractionId,
       ...detalhe,
     });
@@ -483,10 +470,9 @@ async function transicionar(
         }
       });
     } catch (dbErr) {
-      console.error(
-        "Falha ao persistir erro de validação (DLQ):",
-        detalheDoErro(dbErr),
-      );
+      logarErroSemPII("Falha ao persistir erro de validação (DLQ):", dbErr, {
+        extractionId,
+      });
     }
 
     // Só a referência (hash) chega à tela: o SQLSTATE fica no log — o

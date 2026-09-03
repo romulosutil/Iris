@@ -4,7 +4,7 @@ import { DOCUMENTOS_LEGAIS, VERSAO_POLITICA } from "@/lib/legal";
 
 /**
  * Rota pública `/privacidade`. Mesmas razões de posicionamento e de
- * `force-static` descritas em `src/app/termos/page.tsx`.
+ * `force-static` descritas em `src/app/(publico)/termos/page.tsx`.
  */
 export const dynamic = "force-static";
 

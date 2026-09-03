@@ -1,5 +1,6 @@
 // Provider do Agente 2 (Relatório de Família) — interface + roteamento.
 // Espelha src/lib/extraction/provider.ts (resolveProvider).
+import { relatorioFamiliaLlmHabilitado } from "@/lib/flags";
 import { GeminiFamilyReportProvider } from "./gemini-provider";
 import type { FamilyReportDraft, FamilyReportInput } from "./types";
 import { StubFamilyReportProvider } from "./stub-provider";
@@ -22,8 +23,7 @@ export function resolveFamilyReportProvider(clinic: {
 }): FamilyReportProvider {
   if (clinic.isDemo) return new StubFamilyReportProvider();
   const llmHabilitado =
-    process.env.FAMILY_REPORT_LLM_ENABLED === "true" &&
-    !!process.env.GOOGLE_API_KEY;
+    relatorioFamiliaLlmHabilitado() && !!process.env.GOOGLE_API_KEY;
   if (!llmHabilitado) return new StubFamilyReportProvider();
   return new GeminiFamilyReportProvider();
 }

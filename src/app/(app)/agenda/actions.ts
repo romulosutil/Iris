@@ -8,6 +8,7 @@ import {
   type MarcarEstadoInput,
   type SessionEstado,
 } from "./logic";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 export type { SessaoDoDia, SessionEstado } from "./logic";
 
@@ -34,7 +35,7 @@ export async function marcarEstadoAction(
   } catch (err) {
     if (err instanceof RoleError)
       return { error: "Você não tem permissão para atualizar a sessão." };
-    console.error("marcarEstadoAction:", err);
+    logarErroSemPII("marcarEstadoAction:", err);
     return { error: "Não foi possível atualizar a sessão." };
   }
 }
@@ -50,7 +51,7 @@ export async function checkInAction(
     if (!resultado.error) revalidatePath("/agenda");
     return resultado;
   } catch (err) {
-    console.error("checkInAction: erro inesperado", err);
+    logarErroSemPII("checkInAction: erro inesperado", err);
     return { error: "Não foi possível registrar o check-in." };
   }
 }

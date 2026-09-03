@@ -17,10 +17,12 @@ import * as schema from "@/db/schema";
 import {
   clinic,
   protocol,
+  milestone,
+  goal,
   patient,
   consent,
   patientProtocol,
-  goal,
+  careTeamMembership,
   session,
 } from "@/db/schema";
 import { provisionUser } from "@/auth/provisioning";
@@ -58,6 +60,22 @@ export async function seedDemoClinic(
     .returning();
   if (!protocoloDemo) throw new Error("Falha ao criar protocolo demo.");
 
+  // #533 — UM marco, num único domínio, para o e2e do coordenador
+  // (`validacao-coordenador.spec.ts`) ter um alvo de reclassificação:
+  // `alvosValidosDoPaciente` lista goals do paciente + marcos dos protocolos
+  // ativos, e o paciente demo não tem goal. Um só por domínio de propósito —
+  // `resolverAlvoParaFks` devolve `null` (e `validarAlvo` recusa) quando o
+  // domínio tem mais de um marco. O `DemoStubProvider` não usa marcos
+  // (só `goal_id`), então nada muda para `diario-demo`/`revisao`.
+  await ownerDb.insert(milestone).values({
+    protocolId: protocoloDemo.id,
+    dominioId: "mando",
+    nome: "Mando — pede item desejado",
+    nivel: "1",
+    tipoEstrutura: "marco_simples",
+    estrutura: {},
+  });
+
   console.log(`👤 Provisionando coordenador e terapeuta demo...`);
   const { userId: coordenadorId } = await provisionUser({
     email: "coordenador.demo@iris.test",
@@ -90,6 +108,13 @@ export async function seedDemoClinic(
     { nome: "Paciente Demo E2E", hora: 9, spec: "diario-demo" },
     { nome: "Paciente Revisão E2E", hora: 10, spec: "revisao" },
     { nome: "Paciente Ditado E2E", hora: 11, spec: "ditado-voz" },
+    // #533 — o terapeuta consolida e decide as 6 sugestões; as 2 de baixa
+    // confiança sobem para a fila do coordenador (`/validacao`).
+    {
+      nome: "Paciente Validação E2E",
+      hora: 12,
+      spec: "validacao-coordenador",
+    },
   ] as const;
 
   console.log("📅 Agendando sessões de hoje para o terapeuta demo...");
@@ -140,15 +165,38 @@ export async function seedDemoClinic(
     // recusa e a rota da sessão renderiza o cartão de bloqueio no lugar do
     // formulário, e não existe campo "Anotação rápida" para o spec preencher.
     // Uma clínica demo que não consegue documentar não demonstra o produto.
+    //
+    // A meta é de TODOS os pacientes demo porque `app_fatos_prontidao`
+    // (`0149`) é `SECURITY DEFINER` e lê `goal` sem exigir vínculo: a régua
+    // vale para qualquer spec. Já a VISIBILIDADE da meta ao terapeuta segue
+    // exigindo `app_is_on_team` (`goal_select`) — é o `careTeamMembership`
+    // abaixo, e não esta linha, que faz `metasAtivas` deixar de vir vazia.
     await ownerDb.insert(goal).values({
       clinicId,
       patientId: paciente.id,
-      descricao: "Pedir água apontando, sem ajuda física.",
+      descricao: "Pedir o item desejado com palavra ou gesto",
       disciplina: "ABA",
       estado: "ativa",
-      criterioDominio: { tipo: "ocorrencias_consecutivas", valor: 3 },
+      criterioDominio: { tipo: "acertos_consecutivos", valor: 3 },
       criadoPor: coordenadorId,
     });
+
+    // #533 — SÓ o paciente do e2e do coordenador enxerga a meta pelo
+    // terapeuta. O `DemoStubProvider` só põe alvo na sugestão quando
+    // `metasAtivas[0]` existe, e `evidence` nasce POR ALVO
+    // (`revisao/logic.ts`, `alvo_ordinal`): sem meta visível, aprovar a
+    // sugestão não gera evidência nenhuma e nada entra na fila de
+    // `/validacao`. Os outros pacientes ficam sem o vínculo de propósito —
+    // `diario-demo`/`revisao` contam cartões, não evidências, e não devem
+    // mudar de comportamento.
+    if (spec === "validacao-coordenador") {
+      await ownerDb.insert(careTeamMembership).values({
+        patientId: paciente.id,
+        userId: terapeutaId,
+        disciplina: "ABA",
+        papelNaEquipe: "terapeuta_referencia",
+      });
+    }
 
     await ownerDb.insert(session).values({
       clinicId,

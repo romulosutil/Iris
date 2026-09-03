@@ -70,6 +70,7 @@ Ordem de leitura:
 3. `README.md` — 8 princípios inegociáveis + mapa de docs (`docs/**`).
 4. `docs/arquitetura/stack-e-plano-de-construcao.md` — stack, plano fases 0.5 a 6, checklist LGPD mínimo viável.
 5. Docs da fase em construção (mapa em `README.md` — ex: `docs/dados/modelo-de-dados.md` + `docs/ux/fluxos-e-wireframes.md` para Fase 1, `docs/archive/handoff-fase1.md`).
+6. **Estado atual do repositório: `BACKLOG.md`** (fonte única — "Débitos técnicos abertos" + seções `🏁 Sessão …`, mais recente primeiro) e `docs/daily-summary/<data>.md` (resumo do dia). `checkpoint.md` é só um ponteiro para esses dois; não o leia como estado (auditoria 360, `DX-02`).
 
 Dúvida documentada: ler doc, não pedir reexplicação ao Rômulo.
 
@@ -110,7 +111,7 @@ Regra pós-mortem D22 (#239, PR #240, memória `d22-sessao-gastou-token-em-loops
 
 **1b. Antes de aplicar a label `jules`, fechar o checklist de handoff (`AGENTS.md` §5.2).** Regra pós-mortem #285/PR #295 (13-14/08/2026): RCA impecável, mas Design incompleto (limites de polling, dono da leitura, decisão de UI, régua de mutação por comportamento — todos "a validar") gerou 9 achados na revisão pós-PR. Fechar os 7 pontos da §5.2 na issue/spec ANTES do label evita que o executor autônomo escolha por você. Revisão pós-PR (Claude/Opus) sempre lê o diff contra a Definição de Pronto original — CI verde sozinho não basta (`AGENTS.md` §5.6).
 
-**2. Teto de ~50 mensagens por sessão:** Ao se aproximar do teto, salvar checkpoint em `checkpoint.md` (feito, pendente, decisões, próximo passo) e avisar Rômulo para `/clear`.
+**2. Teto de ~50 mensagens por sessão:** Ao se aproximar do teto, salvar checkpoint no `BACKLOG.md` (nova seção `🏁 Sessão …` com feito, pendente, decisões, próximo passo — `AGENTS.md` §8) e avisar Rômulo para `/clear`. `checkpoint.md` não recebe estado: é ponteiro para o `BACKLOG.md` e para `docs/daily-summary/`.
 
 ## Permissões — o que rodar livremente vs. o que confirmar antes
 

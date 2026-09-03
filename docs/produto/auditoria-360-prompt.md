@@ -96,27 +96,27 @@ sobreviveram à migração.
 
 ### 2.4 Mapa de documentação — fonte de verdade por assunto
 
-| Preciso de... | Arquivo |
-|---|---|
-| Contrato operacional multi-agente, guardrails, governança 3 camadas | `AGENTS.md` |
-| Detalhe de engenharia, comandos, armadilhas de migração | `CLAUDE.md` |
-| Produto, usuários, anti-referências, princípios de design, a11y-alvo | `PRODUCT.md` |
-| Design system tokens/regras | `DESIGN.md`, `docs/ux/design-system-espectro-brutal.md` |
-| O que já foi identificado como falta/dívida/decisão aberta | `BACKLOG.md` (log de sessões + tabela `D-nnn`) |
-| Specs de features recentes/em andamento | `.specs/features/**` |
-| Regras do agente de extração (R1-R19 + variantes por protocolo) | `docs/agente/system-instructions.md`, `docs/agente/protocolos-e-agente.md`, `docs/agente/output-schema.json` |
-| Regras de validação do coordenador (V1-V5) | `docs/governanca/validacao-coordenador.md` |
-| Modelo de dados / RLS / event-sourcing da timeline | `docs/dados/modelo-de-dados.md`, `src/db/schema.ts` |
-| Gaps de produto já mapeados (não redescobrir) | `docs/produto/mapa-jornadas-gaps.md` |
-| Modelo de negócio, pricing, GTM | `docs/produto/modelo-de-negocio.md` |
-| User flows, wireframes, microcopy pt-BR | `docs/ux/fluxos-e-wireframes.md`, `docs/ux/jornada-sessao-unificada.md` |
-| Inventário de componentes por fase | `docs/ux/inventario-componentes.md` |
-| 14 documentos legais + estado da revisão jurídica (21/08/2026) | `docs/legal/**`, `docs/legal/revisao-juridica-2026-08-21.md` |
-| Checklist de aceite do MVP / go-live | `docs/arquitetura/checklist-producao-mvp.md`, `docs/GO_LIVE.md` |
-| Estado da última sessão de trabalho | `checkpoint.md` |
-| Resumos diários recentes | `docs/daily-summary/*.md` (mais recente: `2026-09-01.md`) |
+| Preciso de...                                                        | Arquivo                                                                                                      |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Contrato operacional multi-agente, guardrails, governança 3 camadas  | `AGENTS.md`                                                                                                  |
+| Detalhe de engenharia, comandos, armadilhas de migração              | `CLAUDE.md`                                                                                                  |
+| Produto, usuários, anti-referências, princípios de design, a11y-alvo | `PRODUCT.md`                                                                                                 |
+| Design system tokens/regras                                          | `DESIGN.md`, `docs/ux/design-system-espectro-brutal.md`                                                      |
+| O que já foi identificado como falta/dívida/decisão aberta           | `BACKLOG.md` (log de sessões + tabela `D-nnn`)                                                               |
+| Specs de features recentes/em andamento                              | `.specs/features/**`                                                                                         |
+| Regras do agente de extração (R1-R19 + variantes por protocolo)      | `docs/agente/system-instructions.md`, `docs/agente/protocolos-e-agente.md`, `docs/agente/output-schema.json` |
+| Regras de validação do coordenador (V1-V5)                           | `docs/governanca/validacao-coordenador.md`                                                                   |
+| Modelo de dados / RLS / event-sourcing da timeline                   | `docs/dados/modelo-de-dados.md`, `src/db/schema.ts`                                                          |
+| Gaps de produto já mapeados (não redescobrir)                        | `docs/produto/mapa-jornadas-gaps.md`                                                                         |
+| Modelo de negócio, pricing, GTM                                      | `docs/produto/modelo-de-negocio.md`                                                                          |
+| User flows, wireframes, microcopy pt-BR                              | `docs/ux/fluxos-e-wireframes.md`, `docs/ux/jornada-sessao-unificada.md`                                      |
+| Inventário de componentes por fase                                   | `docs/ux/inventario-componentes.md`                                                                          |
+| 14 documentos legais + estado da revisão jurídica (21/08/2026)       | `docs/legal/**`, `docs/legal/revisao-juridica-2026-08-21.md`                                                 |
+| Checklist de aceite do MVP / go-live                                 | `docs/arquitetura/checklist-producao-mvp.md`, `docs/GO_LIVE.md`                                              |
+| Estado da última sessão de trabalho                                  | `checkpoint.md`                                                                                              |
+| Resumos diários recentes                                             | `docs/daily-summary/*.md` (mais recente: `2026-09-01.md`)                                                    |
 
-### 2.5 Convenções de engenharia críticas (já resolvidas — audite se são *seguidas*, não se existem)
+### 2.5 Convenções de engenharia críticas (já resolvidas — audite se são _seguidas_, não se existem)
 
 - **RLS multi-tenant**: toda policy/função deve resolver o tenant via
   `app_clinic_id_exigido()`; nunca cast direto de
@@ -225,7 +225,7 @@ se fizer sentido; não os reapresente como "novos":
   (`renderGraficoProtocolo()`) já tem barra empilhada por percentual; o
   subtipo de extração `cadeia` (regra R9,
   `docs/agente/protocolos-e-agente.md`) já captura `{nome,
-  etapas:[{descricao, nivel_ajuda}]}` por rotina (ABLLS-R/AFLS). O gap: a
+etapas:[{descricao, nivel_ajuda}]}` por rotina (ABLLS-R/AFLS). O gap: a
   cadeia por etapa só aparece como lista de texto em `resumo.ts`
   (case "cadeia") na tela de revisão; `materializar.ts` não parece agregar o
   array `etapas` em percentual para alimentar o hexágono ou a barra de
@@ -252,7 +252,7 @@ se fizer sentido; não os reapresente como "novos":
   com a lacuna real sendo "não tem issue".
 - **Padrão de gate lido de forma inconsistente**: o PR #422 (exportação de
   acervo) tinha o mesmo gate de negócio (`clinic.responsavel_conta_id IS
-  NULL`) checado de 3 formas diferentes em `motor.ts`, `download.ts` e
+NULL`) checado de 3 formas diferentes em `motor.ts`, `download.ts` e
   `page.tsx`. Investigue se esse padrão ("mesma regra de negócio checada
   em N lugares de N formas") se repete em outras features além de
   exportação — é o tipo de achado sistêmico que a auditoria deve procurar
