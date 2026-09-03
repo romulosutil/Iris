@@ -68,6 +68,50 @@ describe("CartaoProntidao", () => {
     expect(screen.queryByText(/conquistado/i)).toBeNull();
   });
 
+  // Spec §4, estado 5: "Conta em somente-leitura → escada visível, gestos
+  // desabilitados pela razão que `layout.tsx` já exibe."
+  //
+  // Texto real de `mensagemDeEstado("trial_expirado")` (`estado-conta.ts`) —
+  // não uma frase inventada para o teste: é justamente a reutilização dessa
+  // fonte que a prop existe para garantir.
+  const MOTIVO =
+    "Seu período de teste terminou. Você continua vendo e exportando o que já registrou — para voltar a cadastrar e editar, ative a assinatura. Você paga pelas fichas ativas no mês, sem valor mínimo.";
+
+  it("conta em somente-leitura: escada visível e gesto primário desabilitado com a razão", () => {
+    render(
+      <CartaoProntidao
+        prontidao={prontidao(NADA, "coordenador")}
+        motivoSomenteLeitura={MOTIVO}
+      />,
+    );
+
+    // A escada continua inteira: bloqueio de ESCRITA não apaga a LEITURA de
+    // o que falta e de quem resolve.
+    expect(screen.getAllByRole("listitem")).toHaveLength(6);
+
+    const gesto = screen.getByTestId("gesto-primario");
+    expect(gesto.tagName).toBe("BUTTON");
+    expect((gesto as HTMLButtonElement).disabled).toBe(true);
+    // Sem `href` nenhum: um link "desabilitado" continua abrível por clique do
+    // meio, e levaria a uma tela que recusa a escrita de novo.
+    expect(gesto.hasAttribute("href")).toBe(false);
+
+    // Desabilitado COM razão legível — a diferença entre isso e botão morto.
+    expect(screen.getByTestId("motivo-somente-leitura").textContent).toBe(
+      MOTIVO,
+    );
+  });
+
+  // Contra-caso obrigatório: sem o motivo, nada muda. Sem esta linha, um
+  // componente que desabilitasse SEMPRE passaria no teste acima.
+  it("sem conta bloqueada, o gesto continua sendo o link navegável", () => {
+    render(<CartaoProntidao prontidao={prontidao(NADA, "coordenador")} />);
+    const gesto = screen.getByTestId("gesto-primario");
+    expect(gesto.getAttribute("href")).toBe("/pacientes/p1/cadastro-clinico");
+    expect(gesto.getAttribute("aria-disabled")).toBeNull();
+    expect(screen.queryByTestId("motivo-somente-leitura")).toBeNull();
+  });
+
   it("lista a escada inteira, incluindo os degraus já concluídos", () => {
     render(<CartaoProntidao prontidao={prontidao(NADA, "coordenador")} />);
     expect(screen.getAllByRole("listitem")).toHaveLength(6);

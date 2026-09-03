@@ -184,6 +184,13 @@ export default async function PacienteLayout({
             role: ctx.role,
             patientId: id,
           })}
+          // Mesma chamada que a tarja abaixo faz: `mensagemDeEstado` é a fonte
+          // única da razão. O cartão não escreve copy própria — se escrevesse,
+          // duas frases sobre o mesmo bloqueio conviveriam na mesma tela,
+          // livres para divergir na próxima mudança de política de cobrança.
+          motivoSomenteLeitura={
+            situacao.podeEscrever ? null : mensagemDeEstado(situacao.estado)
+          }
         />
       ) : null}
       {!situacao.podeEscrever ? (
