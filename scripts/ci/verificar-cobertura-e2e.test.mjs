@@ -299,8 +299,19 @@ describe("verificar-cobertura-e2e — teto de flaky por arquivo (#542, Q-06)", (
       { minTests: 17, minFiles: 1, baselineFlaky: baselineTresConhecidos },
     );
     expect(res.ok).toBe(false);
-    expect(res.problemas.join("\n")).toMatch(
+    const mensagem = res.problemas.join("\n");
+    expect(mensagem).toMatch(
       /mobile-navegacao\.spec\.ts: 2 teste\(s\) flaky, baseline permite 1/,
+    );
+    // A lista de testes problemáticos precisa vir junto: sem ela a mensagem
+    // termina em "investigar): " e não diz O QUE investigar. A filtragem casa
+    // o arquivo normalizado (`mobile-navegacao.spec.ts`) contra `t.arquivo`,
+    // que mantém o prefixo `e2e/` — casar cru devolvia lista vazia.
+    expect(mensagem).toContain(
+      'e2e/mobile-navegacao.spec.ts:116 "a barra de lote da validação não fica sob a BottomNav" [mobile-360]',
+    );
+    expect(mensagem).toContain(
+      'e2e/mobile-navegacao.spec.ts:200 "outro teste do mesmo arquivo que também oscilou" [mobile-360]',
     );
   });
 

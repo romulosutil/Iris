@@ -227,7 +227,7 @@ export function verificarCoberturaE2E(report, opts = {}) {
     if (contagem > permitido) {
       problemas.push(
         `${arquivo}: ${contagem} teste(s) flaky, baseline permite ${permitido} — flake novo ou piorado (não suba o baseline sem investigar): ${flakyTestes
-          .filter((t) => t.arquivo === arquivo)
+          .filter((t) => normalizarArquivoFlaky(t.arquivo) === arquivo)
           .map(formatarFlaky)
           .join("; ")}`,
       );
