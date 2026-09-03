@@ -82,7 +82,62 @@ Achados **novos** que as PRs expuseram (além do relatório): aprovação real g
 - 03/09: limite de sessão derrubou 8 agentes às ~00h; retomados em ondas de 4 (A: W4, W8, W11, W9-fix; B: W10; C: W2-fix, W1-fix, revisor de #546/#547/#548, W7)
 - [x] Onda 2 despachada (W4, W6, W8); W7 empilha sobre W4 (mesma tabela `extraction`); onda 3 = W10, W11
 - Isolamento de banco por workstream: `iris_wN` no cluster local (:5433), criado via `docker exec infra-postgres-1 psql -U iris`
-- [ ] W1..W12 em PR Draft
-- [ ] Int-tests rodados sequencialmente por branch (DB compartilhado em :5433)
-- [ ] PRs marcadas Ready
-- [ ] Conflitos acompanhados até merge
+- [x] W1..W12 em PR Draft
+- [x] Int-tests rodados sequencialmente por branch (DB compartilhado em :5433)
+- [x] PRs marcadas Ready
+- [x] Conflitos acompanhados até merge
+
+## Encerramento das 12 ondas (03/09/2026)
+
+**12/12 mergeadas.** `main` em `07fc7b11`. PRs: #541, #543, #544, #545, #546, #547,
+#548, #549, #550, #551, #555, #556. As sequelas de merge também fecharam: #561
+(guard de `app_session_sob_sigilo`, #552), #562 (backfill pelo helper compartilhado,
+#553 parte 1), #563 (régua do profissional responsável nos alertas, #554), #564
+(flake de latência que avermelhava PR alheia), #565 (guard do `.env.example`),
+#569 (forma canônica FLAT do `extraction.payload`, fecha #553).
+
+## Cauda aberta e ordem de execução (revisada em 03/09/2026)
+
+Sete issues sobraram. Duas nasceram do próprio W10 depois do merge de #556.
+
+| Onda | Issue | Item                                                                                                     | Estado                 |
+| ---- | ----- | -------------------------------------------------------------------------------------------------------- | ---------------------- |
+| A    | #553  | Forma canônica do payload + backfill                                                                     | **fechada** (#569)     |
+| A    | #567  | `metrica` objeto × string — `[object Object]` no briefing, linha "Métrica" sumindo do card de supervisão | em andamento           |
+| B    | #542  | Flake e2e `represcricao-mv4` (`Q-06`)                                                                    | despachada             |
+| B    | #566  | Painel admin no DS + fechar `ESCOPO_DS` do lint (`DS-01`, sequela do W10)                                | despachada             |
+| B    | #558  | `PR-04` cadeia de suporte por percentual                                                                 | **spec**, não execução |
+| C    | #560  | `DA-04` logger estruturado + id de correlação                                                            | fila                   |
+| C    | #559  | `A-02` regra em `logic.ts`, rota importando rota                                                         | fila                   |
+
+### Por que esta ordem
+
+- **#553 e #567 são a mesma família**: um formato de jsonb lido de N jeitos. #553
+  canonizou a escrita do `extraction.payload`; #567 faz o mesmo pelo `metrica` do
+  `session_snapshot` — um formatador único ao lado do schema, nunca `String(objeto)`.
+- **#560 antes de #559** (invertido em relação ao registro original): medido em
+  03/09, `logar-erro.ts` tem 49 consumidores, dos quais 11 são `logic.ts` — os
+  mesmos arquivos que #559 vai mover. Fazer #559 primeiro obriga a reescrever a
+  chamada de log duas vezes. Nenhum dos dois cabe num subagente único; ambos
+  precisam de atomização prévia.
+- **#542 e #566 paralelizam** entre si e com #567: interseção de arquivo zero
+  (`e2e/represcricao-mv4.spec.ts` × `(admin)`/`components/admin` ×
+  `sinais.ts`/`briefing`/`supervisao-card`). Teto de 2 subagentes por vez — o
+  runner é self-hosted e agentes paralelos produzem falhas disjuntas na suíte RLS
+  que parecem regressão e são contenção.
+- **Armadilha entre #567 e #566**: `supervisao-card.tsx` está dentro de
+  `ESCOPO_DS` e contado no baseline do lint, que #566 regenera. #566 só pode
+  regenerar o baseline no último commit, depois de rebasear em `main` com #567 já
+  mergeada — senão o baseline conflita e `ds-paleta-crua.test.ts` fica ambíguo
+  sobre quem mudou a contagem.
+- **#558 não é execução**: toca a camada `evidence` (modelo de dados e contrato do
+  agente), então exige `/tlc-spec-driven` antes de qualquer código, e os 7 pontos
+  do checklist de handoff (`AGENTS.md` §5.2) fechados antes da label `jules`.
+
+### Pendências operacionais (não são issue)
+
+- `EXPORT_JOB_TOKEN` no Easypanel — pré-requisito de #545, já mergeada. **Verificar
+  medindo** se foi provisionado; issue fechada não prova serviço no painel.
+- Role `iris_expurgo_audit_log` + `EXPURGO_DATABASE_URL` — mesma situação (#551).
+- Worktrees de `.claude/worktrees/` das 12 ondas seguem no disco; limpar com
+  `git worktree prune` após confirmar que nada pendente vive neles.
