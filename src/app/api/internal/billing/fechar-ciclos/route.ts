@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { autorizarBearer } from "@/lib/security/autorizar-bearer";
 import {
   aplicarBackstopDePrazo,
   cancelarAssinaturasComCarenciaVencida,
@@ -31,7 +31,8 @@ import {
  * a lógica fica aqui, onde `calculator.ts` é a única fonte do preço.
  *
  * Não é rota pública. A autenticação é um bearer fixo (`BILLING_JOB_TOKEN`)
- * comparado em tempo constante — mesmo idioma de `../../hooks/asaas/route.ts`.
+ * comparado em tempo constante por `autorizarBearer` (A-05, #530) — env
+ * ausente recusa tudo, nunca libera um endpoint que dispara cobrança.
  */
 
 export const runtime = "nodejs";
@@ -53,25 +54,13 @@ function diagnosticoDaEtapa(err: unknown, correlacaoId: string): string {
   return descreverErroSemPII(err, correlacaoId);
 }
 
-/**
- * Bearer em tempo constante. Env ausente → false, nunca "passa porque não há
- * token configurado": um deploy sem o segredo deve recusar tudo, não liberar
- * um endpoint que dispara cobrança.
- */
-function autorizado(header: string | null): boolean {
-  const esperado = process.env.BILLING_JOB_TOKEN;
-  if (!esperado || !header) return false;
-  const prefixo = "Bearer ";
-  if (!header.startsWith(prefixo)) return false;
-  const recebido = header.slice(prefixo.length);
-  const a = Buffer.from(recebido, "utf8");
-  const b = Buffer.from(esperado, "utf8");
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
-
 export async function POST(request: Request): Promise<Response> {
-  if (!autorizado(request.headers.get("authorization"))) {
+  if (
+    !autorizarBearer(
+      request.headers.get("authorization"),
+      process.env.BILLING_JOB_TOKEN,
+    )
+  ) {
     return Response.json({ error: "não autorizado" }, { status: 401 });
   }
 

@@ -26,16 +26,17 @@ declare global {
   }
 }
 
+/**
+ * Sem `console.log` de produção (S-08, #530): a lista de tools ia para o
+ * console de todo visitante. Falha de registro continua em `console.warn`,
+ * que é diagnóstico, não telemetria.
+ */
 export function registerWebMCPTools(tools: WebMCPTool[]) {
   if (typeof window === "undefined") return;
 
   if ("navigator" in window && window.navigator.modelContext) {
     try {
       window.navigator.modelContext.provideContext({ tools });
-      console.log(
-        "[WebMCP] Registered tools with navigator.modelContext:",
-        tools.map((t) => t.name),
-      );
     } catch (err) {
       console.warn(
         "[WebMCP] Failed to register tools with navigator.modelContext:",
@@ -50,4 +51,14 @@ export function registerWebMCPTools(tools: WebMCPTool[]) {
       }),
     );
   }
+}
+
+/**
+ * Zera o contexto: `provideContext({ tools: [] })` (ou o evento equivalente).
+ * Chamado no unmount do provider ao sair do grupo público — a navegação do
+ * Next é client-side, e um registro feito na landing sobreviveria até o
+ * prontuário.
+ */
+export function limparWebMCPTools() {
+  registerWebMCPTools([]);
 }

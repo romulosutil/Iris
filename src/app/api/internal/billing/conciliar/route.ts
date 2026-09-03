@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { autorizarBearer } from "@/lib/security/autorizar-bearer";
 import {
   conciliarCiclos,
   conciliarVinculos,
@@ -81,20 +81,14 @@ function inteiroNaoNegativo(valor: number | undefined, padrao: number): number {
     : padrao;
 }
 
-/** Env ausente → false. Deploy sem segredo recusa tudo, nunca libera. */
-function autorizado(header: string | null): boolean {
-  const esperado = process.env.BILLING_JOB_TOKEN;
-  if (!esperado || !header) return false;
-  const prefixo = "Bearer ";
-  if (!header.startsWith(prefixo)) return false;
-  const a = Buffer.from(header.slice(prefixo.length), "utf8");
-  const b = Buffer.from(esperado, "utf8");
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
-
 export async function POST(request: Request): Promise<Response> {
-  if (!autorizado(request.headers.get("authorization"))) {
+  // Env ausente → recusa tudo, nunca libera (`autorizarBearer`, A-05/#530).
+  if (
+    !autorizarBearer(
+      request.headers.get("authorization"),
+      process.env.BILLING_JOB_TOKEN,
+    )
+  ) {
     return Response.json({ error: "não autorizado" }, { status: 401 });
   }
 

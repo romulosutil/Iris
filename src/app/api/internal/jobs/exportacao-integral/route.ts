@@ -1,5 +1,5 @@
-import { timingSafeEqual } from "node:crypto";
 import { processarProximo, expirarVencidos } from "@/lib/export/acervo/motor";
+import { autorizarBearer } from "@/lib/security/autorizar-bearer";
 import {
   descreverErroSemPII,
   logarErroSemPII,
@@ -14,26 +14,17 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Validação de token Bearer em tempo constante.
+ * Só `EXPORT_JOB_TOKEN` autoriza (A-05, #530). O fallback antigo para
+ * `INTERNAL_JOB_TOKEN ?? BILLING_JOB_TOKEN` foi removido: vazar o segredo do
+ * billing não pode dar poder sobre a exportação do acervo.
  */
-function autorizado(header: string | null): boolean {
-  const esperado =
-    process.env.EXPORT_JOB_TOKEN ??
-    process.env.INTERNAL_JOB_TOKEN ??
-    process.env.BILLING_JOB_TOKEN;
-
-  if (!esperado || !header) return false;
-  const prefixo = "Bearer ";
-  if (!header.startsWith(prefixo)) return false;
-  const recebido = header.slice(prefixo.length);
-  const a = Buffer.from(recebido, "utf8");
-  const b = Buffer.from(esperado, "utf8");
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
-
 export async function POST(request: Request): Promise<Response> {
-  if (!autorizado(request.headers.get("authorization"))) {
+  if (
+    !autorizarBearer(
+      request.headers.get("authorization"),
+      process.env.EXPORT_JOB_TOKEN,
+    )
+  ) {
     return Response.json({ error: "não autorizado" }, { status: 401 });
   }
 
@@ -55,23 +46,46 @@ export async function POST(request: Request): Promise<Response> {
       });
     }
 
-    // Expira bundles com retenção vencida (> 72h)
+    // Expira bundles com retenção vencida (> 72h). Roda MESMO com bundle em
+    // `falhou` acima: a falha de uma montagem não pode segurar a retenção das
+    // outras.
     const { expirados } = await expirarVencidos();
 
+    // Q-07 (#530): bundle `falhou` é falha da passada, e o sinal tem de subir
+    // no status HTTP — o job (`scripts/exportacao-acervo.mjs`) só grava este
+    // JSON e sai pelo `resposta.ok`. Um 200 `{ok:true}` com todo bundle em
+    // `falhou` era o "exit 0 mentiroso" da #105 de novo: acervo pendente para
+    // sempre, sem alarme. O corpo vai INTEIRO nos dois caminhos: o que montou,
+    // o que falhou e por quê, e quantos expiraram.
+    const bundlesFalhos = processados.filter(
+      (p) => p.status === "falhou",
+    ).length;
+    const ok = bundlesFalhos === 0;
+
     // #536 — sinal de vida no banco (o `.mjs` deste job é fetch-only). Só
-    // contagens; `bundleId`/`erro` dos itens NÃO entram.
+    // contagens; `bundleId`/`erro` dos itens NÃO entram. O heartbeat é gravado
+    // DEPOIS do veredito da Q-07 e carrega o mesmo `ok`: passada com bundle em
+    // `falhou` não pode carimbar sucesso no monitor enquanto devolve 500.
     await registrarHeartbeat(
       "exportacao",
-      true,
-      detalheSemPii({ processados: processados.length, expirados }),
+      ok,
+      detalheSemPii({
+        processados: processados.length,
+        bundlesFalhos,
+        expirados,
+      }),
     );
 
-    return Response.json({
-      ok: true,
-      processados,
-      totalProcessados: processados.length,
-      expirados,
-    });
+    return Response.json(
+      {
+        ok,
+        processados,
+        totalProcessados: processados.length,
+        bundlesFalhos,
+        expirados,
+      },
+      { status: ok ? 200 : 500 },
+    );
   } catch (err: unknown) {
     // O corpo desta resposta é logado pelo script de disparo (Easypanel, HTTP
     // puro): nome + SQLSTATE + correlação, nunca `err.message` (#531).

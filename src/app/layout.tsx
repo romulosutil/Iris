@@ -1,9 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "@/styles/globals.css";
 import { fontVariables } from "@/app/fonts";
-import { WebMCPProvider } from "@/components/webmcp-provider";
-import { Clarity } from "@/components/clarity";
-import { GoogleAnalytics } from "@/components/google-analytics";
 import { ToastProvider } from "@/components/ui/toast";
 import { RegistrarServiceWorker } from "@/components/pwa/registrar-sw";
 
@@ -15,7 +12,8 @@ export const metadata: Metadata = {
   description:
     "Diário de sessão em linguagem natural, evidência clínica rastreável e aprovação humana item a item. Para TEA, TCC, Fonoaudiologia e Terapia Ocupacional.",
   openGraph: {
-    title: "Iris — Governança clínica para clínicas de terapia multidisciplinar",
+    title:
+      "Iris — Governança clínica para clínicas de terapia multidisciplinar",
     description:
       "Diário de sessão em linguagem natural, evidência clínica rastreável e aprovação humana item a item. Para TEA, TCC, Fonoaudiologia e Terapia Ocupacional.",
     url: "/",
@@ -33,7 +31,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Iris — Governança clínica para clínicas de terapia multidisciplinar",
+    title:
+      "Iris — Governança clínica para clínicas de terapia multidisciplinar",
     description:
       "Diário de sessão em linguagem natural, evidência clínica rastreável e aprovação humana item a item. Para TEA, TCC, Fonoaudiologia e Terapia Ocupacional.",
     images: ["/og-image.png"],
@@ -58,15 +57,21 @@ export const viewport: Viewport = {
   themeColor: "#f2b705",
 };
 
+/**
+ * Root layout SEM SDK de terceiro (S-01 / S-08, #530). Session replay da
+ * Microsoft, GA e o provedor WebMCP montam só em
+ * `src/app/(publico)/layout.tsx`: este layout
+ * envolve o prontuário, e session replay de tela clínica de menor não é
+ * telemetria — é transferência internacional de dado sensível sem operador
+ * nomeado. `layout.test.tsx` e `(publico)/layout.test.tsx` medem os dois
+ * lados.
+ */
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR" data-mode="clinico" className={fontVariables}>
       <body>
-        <GoogleAnalytics />
-        <Clarity />
-        <WebMCPProvider />
         <RegistrarServiceWorker />
         <ToastProvider>{children}</ToastProvider>
       </body>
