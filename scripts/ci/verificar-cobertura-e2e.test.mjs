@@ -173,11 +173,7 @@ describe("verificar-cobertura-e2e — gate anti-pulo-silencioso (#424)", () => {
 
   it("parseArgs exige os dois pisos — piso ausente desligaria o gate", () => {
     expect(() =>
-      parseArgs([
-        "rel.json",
-        "--min-tests=17",
-        "--flaky-baseline=b.json",
-      ]),
+      parseArgs(["rel.json", "--min-tests=17", "--flaky-baseline=b.json"]),
     ).toThrow(ErroDeUso);
     expect(() => parseArgs(["rel.json"])).toThrow(ErroDeUso);
     expect(() => parseArgs([])).toThrow(ErroDeUso);
@@ -412,5 +408,56 @@ describe("verificar-cobertura-e2e — baseline de flaky (scripts/ci/e2e-flaky.ba
         `${arquivo}: teto deve ser inteiro > 0 — zere removendo a entrada`,
       ).toBe(true);
     }
+  });
+});
+
+describe("verificar-cobertura-e2e — chave do baseline × forma real do relatório (#542)", () => {
+  // Regressão do defeito que a PR #585 levou para o CI: o relatório do
+  // Playwright emite `suite.file` RELATIVO ao `testDir` (`mobile-toque.spec.ts`)
+  // e o baseline é escrito com o caminho do repositório
+  // (`e2e/mobile-toque.spec.ts`). Sem normalizar as duas pontas, o lookup erra,
+  // cai no `?? 0` e todo flake CONHECIDO reprova — o baseline fica inerte e o
+  // gate vira o `--max-flaky=0` duro que ele existe para evitar.
+  //
+  // A primeira versão passou nos testes porque as fixtures inventaram a forma
+  // da chave em vez de copiar a do Playwright. Esta fixture usa a forma real.
+  const relatorioFormaReal = {
+    stats: { expected: 58, skipped: 0, unexpected: 0, flaky: 1 },
+    suites: [
+      {
+        // sem prefixo `e2e/` — é assim que o Playwright escreve
+        file: "mobile-toque.spec.ts",
+        specs: [
+          {
+            title: "alvos de toque ≥ 44px — /validacao",
+            line: 56,
+            tests: [{ status: "flaky", projectName: "mobile-360" }],
+          },
+        ],
+      },
+    ],
+  };
+
+  it("baseline com prefixo `e2e/` casa com o arquivo sem prefixo do relatório", () => {
+    const r = verificarCoberturaE2E(relatorioFormaReal, {
+      baselineFlaky: { "e2e/mobile-toque.spec.ts": 1 },
+    });
+    expect(r.problemas).toEqual([]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("baseline sem prefixo também casa — as duas grafias são aceitas", () => {
+    const r = verificarCoberturaE2E(relatorioFormaReal, {
+      baselineFlaky: { "mobile-toque.spec.ts": 1 },
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it("flake acima do teto continua reprovando, com a chave normalizada", () => {
+    const r = verificarCoberturaE2E(relatorioFormaReal, {
+      baselineFlaky: { "e2e/outro.spec.ts": 5 },
+    });
+    expect(r.ok).toBe(false);
+    expect(r.problemas.join(" ")).toContain("mobile-toque.spec.ts");
   });
 });

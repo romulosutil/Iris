@@ -144,10 +144,31 @@ export function coletarFlaky(report) {
   return encontrados;
 }
 
+/**
+ * Normaliza a chave de arquivo usada no baseline de flake.
+ *
+ * O relatório JSON do Playwright emite `suite.file` RELATIVO ao `testDir`
+ * (`mobile-navegacao.spec.ts`), enquanto é natural escrever o baseline com o
+ * caminho como se vê no repositório (`e2e/mobile-navegacao.spec.ts`). Sem
+ * normalizar as duas pontas o lookup erra, cai no `?? 0` e TODO flake conhecido
+ * reprova — o baseline fica inerte e o gate vira um `--max-flaky=0` duro, que é
+ * exatamente o que ele existe para evitar (medido: reprovaria ~40% das
+ * execuções por ruído já conhecido). Foi assim que a primeira versão deste gate
+ * reprovou o próprio CI da PR que o introduziu.
+ */
+export function normalizarArquivoFlaky(arquivo) {
+  return String(arquivo ?? "")
+    .split("\\")
+    .join("/")
+    .replace(/^\.\//, "")
+    .replace(/^e2e\//, "");
+}
+
 function contarFlakyPorArquivo(flakyTestes) {
   const contagem = {};
   for (const t of flakyTestes) {
-    contagem[t.arquivo] = (contagem[t.arquivo] ?? 0) + 1;
+    const chave = normalizarArquivoFlaky(t.arquivo);
+    contagem[chave] = (contagem[chave] ?? 0) + 1;
   }
   return contagem;
 }
@@ -158,6 +179,11 @@ export function formatarFlaky(t) {
 
 export function verificarCoberturaE2E(report, opts = {}) {
   const { minTests = 0, minFiles = 0, baselineFlaky = {} } = opts;
+  // Normaliza também as chaves do baseline: aceita `e2e/x.spec.ts` e `x.spec.ts`.
+  const baselineNormalizado = {};
+  for (const [k, v] of Object.entries(baselineFlaky)) {
+    baselineNormalizado[normalizarArquivoFlaky(k)] = v;
+  }
   const stats = report.stats ?? {};
   const expected = stats.expected ?? 0;
   const skipped = stats.skipped ?? 0;
@@ -197,7 +223,7 @@ export function verificarCoberturaE2E(report, opts = {}) {
   const flakyTestes = coletarFlaky(report);
   const flakyPorArquivo = contarFlakyPorArquivo(flakyTestes);
   for (const [arquivo, contagem] of Object.entries(flakyPorArquivo)) {
-    const permitido = baselineFlaky[arquivo] ?? 0;
+    const permitido = baselineNormalizado[arquivo] ?? 0;
     if (contagem > permitido) {
       problemas.push(
         `${arquivo}: ${contagem} teste(s) flaky, baseline permite ${permitido} — flake novo ou piorado (não suba o baseline sem investigar): ${flakyTestes
