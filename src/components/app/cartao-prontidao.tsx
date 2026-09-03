@@ -153,11 +153,13 @@ export function CartaoProntidao({
           // não há para onde esse caminho lateral ir. A seta "→" também cai:
           // ela promete deslocamento que não vai acontecer.
           //
-          // Sem `aria-describedby` ligando o botão à razão: este é um Server
-          // Component (sem `useId`) e um id fixo colidiria se dois cartões
-          // coexistissem. A razão fica como texto visível imediatamente
+          // Sem `aria-describedby` ligando o botão à razão: um id fixo colidiria
+          // se dois cartões coexistissem, e `useId` (que funciona em Server
+          // Component, por ser determinístico no SSR) só se paga se a razão
+          // ficar longe do botão. Aqui ela é texto visível imediatamente
           // adjacente, dentro do mesmo agrupamento — que é o que separa
-          // "desabilitado com motivo legível" de "botão morto" (§7).
+          // "desabilitado com motivo legível" de "botão morto" (§7). Se a razão
+          // um dia sair de perto do botão, `useId` é a ferramenta certa.
           <div className="flex flex-col gap-2">
             <Button variante="primaria" disabled data-testid="gesto-primario">
               {proximo.rotulo}
