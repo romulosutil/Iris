@@ -121,15 +121,29 @@ mkdir -p -- "${HEARTBEAT_DIR}"
 # deixa o diretório para trás, e um guard que respeita lock de dono morto
 # desliga a transcrição para sempre — que é exatamente o modo de falha que este
 # laço inteiro existe para evitar. Por isso o PID é gravado e conferido.
+#
+# ⚠️ PID SOZINHO NÃO PROVA IDENTIDADE ENTRE BOOTS DO CONTAINER (bug de
+# produção, `asr-agendador`, 2026-09-03): dentro de um container o processo
+# deste script É o pid 1. Se o HEARTBEAT_DIR sobrevive a um restart (mesmo
+# caminho a cada boot) e a trap de EXIT não rodou no boot anterior (SIGKILL,
+# OOM), o lock deixado para trás tem `pid=1` — e o NOVO processo, TAMBÉM pid 1
+# no boot atual, faz `kill -0 1` contra SI MESMO. Isso nunca falha, então o
+# ramo de "lock órfão" nunca é alcançado e o container entra em crash loop
+# achando pra sempre que há um segundo agendador vivo, quando não há nenhum.
+# Por isso a checagem abaixo primeiro descarta o caso em que o pid gravado é
+# o NOSSO PRÓPRIO pid: isso só pode significar "lock de um boot anterior",
+# nunca "outro processo vivo agora" — um segundo laço de verdade (ex.:
+# `docker exec` manual) sempre nasce com um pid DIFERENTE do nosso, porque o
+# nosso já está ocupado.
 readonly LOCK_DIR="${HEARTBEAT_DIR}/.agendador-asr.lock"
 
 if ! mkdir -- "${LOCK_DIR}" 2>/dev/null; then
 	dono="$(cat -- "${LOCK_DIR}/pid" 2>/dev/null || true)"
-	if [[ -n "${dono}" ]] && kill -0 "${dono}" 2>/dev/null; then
+	if [[ -n "${dono}" && "${dono}" != "$$" ]] && kill -0 "${dono}" 2>/dev/null; then
 		log "ERRO: já existe um agendador de ASR vivo neste container (pid ${dono}). Não subindo um segundo — dois laços dobrariam a carga sobre o serviço iris-asr sem aparecer em lugar nenhum."
 		exit 1
 	fi
-	log "ATENÇÃO: lock órfão em ${LOCK_DIR} (dono='${dono:-desconhecido}' não está vivo) — provável container morto no meio de um tick. Retomando."
+	log "ATENÇÃO: lock órfão em ${LOCK_DIR} (dono='${dono:-desconhecido}' não está vivo, ou é o nosso próprio pid $$ sobrevivendo a um restart) — provável container morto no meio de um tick, ou pid 1 reaproveitado entre boots. Retomando."
 	rm -rf -- "${LOCK_DIR}"
 	mkdir -- "${LOCK_DIR}"
 fi
