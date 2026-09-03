@@ -67,6 +67,7 @@ const CHEIA: {
   itens: [
     {
       evidenceId: "00000000-0000-0000-0000-000000000001",
+      sessionId: "00000000-0000-0000-0000-0000000000e1",
       patientId: "00000000-0000-0000-0000-0000000000a1",
       patientNome: "Paciente A",
       sessionNumero: 3,
@@ -81,6 +82,7 @@ const CHEIA: {
     },
     {
       evidenceId: "00000000-0000-0000-0000-000000000002",
+      sessionId: "00000000-0000-0000-0000-0000000000e2",
       patientId: "00000000-0000-0000-0000-0000000000a2",
       patientNome: "Paciente B",
       sessionNumero: 5,

@@ -6,7 +6,6 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { FilaLista } from "./fila-item";
 import {
-  AvisoCentralValidacao,
   AvisoPrimeiraVisita,
   AvisoVolumeAlto,
   SemPermissaoSessoes,
@@ -55,10 +54,6 @@ export default async function SessoesPage({
   const sp = await searchParams;
   const ck = await cookies();
 
-  // #512 · T14 (R-35) — `?de=validacao` chega de `/validacao/page.tsx`
-  // (redirect permanente, R-34); dispara a dica de primeira visita.
-  const de = typeof sp.de === "string" ? sp.de : undefined;
-
   const ordenacaoParam =
     typeof sp.ordenacao === "string" ? sp.ordenacao : undefined;
   const ordenacao: Ordenacao =
@@ -87,8 +82,6 @@ export default async function SessoesPage({
   return (
     <Stack gap="lg">
       <PageHeader title="Sessões" description={fila.escopoTexto} />
-
-      <AvisoCentralValidacao de={de} />
 
       {ctx.role === "coordenador" && fila.terapeutas.length > 1 ? (
         <form

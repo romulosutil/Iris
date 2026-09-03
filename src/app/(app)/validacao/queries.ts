@@ -31,6 +31,9 @@ export type ItemFila = {
   evidenceId: string;
   patientId: string;
   patientNome: string;
+  /** #533 — `/sessoes/[id]` em `revisada` abre a fila em `?sessao=<id>`;
+   * é por esta chave que a página recorta os itens daquela sessão. */
+  sessionId: string;
   sessionNumero: number;
   trecho: string;
   classificacaoAtual: unknown;
@@ -50,6 +53,7 @@ type Row = {
   evidence_id: string;
   patient_id: string;
   patient_nome: string;
+  session_id: string;
   session_numero: number;
   protocol_id: string | null;
   dominio_id: string | null;
@@ -109,7 +113,8 @@ export async function listarFilaValidacao(
   return withTenant(ctx, async (tx) => {
     const rows = (await tx.execute(sql`
       SELECT ec.id AS evidence_id, ec.patient_id, p.nome AS patient_nome,
-             ec.session_numero, ec.protocol_id, ec.dominio_id, ec.classificacao_atual,
+             ec.session_id, ec.session_numero, ec.protocol_id, ec.dominio_id,
+             ec.classificacao_atual,
              x.trecho_fonte AS trecho,
              x.confianca, x.inconsistente_com_historico
       FROM evidence_current ec
@@ -179,6 +184,7 @@ export async function listarFilaValidacao(
         evidenceId: r.evidence_id,
         patientId: r.patient_id,
         patientNome: r.patient_nome,
+        sessionId: r.session_id,
         sessionNumero: r.session_numero,
         trecho: r.trecho ?? "",
         classificacaoAtual: r.classificacao_atual,
