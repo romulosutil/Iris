@@ -188,4 +188,15 @@ describe("formatarMetricaSegmentacao (#567)", () => {
     });
     expect(saida).not.toContain("[object Object]");
   });
+
+  it("chave do protótipo não vaza função no lugar do rótulo", () => {
+    // `ROTULO_POR_EIXO["constructor"]` devolveria `Object`, e o `??` não age
+    // sobre valor definido — a tela receberia uma função e o React quebraria.
+    for (const chave of ["constructor", "toString", "__proto__", "valueOf"]) {
+      expect(formatarMetricaSegmentacao(chave)).toBe(chave);
+      expect(
+        formatarMetricaSegmentacao({ eixo: chave, ordinalRecente: 1 }),
+      ).toBe(`${chave}: 1`);
+    }
+  });
 });

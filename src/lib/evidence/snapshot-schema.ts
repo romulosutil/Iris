@@ -171,6 +171,19 @@ const ROTULO_POR_EIXO: Record<string, string> = {
 };
 
 /**
+ * `ROTULO_POR_EIXO[chave]` cru resolveria pelo protótipo: um eixo gravado como
+ * `"constructor"` devolveria a FUNÇÃO `Object`, e o `??` não age sobre valor
+ * definido — a tela receberia uma função e o React quebraria com
+ * "Functions are not valid as a React child". O eixo vem do jsonb: é dado, não
+ * literal de código.
+ */
+function rotuloDoEixo(chave: string): string {
+  return Object.hasOwn(ROTULO_POR_EIXO, chave)
+    ? ROTULO_POR_EIXO[chave]!
+    : chave;
+}
+
+/**
  * `metrica` → rótulo de exibição, decidido em UM lugar só (#567).
  *
  * O campo tem duas formas em produção (ver docblock do módulo) e três leitores
@@ -195,12 +208,12 @@ export function formatarMetricaSegmentacao(
   if (typeof metrica === "string") {
     const bruta = metrica.trim();
     if (bruta === "") return null;
-    return ROTULO_POR_EIXO[bruta] ?? bruta;
+    return rotuloDoEixo(bruta);
   }
 
   const eixo = metrica.eixo?.trim();
   if (!eixo) return null;
-  const rotulo = ROTULO_POR_EIXO[eixo] ?? eixo;
+  const rotulo = rotuloDoEixo(eixo);
   return typeof metrica.ordinalRecente === "number"
     ? `${rotulo}: ${metrica.ordinalRecente}`
     : rotulo;
