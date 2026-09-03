@@ -17,6 +17,11 @@ import { describe, expect, test } from "vitest";
  * da regra só o que não é configuração do produto (allowlist abaixo, cada item
  * com o porquê). Limite declarado: acesso dinâmico (`process.env[nome]` com
  * variável) não é rastreável estaticamente e fica fora do guard.
+ *
+ * Segundo limite: a varredura é TEXTUAL — não distingue código de comentário.
+ * Escrever `process.env.<PLACEHOLDER>` em prosa cria uma variável fantasma que
+ * o guard cobra no `.env.example`. Em documentação, citar o nome sem o prefixo
+ * `process.env.` (ex.: `<SUPERFICIE>_JOB_TOKEN`).
  */
 
 const RAIZ = path.resolve(__dirname, "..");
@@ -29,10 +34,6 @@ const ALLOWLIST: ReadonlyMap<string, string> = new Map([
   [
     "ALVO",
     "parâmetro interno de scripts/ci/verificar-deps-imagem.mjs (roda dentro da imagem, no CI)",
-  ],
-  [
-    "INTERNAL_JOB_TOKEN",
-    "fallback da rota de exportação que a PR #545 remove (A-05); não documentar no .env.example. Quando #545 mergear, o teste de allowlist órfã abaixo obriga a tirar esta linha",
   ],
 ]);
 /** Prefixos inteiros fora da regra (variáveis do runner de CI). */
