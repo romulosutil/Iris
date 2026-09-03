@@ -94,7 +94,7 @@ describe.skipIf(!hasDb)("Fase 4 (4A) · RLS da Evidence layer", () => {
     const [ext] = await owner`INSERT INTO extraction
         (session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload, revisado_por)
       VALUES (${SESS_A1}, ${CLINIC_A}, 'aprovada', 'evidencia', 'falou água sozinho', 'alta',
-        ${owner.json({ evidencia: { descricao: "pediu água", alvos: [{ goal_id: null, protocol_id: null, dominio_id: "mando" }] } })},
+        ${owner.json({ descricao: "pediu água", alvos: [{ goal_id: null, protocol_id: null, dominio_id: "mando" }] })},
         ${U_T1_A})
       RETURNING id`;
     extractionId = ext!.id as string;

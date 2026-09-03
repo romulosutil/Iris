@@ -147,7 +147,7 @@ describe.skipIf(!hasDb)(
       const [ext1] = await owner`INSERT INTO extraction
       (session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload, revisado_por)
       VALUES (${sess1Id}, ${CLINIC_A}, 'aprovada', 'evidencia', 'trecho s1', 'alta',
-        ${owner.json({ evidencia: { alvos: [{ goal_id: goalId }] } })}, ${U_T1_A})
+        ${owner.json({ alvos: [{ goal_id: goalId }] })}, ${U_T1_A})
       RETURNING id`;
 
       await owner`INSERT INTO evidence

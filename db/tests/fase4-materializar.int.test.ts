@@ -84,7 +84,7 @@ async function inserirEvidence(opts: {
   const [ext] = await owner`INSERT INTO extraction
       (session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload, revisado_por)
     VALUES (${sessId}, ${CLINIC_A}, 'aprovada', 'evidencia', 'trecho de teste', 'alta',
-      ${owner.json({ evidencia: { alvos: [{ goal_id: opts.goalId }] } })}, ${U_T1_A})
+      ${owner.json({ alvos: [{ goal_id: opts.goalId }] })}, ${U_T1_A})
     RETURNING id`;
   const classificacao = {
     nivel_ajuda: opts.nivelAjuda,
@@ -953,7 +953,7 @@ describe.skipIf(!hasDb)(
       const [extMz] = await owner`INSERT INTO extraction
         (session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload, revisado_por)
         VALUES (${sessMzId}, ${CLINIC_A}, 'aprovada', 'evidencia', 'trecho mz', 'alta',
-          ${owner.json({ evidencia: { alvos: [{ goal_id: goalMzId }] } })}, ${U_T1_A})
+          ${owner.json({ alvos: [{ goal_id: goalMzId }] })}, ${U_T1_A})
         RETURNING id`;
 
       await owner`INSERT INTO evidence
