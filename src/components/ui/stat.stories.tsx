@@ -20,3 +20,19 @@ export const ComDescricao: Story = {
     descricao: "Meta de ativação ≥70%",
   },
 };
+
+/**
+ * Modo admin (#566): mesma célula sob os tokens de `[data-mode="admin"]`,
+ * escopados por elemento como no layout do backoffice.
+ */
+export const ModoAdmin: Story = {
+  render: () => (
+    <div data-mode="admin" className="bg-[var(--bg-app)] p-6">
+      <Stat
+        rotulo="Webhooks recebidos"
+        valor="1.284"
+        descricao="Últimas 24h, após deduplicação"
+      />
+    </div>
+  ),
+};
