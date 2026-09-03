@@ -133,13 +133,25 @@ function MenuUsuario({
 
   if (itemsAdmin.length === 0) return null;
 
-  const classeItemAdmin = cn(
-    control("sm"),
-    "font-display flex items-center rounded-[var(--radius-control)] border-2 border-transparent px-3 text-sm",
-    "font-semibold text-[var(--text-secondary)]",
-    "hover:border-[var(--border-muted)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
-    "focus-visible:outline-focus",
-  );
+  // #533 (revisão pós-PR) — o item de administração acende pela MESMA régua
+  // do item da nav diária. Sem isto, `itemsAdmin` recebia `active` calculado
+  // em `app-header.tsx`, exportava `aria-current` pelo `renderAdminLink` e
+  // jogava fora o sinal visual: em `/alertas-risco` o leitor de tela sabia
+  // onde estava e o olho não.
+  const classeItemAdmin = (item: NavItem) =>
+    cn(
+      control("sm"),
+      "font-display flex items-center rounded-[var(--radius-control)] border-2 px-3 text-sm",
+      "focus-visible:outline-focus",
+      item.active
+        ? "border-[var(--border-brutal)] bg-[var(--brand-tint)] font-bold text-[var(--text-primary)] shadow-[var(--elevation-1)]"
+        : "border-transparent font-semibold text-[var(--text-secondary)] hover:border-[var(--border-muted)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
+    );
+
+  // Popover fechado é o estado normal do rail: se a rota atual mora dentro da
+  // Administração, o gatilho é o único âncora visível — sem ele o desktop
+  // fica sem NENHUM item aceso em `/validacao`, `/alertas-risco`, `/equipe`…
+  const algumAdminAtivo = itemsAdmin.some((item) => item.active);
 
   return (
     <div ref={containerRef} className="relative w-full">
@@ -151,12 +163,15 @@ function MenuUsuario({
         aria-expanded={aberto}
         onClick={() => setAberto((v) => !v)}
         title="Menu do usuário — Administração"
+        data-secao-ativa={algumAdminAtivo ? "true" : undefined}
         className={cn(
           control("sm"),
-          "flex w-full items-center gap-2 rounded-[var(--radius-control)] border-2 border-transparent text-sm font-semibold text-[var(--text-secondary)]",
+          "flex w-full items-center gap-2 rounded-[var(--radius-control)] border-2 text-sm",
           colapsado ? "justify-center px-0" : "justify-start px-3",
-          "hover:border-[var(--border-muted)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
           "focus-visible:outline-focus",
+          algumAdminAtivo
+            ? "border-[var(--border-brutal)] bg-[var(--brand-tint)] font-bold text-[var(--text-primary)] shadow-[var(--elevation-1)]"
+            : "border-transparent font-semibold text-[var(--text-secondary)] hover:border-[var(--border-muted)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
         )}
       >
         <span
@@ -184,7 +199,7 @@ function MenuUsuario({
             if (renderAdminLink) {
               return (
                 <React.Fragment key={item.href}>
-                  {renderAdminLink(item, conteudo, classeItemAdmin)}
+                  {renderAdminLink(item, conteudo, classeItemAdmin(item))}
                 </React.Fragment>
               );
             }
@@ -194,7 +209,8 @@ function MenuUsuario({
                 href={item.href}
                 aria-label={item.label}
                 title={item.label}
-                className={classeItemAdmin}
+                aria-current={item.active ? "page" : undefined}
+                className={classeItemAdmin(item)}
               >
                 {conteudo}
               </a>

@@ -26,16 +26,15 @@ export function PassoVerNoAcervo({
   ehCoordenador: boolean;
 }) {
   const podeEncerrar = revisada && ehCoordenador;
+  const texto = !revisada
+    ? "Toda a documentação desta sessão já está no acervo do paciente."
+    : podeEncerrar
+      ? "Revisada — falta só encerrar o item na fila de validação."
+      : "Revisada — falta só a coordenação encerrar o item na fila.";
 
   return (
     <Alert severidade="sucesso" titulo={ROTULO_GESTO.ver_no_acervo}>
-      <p>
-        {revisada
-          ? podeEncerrar
-            ? "Revisada — falta só encerrar o item na fila de validação."
-            : "Revisada — falta só a coordenação encerrar o item na fila."
-          : "Toda a documentação desta sessão já está no acervo do paciente."}
-      </p>
+      <p>{texto}</p>
       <Cluster gap="sm" className="mt-3">
         {podeEncerrar ? (
           <Button asChild variante="primaria">

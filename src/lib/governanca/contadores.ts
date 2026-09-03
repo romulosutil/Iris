@@ -30,6 +30,14 @@ export type BadgesGovernanca = {
  *    (`evidence_current` filtrada por fricção + `alerta_risco_clinico`
  *    por status); o custo real era a 2ª transação, não a query.
  * `React.cache` (dedupe por request) não ajuda: o layout é o único leitor.
+ *
+ * Sobre o `count(*)` em `alerta_risco_clinico` (revisão pós-PR, 02/09): a
+ * `0125_sigilo_alerta_trecho.sql` revoga o SELECT de TABELA de `app_role` e
+ * concede coluna a coluna (tudo menos `trecho_fonte`). Isso NÃO quebra este
+ * `count(*)`: quando o ACL de tabela falha, o Postgres aceita a query se
+ * houver SELECT em qualquer coluna. Medido como `app_role` no Postgres local:
+ * `count(*)` e este predicado retornam linha; só `SELECT trecho_fonte` levanta
+ * `permission denied for table alerta_risco_clinico`.
  */
 export async function contarBadgesGovernanca(
   ctx: TenantContext,
