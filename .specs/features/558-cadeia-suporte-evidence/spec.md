@@ -89,6 +89,9 @@ Todas as decisões de `context.md` estão ratificadas (03/09/2026) e aparecem in
 ### R1 · Contrato do agente
 
 - **R1.1** `docs/agente/output-schema.json` e o Zod `cadeiaSchema` (`agent-output-schema.ts:83-92`) passam a permitir que a cadeia declare seu alvo, com os mesmos campos crus que os demais subtipos usam (`dominio_id`, `goal_ref`, `protocol_slug`). **G-1 (a) ratificada**: a âncora é **única, no nível da cadeia** (`cadeia.dominio_id` / `goal_ref` / `protocol_slug`), coerente com a regra R8. Rotina que cruze domínios é expressa como duas cadeias — não há âncora por etapa.
+
+  > **Ratificação de forma (03/09/2026, depois da implementação).** Esta spec pedia `dominio_id`/`goal_ref`/`protocol_slug`. Medido durante a execução: `goal_ref` e `protocol_slug` são nomes de **coluna de `evidence`**, não campos do contrato do agente — `goal_ref` não existe no schema do agente. A implementação usa **`cadeia.alvo`, singular e opcional**, com a forma de `evidencia.alvos[]`, reusando `alvoSchema` e `resolverAlvoParaFks` sem camada de tradução. **Ratificado**: G-1 (a) continua intacta (âncora única, nunca por etapa) e some uma tradução. Onde esta spec disser `goal_ref`, leia `cadeia.alvo`.
+
 - **R1.2** Os campos de âncora são **opcionais**. Cadeia sem âncora continua válida, aprovável e legível (US-1 não pode quebrar).
 - **R1.3** A regra R9 de `docs/agente/system-instructions.md` é reescrita para instruir a ancoragem, mantendo a proibição de inventar alvo quando o texto não permite inferir.
 - **R1.4** A ordem das etapas continua sendo o **índice do array** — `G-2` resolvida por medição: o diálogo de edição (`revisao-lista.tsx:195-244`, `actions.ts:113-117`) só sobrepõe `funcao`/`nivel_ajuda`/`resultado` na raiz e nunca toca `etapas[]`, então os índices não deslizam. Se a edição de etapa vier a existir, esta decisão é revisitada e o contrato ganha campo `ordem`.

@@ -97,6 +97,8 @@ export interface AlvoEspectro {
 export interface EstadoRepertorio {
   nivel_ajuda_recente?: number | null;
   contagem?: number;
+  /** #558 G-6 (a) — observações com nível de ajuda fora da taxonomia. */
+  niveis_nao_classificados?: number;
   is_candidata?: boolean;
   origem?: string;
   procedencia?: string;
@@ -106,6 +108,14 @@ export interface ResultadoEspectro {
   eixos: DadosEixoRadar[];
   /** Alvos que não resolvem eixo nenhum. Aparecem na tela como lacuna. */
   naoClassificados: number;
+  /**
+   * #558 G-6 (a) — REGISTROS (não alvos) cujo nível de ajuda não pertence à
+   * taxonomia do protocolo. É a 4ª régua do módulo, irmã das três do cabeçalho:
+   * nível que a régua do protocolo não sabe ler não vira `0` nem progresso —
+   * conta aqui e a tela mostra o número, em vez de deixá-lo sumir dentro de
+   * "sem medida".
+   */
+  niveisNaoClassificados: number;
 }
 
 const DOMINIO_PARA_EIXO: Record<string, EixoEspectro> = {
@@ -236,9 +246,17 @@ export function computarDadosEspectro(
   }
 
   let naoClassificados = 0;
+  let niveisNaoClassificados = 0;
 
   for (const alvo of alvos) {
     if (!contaComoAlvo(alvo)) continue;
+
+    // Contado ANTES do eixo: um nível ilegível continua sendo um fato sobre o
+    // registro mesmo quando a meta não resolve vértice nenhum.
+    niveisNaoClassificados += Math.max(
+      0,
+      repertorioState[alvo.goalId]?.niveis_nao_classificados ?? 0,
+    );
 
     const eixo = mapearEixo(alvo.dominioId, alvo.disciplina);
     if (!eixo) {
@@ -275,5 +293,5 @@ export function computarDadosEspectro(
     };
   });
 
-  return { eixos, naoClassificados };
+  return { eixos, naoClassificados, niveisNaoClassificados };
 }

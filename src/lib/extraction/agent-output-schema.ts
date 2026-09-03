@@ -80,8 +80,17 @@ const evidenciaSchema = z.object({
     .optional(),
 });
 
+// #558 (G-1 (a)) — a cadeia declara UMA âncora, no nível da cadeia inteira,
+// com a MESMA forma de alvo dos demais subtipos (`alvoSchema`: `goal_id`,
+// `protocol_id`, `dominio_id`). Não há âncora por etapa: rotina que cruze
+// domínios é expressa como DUAS cadeias, coerente com R8 ("todo item de
+// `alvos` compartilha o mesmo `dominio_id`"). O campo é OPCIONAL (R1.2):
+// cadeia sem âncora continua válida, aprovável e legível — só não participa
+// da evolução (fica com as FKs nulas em `evidence` e sai da materialização,
+// que descarta evidência sem `goal_id`).
 const cadeiaSchema = z.object({
   nome: z.string().optional(),
+  alvo: alvoSchema.nullable().optional(),
   etapas: z
     .array(
       z.object({

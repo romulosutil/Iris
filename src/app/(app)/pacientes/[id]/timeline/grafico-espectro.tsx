@@ -123,7 +123,7 @@ export function GraficoEspectro({
   sessaoAtiva,
   sessaoAnterior,
 }: GraficoEspectroProps) {
-  const { eixos, naoClassificados } = espectro;
+  const { eixos, naoClassificados, niveisNaoClassificados } = espectro;
 
   const anteriorPorEixo = React.useMemo(() => {
     const mapa = new Map<DadosEixoRadar["eixo"], number | null>();
@@ -168,6 +168,7 @@ export function GraficoEspectro({
         </p>
         <ListaEixos linhas={linhas} comparando={false} />
         <RodapeNaoClassificados quantidade={naoClassificados} />
+        <RodapeNiveisNaoClassificados quantidade={niveisNaoClassificados} />
       </section>
     );
   }
@@ -290,6 +291,7 @@ export function GraficoEspectro({
       ) : null}
 
       <RodapeNaoClassificados quantidade={naoClassificados} />
+      <RodapeNiveisNaoClassificados quantidade={niveisNaoClassificados} />
 
       <div className="flex flex-wrap gap-2">
         <Dialog>
@@ -503,6 +505,27 @@ function TabelaEspectro({ eixos }: { eixos: DadosEixoRadar[] }) {
         ))}
       </tbody>
     </table>
+  );
+}
+
+/**
+ * #558 G-6 (a) — registro cujo nível de ajuda não pertence à taxonomia do
+ * protocolo. NÃO entra na média do eixo (viraria progresso inventado) e NÃO
+ * vira 0 (que significa "independente"): sai daqui como número explícito, com
+ * o que fazer a respeito. Decidir contar sem mostrar seria devolver o silêncio
+ * por outra porta — que é exatamente o defeito que a #558 fecha.
+ */
+function RodapeNiveisNaoClassificados({ quantidade }: { quantidade: number }) {
+  if (quantidade <= 0) return null;
+  return (
+    <p className="text-xs text-[var(--text-secondary)]">
+      {quantidade === 1
+        ? "1 registro com nível de ajuda fora da taxonomia do protocolo não entra"
+        : `${quantidade} registros com nível de ajuda fora da taxonomia do protocolo não entram`}{" "}
+      no cálculo — o nível informado não existe na escala declarada, e um valor
+      não medido nunca é contado como independência. Ajuste a taxonomia do
+      protocolo ou corrija o nível na revisão da sessão.
+    </p>
   );
 }
 

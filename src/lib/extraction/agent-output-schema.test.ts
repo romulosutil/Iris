@@ -370,3 +370,104 @@ describe("eval set do modo convencional valida contra agentOutputSchema (D47)", 
     },
   );
 });
+
+// ─── #558 T1 — âncora opcional da cadeia (G-1 (a)) ───────────────────────────
+// A `cadeia` passa a poder declarar UMA âncora (`cadeia.alvo`), na mesma forma
+// dos itens de `evidencia.alvos`. O campo é OPCIONAL: extração antiga (sem
+// âncora, a única forma que existia até aqui) continua validando — R1.2/R1.5.
+describe("cadeia.alvo (#558 R1)", () => {
+  const comCadeia = (cadeia: unknown) => ({
+    extracoes: [
+      {
+        tipo: "cadeia",
+        confianca: "alta",
+        trecho_fonte: "no lanche abriu a lancheira sozinho",
+        cadeia,
+      },
+    ],
+    resumo_sessao: "Rotina de lanche descrita etapa a etapa.",
+  });
+
+  const etapas = [
+    { descricao: "abrir a lancheira", nivel_ajuda: "independente" },
+    { descricao: "abrir o pote", nivel_ajuda: "ajuda física parcial" },
+  ];
+
+  test("payload ANTIGO (sem âncora) continua válido", () => {
+    const r = agentOutputSchema.safeParse(
+      comCadeia({ nome: "Lanche", etapas }),
+    );
+    expect(r.success).toBe(true);
+  });
+
+  test("payload NOVO (com âncora) é válido e preserva os refs crus", () => {
+    const r = agentOutputSchema.safeParse(
+      comCadeia({
+        nome: "Lanche",
+        alvo: { protocol_id: "vbmapp", dominio_id: "autonomia" },
+        etapas,
+      }),
+    );
+    expect(r.success).toBe(true);
+    const extraida = r.success
+      ? (r.data.extracoes[0] as { cadeia?: { alvo?: unknown } }).cadeia?.alvo
+      : null;
+    expect(extraida).toEqual({
+      protocol_id: "vbmapp",
+      dominio_id: "autonomia",
+    });
+  });
+
+  test("âncora explicitamente nula é válida (ausência declarada)", () => {
+    expect(
+      agentOutputSchema.safeParse(
+        comCadeia({ nome: "Lanche", alvo: null, etapas }),
+      ).success,
+    ).toBe(true);
+  });
+
+  test("âncora MALFORMADA é rejeitada — não atravessa como dado", () => {
+    // escalar no lugar do objeto de alvo
+    expect(
+      agentOutputSchema.safeParse(comCadeia({ alvo: "autonomia", etapas }))
+        .success,
+    ).toBe(false);
+    // tipo errado dentro do alvo
+    expect(
+      agentOutputSchema.safeParse(comCadeia({ alvo: { goal_id: 42 }, etapas }))
+        .success,
+    ).toBe(false);
+  });
+});
+
+// O doc (`output-schema.json`) e o Zod precisam concordar sobre a existência da
+// âncora — foi a divergência doc-vs-código que a #390 R1 passou a vigiar.
+describe("cadeia.alvo documentada (#558 R1.1)", () => {
+  const doc = JSON.parse(
+    readFileSync(
+      path.join(process.cwd(), "docs/agente/output-schema.json"),
+      "utf8",
+    ),
+  ) as {
+    properties: {
+      extracoes: {
+        items: {
+          properties: {
+            cadeia: { properties: Record<string, { properties?: object }> };
+          };
+        };
+      };
+    };
+  };
+
+  test("o doc declara cadeia.alvo com os três refs crus", () => {
+    const alvo = doc.properties.extracoes.items.properties.cadeia.properties
+      .alvo as { properties: Record<string, unknown> };
+    expect(alvo).toBeDefined();
+    expect(Object.keys(alvo.properties).sort()).toEqual([
+      "dominio_id",
+      "goal_id",
+      "protocol_id",
+    ]);
+  });
+});

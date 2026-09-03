@@ -1379,7 +1379,17 @@ export const evidence = pgTable(
       .references(() => session.id),
     // número sequencial do paciente; base da linha do tempo
     sessionNumero: integer("session_numero").notNull(),
-    // posição do alvo em alvos[] (base 0); discriminador de idempotência
+    // posição do alvo em alvos[] (base 0); discriminador de idempotência.
+    //
+    // ⚠️ SEMÂNTICA DUPLA desde a #558 (decisão G-3 (a)): para o subtipo
+    // `cadeia` a linha não é um ALVO de evidência, e sim uma ETAPA da rotina —
+    // `alvo_ordinal` é o índice da etapa em `cadeia.etapas[]`, e a âncora
+    // (única, no nível da cadeia) é a MESMA em todas as etapas da extração.
+    // Quem desambigua as duas leituras é o campo `subtipo` gravado dentro de
+    // `classificacao_original` (`"cadeia"` nas etapas de rotina, ausente nos
+    // alvos de `evidencia`). O papel de discriminador de idempotência não
+    // muda: `uq_evidence_alvo (extraction_id, alvo_ordinal)` continua sendo a
+    // chave estável nos dois casos.
     alvoOrdinal: integer("alvo_ordinal").notNull(),
     // refs CRUS do agente (texto livre, preservados para a resolução futura)
     protocolSlug: text("protocol_slug"),

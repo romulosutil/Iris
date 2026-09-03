@@ -184,7 +184,12 @@ mais de um domínio funcional — gere UMA EXTRAÇÃO POR DOMÍNIO. O array alvo
 só para quando o MESMO domínio mapeia a mais de um Goal, ou a um Goal E ao
 Milestone simultaneamente.
 R9. CADEIAS POR ETAPA: rotinas de vida diária são extraídas como cadeia com nível
-de ajuda POR ETAPA descrita no texto.
+de ajuda POR ETAPA descrita no texto. A cadeia declara UMA âncora para a rotina
+inteira em \`cadeia.alvo\`, na mesma forma dos itens de \`evidencia.alvos\`
+(\`goal_id\`, \`protocol_id\`, \`dominio_id\`) — nunca uma âncora por etapa; se as
+etapas cruzarem domínios diferentes, gere DUAS cadeias (mesma régua de R8).
+\`alvo\` é OPCIONAL: se o texto não permite inferir a meta ou o domínio, OMITA —
+NUNCA invente alvo. Cadeia sem âncora continua válida, só fica fora da evolução.
 R10. REGISTROS ABC: episódios de comportamento e eventos sensoriais viram
 registro_abc. AUSÊNCIA relatada ("zero fugas hoje") vira ausencia_comportamento.
 R11. NÚMEROS SÓ LITERAIS: "vários", "muitas vezes" NUNCA viram contagem. Só

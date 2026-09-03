@@ -26,6 +26,14 @@ import { z } from "zod";
 export const RepertorioEntrySchema = z.object({
   nivel_ajuda_recente: z.number().nullable().default(null),
   contagem: z.number().default(0),
+  /**
+   * #558 G-6 (a) — quantas observações desta meta trouxeram um nível de ajuda
+   * FORA da `taxonomia_ajuda` do protocolo. Default 0: snapshot gravado antes
+   * da #558 (e o da anamnese marco-zero, que não passa por taxonomia) continua
+   * válido e simplesmente não reporta nada. Nunca confundir com
+   * `nivel_ajuda_recente: 0`, que significa "independente".
+   */
+  niveis_nao_classificados: z.number().default(0),
   is_candidata: z.boolean().optional(),
   origem: z.string().optional(),
   procedencia: z.string().optional(),
