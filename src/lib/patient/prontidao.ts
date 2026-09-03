@@ -11,7 +11,7 @@ import {
  *
  * Função PURA de propósito: recebe fatos já lidos, nunca decide o que ler. É
  * esse limite que a torna testável na matriz completa modalidade × fatos ×
- * papel sem tocar banco. Quem lê os fatos é `prontidao-queries.ts`.
+ * papel sem tocar banco. Quem lê os fatos é `./prontidao-queries.ts`.
  *
  * Nada aqui é persistido: prontidão derivada nunca mente sobre um degrau
  * desfeito — a última meta descontinuada devolve o paciente ao estado

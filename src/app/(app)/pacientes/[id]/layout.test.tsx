@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import PacienteLayout from "./layout";
 import { getTenantContext } from "@/auth/tenant";
-import { obterFatosProntidao } from "./prontidao-queries";
+import { obterFatosProntidao } from "@/lib/patient/prontidao-queries";
 
 // Mock das dependências de tenant e billing
 vi.mock("next/navigation", () => ({
@@ -19,7 +19,7 @@ vi.mock("@/auth/tenant", () => ({
   }),
 }));
 
-vi.mock("./prontidao-queries", () => ({
+vi.mock("@/lib/patient/prontidao-queries", () => ({
   // Task 7c — a porta devolve `{ fatos, modalidade }`, não os fatos soltos.
   obterFatosProntidao: vi.fn(async () => ({
     fatos: {
