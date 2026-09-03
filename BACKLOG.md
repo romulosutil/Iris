@@ -126,6 +126,20 @@
 
 ---
 
+## 🏁 Sessão 03/09/2026 (tarde) — #567 fechada: a `metrica` do snapshot passou a ter UM formatador
+
+**O defeito, em uma frase:** `session_snapshot.segmentacao[*][*].metrica` tem duas formas em produção (objeto `{ eixo, ordinalRecente }` de toda sessão normal; string `"nivel_ajuda"` da anamnese marco-zero) e dois dos três leitores tratavam como `string` — sem que nada disso fosse erro de tipo, porque `sinais.ts` mentia na declaração e `briefing/queries.ts` resolvia com `String()`.
+
+**Entregue (PR #570):** `formatarMetricaSegmentacao` em `src/lib/evidence/snapshot-schema.ts`, ao lado do schema que já descreve a forma. Os três leitores passam por ele. `DetalheEstagnacao.metrica` virou `string | null` de verdade e `SnapshotRow.segmentacao` reusa `Segmentacao` do Zod em vez de redeclarar `metrica: string`. `briefing/logic.ts` ganhou `linhasUltimaSessaoDe` (pura, testável sem banco). O card perdeu a defesa morta contra as strings `"undefined"`/`"null"` — que nasciam do `String(objeto)` a montante.
+
+**Sem backfill.** `lerDetalheAlerta` formata na **leitura** o `alerta.detalhe` (jsonb) já persistido; o teste de `supervisao/queries.ts` alimenta uma linha antiga na forma objeto e afirma o rótulo renderizado. Confirmado medindo, não presumido.
+
+**Decisão de produto (validada com o Rômulo):** forma objeto exibe **`Nível de ajuda: 3`** — `eixo` é constante literal hoje (`segmentacao.ts:131,169`), só `ordinalRecente` carrega dado. `ordinalRecente` nulo cai para **`Nível de ajuda`** (rótulo do eixo sozinho), não para "sem métrica registrada": eixo registrado SEM medida ≠ nada registrado, mesma régua de `espectro.ts` (ausência de dado nunca vira zero).
+
+**Mutação registrada na PR:** reverter o formatador em `sinais.ts` derruba o teste do card; reverter em `briefing/logic.ts` traz `[object Object]` de volta (`Received: "[object Object]"`); reverter `lerDetalheAlerta` derruba o teste da linha antiga.
+
+**Achado lateral (não é regressão):** `pnpm test` local reprova 1/2736 em `scripts/lint/console-erro-sem-pii.test.ts` com `Test timed out in 5000ms` — o teste instancia um `ESLint` real e o boot estoura 5s sob a carga da suíte. Medido em `main` limpo (`git stash -u` + `pnpm test`): **mesma falha**, 2713 passam. Passa isolado (5/5) e o CI é verde. Não virou débito por ser flake de carga local; anotado em memória.
+
 ## 🏁 Sessão 03/09/2026 — D-A6/A8/A9/A10 ratificados; a sequela da #557 catalogada
 
 **Ratificação.** As quatro decisões que a auditoria de 02/09 acrescentou à spec

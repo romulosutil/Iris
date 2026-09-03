@@ -1,7 +1,15 @@
+import {
+  formatarMetricaSegmentacao,
+  type ResultadoSegmentacao,
+  type Segmentacao,
+} from "@/lib/evidence/snapshot-schema";
+
 export type SinalTipo = "estagnacao" | "regressao" | "faltas_excessivas";
 
 export type DetalheEstagnacao = {
-  metrica: string;
+  /** Já formatado para exibição (`formatarMetricaSegmentacao`) — nunca o
+   * objeto cru do snapshot. `null` quando não há métrica. */
+  metrica: string | null;
   tipoEstrutura: string;
   sessionNumero: number;
 };
@@ -31,11 +39,32 @@ export function chaveNatural(
 export type SnapshotRow = {
   patientId: string;
   sessionNumero: number;
-  segmentacao: Record<
-    string,
-    Record<string, { tipo_estrutura: string; metrica: string; rotulo: string }>
-  >;
+  /** Forma persistida de `session_snapshot.segmentacao` — `metrica` é objeto
+   * OU string, conforme o schema; nunca redeclarar `string` aqui (#567). */
+  segmentacao: Segmentacao;
 };
+
+/**
+ * Detalhe de um alerta JÁ PERSISTIDO (`alerta.detalhe`, jsonb) → forma de
+ * exibição. Linhas antigas guardam `metrica` como objeto; a formatação roda na
+ * LEITURA, então não há backfill a fazer (#567).
+ */
+export function lerDetalheAlerta(
+  bruto: unknown,
+): DetalheEstagnacao | DetalheFaltas {
+  const dados = (
+    typeof bruto === "string" ? JSON.parse(bruto) : bruto
+  ) as Record<string, unknown>;
+  if (dados && typeof dados === "object" && "metrica" in dados) {
+    return {
+      ...(dados as unknown as DetalheEstagnacao),
+      metrica: formatarMetricaSegmentacao(
+        dados.metrica as ResultadoSegmentacao["metrica"],
+      ),
+    };
+  }
+  return dados as unknown as DetalheFaltas;
+}
 
 export function sinaisDeSnapshot(rows: SnapshotRow[]): SinalCru[] {
   const sinais: SinalCru[] = [];
@@ -54,7 +83,7 @@ export function sinaisDeSnapshot(rows: SnapshotRow[]): SinalCru[] {
             goalId,
             protocolId,
             detalhe: {
-              metrica: data.metrica,
+              metrica: formatarMetricaSegmentacao(data.metrica),
               tipoEstrutura: data.tipo_estrutura,
               sessionNumero: row.sessionNumero,
             },

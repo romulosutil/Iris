@@ -3,6 +3,9 @@ import {
   chaveNatural,
   sinaisDeSnapshot,
   sinaisDeFaltas,
+  lerDetalheAlerta,
+  type DetalheEstagnacao,
+  type DetalheFaltas,
   type SnapshotRow,
 } from "./sinais";
 
@@ -214,5 +217,89 @@ describe("sinais - logic unit tests", () => {
       expect(c3).toBe("faltas_excessivas:p1");
       expect(c1).not.toBe(c2);
     });
+  });
+});
+
+describe("metrica objeto na fila de supervisão (#567)", () => {
+  const linhaComMetricaObjeto = (
+    metrica: unknown,
+    rotulo = "estagnacao",
+  ): SnapshotRow[] => [
+    {
+      patientId: "patient-1",
+      sessionNumero: 12,
+      segmentacao: {
+        "goal-1": {
+          "protocol-1": {
+            tipo_estrutura: "marco_simples",
+            metrica: metrica as never,
+            rotulo,
+          },
+        },
+      },
+    },
+  ];
+
+  it("snapshot de sessão normal produz métrica exibível, não o objeto cru", () => {
+    const [sinal] = sinaisDeSnapshot(
+      linhaComMetricaObjeto({ eixo: "nivel_ajuda", ordinalRecente: 3 }),
+    );
+    const detalhe = sinal!.detalhe as DetalheEstagnacao;
+    expect(detalhe.metrica).toBe("Nível de ajuda: 3");
+    expect(typeof detalhe.metrica).toBe("string");
+  });
+
+  it("ordinal nulo mantém o eixo — a linha não some do card", () => {
+    const [sinal] = sinaisDeSnapshot(
+      linhaComMetricaObjeto({ eixo: "nivel_ajuda", ordinalRecente: null }),
+    );
+    expect((sinal!.detalhe as DetalheEstagnacao).metrica).toBe(
+      "Nível de ajuda",
+    );
+  });
+
+  it("marco-zero (metrica string) segue exibindo o mesmo rótulo", () => {
+    const [sinal] = sinaisDeSnapshot(linhaComMetricaObjeto("nivel_ajuda"));
+    expect((sinal!.detalhe as DetalheEstagnacao).metrica).toBe(
+      "Nível de ajuda",
+    );
+  });
+
+  it("sem métrica o detalhe carrega null, nunca a palavra 'undefined'", () => {
+    const [sinal] = sinaisDeSnapshot(linhaComMetricaObjeto(null));
+    expect((sinal!.detalhe as DetalheEstagnacao).metrica).toBeNull();
+  });
+});
+
+describe("lerDetalheAlerta — sinais já persistidos (#567)", () => {
+  it("alerta antigo com metrica objeto no jsonb renderiza formatado", () => {
+    const det = lerDetalheAlerta({
+      metrica: { eixo: "nivel_ajuda", ordinalRecente: 2 },
+      tipoEstrutura: "marco_simples",
+      sessionNumero: 7,
+    }) as DetalheEstagnacao;
+    expect(det.metrica).toBe("Nível de ajuda: 2");
+    expect(det.tipoEstrutura).toBe("marco_simples");
+    expect(det.sessionNumero).toBe(7);
+  });
+
+  it("detalhe persistido como string JSON é desserializado antes de formatar", () => {
+    const det = lerDetalheAlerta(
+      JSON.stringify({
+        metrica: { eixo: "nivel_ajuda", ordinalRecente: 2 },
+        tipoEstrutura: "marco_simples",
+        sessionNumero: 7,
+      }),
+    ) as DetalheEstagnacao;
+    expect(det.metrica).toBe("Nível de ajuda: 2");
+  });
+
+  it("detalhe de faltas atravessa intacto", () => {
+    const det = lerDetalheAlerta({
+      faltas: 3,
+      janelaSemanas: 4,
+      limiar: 3,
+    }) as DetalheFaltas;
+    expect(det).toEqual({ faltas: 3, janelaSemanas: 4, limiar: 3 });
   });
 });

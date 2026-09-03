@@ -85,23 +85,14 @@ function formatarMetadadosClinicos(
     partes.push(`Sessão ${sessionNumero}`);
   }
 
-  if (
-    metrica &&
-    typeof metrica === "string" &&
-    metrica.trim() !== "" &&
-    metrica !== "undefined" &&
-    metrica !== "null"
-  ) {
+  // `typeof === "string"` é a fronteira de runtime (o detalhe vem de jsonb),
+  // não defesa contra as strings "undefined"/"null": essas nasciam de
+  // `String(objeto)` na leitura e morreram com o formatador único (#567).
+  if (typeof metrica === "string" && metrica.trim() !== "") {
     partes.push(`Métrica: ${metrica}`);
   }
 
-  if (
-    tipoEstrutura &&
-    typeof tipoEstrutura === "string" &&
-    tipoEstrutura.trim() !== "" &&
-    tipoEstrutura !== "undefined" &&
-    tipoEstrutura !== "null"
-  ) {
+  if (typeof tipoEstrutura === "string" && tipoEstrutura.trim() !== "") {
     partes.push(`Área: ${tipoEstrutura}`);
   }
 
