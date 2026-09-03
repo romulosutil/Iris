@@ -1,0 +1,7 @@
+{
+  "src/lib/billing/rotulos-assinatura.ts": 1,
+  "src/lib/billing/rotulos-ciclo.ts": 1,
+  "src/lib/patient/prontidao-queries.ts": 1,
+  "src/lib/patient/prontidao-rotas.test.ts": 1,
+  "src/lib/patient/prontidao.ts": 1
+}

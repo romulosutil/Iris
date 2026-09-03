@@ -21,6 +21,17 @@ const baselineDS = JSON.parse(
   ),
 );
 
+// A-02 (#559, F1): imports de `@/app/**` que ainda existem em `src/lib` e
+// `src/components/ui`, com a contagem atual por arquivo. Só pode CAIR — as
+// fatias F2–F5 da issue zeram cada entrada movendo o módulo. Ver o bloco da
+// regra no fim deste arquivo e `scripts/lint/fronteira-lib-app.test.ts`.
+const baselineFronteira = JSON.parse(
+  readFileSync(
+    new URL("./scripts/lint/fronteira-lib-app.baseline.json", import.meta.url),
+    "utf8",
+  ),
+);
+
 const config = [
   {
     ignores: [
@@ -102,6 +113,40 @@ const config = [
     ],
     plugins: { ds: pluginDS },
     rules: { "ds/sem-paleta-crua": "error" },
+  },
+  {
+    // A-02 (#559, fatia F1): fronteira `lib` ↛ `app`. `src/lib` e
+    // `src/components/ui` são os bounded contexts e o design system — eles não
+    // podem importar de `src/app`, que é a camada de rota. A inversão já
+    // existe (`lib/billing/rotulos-*` importa `@/app/(app)/assinatura/queries`)
+    // e é o que a auditoria 360 chamou de "lib dependendo de app".
+    //
+    // Esta regra é o degrau barato: PARA A SANGRIA antes do refactor grande
+    // (fatias F2–F5 movem o passivo). O baseline abaixo congela o que já
+    // existe; `scripts/lint/fronteira-lib-app.test.ts` (roda no `pnpm test`)
+    // reativa a regra sobre esses arquivos e falha se a contagem SUBIR — e
+    // pede para abaixar o baseline quando ela cai.
+    //
+    // Import de TIPO conta: `import type { X } from "@/app/..."` amarra o
+    // módulo de lib ao arquivo de rota em tempo de compilação e é exatamente
+    // o que impede mover o módulo depois.
+    files: ["src/lib/**/*.{ts,tsx}", "src/components/ui/**/*.{ts,tsx}"],
+    // `(app)` e `[id]` dos caminhos de rota precisam de escape num glob.
+    ignores: Object.keys(baselineFronteira).map(comoGlobLiteral),
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/app", "@/app/*", "@/app/**"],
+              message:
+                "Fronteira lib ↛ app (A-02, #559): src/lib e src/components/ui não podem importar de src/app — é o domínio dependendo da rota. Mova o que for compartilhado (tipo, query ou regra) para src/lib e importe de lá; a rota importa de lib, nunca o contrário.",
+            },
+          ],
+        },
+      ],
+    },
   },
 ];
 
