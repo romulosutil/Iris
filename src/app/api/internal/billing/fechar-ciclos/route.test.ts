@@ -659,10 +659,22 @@ describe("POST /api/internal/billing/fechar-ciclos — falha que aborta a passad
 
     const corpo = await (await POST(requisicao())).json();
 
-    const chamada = log.mock.calls.find(
-      ([rotulo]) => rotulo === "[billing-fechamento] etapa de carência abortou",
-    );
-    const registrado = (chamada?.[1] ?? {}) as { correlacaoId?: string };
+    // #560 (F1): o registro é uma linha de JSON; o rótulo virou `evento`.
+    const registrado =
+      log.mock.calls
+        .map(([linha]) => {
+          try {
+            return JSON.parse(String(linha)) as {
+              evento?: string;
+              correlacaoId?: string;
+            };
+          } catch {
+            return {};
+          }
+        })
+        .find(
+          (r) => r.evento === "[billing-fechamento] etapa de carência abortou",
+        ) ?? {};
     expect(registrado.correlacaoId).toMatch(/^[0-9a-f]{8}$/);
     expect(corpo.carenciaAbortada).toBe(
       `Error correlacao=${registrado.correlacaoId}`,

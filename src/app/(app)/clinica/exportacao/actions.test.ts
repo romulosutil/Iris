@@ -103,10 +103,11 @@ describe("solicitarExportacaoAction (Task T7)", () => {
       );
     }
     // O log recebeu só o resumo, nunca o objeto com a message.
+    // #560 (F1): uma linha de JSON, com o rótulo no campo `evento`.
     expect(silencio).toHaveBeenCalledTimes(1);
-    const [rotulo, resumo] = silencio.mock.calls[0]! as [string, unknown];
-    expect(rotulo).toBe("solicitarExportacao:");
-    expect(resumo).not.toBe(erroDeDriver);
-    expect(JSON.stringify(resumo)).not.toContain(params);
+    const linha = String(silencio.mock.calls[0]![0]);
+    const resumo = JSON.parse(linha) as { evento: string };
+    expect(resumo.evento).toBe("solicitarExportacao:");
+    expect(linha).not.toContain(params);
   });
 });

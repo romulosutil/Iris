@@ -3,6 +3,10 @@ import {
   NOME_COOKIE_TOKEN,
   opcoesCookieToken,
 } from "@/app/(auth)/redefinir-senha/cookie";
+import {
+  CABECALHO_REQUEST_ID,
+  normalizarRequestId,
+} from "@/lib/observabilidade/logger";
 
 /**
  * Proxy de navegação e middleware central do Next.js 16 (`src/proxy.ts`).
@@ -13,11 +17,37 @@ import {
  * 2. Interceptação segura de `/redefinir-senha?token=...` movendo token para cookie httpOnly.
  * 3. Injeção de cabeçalhos RFC 8288 Link para descoberta de agentes de IA usando `.append("Link", ...)`
  *    para não sobrescrever tags nativas de prefetching/preloading do Next.js.
+ * 4. Id de correlação por request (#560, achado `DA-04`): decide o `requestId`
+ *    de TODA request — inclusive as de mutação, que saem antes das demais
+ *    interceptações — repassa no cabeçalho `x-request-id` para o servidor e
+ *    ecoa na resposta, para o operador casar o que o usuário viu com a linha
+ *    do log. O valor vindo de fora é adotado só depois de podado por
+ *    `normalizarRequestId`: cabeçalho é entrada de terceiro.
+ *
+ * O proxy roda no runtime edge, então importa apenas o núcleo puro do logger
+ * (`logger.ts`), nunca o transporte `pino` (`logger-node.ts`).
  */
 export function proxy(request: NextRequest) {
+  const requestId = normalizarRequestId(
+    request.headers.get(CABECALHO_REQUEST_ID),
+  );
+
+  /** Repassa o id adiante e ecoa na resposta. Todo caminho de saída passa aqui. */
+  const comRequestId = (resposta: NextResponse): NextResponse => {
+    resposta.headers.set(CABECALHO_REQUEST_ID, requestId);
+    return resposta;
+  };
+
+  /** `NextResponse.next` que injeta o id nos headers vistos pelo servidor. */
+  const seguir = (): NextResponse => {
+    const headers = new Headers(request.headers);
+    headers.set(CABECALHO_REQUEST_ID, requestId);
+    return NextResponse.next({ request: { headers } });
+  };
+
   // Apenas métodos de leitura (GET e HEAD) sofrem interceptações customizadas
   if (request.method !== "GET" && request.method !== "HEAD") {
-    return NextResponse.next();
+    return comRequestId(seguir());
   }
 
   const { pathname } = request.nextUrl;
@@ -30,10 +60,10 @@ export function proxy(request: NextRequest) {
 
     const resposta = NextResponse.redirect(urlLimpa);
     resposta.cookies.set(NOME_COOKIE_TOKEN, token, opcoesCookieToken());
-    return resposta;
+    return comRequestId(resposta);
   }
 
-  const response = NextResponse.next();
+  const response = comRequestId(seguir());
 
   // Injeção de cabeçalhos Link para descoberta por agentes de IA (preservando preload headers nativos)
   // `/.well-known` sempre tem "." no path (ex.: "/.well-known/..."), então o

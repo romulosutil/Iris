@@ -32,6 +32,10 @@ const IGNORAR_DIRS = new Set(["node_modules", ".next", "dist", "coverage"]);
 const ALLOWLIST: ReadonlyMap<string, string> = new Map([
   ["NODE_ENV", "definida pelo runtime (Next/Node), não é configuração nossa"],
   [
+    "NEXT_RUNTIME",
+    'definida pelo Next ("nodejs" | "edge"), não é configuração nossa: src/instrumentation.ts a lê para instalar o sink do logger só no runtime Node',
+  ],
+  [
     "ALVO",
     "parâmetro interno de scripts/ci/verificar-deps-imagem.mjs (roda dentro da imagem, no CI)",
   ],
