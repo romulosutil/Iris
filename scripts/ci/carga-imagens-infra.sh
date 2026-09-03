@@ -37,6 +37,7 @@
 #   scripts/ci/carga-imagens-infra.sh alarme
 #   scripts/ci/carga-imagens-infra.sh exportacao
 #   scripts/ci/carga-imagens-infra.sh arquivamento
+#   scripts/ci/carga-imagens-infra.sh expurgo-audit-log
 #
 # Roda igual no CI e na máquina do dev — de propósito. Um teste que só existe
 # no workflow é um teste que ninguém roda antes de abrir o PR.
@@ -62,6 +63,7 @@ readonly TAG_RETENCAO="iris-retencao-ci:local"
 readonly TAG_ALARME="iris-alarme-ci:local"
 readonly TAG_EXPORTACAO="iris-exportacao-ci:local"
 readonly TAG_ARQUIVAMENTO="iris-arquivamento-ci:local"
+readonly TAG_EXPURGO_AUDIT_LOG="iris-expurgo-audit-log-ci:local"
 
 log_info() { printf '[carga-imagens] %s\n' "$*"; }
 log_ok() { printf '[carga-imagens] OK: %s\n' "$*"; }
@@ -729,6 +731,82 @@ carga_arquivamento() {
 		-- docker run --rm "${TAG_ARQUIVAMENTO}" /app/agendador.sh
 }
 
+# --- expurgo-audit-log --------------------------------------------------------
+# Job de expurgo e retenção do audit_log (#116/#536, imagem criada em 03/09/2026
+# depois que a medição em produção mostrou que o serviço NUNCA existiu no
+# Easypanel). Mesmo ponto cego dos demais: COPY arquivo por arquivo +
+# `npm install postgres@3.4.9` à mão, numa imagem que NÃO enxerga o node_modules
+# do repo.
+#
+# O que está em jogo se esta imagem subir quebrada: o job morre a cada tick e
+# NENHUM log de acesso vencido é expurgado — estado indistinguível, de dentro do
+# produto, de "nada passou dos 180 dias". A obrigação do Marco Civil Art. 15
+# deixa de ser cumprida em silêncio, e os logs órfãos de contas deletadas
+# continuam com o vínculo que a LGPD manda cortar.
+#
+# ATENÇÃO: este script NÃO tem `--dry-run`. Não precisa: sem
+# EXPURGO_DATABASE_URL ele sai 1 ANTES de abrir conexão, então nenhuma das
+# asserções abaixo chega perto de um banco.
+carga_expurgo_audit_log() {
+	log_info "buildando ${TAG_EXPURGO_AUDIT_LOG}..."
+	docker build -f infra/expurgo-audit-log/Dockerfile -t "${TAG_EXPURGO_AUDIT_LOG}" .
+
+	esperar_falha_com \
+		"expurgo-audit-log: carga por caminho ABSOLUTO" \
+		"EXPURGO_DATABASE_URL não definida" \
+		-- docker run --rm "${TAG_EXPURGO_AUDIT_LOG}" \
+		node /app/scripts/expurgo-audit-log.mjs
+
+	# Caminho RELATIVO é um caso separado, não redundante: é a forma que o
+	# operador digita no console do painel, e foi a que a #153 quebrou no
+	# escalonamento (argv[1] relativo não bate com import.meta.url sem
+	# pathToFileURL — o processo saía 0 sem varrer nada). Se essa guarda
+	# regredir, esta asserção pega o exit 0.
+	esperar_falha_com \
+		"expurgo-audit-log: carga por caminho RELATIVO" \
+		"EXPURGO_DATABASE_URL não definida" \
+		-- docker run --rm -w /app "${TAG_EXPURGO_AUDIT_LOG}" \
+		node scripts/expurgo-audit-log.mjs
+
+	# FAIL-CLOSED sobre a role errada: mesmo com a DATABASE_URL do app presente
+	# no ambiente, o job tem de recusar. `app_role` nunca teve EXECUTE nas
+	# funções do expurgo, e um fallback silencioso trocaria "não roda" por
+	# "estoura 42501 a cada tick".
+	esperar_falha_com \
+		"expurgo-audit-log: NÃO cai em DATABASE_URL (fail-closed na role)" \
+		"EXPURGO_DATABASE_URL não definida" \
+		-- docker run --rm -e DATABASE_URL=postgres://app:app@127.0.0.1:5432/iris \
+		"${TAG_EXPURGO_AUDIT_LOG}" node /app/scripts/expurgo-audit-log.mjs
+
+	# Resolve TODO specifier dos arquivos copiados, dinâmico incluído — um
+	# `await import()` em try/catch degrada em silêncio e passaria verde nas
+	# asserções acima. O verificador entra por stdin de propósito: não vira
+	# arquivo dentro de uma imagem de produção.
+	esperar_sucesso \
+		"expurgo-audit-log: todo import resolve na imagem (inclusive os dinâmicos)" \
+		-- bash -c "docker run --rm -i -w /app -e ALVO=/app/scripts '${TAG_EXPURGO_AUDIT_LOG}' node --input-type=module < scripts/ci/verificar-deps-imagem.mjs"
+
+	# O agendador usa `set -Eeuo pipefail` e `[[ ]]`: sem o `apk add bash` do
+	# Dockerfile a imagem sobe e o laço morre na primeira linha.
+	esperar_sucesso \
+		"expurgo-audit-log: sintaxe do agendador.sh (bash presente)" \
+		-- docker run --rm "${TAG_EXPURGO_AUDIT_LOG}" bash -n /app/agendador.sh
+
+	# O CMD aponta /app/agendador.sh por caminho absoluto fixo. Se o COPY mudar
+	# de lugar, o container só falha em produção.
+	esperar_sucesso \
+		"expurgo-audit-log: /app/agendador.sh executável (caminho fixo do CMD)" \
+		-- docker run --rm "${TAG_EXPURGO_AUDIT_LOG}" test -x /app/agendador.sh
+
+	# O agendador valida env ANTES de entrar no laço e sai 1. Rodá-lo sem env
+	# prova as duas coisas: que a guarda nomeia a variável, e que este teste não
+	# trava — um agendador que entrasse no laço de 86400s aqui penduraria o CI.
+	esperar_falha_com \
+		"expurgo-audit-log: agendador para na guarda de env (não entra em laço)" \
+		"variável(is) de ambiente ausente(s): EXPURGO_DATABASE_URL" \
+		-- docker run --rm "${TAG_EXPURGO_AUDIT_LOG}" /app/agendador.sh
+}
+
 # --- main --------------------------------------------------------------------
 alvo="${1:-todos}"
 case "${alvo}" in
@@ -739,6 +817,7 @@ retencao) carga_retencao ;;
 alarme) carga_alarme ;;
 exportacao) carga_exportacao ;;
 arquivamento) carga_arquivamento ;;
+expurgo-audit-log) carga_expurgo_audit_log ;;
 todos)
 	carga_escalonamento
 	carga_backup
@@ -747,9 +826,10 @@ todos)
 	carga_alarme
 	carga_exportacao
 	carga_arquivamento
+	carga_expurgo_audit_log
 	;;
 *)
-	log_error "alvo desconhecido: ${alvo} — use 'escalonamento', 'backup', 'billing', 'retencao', 'alarme', 'exportacao', 'arquivamento' ou nenhum (todos)."
+	log_error "alvo desconhecido: ${alvo} — use 'escalonamento', 'backup', 'billing', 'retencao', 'alarme', 'exportacao', 'arquivamento', 'expurgo-audit-log' ou nenhum (todos)."
 	exit 2
 	;;
 esac
