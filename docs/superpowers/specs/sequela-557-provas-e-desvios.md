@@ -88,7 +88,19 @@ divergência tenha sido registrada em lugar nenhum. Três são idioma; o quarto
 | Por que dói       | D-A4 é a decisão que impede a família de defeito inteira ("flag manual só é verdadeira enquanto alguém lembra de escrevê-la"). Hoje ela está implementada e **não provada**: um `cache` mal colocado ou uma coluna futura passariam verdes. |
 | Como se prova     | Um caso no arquivo que já existe, na mesma transação/fixture. **Mutação:** memoizar a prontidão por `patientId` tem que deixar vermelho.                                                                                                    |
 
-### B-7 · 5º passo do onboarding sem teste nenhum
+### B-7 · 5º passo do onboarding: faltava o passo DESFEITO — ✅ FECHADO (PR #576, 03/09/2026)
+
+> **Correção de medição (03/09/2026).** A redação original desta seção dizia
+> "sem teste nenhum". Estava errada: a varredura olhou só `src/**` e o teste
+> mora em `db/tests/onboarding-progresso-rls.int.test.ts`, que existe desde a
+> #489 e recebeu 3 casos do 5º passo na própria #557 (escada por modalidade,
+> modalidade não resolvida, isolamento cross-tenant). O buraco real era
+> **específico e é justamente o que a §6 nomeia**: o passo **desfeito**. A PR
+> #576 estendeu o arquivo existente (7 → 12 casos) em vez de criar um
+> duplicado. A mutação prova o tamanho exato do buraco: com `temMetaAtiva`
+> chumbado em `true`, os 3 casos que já existiam continuam VERDES e só os
+> casos novos caem — nenhum teste anterior distinguia passo derivado de flag
+> persistida.
 
 | Campo             | Conteúdo                                                                                                                                                                                                                                                                              |
 | :---------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
