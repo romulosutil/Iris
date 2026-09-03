@@ -181,6 +181,34 @@ describe.skipIf(!hasDb)("evidence on-approve (Fase 4)", () => {
     });
   });
 
+  // #582 (revisão): o chamador manda SÓ a correção. O core precisa mesclar
+  // sobre o estado do banco — se gravasse o objeto parcial, `payload_editado`
+  // perderia `evidencia` (descricao, alvos) e a inserção em `evidence` acharia
+  // zero alvos, apagando dado clínico com "salvo com sucesso" na tela.
+  test("editar com payload PARCIAL preserva o resto do conteúdo (merge contra o banco)", async () => {
+    const r = await A.editarExtracao(ctxT1, {
+      extractionId: EX_UNICO,
+      payloadEditado: { funcao: "tato (corrigido)" },
+      versao: 1,
+    });
+    expect(r.ok).toBe(true);
+
+    const [ex] =
+      await owner`SELECT payload_editado FROM extraction WHERE id = ${EX_UNICO}`;
+    const editado = ex!.payload_editado as Record<string, unknown>;
+    expect(editado.funcao).toBe("tato (corrigido)");
+    expect(editado.evidencia).toMatchObject({
+      descricao: "nomeou o carro",
+      alvos: [{ protocol_id: "vbmapp", dominio_id: "tato" }],
+    });
+
+    // e o alvo continua chegando em `evidence` — era isto que sumia
+    const rows =
+      await owner`SELECT * FROM evidence WHERE extraction_id = ${EX_UNICO}`;
+    expect(rows.length).toBe(1);
+    expect(rows[0]!.milestone_id).toBe(MILESTONE_TATO);
+  });
+
   // Q-03 (#532): "aprovada sem evidence" deixou de ser comportamento aceito —
   // era exatamente o silêncio que a auditoria apontou. Sem `numero_sequencial`
   // a aprovação é RECUSADA com `SESSAO_SEM_NUMERO` e a transação desfeita

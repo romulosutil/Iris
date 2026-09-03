@@ -48,10 +48,6 @@ describe("editarExtracaoAction (#582)", () => {
         extractionId: "00000000-0000-0000-0000-000000000004",
         versao: "1",
         subtipo: "cadeia",
-        payloadOriginal: JSON.stringify({
-          nome: "escovar dentes",
-          etapas: [{ descricao: "pegar escova", nivel_ajuda: "independente" }],
-        }),
         nivel_ajuda: "dica_fisica",
       }),
     );
@@ -71,19 +67,18 @@ describe("editarExtracaoAction (#582)", () => {
         extractionId: "00000000-0000-0000-0000-000000000004",
         versao: "1",
         subtipo: "evidencia",
-        payloadOriginal: JSON.stringify({ funcao: "tato" }),
         nivel_ajuda: "dica_fisica",
       }),
     );
 
     expect(res.error).toBeUndefined();
+    // Só a CORREÇÃO viaja: o merge com o resto do conteúdo é do core, contra o
+    // banco. Nenhuma outra chave pode aparecer aqui — um objeto reconstruído no
+    // cliente sobrescreveria `payload_editado` inteiro e apagaria o resto.
     expect(editarExtracao).toHaveBeenCalledWith(
       mockCtx,
       expect.objectContaining({
-        payloadEditado: expect.objectContaining({
-          funcao: "tato",
-          nivel_ajuda: "dica_fisica",
-        }),
+        payloadEditado: { nivel_ajuda: "dica_fisica" },
       }),
     );
   });
@@ -106,7 +101,6 @@ describe("editarExtracaoAction (#582)", () => {
           extractionId: "00000000-0000-0000-0000-000000000004",
           versao: "1",
           subtipo,
-          payloadOriginal: "{}",
           funcao: "qualquer coisa",
         }),
       );

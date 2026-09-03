@@ -234,11 +234,6 @@ function DialogoEditar({
               <input type="hidden" name="sessionId" value={sessionId} />
               <input type="hidden" name="extractionId" value={ex.id} />
               <input type="hidden" name="subtipo" value={ex.subtipo} />
-              <input
-                type="hidden"
-                name="payloadOriginal"
-                value={JSON.stringify(payloadOriginalDe(ex, campos))}
-              />
               {campos.map((campo) => (
                 <label key={campo} className="flex flex-col gap-1">
                   <span className="text-sm font-semibold text-[var(--text-primary)]">
@@ -275,20 +270,6 @@ function valorDe(ex: ExtracaoRevisavel, campo: CampoEditavel): string {
   const rotulo = ROTULO_CAMPO_EDITAVEL[campo];
   const linha = ex.resumo.find((l) => l.rotulo === rotulo);
   return linha?.valor ?? "";
-}
-
-// Reconstrói um payload mínimo com os campos editáveis para o merge server-side
-// preservar o resto. O payload original imutável fica no banco (coluna payload).
-function payloadOriginalDe(
-  ex: ExtracaoRevisavel,
-  campos: readonly CampoEditavel[],
-): Record<string, string> {
-  const p: Record<string, string> = {};
-  for (const campo of campos) {
-    const v = valorDe(ex, campo);
-    if (v) p[campo] = v;
-  }
-  return p;
 }
 
 function CartaoRevisao({

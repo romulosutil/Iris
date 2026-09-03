@@ -587,30 +587,54 @@ async function editarExtracaoCore(
   const p = editarSchema.safeParse(input);
   if (!p.success) return { error: p.error.issues[0]!.message };
 
-  // Guard de subtipo (#582 review): `camposPermitidos` no client vem do
-  // hidden `subtipo` do formulário — um POST forjado pode trocá-lo (ex.:
-  // "evidencia" enquanto a extração real é `cadeia`) e fazer o merge no
-  // action escrever funcao/nivel_ajuda/resultado na raiz do payload errado.
-  // O subtipo de VERDADE só existe no banco — relê aqui, dentro do core, e
-  // filtra `payloadEditado` pelos campos que ELE realmente permite, nunca
-  // pelo que o cliente alegou. Não recusa a edição inteira quando o subtipo
-  // real não tem nenhum dos três: o core também serve edições diretas fora
-  // do diálogo genérico (ex.: `preferencia_reforcador` via item_atividade/
-  // valencia, que não é `CAMPO_EDITAVEL`) — a recusa por "sem campo editável"
-  // é responsabilidade do `actions.ts` (que já sabe que veio do diálogo dos
-  // três campos), não deste core genérico.
+  // Merge autoritativo (#582 review): `payload_editado` é gravado INTEIRO (o
+  // `set` de `transicionar` substitui a coluna, e é ele que vira o `conteudo`
+  // efetivo lido por `inserirEvidenciasOnApprove`). O chamador só conhece as
+  // chaves que ele mesmo edita — o form manda três campos, o caminho direto de
+  // `preferencia_reforcador` manda item_atividade/valencia. Se o core gravasse
+  // esse objeto parcial, todo o resto do conteúdo clínico (alvos, descricao,
+  // etapas…) sumiria da versão efetiva — inclusive `alvos`, deixando a
+  // inserção em `evidence` sem alvo nenhum. A base do merge é sempre o estado
+  // do BANCO (`payload_editado ?? payload`), nunca nada vindo do cliente.
+  //
+  // Guard de subtipo: o subtipo de VERDADE também só existe no banco — um POST
+  // forjado pode alegar "evidencia" numa extração `cadeia` e escrever
+  // funcao/nivel_ajuda/resultado na raiz do payload errado. Os três campos de
+  // `CAMPO_EDITAVEL` só passam se `camposEditaveisDe(subtipo real)` os permite.
+  // Chaves fora desses três não são filtradas: o core também serve edições
+  // diretas fora do diálogo genérico (`preferencia_reforcador`) — a recusa por
+  // "subtipo sem campo editável" é responsabilidade do `actions.ts` (que sabe
+  // que a requisição veio do diálogo dos três campos), não deste core.
   const [row] = await withTenant(ctx, (tx) =>
     tx
-      .select({ subtipo: extraction.subtipo })
+      .select({
+        subtipo: extraction.subtipo,
+        payload: extraction.payload,
+        payloadEditado: extraction.payloadEditado,
+      })
       .from(extraction)
       .where(eq(extraction.id, p.data.extractionId)),
   );
-  const payloadEditado = { ...p.data.payloadEditado };
-  if (row) {
-    const camposPermitidos = camposEditaveisDe(row.subtipo);
-    for (const campo of CAMPO_EDITAVEL) {
-      if (!camposPermitidos.includes(campo)) delete payloadEditado[campo];
+
+  const base = row?.payloadEditado ?? row?.payload;
+  const payloadEditado: Record<string, unknown> =
+    base && typeof base === "object" && !Array.isArray(base)
+      ? { ...(base as Record<string, unknown>) }
+      : {};
+  const camposPermitidos = row
+    ? camposEditaveisDe(row.subtipo)
+    : CAMPO_EDITAVEL;
+  for (const [chave, valor] of Object.entries(p.data.payloadEditado)) {
+    const ehCampoDoDialogo = (CAMPO_EDITAVEL as readonly string[]).includes(
+      chave,
+    );
+    if (
+      ehCampoDoDialogo &&
+      !camposPermitidos.includes(chave as (typeof CAMPO_EDITAVEL)[number])
+    ) {
+      continue;
     }
+    payloadEditado[chave] = valor;
   }
 
   const colapso = await resolverColapso(

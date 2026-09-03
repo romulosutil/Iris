@@ -116,19 +116,11 @@ export async function editarExtracaoAction(
     };
   }
 
-  // payloadEditado = payload ORIGINAL (JSON no hidden) com os campos corrigidos
-  // sobrepostos. Preserva o resto do conteúdo que o terapeuta não tocou; o
-  // original imutável fica em `payload` (auditoria — a action core não o toca).
-  let base: Record<string, unknown> = {};
-  try {
-    const raw = String(formData.get("payloadOriginal") ?? "{}");
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object")
-      base = parsed as Record<string, unknown>;
-  } catch {
-    base = {};
-  }
-  const editado: Record<string, unknown> = { ...base };
+  // Só as CORREÇÕES vão para o core (#582 review). O merge com o conteúdo que
+  // o terapeuta não tocou é feito lá dentro, contra o estado do banco — nunca
+  // contra um hidden input do formulário, que só carrega os campos editáveis e
+  // apagaria o resto do payload. O original imutável fica em `payload`.
+  const editado: Record<string, unknown> = {};
   for (const campo of camposPermitidos) {
     const v = formData.get(campo);
     if (typeof v === "string" && v.trim() !== "") editado[campo] = v.trim();
