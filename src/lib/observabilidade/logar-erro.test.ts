@@ -29,6 +29,18 @@ function erroDeDriver(): Error {
   return err;
 }
 
+/**
+ * O registro que o logger estruturado emitiu na chamada `n` (#560, F1): desde
+ * a fachada, o `console` recebe UMA string, que é o registro em JSON.
+ */
+function registroLogado(
+  espiao: ReturnType<typeof vi.spyOn>,
+  n = 0,
+): Record<string, unknown> {
+  const args = espiao.mock.calls[n] as unknown[];
+  return JSON.parse(String(args[0])) as Record<string, unknown>;
+}
+
 /** Tudo que o `console.error` recebeu, achatado numa string só. */
 function tudoQueFoiLogado(espiao: ReturnType<typeof vi.spyOn>): string {
   return (espiao.mock.calls as unknown[][])
@@ -74,11 +86,24 @@ describe("logarErroSemPII", () => {
     });
 
     expect(correlacaoId).toMatch(/^[0-9a-f]{8}$/);
-    const [rotulo, resumo] = espiao.mock.calls[0]!;
-    expect(rotulo).toBe("consolidarSessao:");
+    const registro = registroLogado(espiao);
+    // O rótulo virou o `evento` do registro estruturado; `nivel`, `requestId`
+    // e `hora` são o envelope que todo registro carrega a partir do #560.
+    expect(registro.evento).toBe("consolidarSessao:");
+    expect(registro.nivel).toBe("error");
+    expect(typeof registro.requestId).toBe("string");
+    const {
+      nivel: _n,
+      evento: _e,
+      requestId: _r,
+      hora: _h,
+      ...resumo
+    } = registro;
     expect(resumo).toEqual({
       correlacaoId,
-      nome: "DrizzleQueryError",
+      // A classe do erro sai como `erroNome`: `nome` é chave redigida (é o
+      // nome do paciente no domínio).
+      erroNome: "DrizzleQueryError",
       codigo: "23505",
       constraint: "uq_session_note",
       causaNome: "PostgresError",
@@ -103,11 +128,15 @@ describe("logarErroSemPII", () => {
     logarErroSemPII("x", err, {
       // @ts-expect-error — objeto não é permitido em `extra`
       objeto: { message: err.message },
-      texto: "ok",
+      detalhe: "ok",
+      // `texto` é chave redigida desde o #560: o `extra` do chamador passa
+      // pela mesma lista que o resto do contexto.
+      texto: TEXTO_CLINICO,
     });
     const saida = tudoQueFoiLogado(espiao);
     expect(saida).not.toContain(TEXTO_CLINICO);
     expect(saida).toContain("ok");
+    expect(registroLogado(espiao).texto).toBe("[redigido]");
   });
 
   it("erro que não é Error vira tipo + hash, sem serializar o valor", () => {
@@ -121,9 +150,9 @@ describe("logarErroSemPII", () => {
     const a = logarErroSemPII("x", erroDeDriver());
     const b = logarErroSemPII("x", erroDeDriver());
     expect(a).not.toBe(b);
-    const [, ra] = espiao.mock.calls[0]! as [string, { hashMensagem: string }];
-    const [, rb] = espiao.mock.calls[1]! as [string, { hashMensagem: string }];
-    expect(ra.hashMensagem).toBe(rb.hashMensagem);
+    expect(registroLogado(espiao, 0).hashMensagem).toBe(
+      registroLogado(espiao, 1).hashMensagem,
+    );
   });
 });
 
@@ -159,7 +188,7 @@ describe("extra é responsabilidade do chamador (limite documentado)", () => {
     const espiao = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       logarErroSemPII("x", new Error("y"), { quem: "alguem@exemplo.com" });
-      const [, resumo] = espiao.mock.calls[0]! as [string, { quem: string }];
+      const resumo = registroLogado(espiao);
       // Não é uma garantia desejável — é o LIMITE do helper, fixado aqui para
       // que ninguém presuma o contrário: `extra` leva id/código, nunca texto.
       expect(resumo.quem).toBe("alguem@exemplo.com");
@@ -179,10 +208,11 @@ describe("logarAvisoSemPII", () => {
       });
       expect(erroSpy).not.toHaveBeenCalled();
       expect(warnSpy).toHaveBeenCalledTimes(1);
-      const [rotulo, resumo] = warnSpy.mock.calls[0]! as [string, unknown];
-      expect(rotulo).toBe("[faixa] falhou");
-      expect(JSON.stringify(resumo)).not.toContain(TEXTO_CLINICO);
-      expect(resumo).toMatchObject({ correlacaoId: id, clinicId: "c-1" });
+      const registro = registroLogado(warnSpy);
+      expect(registro.evento).toBe("[faixa] falhou");
+      expect(registro.nivel).toBe("warn");
+      expect(JSON.stringify(registro)).not.toContain(TEXTO_CLINICO);
+      expect(registro).toMatchObject({ correlacaoId: id, clinicId: "c-1" });
     } finally {
       erroSpy.mockRestore();
       warnSpy.mockRestore();

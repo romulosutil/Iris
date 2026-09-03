@@ -1,4 +1,5 @@
 import { codigoPg, constraintPg } from "@/db/pg-error";
+import { gerarCorrelacaoId, registrar } from "./logger";
 
 /**
  * Log de erro sem PII (#531, achado S-03 da auditoria 360).
@@ -74,16 +75,14 @@ function mensagemDe(valor: unknown): string | undefined {
   return typeof valor === "string" ? valor : undefined;
 }
 
-/** Id curto por chamada — o que o usuário vê e o operador procura no log. */
-export function gerarCorrelacaoId(): string {
-  const c = globalThis.crypto as { randomUUID?: () => string } | undefined;
-  if (c && typeof c.randomUUID === "function") {
-    return c.randomUUID().replace(/-/g, "").slice(0, 8);
-  }
-  return Math.floor(Math.random() * 0xffffffff)
-    .toString(16)
-    .padStart(8, "0");
-}
+/**
+ * Id curto por chamada — o que o usuário vê e o operador procura no log.
+ *
+ * A implementação passou para `./logger` (#560, F1), onde mora a correlação;
+ * o nome continua exportado daqui porque é a superfície pública que os
+ * chamadores já usam.
+ */
+export { gerarCorrelacaoId };
 
 /** Reduz qualquer valor lançado ao conjunto fechado de campos sem PII. */
 export function resumirErro(
@@ -136,8 +135,15 @@ function emitir(
   extra?: ExtraLog,
 ): string {
   const resumo = resumirErro(err);
+  // `nome` do resumo é a CLASSE do erro; `nome` no domínio é o nome do
+  // paciente. Colisão descoberta ao ligar a redaction por chave (#560): manter
+  // a classe sob `nome` obrigaria a lista a liberar `nome`, e aí
+  // `extra: { nome: paciente.nome }` sairia inteiro. O registro usa `erroNome`;
+  // `ResumoErro.nome` (API pública de `resumirErro`) não mudou.
+  const { nome, ...restoDoResumo } = resumo;
   const seguro: Record<string, string | number | boolean | null | undefined> = {
-    ...resumo,
+    ...restoDoResumo,
+    erroNome: nome,
   };
   if (extra) {
     for (const [chave, valor] of Object.entries(extra)) {
@@ -154,8 +160,11 @@ function emitir(
       }
     }
   }
-  if (nivel === "warn") console.warn(rotulo, seguro);
-  else console.error(rotulo, seguro);
+  // #560 (F1): caminho único de saída. Antes eram `console.warn`/`console.error`
+  // com um objeto solto; agora o registro sai como JSON, com `requestId`, e
+  // passa pela redaction por chave. A assinatura pública não mudou — é por
+  // isso que os 49 chamadores continuam compilando sem uma linha alterada.
+  registrar(nivel, rotulo, seguro);
   return resumo.correlacaoId;
 }
 
