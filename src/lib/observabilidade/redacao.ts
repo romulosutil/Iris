@@ -192,6 +192,10 @@ export function caminhosPinoRedact(): string[] {
   ]) {
     nomes.add(chave);
   }
-  // `*.chave` cobre qualquer nível sob o contexto do registro.
+  // `chave` cobre a raiz e `*.chave` cobre **um** nível abaixo dela — o
+  // `pino` não tem curinga de profundidade arbitrária (`**` não existe na
+  // sintaxe de `redact.paths`). Profundidade maior é coberta por
+  // `redigirContexto`, que roda antes do sink e carrega a garantia; esta
+  // lista é redundância de transporte, não a fronteira.
   return [...nomes].flatMap((n) => [n, `*.${n}`]);
 }

@@ -115,6 +115,30 @@ describe("sinkConsole", () => {
       clinic_id: "c-1",
     });
   });
+
+  it("serializa bigint como string em vez de lançar TypeError", () => {
+    const linhas: string[] = [];
+    const original = console.warn;
+    console.warn = (...args: unknown[]) => linhas.push(String(args[0]));
+    try {
+      expect(() =>
+        sinkConsole({
+          nivel: "warn",
+          evento: "acervo.medido",
+          requestId: "r1",
+          hora: "2026-09-03T00:00:00.000Z",
+          bytes_tamanho: 9007199254740993n,
+          aninhado: { total: 1n },
+        }),
+      ).not.toThrow();
+    } finally {
+      console.warn = original;
+    }
+    expect(JSON.parse(linhas[0]!)).toMatchObject({
+      bytes_tamanho: "9007199254740993",
+      aninhado: { total: "1" },
+    });
+  });
 });
 
 describe("normalizarRequestId", () => {

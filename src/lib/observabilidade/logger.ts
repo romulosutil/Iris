@@ -125,8 +125,19 @@ export function requestIdAtual(): string {
  * mesmo do `pino` no essencial (uma linha, JSON, `nivel`/`evento`/`requestId`),
  * então o mesmo `grep` serve.
  */
+/**
+ * `JSON.stringify` nativo lança `TypeError` em `bigint`. O schema tem colunas
+ * `bigint` (`acervo.bytes_tamanho`, entre outras) e o driver as devolve como
+ * `bigint` — um erro de banco que carregue esse valor no contexto derrubaria
+ * o processo *pelo log*. O sink é a última linha antes da saída: nada aqui
+ * pode lançar.
+ */
+function substituirNaoSerializavel(_chave: string, valor: unknown): unknown {
+  return typeof valor === "bigint" ? valor.toString() : valor;
+}
+
 export const sinkConsole: SinkLog = (registro) => {
-  const linha = JSON.stringify(registro);
+  const linha = JSON.stringify(registro, substituirNaoSerializavel);
   if (registro.nivel === "error") console.error(linha);
   else if (registro.nivel === "warn") console.warn(linha);
   else if (registro.nivel === "debug") console.debug(linha);
@@ -153,7 +164,26 @@ const ORDEM: Record<NivelLog, number> = {
   error: 40,
 };
 
+let nivelMinimoCache: NivelLog | null = null;
+
+/**
+ * Memoizado na **primeira chamada**, não no import: `registrar` roda em todo
+ * evento e `process.env` no Node atravessa binding C++ a cada leitura. Ler no
+ * topo do módulo é o erro conhecido do repo (env avaliada antes de o runtime
+ * montar o ambiente passa local e falha no CI), então a leitura fica no
+ * primeiro uso. Trocar `LOG_LEVEL` em runtime não tem efeito — em teste, usar
+ * {@link recarregarNivelMinimo}.
+ */
 function nivelMinimo(): NivelLog {
+  return (nivelMinimoCache ??= lerNivelMinimo());
+}
+
+/** Só para teste: descarta o nível memoizado para reler `LOG_LEVEL`. */
+export function recarregarNivelMinimo(): void {
+  nivelMinimoCache = null;
+}
+
+function lerNivelMinimo(): NivelLog {
   const bruto = process.env.LOG_LEVEL?.toLowerCase();
   if (
     bruto === "debug" ||
