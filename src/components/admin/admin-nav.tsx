@@ -1,74 +1,58 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Pill } from "@/components/ui/primitives/pill";
+import { TabsNav } from "@/components/ui/tabs-nav";
 
 interface AdminNavProps {
   userEmail: string;
 }
 
+/**
+ * Cabeçalho do backoffice. As abas são o `TabsNav` do DS (abas que são ROTAS):
+ * além do visual tokenizado, ele traz `aria-current="page"` e o alvo de toque
+ * de 44px, que a versão anterior — um `map` de `<Link>` com classes cruas —
+ * não tinha. `border-b-0` porque a linha de base aqui é a do próprio
+ * `<header>`; duas linhas empilhadas seriam ruído.
+ */
 export function AdminNav({ userEmail }: AdminNavProps) {
-  const pathname = usePathname();
-
-  const isExactActive = (path: string) => pathname === path;
-  const isSubActive = (path: string) =>
-    path !== "/benjamin" && pathname.startsWith(path);
-
-  const links = [
-    {
-      href: "/benjamin",
-      label: "Visão Geral",
-      active: isExactActive("/benjamin"),
-    },
-    {
-      href: "/benjamin/clinicas",
-      label: "Clínicas",
-      active: isSubActive("/benjamin/clinicas"),
-    },
-    {
-      href: "/benjamin/saude",
-      label: "Saúde & Integrações",
-      active: isSubActive("/benjamin/saude"),
-    },
+  const itens = [
+    { href: "/benjamin", rotulo: "Visão Geral", exato: true },
+    { href: "/benjamin/clinicas", rotulo: "Clínicas" },
+    { href: "/benjamin/saude", rotulo: "Saúde & Integrações" },
   ];
 
   return (
-    <header className="border-b border-slate-800 bg-slate-950 text-slate-100">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
-        <div className="flex items-center gap-6">
+    <header className="border-b-2 border-[var(--border-brutal)] bg-[var(--bg-app)] text-[var(--text-primary)]">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-lg font-bold tracking-tight text-teal-400">
+            <span className="font-display text-lg font-bold tracking-tight text-[var(--action-primary)]">
               IRIS
             </span>
-            <span className="rounded border border-rose-800/50 bg-rose-950/80 px-2 py-0.5 text-xs font-medium tracking-wider text-rose-300 uppercase">
+            <Pill
+              colorScheme="coral"
+              size="sm"
+              className="tracking-wider uppercase"
+            >
               Super Admin
-            </span>
+            </Pill>
           </div>
 
-          <nav className="flex items-center gap-1">
-            {links.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  link.active
-                    ? "bg-slate-800 font-semibold text-white"
-                    : "text-slate-400 hover:bg-slate-900 hover:text-slate-200"
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
+          <TabsNav
+            itens={itens}
+            ariaLabel="Seções do backoffice"
+            className="border-b-0"
+          />
         </div>
 
-        <div className="flex items-center gap-4 text-xs text-slate-400">
-          <span className="hidden rounded bg-slate-900 px-2.5 py-1 font-mono text-slate-300 sm:inline-block">
+        <div className="flex items-center gap-3 text-xs">
+          <span className="hidden rounded-[var(--radius-sm)] bg-[var(--surface-muted)] px-2.5 py-1 font-mono text-[var(--text-secondary)] sm:inline-block">
             {userEmail}
           </span>
           <Link
             href="/agenda"
-            className="rounded border border-slate-700 bg-slate-900 px-3 py-1 text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
+            className="focus-visible:outline-focus min-h-11 rounded-[var(--radius-control)] border-[length:var(--border-brutal-width)] border-[var(--border-muted)] bg-[var(--surface-card)] px-3 py-2 font-semibold text-[var(--text-primary)] transition-colors outline-none hover:bg-[var(--surface-elevated)] focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
           >
             Voltar ao App
           </Link>
