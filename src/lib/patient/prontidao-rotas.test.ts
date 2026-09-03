@@ -93,7 +93,7 @@ describe("alcance de rota dos degraus de prontidão", () => {
     // Query string e hash não fazem parte do caminho de arquivo: sem removê-los,
     // uma rota como "/anamnese?aba=1" viraria o segmento "anamnese?aba=1" e não
     // casaria com a pasta literal na árvore do app.
-    const caminho = rota.split(/[?#]/)[0];
+    const caminho = rota.split(/[?#]/)[0] ?? rota;
     const segmentos = caminho.split("/").filter(Boolean);
     const arquivo = resolverPagina(RAIZ_APP, segmentos);
 
