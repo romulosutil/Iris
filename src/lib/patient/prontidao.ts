@@ -11,7 +11,7 @@ import {
  *
  * Função PURA de propósito: recebe fatos já lidos, nunca decide o que ler. É
  * esse limite que a torna testável na matriz completa modalidade × fatos ×
- * papel sem tocar banco. Quem lê os fatos é `prontidao-queries.ts`.
+ * papel sem tocar banco. Quem lê os fatos é `./prontidao-queries.ts`.
  *
  * Nada aqui é persistido: prontidão derivada nunca mente sobre um degrau
  * desfeito — a última meta descontinuada devolve o paciente ao estado
@@ -71,7 +71,13 @@ interface DefinicaoDegrau {
   concluido: (f: FatosProntidao) => boolean;
 }
 
-const DEFINICOES: Record<DegrauId, DefinicaoDegrau> = {
+/**
+ * Exportado para `prontidao-rotas.test.ts`: a prova de "alcance de rota"
+ * precisa varrer TODOS os degraus, inclusive os que nenhuma modalidade exibe
+ * hoje. Fora do teste, use `montarProntidao` — é ela que decide se o papel
+ * atual recebe a rota.
+ */
+export const DEFINICOES: Record<DegrauId, DefinicaoDegrau> = {
   admissao: {
     rotulo: "Admissão",
     descricao: "Cadastro, consentimento e modalidade clínica.",

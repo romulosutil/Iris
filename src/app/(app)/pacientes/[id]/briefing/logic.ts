@@ -3,6 +3,10 @@
 // `queries.ts`, mas são testáveis isoladas em jsdom sem mockar o banco.
 
 import { registroAbcSchema } from "@/lib/extraction/agent-output-schema";
+import {
+  formatarMetricaSegmentacao,
+  type Segmentacao,
+} from "@/lib/evidence/snapshot-schema";
 
 export type AlertaManejo = {
   extractionId: string;
@@ -119,4 +123,54 @@ export function alertasGraveDe(rows: ExtracaoAbcRow[]): AlertaManejo[] {
       sessionNumero: row.sessionNumero,
       revisadoEm: row.revisadoEm,
     }));
+}
+
+type EstadoRepertorioBriefing = {
+  metrica_recente?: unknown;
+  contagem?: unknown;
+  is_candidata?: boolean;
+};
+
+export type LinhaUltimaSessao = {
+  chave: string;
+  rotulo: string;
+  metrica: string;
+  isCandidata: boolean;
+};
+
+/**
+ * Monta as linhas de "Última sessão" a partir do snapshot materializado.
+ *
+ * A métrica sai do formatador único (`formatarMetricaSegmentacao`) — antes era
+ * `String(primeiroSeg?.metrica)`, que renderizava `[object Object]` para todo
+ * snapshot de sessão normal, cuja `metrica` é objeto (#567). O fallback segue
+ * a mesma ordem de antes: segmentação → repertório → copy de ausência.
+ */
+export function linhasUltimaSessaoDe({
+  repertorio,
+  segmentacao,
+  descricaoPorGoal,
+}: {
+  repertorio: Record<string, EstadoRepertorioBriefing>;
+  segmentacao: Segmentacao;
+  descricaoPorGoal: Map<string, string>;
+}): LinhaUltimaSessao[] {
+  return Object.keys(repertorio).map((chave) => {
+    const estado = repertorio[chave] ?? {};
+    const primeiroSeg = Object.values(segmentacao[chave] ?? {})[0];
+    const rotulo = descricaoPorGoal.get(chave) ?? primeiroSeg?.rotulo ?? chave;
+
+    const daSegmentacao = formatarMetricaSegmentacao(primeiroSeg?.metrica);
+    const doRepertorio = estado.metrica_recente ?? estado.contagem;
+    const metrica =
+      daSegmentacao ??
+      (doRepertorio != null ? String(doRepertorio) : "sem métrica registrada");
+
+    return {
+      chave,
+      rotulo,
+      metrica,
+      isCandidata: estado.is_candidata === true,
+    };
+  });
 }
