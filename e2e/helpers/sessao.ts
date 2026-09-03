@@ -30,50 +30,6 @@ import { appUser, authThrottle, twoFactor } from "@/db/schema";
  * código é derivado aqui a partir do `totpURI` — o mesmo segredo que o app
  * mostraria no QR.
  */
-/**
- * ECONNRESET: o `webServer` do Playwright às vezes derruba a conexão sob
- * carga do CI no instante do POST — não é resposta HTTP (não tem `.status()`),
- * é exceção lançada pelo próprio `APIRequestContext`. Sem retry aqui o
- * sign-in fica flaky por infra, não por regressão (mesmo sintoma do 429).
- */
-async function postSignInComRetry(
-  page: Page,
-  email: string,
-  senha: string,
-  headers: Record<string, string>,
-) {
-  const api = page.request;
-  const post = async () => {
-    try {
-      return await api.post("/api/auth/sign-in/email", {
-        data: { email, password: senha },
-        headers,
-      });
-    } catch (erro) {
-      if (erro instanceof Error && /ECONNRESET/.test(erro.message)) {
-        return null;
-      }
-      throw erro;
-    }
-  };
-
-  let login = await post();
-  for (
-    let tentativa = 0;
-    tentativa < 3 && (login === null || login.status() === 429);
-    tentativa++
-  ) {
-    await page.waitForTimeout(6000);
-    login = await post();
-  }
-  if (login === null) {
-    throw new Error(
-      `sign-in falhou para ${email}: ECONNRESET persistente após retries`,
-    );
-  }
-  return login;
-}
-
 export async function entrarComMfa(
   page: Page,
   email: string,
@@ -110,7 +66,21 @@ export async function entrarComMfa(
   // sign-in legítimo leva 429 e a suíte falha por ORDEM de execução. Esperar e
   // repetir é a concessão certa: a proteção continua ligada e exercitada pelo
   // spec de brute-force; aqui ela só não pode reprovar um login válido.
-  const login = await postSignInComRetry(page, email, senha, headers);
+  let login = await api.post("/api/auth/sign-in/email", {
+    data: { email, password: senha },
+    headers,
+  });
+  for (
+    let tentativa = 0;
+    tentativa < 3 && login.status() === 429;
+    tentativa++
+  ) {
+    await page.waitForTimeout(6000);
+    login = await api.post("/api/auth/sign-in/email", {
+      data: { email, password: senha },
+      headers,
+    });
+  }
   expect(
     login.ok(),
     `sign-in falhou para ${email}: ${await login.text()}`,
@@ -153,6 +123,7 @@ export async function entrarSemMfa(
   email: string,
   senha: string,
 ): Promise<void> {
+  const api = page.request;
   const origem = new URL(
     process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
   ).origin;
@@ -161,7 +132,21 @@ export async function entrarSemMfa(
   await zerarSegundoFator(email);
   await authDb.delete(authThrottle);
 
-  const login = await postSignInComRetry(page, email, senha, headers);
+  let login = await api.post("/api/auth/sign-in/email", {
+    data: { email, password: senha },
+    headers,
+  });
+  for (
+    let tentativa = 0;
+    tentativa < 3 && login.status() === 429;
+    tentativa++
+  ) {
+    await page.waitForTimeout(6000);
+    login = await api.post("/api/auth/sign-in/email", {
+      data: { email, password: senha },
+      headers,
+    });
+  }
   expect(
     login.ok(),
     `sign-in falhou para ${email}: ${await login.text()}`,
