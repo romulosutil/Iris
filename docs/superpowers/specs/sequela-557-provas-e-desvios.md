@@ -52,7 +52,7 @@ divergência tenha sido registrada em lugar nenhum. Três são idioma; o quarto
 | Por que dói       | Faltam exatamente os dois casos que D-A10 criou: o terapeuta fora da equipe é o cenário que a opção (b) e o definer `0149` existem para atender. Provar a leitura (int-test) e não provar a tela deixa o gesto sem oráculo.                                                                      |
 | Como se prova     | Quatro casos, um por papel, na superfície `sessoes/[id]` (passo Documentar). O caso "terapeuta fora da equipe" tem que afirmar o gesto **habilitado** pela via do definer — se afirmar "Aguardando coordenação", a opção (b) não está chegando na tela.                                          |
 
-### B-3 · Caminho feliz e2e — 🚧 EM EXECUÇÃO (branch `test/prontidao-e2e`)
+### B-3 · Caminho feliz e2e — ✅ FECHADO (PR #591, `22b91001`, 03/09/2026)
 
 | Campo             | Conteúdo                                                                                                                                                                                                                                                       |
 | :---------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -225,7 +225,7 @@ capacidade — a ordem acima é a conservadora.
 
 ## Parte 4 — Lacuna descoberta durante a execução
 
-### B-8 · "Aguardando coordenação" não é produzível hoje — 🚧 EM EXECUÇÃO (branch `feat/prontidao-aguardando-coordenacao`)
+### B-8 · "Aguardando coordenação" não é produzível hoje — ✅ FECHADO (PR #586, `547def32`, 03/09/2026)
 
 | Campo             | Conteúdo                                                                                                                                                                                                                                                                                                        |
 | :---------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -244,22 +244,66 @@ Ondas disparadas no mesmo dia em que a sequela foi escrita. Cada agente em
 worktree próprio, banco `iris_wN` próprio, sem `pnpm test:rls` completo em
 paralelo.
 
-| PR       | Escopo                                                                                                                                         | Estado                                                                                            |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| **#571** | B-1 — alcance de rota                                                                                                                          | ✅ mergeada (`c526c1b9`); 11 casos, nenhum botão morto, mutação provada                           |
-| **#572** | Desvio A + B-4 — token `warning` e story dos 7 estados                                                                                         | ✅ mergeada (`3613cc32`); inclui a correção de contraste AA do estado `pendente`                  |
-| **#573** | Ratificação D-A6/A8/A9/A10 + este documento + D83                                                                                              | ✅ mergeada (`73a67e73`)                                                                          |
-| **#579** | Desvios B + C + D — ERRCODE dedicado (`IR001`/`IR002`, migração `0152`), contrato `null`, `git mv` para `src/lib/patient/`, `logarAvisoSemPII` | ✅ mergeada (`199f6a7f`); fecha a #559                                                            |
-| **#578** | B-2 — 4 papéis × gesto primário                                                                                                                | ✅ mergeada (`b739b965`); cobre as duas superfícies                                               |
-| **#577** | B-5 — conta somente-leitura (prop nova no cartão + ordem das recusas)                                                                          | ✅ mergeada (`268001f5`)                                                                          |
-| **#575** | B-6 — modalidade trocada depois de pronta                                                                                                      | ✅ mergeada (`82982de2`)                                                                          |
-| **#576** | B-7 — 5º passo do onboarding (o passo **desfeito**)                                                                                            | ✅ mergeada (`50222320`); estendeu `db/tests/onboarding-progresso-rls.int.test.ts` (7 → 12 casos) |
-| —        | B-3 — e2e do caminho feliz                                                                                                                     | 🚧 em execução, branch `test/prontidao-e2e`                                                       |
-| —        | B-8 — "Aguardando coordenação" não é produzível (ver Parte 4)                                                                                  | 🚧 em execução, branch `feat/prontidao-aguardando-coordenacao`                                    |
-| —        | Varredura `0144` → `0149` + reconciliação dos documentos                                                                                       | ✅ esta PR                                                                                        |
+| PR       | Escopo                                                                                                                                         | Estado                                                                                                                                         |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **#571** | B-1 — alcance de rota                                                                                                                          | ✅ mergeada (`c526c1b9`); 11 casos, nenhum botão morto, mutação provada                                                                        |
+| **#572** | Desvio A + B-4 — token `warning` e story dos 7 estados                                                                                         | ✅ mergeada (`3613cc32`); inclui a correção de contraste AA do estado `pendente`                                                               |
+| **#573** | Ratificação D-A6/A8/A9/A10 + este documento + D83                                                                                              | ✅ mergeada (`73a67e73`)                                                                                                                       |
+| **#579** | Desvios B + C + D — ERRCODE dedicado (`IR001`/`IR002`, migração `0152`), contrato `null`, `git mv` para `src/lib/patient/`, `logarAvisoSemPII` | ✅ mergeada (`199f6a7f`); fecha a #559                                                                                                         |
+| **#578** | B-2 — 4 papéis × gesto primário                                                                                                                | ✅ mergeada (`b739b965`); cobre as duas superfícies                                                                                            |
+| **#577** | B-5 — conta somente-leitura (prop nova no cartão + ordem das recusas)                                                                          | ✅ mergeada (`268001f5`)                                                                                                                       |
+| **#575** | B-6 — modalidade trocada depois de pronta                                                                                                      | ✅ mergeada (`82982de2`)                                                                                                                       |
+| **#576** | B-7 — 5º passo do onboarding (o passo **desfeito**)                                                                                            | ✅ mergeada (`50222320`); estendeu `db/tests/onboarding-progresso-rls.int.test.ts` (7 → 12 casos)                                              |
+| **#591** | B-3 — e2e do caminho feliz                                                                                                                     | ✅ mergeada (`22b91001`): um cenário, dois `BrowserContext`, costurando cartão + pill + Documentar; mutação em `podeDocumentar` deixa vermelho |
+| **#586** | B-8 — "Aguardando coordenação" (ver Parte 4)                                                                                                   | ✅ mergeada (`547def32`): `SituacaoProntidao` separa `pronto` de `fatos_nao_visiveis`, que antes colapsavam em `proximo === null`              |
+| —        | Varredura `0144` → `0149` + reconciliação dos documentos                                                                                       | ✅ esta PR                                                                                                                                     |
 
 **Correção de contraste que virou regra** — aplicar a §3.2 ao pé da letra
 reprovava AA no estado `pendente` (4.20:1 no claro, piso 4.5 para 12px
 semibold). A spec foi corrigida com o número medido, e não o contrário: sem o
 número registrado, a próxima pessoa "conserta" de volta e reintroduz a
 reprovação, que o `axe` sob jsdom não acusa.
+
+---
+
+## Fecho — 03/09/2026
+
+**A sequela está fechada.** Onze itens (7 buracos + 4 desvios) mais o B-8, que
+nasceu da própria execução, em 10 PRs mergeadas na `main`:
+
+`#571` alcance de rota · `#572` token `warning` + story + contraste AA ·
+`#579` ERRCODE `IR001`/`IR002`, contrato `null`, query em `src/lib/patient/`,
+`logarAvisoSemPII` · `#577` somente-leitura · `#576` 5º passo do onboarding ·
+`#578` 4 papéis × gesto primário · `#575` modalidade trocada (D-A4) ·
+`#573` ratificação D-A6/A8/A9/A10 + D83 · `#584` varredura `0144`→`0149` +
+reconciliação · `#586` `SituacaoProntidao` · `#591` e2e das três superfícies.
+
+### O que a execução ensinou
+
+**Duas medições minhas estavam erradas, e as duas erraram do mesmo jeito:**
+varredura limitada a `src/**`. O 5º passo do onboarding "sem teste nenhum" já
+tinha 3 casos em `db/tests/`; a `Task 9 Step 1` marcada como aberta já estava
+coberta em `checklist-onboarding.test.tsx:39` desde a #557. **Buraco de prova
+se mede no repositório inteiro** — `src/`, `db/tests/`, `e2e/`, `scripts/` —
+porque neste repo o teste nem sempre mora ao lado do código.
+
+**A spec podia estar certa e o código errado, e estava.** O B-8 não é buraco de
+prova: é a §4a prometendo uma tela ("Aguardando coordenação" fixo) que o código
+não sabia produzir, porque "pronto" e "não visível" colapsavam no mesmo
+`proximo === null`. Achado por um agente que se recusou a escrever a asserção
+que a tarefa pedia, por não conseguir produzir o estado — e reportou em vez de
+afrouxar o teste.
+
+**Aplicar a spec ao pé da letra reprovou AA.** O trio de tokens da §3.2 dava
+4.20:1 no estado `pendente` (piso 4.5 para 12px semibold), e `axe` sob jsdom não
+checa contraste: passaria no CI. A spec foi corrigida com o número medido.
+
+### Aberto, fora desta sequela
+
+- `scripts/lint/console-erro-sem-pii.test.ts` estoura o `testTimeout` de 5s
+  localmente (o caso leva 20-34s: sobe o ESLint de verdade por identificador).
+  **Pré-existente** — falha idêntica em `2358a279`, antes de qualquer PR desta
+  série — e verde no CI, cuja máquina é mais rápida. Merece `testTimeout`
+  próprio, não conserto de carona.
+- Flake observado pelo agente do e2e: `e2e/helpers/sessao.ts:107` reexecuta
+  `sign-in/email` sob 429 mas **não** o `verify-totp`. Merece issue própria.
