@@ -1441,14 +1441,148 @@ nas funções do expurgo). Provisionar a role de login uma vez, como dono:
 CREATE ROLE iris_expurgo_audit_log_login LOGIN PASSWORD '<senha forte>' IN ROLE iris_expurgo_audit_log;
 ```
 
-> ⚠️ **PENDÊNCIA — medir em produção (#536):** não é verificável do
-> repositório se o serviço `iris-expurgo-audit-log` existe no Easypanel. Como
-> saber: depois do deploy da `0146`, o detector `iris-alarme` manda e-mail
-> `expurgo-audit-log` com "nenhum heartbeat registrado" se o job não estiver
-> de pé — esse e-mail **é** a medição. Se o serviço existir, trocar a env
-> `DATABASE_URL` por `EXPURGO_DATABASE_URL` (role acima) e reimplantar; se
-> não existir, criar como os demais jobs (comando
-> `node /app/scripts/expurgo-audit-log.mjs`, 1x/dia).
+#### 🔴 MEDIÇÃO FEITA — 03/09/2026: o serviço NÃO existia (a pendência fechou vermelha)
+
+A pendência que ficava aqui dizia "não é verificável do repositório se o
+serviço `iris-expurgo-audit-log` existe no Easypanel; o e-mail do `iris-alarme`
+**é** a medição". A medição aconteceu. Resultado, no log do serviço
+`iris-alarme` em produção (VPS `31.97.170.105`, projeto `espectro-mvp`):
+
+```
+[alarme-jobs] ATENÇÃO: expurgo-audit-log — nenhum heartbeat registrado para "expurgo-audit-log" — o job nunca rodou desde a migração 0146 ou o serviço não está provisionado (ver infra/README.md, §Alarme automático).
+[alarme-jobs] expurgo-audit-log: já alertado hoje, sem reenvio.
+```
+
+E a enumeração dos serviços do projeto no painel confirmou o outro ramo do
+"ou": **não existe** `iris-expurgo-audit-log`. Os serviços são `api`,
+`asr-agendador`, `asr-sweeper`, `clinic`, `iris-alarme`, `iris-app`,
+`iris-arquivamento`, `iris-asr`, `iris-backup`, `iris-billing`,
+`iris-escalonamento`, `iris-exportacao`, `iris-glitchtip`,
+`iris-glitchtip-worker`, `iris-migrate`, `iris-minio`, `iris-postgres`,
+`iris-redis`, `iris-retencao`, `mysql`, `patient`, `redis`, `silmer-api`,
+`silmer-edge-web`, `silmer-worker`.
+
+**Conclusão medida, não deduzida: o expurgo do `audit_log` NUNCA rodou em
+produção.** O script existe desde a #116, a role desde a `0145`, o heartbeat
+desde a `0146` — faltava a imagem e o serviço. Enquanto isso durou, nenhuma
+linha de log de acesso foi apagada por idade (Marco Civil Art. 15, retenção de
+180 dias) e nenhum log órfão de conta deletada foi pseudonimizado (LGPD).
+
+**O que esta PR entrega:** a imagem `infra/expurgo-audit-log/` (Dockerfile +
+`agendador.sh`, 1x/dia) e a asserção de carga
+(`scripts/ci/carga-imagens-infra.sh expurgo-audit-log`). **O que ela NÃO faz:**
+criar a role de login e o serviço no painel — isso é ato manual, abaixo.
+
+#### Provisionamento no Easypanel — passo a passo
+
+Cada passo traz **como saber que deu certo**. Ordem importa: sem o passo 1 o
+serviço sobe e morre na guarda de env a cada tick.
+
+**1. Criar a role de login no Postgres (uma vez).**
+
+No painel, projeto `espectro-mvp` → serviço `iris-postgres` → aba **Console**.
+Não use o console "Postgres Client" do Easypanel: ele tenta `postgres` como
+usuário e a role não existe neste servidor. Abra um **Bash** e conecte como o
+dono (`iris`):
+
+```bash
+psql -U iris -d iris
+```
+
+Gere a senha fora do banco (`openssl rand -base64 32`) e rode:
+
+```sql
+CREATE ROLE iris_expurgo_audit_log_login LOGIN PASSWORD '<senha gerada>' IN ROLE iris_expurgo_audit_log;
+```
+
+_Como saber que deu certo:_ a saída é `CREATE ROLE`. Confirme a herança — a
+consulta tem de devolver uma linha:
+
+```sql
+SELECT r.rolname AS membro, g.rolname AS herda_de
+  FROM pg_auth_members m
+  JOIN pg_roles r ON r.oid = m.member
+  JOIN pg_roles g ON g.oid = m.roleid
+ WHERE r.rolname = 'iris_expurgo_audit_log_login';
+```
+
+Se `CREATE ROLE` falhar com `role "iris_expurgo_audit_log" does not exist`, a
+migração `0145` não foi aplicada nesse banco — pare aqui e rode o
+`iris-migrate` antes.
+
+**2. Criar o serviço.**
+
+Projeto `espectro-mvp` → **+ Serviço** → **App** → nome exatamente
+`iris-expurgo-audit-log` (o nome não é cosmético: é como você vai achar o log
+depois). _Como saber que deu certo:_ o card aparece na lista de serviços do
+projeto, com o status parado/sem imagem.
+
+**3. Apontar para o repositório e para o Dockerfile.**
+
+Aba **Origem** → GitHub → repositório `romulosutil/Iris`, branch `main`. Aba
+**Compilação** → método **Dockerfile** → caminho
+`infra/expurgo-audit-log/Dockerfile`. **Contexto de build: a raiz do repo** (é
+o default; não mude para `infra/expurgo-audit-log`, senão os `COPY` de
+`scripts/**` quebram com "not found"). _Como saber que deu certo:_ o primeiro
+deploy termina com `Successfully built`; no log da build aparecem as linhas
+`COPY scripts/expurgo-audit-log.mjs` e `COPY scripts/lib/heartbeat.mjs`.
+
+**4. Configurar as variáveis de ambiente.**
+
+Aba **Ambiente**:
+
+```
+EXPURGO_DATABASE_URL=postgres://iris_expurgo_audit_log_login:<senha do passo 1>@espectro-mvp_iris-postgres:5432/iris
+INTERVALO_S=86400
+```
+
+O host é o nome interno do serviço de Postgres
+(`espectro-mvp_iris-postgres`), não `localhost` nem o IP público.
+
+⚠️ **NUNCA coloque `DATABASE_URL` aqui.** O job recusa por desenho: `app_role`
+não tem EXECUTE nas funções do expurgo, e o fallback só trocaria "não roda" por
+"estoura `42501` a cada tick".
+
+⚠️ **Salvar as variáveis NÃO as aplica.** O Easypanel só passa o novo ambiente
+ao container no próximo deploy: depois de salvar, clique em **Implantar**. Um
+serviço "salvo mas não implantado" continua rodando com o ambiente antigo — e o
+log vai continuar acusando a env que falta.
+
+_Como saber que deu certo:_ o log do serviço, logo após o Implantar, traz
+`[agendador-expurgo-audit-log] … ativo. intervalo=86400s`. Se trouxer
+`ERRO: variável(is) de ambiente ausente(s): EXPURGO_DATABASE_URL`, o Implantar
+não foi clicado (ou o nome da variável saiu com typo).
+
+**5. Conferir a primeira varredura.**
+
+Ainda no log do serviço, dentro de um minuto do start:
+
+```
+[expurgo-audit-log] <timestamp> Iniciando varredura de expurgo (Marco Civil #116 / #536)...
+[expurgo-audit-log] Logs órfãos pseudonimizados: N
+[expurgo-audit-log] Logs de acesso expirados (180+ dias) expurgados: N
+[expurgo-audit-log] Varredura concluída com sucesso.
+```
+
+Contagens em zero são um resultado **válido** (pode não haver nada vencido); o
+que prova o job é a linha `Varredura concluída com sucesso`. Se aparecer
+`FALHA na varredura` com `42501`, a role do passo 1 está errada — confira a
+herança.
+
+**6. Conferir que o alarme parou de acusar.**
+
+_Como saber que deu certo (esta é a medição de verdade, a mesma que fechou a
+pendência):_ no banco,
+
+```sql
+SELECT job, ultimo_ok, ultimo_erro FROM job_heartbeat WHERE job = 'expurgo-audit-log';
+```
+
+tem de devolver uma linha com `ultimo_ok` recente. E no dia seguinte o log do
+serviço `iris-alarme` **não** pode mais trazer
+`ATENÇÃO: expurgo-audit-log — nenhum heartbeat registrado`. Enquanto essa linha
+aparecer, o job não está de pé — não importa o que o card do painel diga
+("job provisionado ≠ job que roda").
 
 ---
 
@@ -2718,7 +2852,7 @@ chamada (`app_alarme_job_heartbeats()`, EXECUTE só para `iris_alarme`).
 | `exportacao`        | 300s (5min)                           | 1h                    | `problema`    |
 | `asr`               | 20s (asr-transcrever)                 | 30min                 | `problema`    |
 | `asr-sweeper`       | 3600s (1h)                            | 3h                    | `problema`    |
-| `expurgo-audit-log` | 1x/dia (documentado; serviço a medir) | 36h                   | `problema`    |
+| `expurgo-audit-log` | 86400s (1x/dia)                       | 36h                   | `problema`    |
 | `conciliacao`       | **sob demanda** (runbook #375)        | —                     | `ok`          |
 
 Regras, iguais para todos:
@@ -2728,9 +2862,11 @@ Regras, iguais para todos:
   É a única condição que alarma a conciliação.
 - Linha **ausente** → `problema`, não `indeterminado`: o detector conseguiu
   ler a tabela e o job simplesmente nunca gravou — ou nunca rodou desde a
-  `0146`, ou o serviço não está provisionado. **É assim que se mede se
-  `iris-expurgo-audit-log` existe em produção** (ver a pendência na seção do
-  job). Espere um e-mail por job no primeiro dia após o deploy, até cada
+  `0146`, ou o serviço não está provisionado. **Foi assim que se mediu que
+  `iris-expurgo-audit-log` não existia em produção** — em 03/09/2026 o detector
+  acusou "nenhum heartbeat registrado" e a enumeração do painel confirmou a
+  ausência do serviço (ver a seção do job). Espere um e-mail por job no
+  primeiro dia após o deploy, até cada
   imagem de infra ser reconstruída com o `COPY scripts/lib/heartbeat.mjs`.
 - Falha ao **ler** a tabela → `indeterminado` em todos os sete (loga, não
   envia). Heartbeats **não** entram no escalonamento de detector cego: eles

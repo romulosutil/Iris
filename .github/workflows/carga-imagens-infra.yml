@@ -40,6 +40,9 @@ on:
       - "infra/alarme/**"
       - "infra/exportacao/**"
       - "infra/arquivamento/**"
+      # Imagem criada em 03/09/2026 (#536): a medição em produção mostrou que
+      # o serviço `iris-expurgo-audit-log` nunca existiu no Easypanel.
+      - "infra/expurgo-audit-log/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/carga-imagens-infra.yml"
   push:
@@ -58,6 +61,9 @@ on:
       - "infra/alarme/**"
       - "infra/exportacao/**"
       - "infra/arquivamento/**"
+      # Imagem criada em 03/09/2026 (#536): a medição em produção mostrou que
+      # o serviço `iris-expurgo-audit-log` nunca existiu no Easypanel.
+      - "infra/expurgo-audit-log/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/carga-imagens-infra.yml"
   # Botão manual: útil para reexercitar as imagens depois de uma mudança de base
