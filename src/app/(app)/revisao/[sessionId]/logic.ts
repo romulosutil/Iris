@@ -20,6 +20,11 @@ import {
 import { podeAutoValidar } from "@/lib/sessao/aprovacao";
 import { conteudoDoSubtipo } from "@/lib/extraction/conteudo-subtipo";
 import { avaliarFriccao } from "@/lib/extraction/review-policy";
+import {
+  CAMPO_EDITAVEL,
+  camposEditaveisDe,
+} from "@/lib/extraction/campos-editaveis";
+import { rotuloSubtipo } from "./resumo";
 import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 import { textoErroInterno } from "@/lib/copy/erros";
 
@@ -582,6 +587,39 @@ async function editarExtracaoCore(
 ): Promise<ReviewResult> {
   const p = editarSchema.safeParse(input);
   if (!p.success) return { error: p.error.issues[0]!.message };
+
+  // Guard de subtipo (#582 review): `camposPermitidos` no client vem do
+  // hidden `subtipo` do formulário — um POST forjado pode trocá-lo (ex.:
+  // "evidencia" enquanto a extração real é `cadeia`) e fazer o merge no
+  // action escrever funcao/nivel_ajuda/resultado na raiz do payload errado.
+  // O subtipo de VERDADE só existe no banco — relê aqui, dentro do core, e
+  // filtra `payloadEditado` pelos campos que ELE realmente permite, nunca
+  // pelo que o cliente alegou.
+  const [row] = await withTenant(ctx, (tx) =>
+    tx
+      .select({ subtipo: extraction.subtipo })
+      .from(extraction)
+      .where(eq(extraction.id, p.data.extractionId)),
+  );
+  if (!row) {
+    // Extração não encontrada — segue para `transicionar`, que devolve o
+    // erro de concorrência/CAS padrão sem duplicar essa checagem.
+    return transicionar(ctx, p.data.extractionId, p.data.versao, {
+      estado: "editada",
+      payloadEditado: p.data.payloadEditado,
+    });
+  }
+  const camposPermitidos = camposEditaveisDe(row.subtipo);
+  if (camposPermitidos.length === 0) {
+    return {
+      error: `Extrações do tipo "${rotuloSubtipo(row.subtipo as Parameters<typeof rotuloSubtipo>[0])}" ainda não podem ser editadas por aqui. Aprove se os dados estiverem certos, ou descarte esta sugestão e registre a correção diretamente na sessão.`,
+    };
+  }
+  const payloadEditado = { ...p.data.payloadEditado };
+  for (const campo of CAMPO_EDITAVEL) {
+    if (!camposPermitidos.includes(campo)) delete payloadEditado[campo];
+  }
+
   const colapso = await resolverColapso(
     ctx,
     p.data.extractionId,
@@ -594,7 +632,7 @@ async function editarExtracaoCore(
     p.data.versao,
     {
       estado: "editada",
-      payloadEditado: p.data.payloadEditado,
+      payloadEditado,
     },
     colapso,
   );
