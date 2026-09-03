@@ -35,10 +35,32 @@ const ROTULO_ESTADO: Record<EstadoDegrau, string> = {
   pendente: "Recomendado",
 };
 
-const COR_ESTADO: Record<EstadoDegrau, string> = {
-  concluido: "text-[var(--status-success-fg)]",
-  bloqueante: "text-[var(--status-error-fg)]",
-  pendente: "text-[var(--text-secondary)]",
+/**
+ * Trio bg/fg/border por estado, exatamente como a spec §3.2 fixa
+ * (`docs/superpowers/specs/2026-09-01-jornada-admissao-paciente-design.md`).
+ *
+ * `bloqueante` é WARNING, nunca ERROR — e não é preciosismo de paleta: um
+ * degrau bloqueante é AUSÊNCIA DE DADO, não erro do operador. Pintar de
+ * `error` treinaria a ler a escada inteira como falha de quem está olhando,
+ * quando a escada existe para dizer "falta isto, e é assim que se resolve".
+ *
+ * `concluido` é o único estado que afirma algo feito, e por isso é o único que
+ * pode usar o verde do DS. `pendente` é neutro de propósito: ausência não
+ * causal não disputa atenção com o degrau que bloqueia.
+ */
+const TOKENS_ESTADO: Record<EstadoDegrau, string> = {
+  concluido:
+    "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--status-success-fg)]",
+  bloqueante:
+    "border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)]",
+  // `pendente` NÃO pinta fundo, e isso é medição, não gosto: a spec §3.2 fixa
+  // `--surface-muted`, mas `--text-secondary` (#71717a) sobre `--surface-muted`
+  // (#f1efe9) dá 4.20:1 no tema claro — abaixo do piso AA de 4.5:1, porque o
+  // selo é 12px semibold e não conta como texto grande. Sobre o fundo do
+  // cartão o MESMO par dá 4.83:1 e passa. O `axe` sob jsdom não checa
+  // contraste, então essa reprovação não apareceria em CI. Mantida a intenção
+  // da spec (neutro, não disputa atenção); trocado só o portador do neutro.
+  pendente: "border-[var(--border-brutal)] text-[var(--text-secondary)]",
 };
 
 export interface CartaoProntidaoProps {
@@ -93,7 +115,7 @@ export function CartaoProntidao({
             {/* Palavra, não só cor: quem não distingue matiz ainda lê o
                 estado — regra 3 do redesenho. */}
             <span
-              className={`font-mono text-xs font-semibold tracking-wide uppercase ${COR_ESTADO[degrau.estado]}`}
+              className={`inline-flex shrink-0 items-center rounded-[var(--radius-pill)] border px-2 py-0.5 font-mono text-xs font-semibold tracking-wide uppercase ${TOKENS_ESTADO[degrau.estado]}`}
             >
               {ROTULO_ESTADO[degrau.estado]}
             </span>
