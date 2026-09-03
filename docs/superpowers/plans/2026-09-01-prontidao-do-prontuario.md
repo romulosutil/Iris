@@ -1068,7 +1068,7 @@ revisão. O rótulo textual já está no snippet e é obrigatório — o teste
 Run: `pnpm test src/components/app/cartao-prontidao.test.tsx`
 Expected: PASS, 5 testes.
 
-- [ ] **Step 5: Story com os 7 estados da spec §4** _(auditoria 02/09, R-7)_
+- [x] **Step 5: Story com os 7 estados da spec §4** _(auditoria 02/09, R-7)_ — entregue na PR #572 (03/09/2026), com a correção de contraste do estado `pendente`
 
 Criar `src/components/app/cartao-prontidao.stories.tsx` (padrão de
 `src/components/ui/alert.stories.tsx`), uma story por estado: prontuário pronto
@@ -2036,7 +2036,7 @@ casos que a spec §6 passou a exigir e que nenhuma task acima cria sozinha:
 _(auditoria 02/09, R-5)_ — prova por papel e por alcance, que a matriz da
 função pura **não** substitui:
 
-- **Alcance de rota (rodar primeiro)**: `src/lib/patient/prontidao-rotas.test.ts`
+- ✅ **Alcance de rota (rodar primeiro)** — entregue na PR #571 (03/09/2026): 11 casos, nenhum botão morto encontrado, mutação provada nos dois sentidos. `src/lib/patient/prontidao-rotas.test.ts`
   — para cada `DegrauId`, `DEFINICOES[id].rota("p1")` é `null` ou um caminho
   que existe em `src/app/(app)/**/page.tsx` e **não** é um `redirect()`.
   `/diario/[id]` e `/revisao/[id]` viraram redirect na #512; um `href` para lá

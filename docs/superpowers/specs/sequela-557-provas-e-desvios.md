@@ -34,7 +34,7 @@ divergência tenha sido registrada em lugar nenhum. Três são idioma; o quarto
 
 ## Parte 1 — Os 7 buracos de prova
 
-### B-1 · Alcance de rota (pré-requisito de tudo)
+### B-1 · Alcance de rota (pré-requisito de tudo) — ✅ FECHADO (PR #571, 03/09/2026)
 
 | Campo             | Conteúdo                                                                                                                                                                                                                                                                       |
 | :---------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -61,7 +61,7 @@ divergência tenha sido registrada em lugar nenhum. Três são idioma; o quarto
 | Por que dói       | É a única prova que costura as **três** superfícies (cartão no prontuário, pill na lista, passo Documentar). Cada uma tem teste próprio; nenhuma tem teste de que o estado muda junto nas três.                                                                |
 | Como se prova     | Um cenário, não uma matriz. O ponto que não pode faltar: **o cartão some** quando `proximo === null` (§4, "Nada a fazer não ocupa pixel"). Atenção ao gate de cobertura e2e — flaky não conta como `expected` (`scripts/ci/verificar-cobertura-e2e.mjs`, D80). |
 
-### B-4 · Story dos 7 estados
+### B-4 · Story dos 7 estados — ✅ FECHADO (PR #572, 03/09/2026), junto do desvio A
 
 | Campo             | Conteúdo                                                                                                                                                                                                                                                               |
 | :---------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -208,3 +208,30 @@ capacidade — a ordem acima é a conservadora.
 3. #559 fechada pelo desvio B (keyword em inglês na PR — memória
    `pr-em-pt-br-nao-fecha-issue`).
 4. Nenhum checkbox do plano marcado sem arquivo que o sustente.
+
+---
+
+## Estado da execução — 03/09/2026
+
+Ondas disparadas no mesmo dia em que a sequela foi escrita. Cada agente em
+worktree próprio, banco `iris_wN` próprio, sem `pnpm test:rls` completo em
+paralelo.
+
+| PR       | Escopo                                                                                                     | Estado                                                         |
+| -------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| **#571** | B-1 — alcance de rota                                                                                      | aberta; 11 casos, nenhum botão morto, mutação provada          |
+| **#572** | Desvio A + B-4 — token `warning` e story dos 7 estados                                                     | aberta; inclui a correção de contraste AA do estado `pendente` |
+| **#573** | Ratificação D-A6/A8/A9/A10 + este documento + D83                                                          | aberta                                                         |
+| —        | Desvios B + C + D — ERRCODE dedicado, contrato `null`, `git mv` para `src/lib/patient/`, `logarErroSemPII` | em execução                                                    |
+| —        | B-2 — 4 papéis × gesto primário                                                                            | em execução                                                    |
+| —        | B-5 — conta somente-leitura (prop nova no cartão + ordem das recusas)                                      | em execução, empilhada sobre a #572                            |
+| —        | B-6 — modalidade trocada depois de pronta                                                                  | em execução                                                    |
+| —        | B-7 — 5º passo do onboarding                                                                               | em execução                                                    |
+| —        | B-3 — e2e do caminho feliz                                                                                 | não iniciado; serial, disputa porta e banco                    |
+| —        | Varredura `0144` → `0149` (16 comentários em 8 arquivos)                                                   | não iniciado; por último, cruza todos os arquivos              |
+
+**Correção de contraste que virou regra** — aplicar a §3.2 ao pé da letra
+reprovava AA no estado `pendente` (4.20:1 no claro, piso 4.5 para 12px
+semibold). A spec foi corrigida com o número medido, e não o contrário: sem o
+número registrado, a próxima pessoa "conserta" de volta e reintroduz a
+reprovação, que o `axe` sob jsdom não acusa.
