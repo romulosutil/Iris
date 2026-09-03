@@ -360,13 +360,20 @@ const FUNCOES_COM_USER_ROLE_HELPER = [
 ];
 
 /**
- * As 12 funções que chamam app_user_id_exigido() (0093 + 0094, D23, 0112 #392, 0114 #393, 0115 #407, 0121 #119, 0142 #529, 0143 #539, 0144 T07c).
+ * As 10 funções que chamam app_user_id_exigido() (0093 + 0094, D23, 0112 #392, 0114 #393, 0115 #407, 0121 #119, 0142 #529, 0143 #539, 0144 T07c, 0150 #554).
+ *
+ * #554 (0150) — `app_alerta_risco_visivel` e `app_alerta_trecho_fonte` SAÍRAM
+ * desta lista. O ramo de dono delas deixou de ser
+ * `app_session_terapeuta_id(session_id) = app_user_id_exigido()` e passou a ser
+ * `app_session_profissional_responsavel(session_id)` (régua da 0143: titular OU
+ * substituto), então a chamada do helper de identidade virou TRANSITIVA — ela
+ * acontece dentro de `app_session_profissional_responsavel`, que continua nesta
+ * lista. Não é afrouxamento: este oráculo mede quem chama o helper de
+ * IDENTIDADE, e a fronteira de TENANT das duas segue medida em
+ * `FUNCOES_COM_HELPER` (as duas continuam lá, com
+ * `clinic_id = app_clinic_id_exigido()` em AND no guard interno).
  */
 const FUNCOES_COM_USER_ID_EXIGIDO_HELPER = [
-  "app_alerta_risco_visivel",
-  // #529 (0142) — `app_session_terapeuta_id(session_id) = app_user_id_exigido()`,
-  // o terceiro ramo do predicado de `alerta_risco_scope`.
-  "app_alerta_trecho_fonte",
   // D56 (0133) — o alvo da declaração NUNCA entra por parâmetro: é sempre
   // `app_user_id_exigido()`. Não existe assinatura capaz de declarar e-Psi no
   // registro de outra pessoa.
@@ -738,7 +745,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(FUNCOES_COM_USER_ROLE_HELPER.length).toBe(17);
   });
 
-  test("as 11 funções de autorização por identidade chamam app_user_id_exigido() — conjunto exato", async () => {
+  test("as 10 funções de autorização por identidade chamam app_user_id_exigido() — conjunto exato", async () => {
     const rows = await owner!<{ proname: string }[]>`
       SELECT p.proname
         FROM pg_proc p
@@ -750,7 +757,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.proname)).toEqual(
       FUNCOES_COM_USER_ID_EXIGIDO_HELPER,
     );
-    expect(FUNCOES_COM_USER_ID_EXIGIDO_HELPER.length).toBe(12);
+    expect(FUNCOES_COM_USER_ID_EXIGIDO_HELPER.length).toBe(10);
   });
 
   test("as 3 funções com identidade leniente chamam app_user_id_atual() — conjunto exato", async () => {

@@ -22,11 +22,16 @@ const U_COORD_A = "00000000-0000-0000-0000-0000000012c1";
 const U_TER_SESSAO = "00000000-0000-0000-0000-0000000012a1"; // terapeuta da sessão de origem
 const U_TER_EQUIPE = "00000000-0000-0000-0000-0000000012a2"; // outro membro da equipe de cuidado
 const U_TER_FORA = "00000000-0000-0000-0000-0000000012a3"; // mesma clínica, fora da equipe
+// #554 — substituto designado na agenda: atendeu a sessão (`atendido_por_id`)
+// e NÃO está na equipe de cuidado do paciente.
+const U_TER_SUB = "00000000-0000-0000-0000-0000000012a4";
 const U_COORD_B = "00000000-0000-0000-0000-0000000012c2";
 const P_A = "00000000-0000-0000-0000-0000000012d1";
 const P_B = "00000000-0000-0000-0000-0000000012d2";
 const S_A = "00000000-0000-0000-0000-0000000012e1";
 const S_B = "00000000-0000-0000-0000-0000000012e2";
+// #554 — sessão de A coberta pelo substituto (titular ausente).
+const S_SUB = "00000000-0000-0000-0000-0000000012e3";
 // #391 — âncoras novas (RPD e instrumento formal), uma por clínica, para
 // provar que o predicado de leitura isola tenant também nas origens novas.
 const RPD_A = "00000000-0000-0000-0000-0000000012f1";
@@ -46,12 +51,14 @@ async function semear() {
     (${U_TER_SESSAO}, 'Ter Sessão', 'ter-sessao@risco.test'),
     (${U_TER_EQUIPE}, 'Ter Equipe', 'ter-equipe@risco.test'),
     (${U_TER_FORA}, 'Ter Fora', 'ter-fora@risco.test'),
+    (${U_TER_SUB}, 'Ter Substituto', 'ter-sub@risco.test'),
     (${U_COORD_B}, 'Coord B', 'coord-b@risco.test')`;
   await owner!`INSERT INTO user_role (user_id, clinic_id, papel) VALUES
     (${U_COORD_A}, ${CLINIC_A}, 'coordenador'),
     (${U_TER_SESSAO}, ${CLINIC_A}, 'terapeuta'),
     (${U_TER_EQUIPE}, ${CLINIC_A}, 'terapeuta'),
     (${U_TER_FORA}, ${CLINIC_A}, 'terapeuta'),
+    (${U_TER_SUB}, ${CLINIC_A}, 'terapeuta'),
     (${U_COORD_B}, ${CLINIC_B}, 'coordenador')`;
   // `alta_em` preenchida: desde a 0128 (#352) `app_purgar_paciente` tem gate de
   // retenção, e um paciente sem alta é inelegível por construção — o caso de
@@ -65,6 +72,9 @@ async function semear() {
   await owner!`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, disciplina) VALUES
     (${S_A}, ${CLINIC_A}, ${P_A}, ${U_TER_SESSAO}, now(), 'psicologia'),
     (${S_B}, ${CLINIC_B}, ${P_B}, ${U_COORD_B}, now(), 'psicologia')`;
+  // #554 — sessão coberta: titular U_TER_SESSAO, quem atendeu foi U_TER_SUB.
+  await owner!`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, atendido_por_id, agendada_para, disciplina) VALUES
+    (${S_SUB}, ${CLINIC_A}, ${P_A}, ${U_TER_SESSAO}, ${U_TER_SUB}, now() + interval '3 hours', 'psicologia')`;
   // #391 — âncoras das origens novas, uma por clínica.
   await owner!`INSERT INTO tcc_rpd_entry
       (id, clinic_id, patient_id, situacao, pensamento_automatico, emocao, intensidade, criado_por) VALUES
@@ -315,6 +325,100 @@ describe.skipIf(!hasDb)("alerta_risco_clinico — RLS e privilégios", () => {
     expect(await ve(ctx("terapeuta", U_TER_SESSAO))).toBe(true);
     expect(await ve(ctx("terapeuta", U_TER_EQUIPE))).toBe(true);
     expect(await ve(ctx("terapeuta", U_TER_FORA))).toBe(false);
+  });
+
+  /**
+   * #554 — régua do profissional responsável (`terapeuta_id` OU
+   * `atendido_por_id`, 0143/#539) nos TRÊS lugares que decidem visibilidade de
+   * alerta de risco: a policy `alerta_risco_scope` (0085),
+   * `app_alerta_risco_visivel` (0093) e `app_alerta_trecho_fonte` (0142/#529).
+   *
+   * Antes da 0150 os três usavam `app_session_terapeuta_id(session_id) = <eu>`:
+   * o substituto que atendeu a sessão e não está na equipe NÃO via o alerta que
+   * a extração daquela sessão gerou — enquanto a titular, que não estava lá,
+   * via. Estes casos medem comportamento sob `app_role`, não o texto do `.sql`.
+   */
+  describe("#554 — substituto designado enxerga o alerta da sessão que atendeu", () => {
+    /** Lê o alerta pelas TRÊS vias de uma vez, sob o tenant informado. */
+    const lerComoUsuario = async (c: TenantContext, id: string) => {
+      return withTenant(c, async (tx) => {
+        const linhas = (await tx.execute(
+          sql`SELECT id FROM alerta_risco_clinico WHERE id = ${id}::uuid`,
+        )) as unknown as Array<{ id: string }>;
+        const fn = (await tx.execute(sql`
+          SELECT app_alerta_risco_visivel(${id}::uuid) AS visivel,
+                 app_alerta_trecho_fonte(${id}::uuid) AS trecho
+        `)) as unknown as Array<{ visivel: boolean; trecho: string | null }>;
+        return {
+          policy: linhas.length === 1,
+          visivel: fn[0]!.visivel,
+          trecho: fn[0]!.trecho,
+        };
+      });
+    };
+
+    test("substituto FORA da equipe lê o alerta e o trecho_fonte da sessão que atendeu", async () => {
+      await semear();
+      const id = await criar(ctx("terapeuta", U_TER_SESSAO), {
+        patientId: P_A,
+        sessionId: S_SUB,
+        trecho: "trecho literal da sessão coberta",
+      });
+
+      // Pré-condição do caso: o substituto NÃO está na equipe de cuidado — se
+      // estivesse, `app_is_on_team` já o deixaria passar e o teste não mediria
+      // a régua nova.
+      const equipe = await owner!<{ n: string }[]>`
+        SELECT count(*) AS n FROM care_team_membership
+         WHERE patient_id = ${P_A} AND user_id = ${U_TER_SUB}
+           AND vigencia_fim IS NULL`;
+      expect(Number(equipe[0]!.n)).toBe(0);
+
+      const r = await lerComoUsuario(ctx("terapeuta", U_TER_SUB), id);
+      expect(r.policy).toBe(true);
+      expect(r.visivel).toBe(true);
+      expect(r.trecho).toBe("trecho literal da sessão coberta");
+    });
+
+    test("terapeuta alheio (nem responsável nem na equipe) continua sem ler o alerta nem o trecho", async () => {
+      await semear();
+      const id = await criar(ctx("terapeuta", U_TER_SESSAO), {
+        patientId: P_A,
+        sessionId: S_SUB,
+        trecho: "trecho literal da sessão coberta",
+      });
+
+      const r = await lerComoUsuario(ctx("terapeuta", U_TER_FORA), id);
+      expect(r.policy).toBe(false);
+      expect(r.visivel).toBe(false);
+      expect(r.trecho).toBeNull();
+    });
+
+    test("alerta_risco_scope continua escondendo linha PSEUDONIMIZADA de não-coordenador — inclusive do substituto", async () => {
+      await semear();
+      const id = await criar(ctx("terapeuta", U_TER_SESSAO), {
+        patientId: P_A,
+        sessionId: S_SUB,
+        trecho: "trecho literal da sessão coberta",
+      });
+      await withTenant(ctx("coordenador", U_COORD_A), (tx) =>
+        tx.execute(
+          sql`SELECT app_purgar_paciente(${P_A}::uuid, 'pedido de erasure')`,
+        ),
+      );
+      const [linha] = await owner!<{ pseudonimizado_em: Date | null }[]>`
+        SELECT pseudonimizado_em FROM alerta_risco_clinico WHERE id = ${id}`;
+      expect(linha!.pseudonimizado_em).not.toBeNull();
+
+      const comoSub = await lerComoUsuario(ctx("terapeuta", U_TER_SUB), id);
+      expect(comoSub.policy).toBe(false);
+      expect(comoSub.visivel).toBe(false);
+      expect(comoSub.trecho).toBeNull();
+
+      const comoCoord = await lerComoUsuario(ctx("coordenador", U_COORD_A), id);
+      expect(comoCoord.policy).toBe(true);
+      expect(comoCoord.visivel).toBe(true);
+    });
   });
 
   test("prazo é resolvido no banco e a certeza NÃO o relaxa (§4.1)", async () => {
