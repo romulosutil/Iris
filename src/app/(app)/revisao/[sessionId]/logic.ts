@@ -20,6 +20,10 @@ import {
 import { podeAutoValidar } from "@/lib/sessao/aprovacao";
 import { conteudoDoSubtipo } from "@/lib/extraction/conteudo-subtipo";
 import { avaliarFriccao } from "@/lib/extraction/review-policy";
+import {
+  CAMPO_EDITAVEL,
+  camposEditaveisDe,
+} from "@/lib/extraction/campos-editaveis";
 import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 import { textoErroInterno } from "@/lib/copy/erros";
 
@@ -582,6 +586,57 @@ async function editarExtracaoCore(
 ): Promise<ReviewResult> {
   const p = editarSchema.safeParse(input);
   if (!p.success) return { error: p.error.issues[0]!.message };
+
+  // Merge autoritativo (#582 review): `payload_editado` é gravado INTEIRO (o
+  // `set` de `transicionar` substitui a coluna, e é ele que vira o `conteudo`
+  // efetivo lido por `inserirEvidenciasOnApprove`). O chamador só conhece as
+  // chaves que ele mesmo edita — o form manda três campos, o caminho direto de
+  // `preferencia_reforcador` manda item_atividade/valencia. Se o core gravasse
+  // esse objeto parcial, todo o resto do conteúdo clínico (alvos, descricao,
+  // etapas…) sumiria da versão efetiva — inclusive `alvos`, deixando a
+  // inserção em `evidence` sem alvo nenhum. A base do merge é sempre o estado
+  // do BANCO (`payload_editado ?? payload`), nunca nada vindo do cliente.
+  //
+  // Guard de subtipo: o subtipo de VERDADE também só existe no banco — um POST
+  // forjado pode alegar "evidencia" numa extração `cadeia` e escrever
+  // funcao/nivel_ajuda/resultado na raiz do payload errado. Os três campos de
+  // `CAMPO_EDITAVEL` só passam se `camposEditaveisDe(subtipo real)` os permite.
+  // Chaves fora desses três não são filtradas: o core também serve edições
+  // diretas fora do diálogo genérico (`preferencia_reforcador`) — a recusa por
+  // "subtipo sem campo editável" é responsabilidade do `actions.ts` (que sabe
+  // que a requisição veio do diálogo dos três campos), não deste core.
+  const [row] = await withTenant(ctx, (tx) =>
+    tx
+      .select({
+        subtipo: extraction.subtipo,
+        payload: extraction.payload,
+        payloadEditado: extraction.payloadEditado,
+      })
+      .from(extraction)
+      .where(eq(extraction.id, p.data.extractionId)),
+  );
+
+  const base = row?.payloadEditado ?? row?.payload;
+  const payloadEditado: Record<string, unknown> =
+    base && typeof base === "object" && !Array.isArray(base)
+      ? { ...(base as Record<string, unknown>) }
+      : {};
+  const camposPermitidos = row
+    ? camposEditaveisDe(row.subtipo)
+    : CAMPO_EDITAVEL;
+  for (const [chave, valor] of Object.entries(p.data.payloadEditado)) {
+    const ehCampoDoDialogo = (CAMPO_EDITAVEL as readonly string[]).includes(
+      chave,
+    );
+    if (
+      ehCampoDoDialogo &&
+      !camposPermitidos.includes(chave as (typeof CAMPO_EDITAVEL)[number])
+    ) {
+      continue;
+    }
+    payloadEditado[chave] = valor;
+  }
+
   const colapso = await resolverColapso(
     ctx,
     p.data.extractionId,
@@ -594,7 +649,7 @@ async function editarExtracaoCore(
     p.data.versao,
     {
       estado: "editada",
-      payloadEditado: p.data.payloadEditado,
+      payloadEditado,
     },
     colapso,
   );
