@@ -90,7 +90,11 @@ describe("alcance de rota dos degraus de prontidão", () => {
     if (rota === null) return;
 
     expect(rota.startsWith("/")).toBe(true);
-    const segmentos = rota.split("/").filter(Boolean);
+    // Query string e hash não fazem parte do caminho de arquivo: sem removê-los,
+    // uma rota como "/anamnese?aba=1" viraria o segmento "anamnese?aba=1" e não
+    // casaria com a pasta literal na árvore do app.
+    const caminho = rota.split(/[?#]/)[0];
+    const segmentos = caminho.split("/").filter(Boolean);
     const arquivo = resolverPagina(RAIZ_APP, segmentos);
 
     expect(
