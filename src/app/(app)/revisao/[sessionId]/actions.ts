@@ -11,6 +11,9 @@ import {
   type ReviewResult,
 } from "./logic";
 import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+import { camposEditaveisDe } from "@/lib/extraction/campos-editaveis";
+import { rotuloSubtipo } from "./resumo";
+import type { ExtractionSubtipo } from "@/lib/extraction/provider";
 
 // Recusas explícitas do core (#532): o código é o contrato com os testes; a
 // UI recebe a frase. `CONCURRENCY_ERROR` segue passando cru — a tela já o
@@ -98,6 +101,21 @@ export async function editarExtracaoAction(
   _prev: RevisaoState,
   formData: FormData,
 ): Promise<RevisaoState> {
+  // Guard (#582): o diálogo só oferece os campos que o subtipo REALMENTE tem
+  // na raiz do payload (camposEditaveisDe — fonte única, também usada pelo
+  // client em revisao-lista.tsx). Um subtipo sem nenhum campo editável (ex.:
+  // `cadeia`, que guarda nível de ajuda por ETAPA, não na raiz) não chega a
+  // gravar nada — recusa explícita em vez de "salvo com sucesso" mudo. A
+  // checagem é redundante com a UI (que já não renderiza o form nesse caso),
+  // mas fecha a mesma porta para um POST direto.
+  const subtipo = String(formData.get("subtipo") ?? "") as ExtractionSubtipo;
+  const camposPermitidos = camposEditaveisDe(subtipo);
+  if (camposPermitidos.length === 0) {
+    return {
+      error: `Extrações do tipo "${rotuloSubtipo(subtipo)}" ainda não podem ser editadas por aqui. Aprove se os dados estiverem certos, ou descarte esta sugestão e registre a correção diretamente na sessão.`,
+    };
+  }
+
   // payloadEditado = payload ORIGINAL (JSON no hidden) com os campos corrigidos
   // sobrepostos. Preserva o resto do conteúdo que o terapeuta não tocou; o
   // original imutável fica em `payload` (auditoria — a action core não o toca).
@@ -111,7 +129,7 @@ export async function editarExtracaoAction(
     base = {};
   }
   const editado: Record<string, unknown> = { ...base };
-  for (const campo of ["funcao", "nivel_ajuda", "resultado"] as const) {
+  for (const campo of camposPermitidos) {
     const v = formData.get(campo);
     if (typeof v === "string" && v.trim() !== "") editado[campo] = v.trim();
   }
