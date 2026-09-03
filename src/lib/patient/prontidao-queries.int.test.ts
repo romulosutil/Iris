@@ -16,7 +16,7 @@ vi.mock("server-only", () => ({}));
  * Task 3 (prontidão do prontuário) — `obterFatosProntidao` lê os seis fatos
  * numa transação `withTenant`, sob a RLS real.
  *
- * Task 7c (0144) trocou a leitura direta por `app_fatos_prontidao`
+ * Task 7c (0149) trocou a leitura direta por `app_fatos_prontidao`
  * (`SECURITY DEFINER`): o motivo do segundo `describe` é D-A9/D-A10. As
  * tabelas clínicas (`goal` incluída) têm policy de SELECT chaveada por PAPEL
  * e EQUIPE (`goal_select`, `db/migrations/0006_fase2_rls.sql:207` —

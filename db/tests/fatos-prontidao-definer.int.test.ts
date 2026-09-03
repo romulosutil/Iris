@@ -1,5 +1,5 @@
 /**
- * Task 7c (0144) — `app_fatos_prontidao`, o definer que lê os seis fatos da
+ * Task 7c (0149) — `app_fatos_prontidao`, o definer que lê os seis fatos da
  * prontidão em lote (`uuid[]`), sob um guard que ESPELHA `goal_select`
  * (`db/migrations/0006_fase2_rls.sql:207` — `coordenador` OR
  * `app_is_on_team`) MAIS o recorte de terapeuta de cobertura que a `0092`
@@ -165,7 +165,7 @@ function chamar(ctx: CtxDeTeste, patientIds: string[]): Promise<LinhaCrua[]> {
   ) as unknown as Promise<LinhaCrua[]>;
 }
 
-describe.skipIf(!hasDb)("Task 7c · app_fatos_prontidao (0144)", () => {
+describe.skipIf(!hasDb)("Task 7c · app_fatos_prontidao (0149)", () => {
   beforeAll(async () => {
     ({ withTenant } = await import("@/db/rls"));
     ({ sql: appSql } = await import("@/db/client"));

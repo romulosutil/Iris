@@ -43,7 +43,7 @@ divergência tenha sido registrada em lugar nenhum. Três são idioma; o quarto
 | Por que dói       | É o primeiro lugar onde um `href` errado vira botão morto com teste de componente verde. `/diario/[id]` e `/revisao/[id]` viraram redirect na #512 (`Q-04`) — o precedente é do mesmo repo, não hipotético.                                                                    |
 | Como se prova     | O teste enumera os `DegrauId` a partir da própria tabela de definições (não de uma lista repetida no teste — lista repetida diverge no primeiro degrau novo). **Mutação:** apontar uma rota de degrau para um caminho que é `redirect()` tem que deixar vermelho.              |
 
-### B-2 · Página por papel no `sessoes/[id]` — faltam os dois terapeutas
+### B-2 · Página por papel no `sessoes/[id]` — ✅ FECHADO (PR #578, 03/09/2026)
 
 | Campo             | Conteúdo                                                                                                                                                                                                                                                                                         |
 | :---------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -52,7 +52,7 @@ divergência tenha sido registrada em lugar nenhum. Três são idioma; o quarto
 | Por que dói       | Faltam exatamente os dois casos que D-A10 criou: o terapeuta fora da equipe é o cenário que a opção (b) e o definer `0149` existem para atender. Provar a leitura (int-test) e não provar a tela deixa o gesto sem oráculo.                                                                      |
 | Como se prova     | Quatro casos, um por papel, na superfície `sessoes/[id]` (passo Documentar). O caso "terapeuta fora da equipe" tem que afirmar o gesto **habilitado** pela via do definer — se afirmar "Aguardando coordenação", a opção (b) não está chegando na tela.                                          |
 
-### B-3 · Caminho feliz e2e
+### B-3 · Caminho feliz e2e — 🚧 EM EXECUÇÃO (branch `test/prontidao-e2e`)
 
 | Campo             | Conteúdo                                                                                                                                                                                                                                                       |
 | :---------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -70,7 +70,7 @@ divergência tenha sido registrada em lugar nenhum. Três são idioma; o quarto
 | Por que dói       | A §3.2 nomeia a colisão de semântica do DS (`U-02`, `DS-02`): o violeta de "sugerido pela IA" e o verde de "aprovado" não podem ser reusados por degrau. Sem a story, a colisão só aparece no prontuário de um cliente. É também onde o desvio **A** salta aos olhos.  |
 | Como se prova     | Uma story por estado da tabela da §4 (7 no total, incluindo "prontuário pronto → cartão some" e "falha de leitura → cartão não renderiza"). Storybook 10: viewport é global, não `parameters.defaultViewport` (memória `storybook10-viewport-e-global-nao-parametro`). |
 
-### B-5 · Conta em somente-leitura
+### B-5 · Conta em somente-leitura — ✅ FECHADO (PR #577, 03/09/2026)
 
 | Campo             | Conteúdo                                                                                                                                                                                                                                                                                                         |
 | :---------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -79,7 +79,7 @@ divergência tenha sido registrada em lugar nenhum. Três são idioma; o quarto
 | Por que dói       | O componente não tem por onde receber o estado da conta — não é teste faltando, é **prop faltando**. Sem ela, uma conta em somente-leitura mostra um botão primário que a action vai recusar: botão morto, que é o anti-padrão nomeado na §7.                                                                    |
 | Como se prova     | (1) Teste de componente: com a conta em somente-leitura, o gesto primário sai desabilitado e a razão exibida é a mesma do `layout.tsx` (não uma copy nova). (2) Int-test: numa conta somente-leitura **e** com escada bloqueada, a mensagem de recusa é a da conta, não a da escada — a ordem é o que se afirma. |
 
-### B-6 · Modalidade trocada depois de pronta (prova de D-A4)
+### B-6 · Modalidade trocada depois de pronta (prova de D-A4) — ✅ FECHADO (PR #575, 03/09/2026)
 
 | Campo             | Conteúdo                                                                                                                                                                                                                                    |
 | :---------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -113,7 +113,7 @@ divergência tenha sido registrada em lugar nenhum. Três são idioma; o quarto
 
 ## Parte 2 — Os 4 desvios de spec
 
-### Desvio A · Token de erro onde a spec manda aviso
+### Desvio A · Token de erro onde a spec manda aviso — ✅ FECHADO (PR #572, 03/09/2026)
 
 | Campo             | Conteúdo                                                                                                                                                                                                                                                                               |
 | :---------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -122,7 +122,7 @@ divergência tenha sido registrada em lugar nenhum. Três são idioma; o quarto
 | Por que dói       | Não é preferência estética: é a diferença entre "falta um passo" e "você errou". A escada é a única superfície do produto que fala com o operador **antes** de ele fazer qualquer coisa.                                                                                               |
 | Como se prova     | Trocar os três tokens e afirmar no teste de componente que o estado `bloqueante` não usa a família `error`. A story (B-4) é onde isso fica visível. Atenção: axe sob jsdom **não** checa contraste (memória `doc-ds-conflita-com-a11y-menta-terracota`) — conferir o par no navegador. |
 
-### Desvio B · `prontidao-queries.ts` na rota, não em `lib` (= issue #559)
+### Desvio B · `prontidao-queries.ts` na rota, não em `lib` (= issue #559) — ✅ FECHADO (PR #579, 03/09/2026)
 
 | Campo             | Conteúdo                                                                                                                                                                                                                                                            |
 | :---------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -131,7 +131,7 @@ divergência tenha sido registrada em lugar nenhum. Três são idioma; o quarto
 | Por que dói       | Já está aberto como **#559** (`A-02`). O acoplamento não é teórico: `onboarding-queries.ts` passa a depender do ciclo de vida de uma pasta de rota que pode ser movida por qualquer refactor de UI (precedente: memória `issue-aponta-arquivo-que-virou-redirect`). |
 | Como se prova     | Mover o arquivo para `src/lib/patient/prontidao-queries.ts`, atualizar os importadores, e `pnpm typecheck` + `pnpm lint` verdes. **Fecha a #559** — o corpo dela é este item; abrir issue nova seria duplicar.                                                      |
 
-### Desvio C · `console.warn` onde a spec manda `logarErroSemPII` (parente da #560)
+### Desvio C · `console.warn` onde a spec manda `logarErroSemPII` (parente da #560) — ✅ FECHADO (PR #579, 03/09/2026)
 
 | Campo             | Conteúdo                                                                                                                                                                                                                                                                    |
 | :---------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -140,7 +140,7 @@ divergência tenha sido registrada em lugar nenhum. Três são idioma; o quarto
 | Por que dói       | **Medido: não vaza PII hoje** — os dois logam só `name` + SQLSTATE. O problema é idioma: é o template que a próxima query copia, e a próxima terá texto clínico. Em `DrizzleQueryError` a `message` é o SQL inteiro com os `params` (`S-03`). Relacionado à **#560**.       |
 | Como se prova     | Trocar as duas chamadas pelo helper, com `patientId` como correlação. **Mutação:** não há oráculo automático para "não vaza PII" — o oráculo é o helper ser o único caminho. Um teste que afirme que o `catch` chama `logarErroSemPII` (e não `console.*`) segura o idioma. |
 
-### Desvio D · `obterFatosProntidao` lança onde a spec define `| null`
+### Desvio D · `obterFatosProntidao` lança onde a spec define `| null` — ✅ FECHADO (PR #579, 03/09/2026)
 
 | Campo             | Conteúdo                                                                                                                                                                                                                                                                                                                                              |
 | :---------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -223,24 +223,40 @@ capacidade — a ordem acima é a conservadora.
 
 ---
 
+## Parte 4 — Lacuna descoberta durante a execução
+
+### B-8 · "Aguardando coordenação" não é produzível hoje — 🚧 EM EXECUÇÃO (branch `feat/prontidao-aguardando-coordenacao`)
+
+| Campo             | Conteúdo                                                                                                                                                                                                                                                                                                        |
+| :---------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Como apareceu     | Medido pelo agente da **B-2** (#578) ao escrever o caso "papel sem leitura clínica" no passo Documentar: a §6 pede afirmar "qual gesto aparece, **ou** que nenhum aparece e o texto é `Aguardando coordenação`" — e o segundo ramo não tem como ser afirmado.                                                   |
+| O que a spec pede | §4a promete o selo fixo **"Aguardando coordenação"** no passo Documentar para quem não enxerga o prontuário clínico (R-1: escada vazia por papel ≠ escada bloqueada por dado).                                                                                                                                  |
+| O que existe hoje | `CartaoProntidao` devolve `null` quando `proximo === null`. Como `obterFatosProntidao` também devolve `null` para o papel sem leitura clínica (contrato ratificado no desvio D, #579), esse papel vê **nada** — não um selo. A regra §4 "nada a fazer não ocupa pixel" está engolindo o caso da §4a.            |
+| Por que dói       | São dois estados com significados opostos colapsados no mesmo pixel vazio: "prontuário pronto, nada a fazer" e "existe coisa a fazer, mas não é sua". O segundo é justamente a distinção que R-1 criou e que o desvio D acabou de reconstruir na camada de dados — e ela se perde na camada de apresentação.    |
+| Como se prova     | O caso de componente da B-2 para o papel sem leitura clínica passa a afirmar o texto "Aguardando coordenação" em vez de ausência. **Mutação:** fazer o componente devolver `null` também nesse ramo tem que deixar vermelho — se continuar verde, o oráculo voltou a ser "cartão ausente" e não distingue nada. |
+| Escopo            | **Registro, não conserto**, nesta PR. A implementação corre em paralelo na branch `feat/prontidao-aguardando-coordenacao`.                                                                                                                                                                                      |
+
+---
+
 ## Estado da execução — 03/09/2026
 
 Ondas disparadas no mesmo dia em que a sequela foi escrita. Cada agente em
 worktree próprio, banco `iris_wN` próprio, sem `pnpm test:rls` completo em
 paralelo.
 
-| PR       | Escopo                                                                                                     | Estado                                                         |
-| -------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| **#571** | B-1 — alcance de rota                                                                                      | aberta; 11 casos, nenhum botão morto, mutação provada          |
-| **#572** | Desvio A + B-4 — token `warning` e story dos 7 estados                                                     | aberta; inclui a correção de contraste AA do estado `pendente` |
-| **#573** | Ratificação D-A6/A8/A9/A10 + este documento + D83                                                          | aberta                                                         |
-| —        | Desvios B + C + D — ERRCODE dedicado, contrato `null`, `git mv` para `src/lib/patient/`, `logarErroSemPII` | em execução                                                    |
-| —        | B-2 — 4 papéis × gesto primário                                                                            | em execução                                                    |
-| —        | B-5 — conta somente-leitura (prop nova no cartão + ordem das recusas)                                      | em execução, empilhada sobre a #572                            |
-| —        | B-6 — modalidade trocada depois de pronta                                                                  | em execução                                                    |
-| —        | B-7 — 5º passo do onboarding                                                                               | em execução                                                    |
-| —        | B-3 — e2e do caminho feliz                                                                                 | não iniciado; serial, disputa porta e banco                    |
-| —        | Varredura `0144` → `0149` (16 comentários em 8 arquivos)                                                   | não iniciado; por último, cruza todos os arquivos              |
+| PR       | Escopo                                                                                                                                         | Estado                                                                                            |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| **#571** | B-1 — alcance de rota                                                                                                                          | ✅ mergeada (`c526c1b9`); 11 casos, nenhum botão morto, mutação provada                           |
+| **#572** | Desvio A + B-4 — token `warning` e story dos 7 estados                                                                                         | ✅ mergeada (`3613cc32`); inclui a correção de contraste AA do estado `pendente`                  |
+| **#573** | Ratificação D-A6/A8/A9/A10 + este documento + D83                                                                                              | ✅ mergeada (`73a67e73`)                                                                          |
+| **#579** | Desvios B + C + D — ERRCODE dedicado (`IR001`/`IR002`, migração `0152`), contrato `null`, `git mv` para `src/lib/patient/`, `logarAvisoSemPII` | ✅ mergeada (`199f6a7f`); fecha a #559                                                            |
+| **#578** | B-2 — 4 papéis × gesto primário                                                                                                                | ✅ mergeada (`b739b965`); cobre as duas superfícies                                               |
+| **#577** | B-5 — conta somente-leitura (prop nova no cartão + ordem das recusas)                                                                          | ✅ mergeada (`268001f5`)                                                                          |
+| **#575** | B-6 — modalidade trocada depois de pronta                                                                                                      | ✅ mergeada (`82982de2`)                                                                          |
+| **#576** | B-7 — 5º passo do onboarding (o passo **desfeito**)                                                                                            | ✅ mergeada (`50222320`); estendeu `db/tests/onboarding-progresso-rls.int.test.ts` (7 → 12 casos) |
+| —        | B-3 — e2e do caminho feliz                                                                                                                     | 🚧 em execução, branch `test/prontidao-e2e`                                                       |
+| —        | B-8 — "Aguardando coordenação" não é produzível (ver Parte 4)                                                                                  | 🚧 em execução, branch `feat/prontidao-aguardando-coordenacao`                                    |
+| —        | Varredura `0144` → `0149` + reconciliação dos documentos                                                                                       | ✅ esta PR                                                                                        |
 
 **Correção de contraste que virou regra** — aplicar a §3.2 ao pé da letra
 reprovava AA no estado `pendente` (4.20:1 no claro, piso 4.5 para 12px

@@ -150,7 +150,7 @@ export async function listarTodosPacientes(
       // fixa o contrato medindo.
       const idsVisiveisSobRls = linhas.map((linha) => linha.id);
       // Uma chamada só, com o array de ids da página — não uma por paciente.
-      // `app_fatos_prontidao` (migração `0144`, D-A12) lê pelo MESMO
+      // `app_fatos_prontidao` (migração `0149`, D-A12) lê pelo MESMO
       // predicado que `obterFatosProntidaoNaTx` (`@/lib/patient/prontidao-queries`): as
       // duas portas passam a divergir zero, inclusive no recorte de
       // cobertura que faltava aqui antes da Task 7c.

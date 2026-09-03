@@ -129,7 +129,7 @@ async function capturarDiarioCore(
       // cobertura) o terapeuta de COBERTURA não lê a linha `patient`, então a
       // modalidade chegava `null` e a régua recusava por "modalidade
       // ausente" um caso clinicamente autorizado. A modalidade agora sai por
-      // `app_fatos_prontidao` (migração `0144`), pela MESMA porta e sob o
+      // `app_fatos_prontidao` (migração `0149`), pela MESMA porta e sob o
       // MESMO guard dos seis fatos — quem lê os fatos lê a modalidade, e
       // ninguém mais.
       const [sess] = await tx
@@ -678,7 +678,7 @@ async function consolidarSessaoCore(
       // `patient_select` (RLS por equipe, sem recorte de cobertura) o
       // terapeuta de cobertura não lê a linha `patient`; a modalidade chegava
       // `null` e a régua recusava por "modalidade ausente" o que é cobertura
-      // clínica legítima. Agora ela sai de `app_fatos_prontidao` (`0144`),
+      // clínica legítima. Agora ela sai de `app_fatos_prontidao` (`0149`),
       // pela mesma porta e sob o mesmo guard dos seis fatos. O que sobra aqui
       // são só colunas de `session` — sempre legíveis a quem pode gravar a
       // nota, que é o motivo de o `sess!` abaixo continuar seguro.

@@ -16,12 +16,31 @@ presunção).
 O que ficou aberto — 7 buracos de prova + 4 desvios de spec — está catalogado
 em [`../specs/sequela-557-provas-e-desvios.md`](../specs/sequela-557-provas-e-desvios.md),
 rascunho do corpo da issue-sequela. Relacionadas: **#559** (rota importando
-rota) e **#560** (idioma de log de erro).
+rota, **fechada** pela #579) e **#560** (idioma de log de erro).
 
-**Não marcados de propósito**, mesmo com a feature em produção: os passos de
-**prova de mutação** (Task 7 Step 5, Task 7b Step 6) e os de **rodar suíte**
-que não deixam artefato no repo — marcar "mutação provada" sem tê-la rodado é
-exatamente o defeito que a memória `teste-verde-que-nao-testa-nada` descreve.
+### Reconciliação de 03/09/2026 (fim do dia)
+
+A sequela foi executada no mesmo dia, em 7 PRs mergeadas na `main`: **#571**
+(alcance de rota), **#572** (token `warning` + story dos 7 estados + contraste
+AA), **#579** (ERRCODE `IR001`/`IR002` na migração `0152`, contrato `null`,
+`git mv` de `prontidao-queries.ts` para `src/lib/patient/`, `logarAvisoSemPII`),
+**#577** (conta somente-leitura), **#576** (5º passo do onboarding, incluindo o
+passo desfeito), **#578** (4 papéis × gesto primário nas duas superfícies),
+**#575** (modalidade trocada depois de pronta), **#573** (ratificação + D83).
+
+**O que continua aberto de verdade:**
+
+1. **e2e do caminho feliz** (`e2e/prontidao-do-prontuario.spec.ts`) — Task 10
+   Step 0, último marcador da §6. Em execução na branch `test/prontidao-e2e`.
+2. **"Aguardando coordenação" não é produzível** — `CartaoProntidao` devolve
+   `null` quando `proximo === null`, então o papel sem leitura clínica vê
+   **nada**, não o selo que a §4a promete. Registrado como **B-8** na sequela;
+   em execução na branch `feat/prontidao-aguardando-coordenacao`.
+3. Os passos de **prova de mutação** (Task 7 Step 5, Task 7b Step 6) e os de
+   **rodar suíte** (Task 10 Steps 1-3, Task 9 Steps 2 e 4), que não deixam
+   artefato no repo. **Não marcados de propósito**: marcar "mutação provada"
+   sem tê-la rodado é exatamente o defeito que a memória
+   `teste-verde-que-nao-testa-nada` descreve.
 
 ---
 
@@ -1940,7 +1959,10 @@ passo 1 e some onde a jornada endurece.
 - Modify: `src/app/(app)/onboarding-queries.ts`
 - Test: `src/app/(app)/checklist-onboarding.test.tsx` (já existe)
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha** _(medido em 03/09/2026:
+      `src/app/(app)/checklist-onboarding.test.tsx:39` tem exatamente este caso,
+      desde a própria #557 — a reconciliação anterior o deu como ausente porque
+      varreu o nome do arquivo, não o corpo)_
 
 Em `checklist-onboarding.test.tsx`, estender `ZERADO` e `TUDO` com
 `primeiroPacientePronto` e acrescentar:
@@ -2019,16 +2041,23 @@ git commit -m "feat(onboarding): add fifth step covering the gap up to a usable 
 Antes da suíte, conferir que existem — e ficam vermelhos quando devem — os
 casos que a spec §6 passou a exigir e que nenhuma task acima cria sozinha:
 
-- **Conta somente-leitura com prontuário bloqueado**: em
+- ✅ **Conta somente-leitura com prontuário bloqueado** — entregue na PR #577
+  (03/09/2026): em
   `cartao-prontidao.test.tsx`, o gesto primário sai desabilitado quando a
   conta está em somente-leitura (mesma razão que `layout.tsx` exibe); em
   `gate-documentar.int.test.ts`, a action recusa pela conta **antes** de
   recusar pela escada (`comEscrita` já faz isso — o teste prova a ordem).
-- **Modalidade trocada depois de pronta**: em `bloqueio-documentar.int.test.ts`,
+- ✅ **Modalidade trocada depois de pronta** — entregue na PR #575
+  (03/09/2026): em `bloqueio-documentar.int.test.ts`,
   paciente `protocol_driven` com protocolo + meta (`podeDocumentar: true`) →
   `alterarModalidadeClinica(..., "cognitive_behavioral")` → `carregarSessao`
   devolve `podeDocumentar: false` por instrumento. Prova D-A4 sem coluna.
-- **Definer novo**: se alguma task acima acabou criando um `SECURITY DEFINER`
+- ✅ **Definer novo** — criado e provado: `app_fatos_prontidao`
+  (`db/migrations/0149_fatos_prontidao_definer.sql`; ERRCODEs dedicados na
+  `0152`, PR #579), listado em `FUNCOES_COM_HELPER`
+  (`db/tests/clinic-id-helper-rls.int.test.ts`) e com caso negativo
+  cross-tenant em `db/tests/fatos-prontidao-definer.int.test.ts`. Texto
+  original abaixo, mantido como régua: se alguma task acima acabou criando um `SECURITY DEFINER`
   (a Task 8 é a candidata), ele está em `FUNCOES_COM_HELPER` e tem caso
   negativo cross-tenant em `db/tests/`. Se não criou nenhum, escrever isso na
   descrição da PR — ausência declarada, não presumida.
@@ -2041,13 +2070,20 @@ função pura **não** substitui:
   que existe em `src/app/(app)/**/page.tsx` e **não** é um `redirect()`.
   `/diario/[id]` e `/revisao/[id]` viraram redirect na #512; um `href` para lá
   é botão morto com teste de componente verde.
-- **Página por papel**: `src/app/(app)/pacientes/[id]/layout.test.tsx` e
+- ✅ **Página por papel** — entregue na PR #578 (03/09/2026), 4 papéis nas
+  duas superfícies. **Ressalva medida:** o ramo "nenhum gesto aparece e o texto
+  é 'Aguardando coordenação'" **não é produzível hoje** — `CartaoProntidao`
+  devolve `null` quando `proximo === null`, então o papel sem leitura clínica
+  vê ausência, não selo. Registrado como **B-8** na sequela; em execução na
+  branch `feat/prontidao-aguardando-coordenacao`.
+  `src/app/(app)/pacientes/[id]/layout.test.tsx` e
   `src/app/(app)/sessoes/[id]/page.test.tsx` montam a página com o `ctx` de
   cada um dos 4 papéis (`coordenador`, `terapeuta` na equipe, `terapeuta` fora,
   `admin_recepcao`) e afirmam **qual** gesto primário aparece — ou que nenhum
   aparece e o texto é "Aguardando coordenação". Quatro casos por superfície,
   sem exceção: é o teste que faltou na #512.
-- **Caminho feliz e2e**: `e2e/prontidao-do-prontuario.spec.ts` — coordenador
+- 🚧 **Caminho feliz e2e** — ÚNICO item da §6 ainda aberto; em execução na
+  branch `test/prontidao-e2e`. `e2e/prontidao-do-prontuario.spec.ts` — coordenador
   prescreve → ativa meta → cartão some → terapeuta (na equipe) documenta.
   Um cenário; o que interessa é a costura entre as três superfícies.
 

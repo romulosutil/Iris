@@ -127,7 +127,7 @@ describe.skipIf(!hasDb)("#539 · profissional responsável pela sessão", () => 
     // com `ProntuarioIncompletoError` antes de exercitarem o que provam.
     //
     // O substituto ENXERGA esses fatos, e é por construção: o recorte de
-    // cobertura de `app_fatos_prontidao` (0144) é
+    // cobertura de `app_fatos_prontidao` (0149) é
     // `session.terapeuta_id OU session.atendido_por_id` — o MESMO par que
     // `app_session_profissional_responsavel` (0143) usa. As duas frentes
     // chegaram ao mesmo recorte de forma independente. `U_SUB` segue FORA da
