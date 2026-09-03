@@ -264,6 +264,9 @@ describe("SessaoPage — passo Documentar, 4 papéis × gesto primário", () => 
     const d = dados(ctx, FATOS_INCOMPLETOS);
     expect(d.prontidao.degraus).toEqual([]);
     expect(d.prontidao.podeDocumentar).toBe(false);
+    // O discriminante que separa esta escada vazia da escada CUMPRIDA. Sem
+    // ele os dois estados chegavam à tela como o mesmo `proximo === null`.
+    expect(d.prontidao.situacao).toBe("fatos_nao_visiveis");
 
     await renderPagina(ctx, d);
 
@@ -274,5 +277,22 @@ describe("SessaoPage — passo Documentar, 4 papéis × gesto primário", () => 
     expect(screen.queryByTestId("gesto-primario")).toBeNull();
     // E nenhum formulário: fail-closed continua fechado.
     expect(screen.queryByText("Documentar")).toBeNull();
+
+    // ── A metade que faltava (#578 parou aqui) ─────────────────────────────
+    // Até aqui o teste só afirmava AUSÊNCIAS — e ausência de tudo é
+    // exatamente o que a tela mostrava no BOM caso (prontuário pronto,
+    // formulário liberado). Um oráculo só de negativas não distingue
+    // "fail-closed com razão" de "fail-closed mudo", e era mudo que ela
+    // estava. A §4a exige o selo FIXO:
+    expect(screen.getByText(/Aguardando Coordenação/i)).toBeTruthy();
+    // Fixo mesmo: sem os dois-pontos que o `CartaoProntidao` usa para emendar
+    // o rótulo do degrau ("Aguardando Coordenação: Prescrever um protocolo").
+    // Se um dia o cartão voltar a renderizar aqui, esta asserção cai.
+    expect(screen.queryByText(/Aguardando Coordenação:/i)).toBeNull();
+    // E o cabeçalho do bloqueio continua na tela: a pessoa vê QUE está
+    // bloqueada, não uma página que simplesmente não tem passo.
+    expect(
+      screen.getByText("Esta sessão ainda não pode ser documentada"),
+    ).toBeTruthy();
   });
 });

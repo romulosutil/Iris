@@ -11,6 +11,15 @@ import { CartaoProntidao } from "@/components/app/cartao-prontidao";
  * tela vazia igual a esta.
  */
 export function EvolucaoVazia({ prontidao }: { prontidao: Prontidao }) {
+  // "Não visível" nunca pode passar por "pronto". Sem este ramo, a escada
+  // vazia de um papel sem leitura clínica cairia no `proximo === null` abaixo
+  // e a tela afirmaria "O prontuário está pronto" sobre um prontuário que
+  // ninguém conseguiu ler — a afirmação falsa que a §4a existe para matar.
+  // Aqui, no PRONTUÁRIO, o estado honesto é ausência (D-A9: a recepção não
+  // recebe selo clínico); quem mostra "Aguardando coordenação" é o passo
+  // Documentar, a superfície onde a régua morde.
+  if (prontidao.situacao === "fatos_nao_visiveis") return null;
+
   if (prontidao.proximo === null) {
     // Prontuário pronto: aqui a espera é real e a frase é verdadeira.
     return (
