@@ -33,6 +33,18 @@ import { entrarComMfa } from "./helpers/sessao";
 test("represcrever para baixo confirma antes e leva à barra da disciplina afetada", async ({
   page,
 }) => {
+  // `test.slow()` triplica o timeout padrão de 30s. Este teste encadeia
+  // ~6 navegações full-page com round-trip de SSR+DB (`entrarComMfa` já
+  // inclui um retry documentado de até 18s em `sign-in/email` para o rate
+  // limit próprio do Better-Auth — ver comentário em `helpers/sessao.ts`).
+  // Sob carga do runner (CI compartilhado/self-hosted), a folga entre esse
+  // retry e o teto de 30s some, e QUALQUER assertion do fluxo — não
+  // especificamente `toBeInViewport()` no fim — pode estourar por tempo,
+  // não por regressão de produto. Reproduzido em diagnóstico local com CPU
+  // throttling (10/10 falhas, mas na `toHaveURL` logo após criar o
+  // paciente, muito antes da barra de cobertura) — issue #542/Q-06.
+  test.slow();
+
   await entrarComMfa(page, "e2e@iris.test", "Senha E2E 123");
 
   // --- Paciente novo, para o teste não depender de estado deixado por outro spec.
@@ -117,6 +129,10 @@ test("represcrever para baixo confirma antes e leva à barra da disciplina afeta
 test("prescrever disciplina nova sobre equipe já montada também pergunta antes", async ({
   page,
 }) => {
+  // Mesma folga de tempo do teste acima — mesmo formato de fluxo (ver
+  // comentário lá para o mecanismo raiz, issue #542/Q-06).
+  test.slow();
+
   await entrarComMfa(page, "e2e@iris.test", "Senha E2E 123");
 
   await page.goto("/pacientes/novo");
