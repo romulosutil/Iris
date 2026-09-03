@@ -66,13 +66,30 @@ const TOKENS_ESTADO: Record<EstadoDegrau, string> = {
 export interface CartaoProntidaoProps {
   prontidao: Prontidao;
   titulo?: string;
+  /**
+   * Razão da conta em somente-leitura — spec §4, estado 5.
+   *
+   * UMA prop, e de propósito uma só: o par `somenteLeitura: boolean` +
+   * `motivo: string` admitiria dois estados que não existem no domínio
+   * ("bloqueado sem razão" e "razão sem bloqueio"), e o primeiro deles é
+   * exatamente o botão morto que a §7 proíbe. Aqui a PRESENÇA de texto é o
+   * sinal: sem texto não há bloqueio, e não há como bloquear sem dizer por quê.
+   *
+   * O texto NÃO é escrito aqui. Vem de `mensagemDeEstado(situacao.estado)` —
+   * a mesma chamada que o `layout.tsx` do paciente já usa para a tarja "Conta
+   * em somente-leitura". Copy nova seria uma segunda fonte da mesma verdade,
+   * livre para divergir da tarja logo abaixo do cartão.
+   */
+  motivoSomenteLeitura?: string | null;
 }
 
 export function CartaoProntidao({
   prontidao,
   titulo = "Para este prontuário gerar dados",
+  motivoSomenteLeitura,
 }: CartaoProntidaoProps) {
   const { degraus, proximo, quemResolve } = prontidao;
+  const bloqueadoPelaConta = Boolean(motivoSomenteLeitura);
 
   // Nada a fazer não ocupa pixel: um card vazio ainda cobra scroll e atenção
   // de quem já concluiu a escada.
@@ -124,11 +141,41 @@ export function CartaoProntidao({
       </ul>
 
       {proximo.rota ? (
-        <Button variante="primaria" asChild>
-          <Link href={proximo.rota} data-testid="gesto-primario">
-            {proximo.rotulo} →
-          </Link>
-        </Button>
+        bloqueadoPelaConta ? (
+          // Escada visível, gesto desabilitado — nunca o cartão inteiro some.
+          // A escada é LEITURA (o que falta, e quem resolve), e leitura não é
+          // o que a conta em somente-leitura tira.
+          //
+          // `<Button disabled>` sem `<Link>`, e não `asChild` com `disabled`:
+          // com `asChild` o `href` sobrevive ao `aria-disabled` e continua
+          // abrível por clique do meio / "abrir em nova aba", levando a uma
+          // tela que vai recusar a escrita de novo. Sem elemento de navegação
+          // não há para onde esse caminho lateral ir. A seta "→" também cai:
+          // ela promete deslocamento que não vai acontecer.
+          //
+          // Sem `aria-describedby` ligando o botão à razão: este é um Server
+          // Component (sem `useId`) e um id fixo colidiria se dois cartões
+          // coexistissem. A razão fica como texto visível imediatamente
+          // adjacente, dentro do mesmo agrupamento — que é o que separa
+          // "desabilitado com motivo legível" de "botão morto" (§7).
+          <div className="flex flex-col gap-2">
+            <Button variante="primaria" disabled data-testid="gesto-primario">
+              {proximo.rotulo}
+            </Button>
+            <p
+              data-testid="motivo-somente-leitura"
+              className="text-sm text-[var(--text-secondary)]"
+            >
+              {motivoSomenteLeitura}
+            </p>
+          </div>
+        ) : (
+          <Button variante="primaria" asChild>
+            <Link href={proximo.rota} data-testid="gesto-primario">
+              {proximo.rotulo} →
+            </Link>
+          </Button>
+        )
       ) : (
         // Sem rota, o papel atual não pode agir — nada de link morto que
         // esbarraria no `notFound()` do `requireRole` do destino (regra 2).

@@ -145,20 +145,21 @@ export const ModalidadeNaoResolvida: Story = {
 // pela razão que layout.tsx já exibe."
 export const ContaSomenteLeitura: Story = {
   name: "5. Conta em somente-leitura",
-  args: { prontidao: prontidao(NADA, "coordenador") },
+  args: {
+    prontidao: prontidao(NADA, "coordenador"),
+    // Texto real de `mensagemDeEstado("trial_expirado")` — a mesma string que
+    // o `layout.tsx` passa em produção, não copy de story.
+    motivoSomenteLeitura:
+      "Seu período de teste terminou. Você continua vendo e exportando o que já registrou — para voltar a cadastrar e editar, ative a assinatura. Você paga pelas fichas ativas no mês, sem valor mínimo.",
+  },
   parameters: {
     docs: {
       description: {
         story:
-          "PENDÊNCIA CONHECIDA: hoje `CartaoProntidao` recebe apenas `{ prontidao, titulo }` — não existe prop de somente-leitura. A tarja de razão é renderizada pelo `layout.tsx` (simulada acima), mas o gesto primário do cartão continua clicável. Fechar isso exige mudar a API do componente e está fora do escopo desta correção; a story existe para deixar o buraco visível em vez de fingir que o estado já é coberto.",
+          "A escada continua inteira — bloqueio de ESCRITA não apaga a LEITURA de o que falta e de quem resolve. O que muda é o gesto: `<Button disabled>` com a razão logo abaixo, sem `href`. Um link marcado `aria-disabled` continuaria abrível por clique do meio e levaria a uma tela que recusa a escrita de novo; e a seta `→` cai porque prometia um deslocamento que não acontece. A razão vem de `mensagemDeEstado(situacao.estado)`, a MESMA fonte da tarja que o `layout.tsx` renderiza logo abaixo do cartão — copy própria aqui seria uma segunda verdade sobre o mesmo bloqueio.",
       },
     },
   },
-  render: (args) => (
-    <Vazio nota="Tarja de somente-leitura renderizada pelo layout.tsx — NÃO pelo cartão. O cartão abaixo ainda oferece o gesto primário.">
-      <CartaoProntidao {...args} />
-    </Vazio>
-  ),
 };
 
 // 6/7 — §4: "Evolução sem snapshot → renderiza a escada, não mais

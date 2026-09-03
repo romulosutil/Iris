@@ -107,6 +107,64 @@ describe.skipIf(!hasDb)("gate de documentação nas actions", () => {
     await owner`DELETE FROM goal WHERE patient_id = ${PAC}`;
     await owner`DELETE FROM patient_protocol WHERE patient_id = ${PAC}`;
     await owner`DELETE FROM session_note WHERE session_id = ${SESS}`;
+    // Devolve a clínica ao estado "pode escrever" (trial em curso). O caso da
+    // ordem das recusas envelhece o relógio; sem este reset ele contaminaria
+    // todos os casos seguintes. UPDATE escopado por id, nunca TRUNCATE novo:
+    // TRUNCATE colide com os int-tests que rodam em paralelo.
+    await owner`UPDATE clinic SET trial_comeco_em = NULL, criado_em = now() WHERE id = ${CLINIC_A}`;
+  });
+
+  /**
+   * Ordem das recusas — spec §6.
+   *
+   * `capturarDiario` é `comEscrita(capturarDiarioCore)`: o guard de CONTA é o
+   * invólucro e a régua da ESCADA (`assertPodeDocumentar`) mora dentro do
+   * core, na transação da escrita. A ordem, portanto, não é preferência de
+   * estilo — é a topologia do módulo, e este caso é o que a trava.
+   *
+   * Por que importa para quem opera: com as duas coisas erradas ao mesmo
+   * tempo, a recusa pela escada ("falta ativar ao menos uma meta") manda o
+   * terapeuta atrás da coordenação para prescrever protocolo e abrir meta —
+   * trabalho real, feito por outra pessoa — e no fim disso a escrita CONTINUA
+   * recusada, porque o problema nunca foi a escada. A recusa pela conta nomeia
+   * a única ação que destrava (ativar a assinatura) e é acionável por quem
+   * administra a clínica.
+   *
+   * O arranjo deixa as DUAS recusas disponíveis: `beforeEach` já apagou meta e
+   * protocolo (escada bloqueada nos dois degraus de `protocol_driven`), e o
+   * relógio do trial é envelhecido aqui. Se só uma estivesse disponível, o
+   * teste não distinguiria ordem nenhuma.
+   */
+  test("conta em somente-leitura recusa ANTES da escada incompleta", async () => {
+    // `trial_comeco_em` no passado + `criado_em` ainda mais atrás: sem
+    // subscription, `derivarSituacao` cai em `trial_expirado`
+    // (podeEscrever=false). Feito por colunas de `clinic` de propósito — ler
+    // `subscription` sob a RLS do terapeuta traria a policy de billing para
+    // dentro de um teste que não é sobre ela.
+    await owner`
+      UPDATE clinic
+      SET trial_comeco_em = now() - interval '60 days',
+          criado_em       = now() - interval '90 days'
+      WHERE id = ${CLINIC_A}`;
+
+    const r = await capturarDiario(ctxT1, {
+      sessionId: SESS,
+      texto: "Diário numa conta bloqueada e num prontuário incompleto.",
+    });
+
+    // `comEscrita` RETORNA `{ error, bloqueioConta }`; `assertPodeDocumentar`
+    // LANÇA. Chegar aqui com um objeto já é metade da prova — se a ordem
+    // invertesse, a linha acima teria estourado `ProntuarioIncompletoError`.
+    expect(r.bloqueioConta?.estado).toBe("trial_expirado");
+    expect(r.error).toMatch(/período de teste terminou/i);
+
+    // E a outra metade: a mensagem é a da CONTA, não a da escada. Sem esta
+    // asserção, um guard que concatenasse as duas razões passaria.
+    expect(r.error).not.toMatch(/falta/i);
+    expect(r.error).not.toMatch(/meta/i);
+    expect(r.error).not.toMatch(/protocolo/i);
+
+    expect(await contarNotas("captura_rapida")).toBe(0);
   });
 
   // `capturarDiario`/`consolidarSessao` (exportação `comEscrita`-envolvida do
