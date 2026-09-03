@@ -102,6 +102,16 @@ const PADROES_PII: readonly ((normalizada: string) => boolean)[] = [
   // `cpf`, `cpfcnpj`, `cpfhash`, `responsavelcpf`.
   (k) => k.includes("cpf"),
   // `senha`, `senhaatual`, `password`, `clientsecret`, `apikey`.
+  //
+  // `includes("secret")` é substring, então pega junto qualquer campo cujo
+  // nome carregue o radical sem ser credencial — `secretaria`,
+  // `secretaria_nome`, `secretariaId`. Nenhum existe no schema hoje; se um
+  // nascer, some do log como `[redigido]` **em silêncio**, e o sintoma será
+  // "campo comum não aparece no log". A troca é deliberada: sob este modelo
+  // de ameaça, over-redaction custa uma sessão de debug, false-negative
+  // custa credencial em log persistido. O caso está fixado em
+  // `redacao.test.ts` para que afrouxar isso seja decisão explícita, não
+  // efeito colateral.
   (k) =>
     k.includes("senha") ||
     k.includes("password") ||

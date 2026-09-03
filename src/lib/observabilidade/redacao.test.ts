@@ -129,6 +129,18 @@ describe("chaveEhPII", () => {
     expect(chaveEhPII(chave)).toBe(false);
   });
 
+  // Over-redaction conhecida e aceita: `includes("secret")` é substring e
+  // alcança o radical em português. Fixado aqui para que o sintoma futuro
+  // ("campo comum sumiu do log") tenha um lugar onde já está explicado, e
+  // para que afrouxar o padrão seja decisão explícita — quem trocar por
+  // igualdade ou por `endsWith` derruba este teste e lê o porquê.
+  it.each(["secretaria", "secretaria_nome", "secretariaId"])(
+    "redige %s por colisão de substring com `secret` — trade-off deliberado",
+    (chave) => {
+      expect(chaveEhPII(chave)).toBe(true);
+    },
+  );
+
   it("mantém no módulo de produção toda chave exata que o oráculo exige", () => {
     // Casa as duas metades: se alguém tirar uma chave de `CHAVES_PII` sem
     // tocar no oráculo, isto aponta exatamente qual sumiu.
