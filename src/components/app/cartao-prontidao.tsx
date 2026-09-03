@@ -53,8 +53,14 @@ const TOKENS_ESTADO: Record<EstadoDegrau, string> = {
     "border-[var(--status-success-border)] bg-[var(--status-success-bg)] text-[var(--status-success-fg)]",
   bloqueante:
     "border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] text-[var(--status-warning-fg)]",
-  pendente:
-    "border-[var(--border-brutal)] bg-[var(--surface-muted)] text-[var(--text-secondary)]",
+  // `pendente` NÃO pinta fundo, e isso é medição, não gosto: a spec §3.2 fixa
+  // `--surface-muted`, mas `--text-secondary` (#71717a) sobre `--surface-muted`
+  // (#f1efe9) dá 4.20:1 no tema claro — abaixo do piso AA de 4.5:1, porque o
+  // selo é 12px semibold e não conta como texto grande. Sobre o fundo do
+  // cartão o MESMO par dá 4.83:1 e passa. O `axe` sob jsdom não checa
+  // contraste, então essa reprovação não apareceria em CI. Mantida a intenção
+  // da spec (neutro, não disputa atenção); trocado só o portador do neutro.
+  pendente: "border-[var(--border-brutal)] text-[var(--text-secondary)]",
 };
 
 export interface CartaoProntidaoProps {
