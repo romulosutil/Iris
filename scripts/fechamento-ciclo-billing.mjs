@@ -96,12 +96,26 @@ export async function executarFechamento(
   }
 
   if (!resposta.ok) {
+    // Distingue "404 do proxy" (alvo inexistente — Traefik nunca chegou a
+    // repassar para o Next) de "404 da aplicação" (rota existe, mas o Next
+    // decidiu 404). Sem isso a mensagem afirma UMA causa ("a rota não existe")
+    // quando a evidência também é compatível com "o App estava fora do ar no
+    // instante do disparo" — um deploy em andamento, por exemplo. O proxy
+    // responde texto puro, sem `content-type: application/json`, com o corpo
+    // fixo abaixo; o 404 legítimo do App Router vem como página HTML.
+    const proxy404 =
+      resposta.status === 404 &&
+      corpo.trim() === "404 page not found" &&
+      !(resposta.headers?.get?.("content-type") ?? "").includes("json");
     return {
       ok: false,
       status: resposta.status,
       corpo,
       falha: "status",
-      erro: `HTTP ${resposta.status} — corpo recebido: ${corpo}`,
+      provavelmenteProxy404: proxy404,
+      erro: proxy404
+        ? `HTTP 404 do PROXY (não da aplicação) — alvo não respondeu; App pode estar fora do ar ou a URL/host aponta para o serviço errado. Corpo: ${corpo}`
+        : `HTTP ${resposta.status} — corpo recebido: ${corpo}`,
     };
   }
 
@@ -216,6 +230,7 @@ async function main() {
       ok: resultado.ok,
       status: resultado.status,
       falha: resultado.falha ?? null,
+      provavelmenteProxy404: resultado.provavelmenteProxy404 ?? null,
       erro: resultado.erro ?? null,
       // Primeiro nível: qual etapa caiu, e quanto de irreversível já havia
       // acontecido quando ela caiu.
