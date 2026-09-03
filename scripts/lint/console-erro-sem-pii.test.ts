@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { ESLint } from "eslint";
 import path from "node:path";
 
@@ -42,6 +42,24 @@ async function achados(
 }
 
 describe("#531 — lint contra `console.error(rotulo, err)` (S-03)", () => {
+  /**
+   * #597 — a instância do ESLint já é única (acima), mas a PRIMEIRA
+   * `lintText` é que paga o carregamento do flat config inteiro:
+   * `eslint-config-next`, o `typescript-eslint` e o plugin do Storybook.
+   * Medido nesta máquina: 16.7s na primeira chamada, 20-37ms em cada uma das
+   * seguintes. Esse custo caía sobre o primeiro `it` do arquivo, que estourava
+   * o `testTimeout` padrão de 5s — vermelho crônico local, verde no CI só
+   * porque o runner é mais rápido.
+   *
+   * Pagar o aquecimento aqui, com timeout de hook explícito, mantém cada teste
+   * no orçamento apertado de 5s: se um caso passar a demorar de verdade, o
+   * padrão continua acusando em vez de ficar escondido atrás de um
+   * `testTimeout` inflado para o arquivo todo.
+   */
+  beforeAll(async () => {
+    await achados("export const aquecimento = 1;");
+  }, 120_000);
+
   it("acusa o erro como argumento direto do console.error", async () => {
     for (const identificador of [
       "err",
