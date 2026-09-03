@@ -41,9 +41,15 @@
  * manual "confirmar antes" (ver CLAUDE.md) — nunca automatizar contra dado real
  * sem aval explícito.
  *
- * ─── MEDIÇÃO ANTES/DEPOIS (#553, item 3 — NÃO executar em produção sem aval
- * explícito do Rômulo; a decisão de rodar o backfill e quem assina segue
- * ABERTA na issue). Conta as extrações que decisão humana já aprovou e que
+ * ─── MEDIÇÃO ANTES/DEPOIS (#553, item 3 — EXECUTADA em produção 03/09/2026,
+ * psql como owner, só SELECT). Resultado: **3 linhas**, todas da clínica
+ * DesignerS e todas com `jsonb_array_length(alvos) = 0`, sessão numerada e
+ * revisor presente. São os SKIPS LEGÍTIMOS já previstos abaixo (alvo vazio),
+ * não resíduo da deriva de forma — o backfill não teria o que recuperar e por
+ * isso NÃO foi executado em produção. Reexecutar a query antes de qualquer
+ * backfill futuro: o número acima é de 03/09/2026, não é permanente.
+ *
+ * Conta as extrações que decisão humana já aprovou e que
  * mesmo assim não têm nenhuma linha em `evidence` — o buraco que a deriva de
  * forma do payload abriu em silêncio. Roda como owner (bypassa RLS), por isso
  * agrega por clínica:

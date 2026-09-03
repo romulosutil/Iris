@@ -125,6 +125,37 @@
 
 ---
 
+## 🏁 Sessão 03/09/2026 — #553 fechada: `extraction.payload` é FLAT por medição, e o backfill em produção não tinha o que recuperar
+
+**Item (2) — forma canônica ratificada: FLAT.** Não por leitura de código, por contagem no banco de produção (psql como owner, 03/09/2026):
+
+```
+SELECT (payload ? 'evidencia') AS forma_aninhada, count(*)
+  FROM extraction WHERE subtipo='evidencia' GROUP BY 1;
+→ f | 310      (zero linhas aninhadas)
+```
+
+Coerente com os escritores: `payloadDoSubtipo` (`llm-provider.ts`), `DemoStubProvider`, `NullProvider` e `scripts/seed-demo-account.ts` gravam flat, e **nunca houve escritor aninhado** — antes da D57 (`7886e8f4`) produção rodava `NullProvider`, porque o `.env` não tinha chave de LLM e a flag não tinha efeito. **Nada a migrar.**
+
+**Correção ao enunciado da issue:** o item (2) **não toca** `docs/agente/output-schema.json`. Aquele doc é o contrato de saída do _agente_, que é e continua **aninhado** (`{tipo, evidencia:{…}}`); o que estava indefinido era a forma da _coluna jsonb_, que `payloadDoSubtipo` desembrulha. Camadas distintas — não exigiu `/tlc-spec-driven`.
+
+**Item (3) — medição em produção executada, backfill NÃO executado.** Aprovações sem `evidence`: **3 linhas**, todas da clínica DesignerS, todas com `jsonb_array_length(alvos) = 0`, sessão numerada e revisor presente. São os **skips legítimos** já previstos no cabeçalho do script (alvo vazio), não resíduo da deriva. O backfill não teria o que recuperar; nenhuma escrita foi feita em produção.
+
+**Fixtures aninhadas realinhadas para flat** (`db/tests/fase4-materializar.int.test.ts` ×2, `db/tests/fase4-evidence-rls.int.test.ts`, `db/tests/anamnese-rematerializacao.int.test.ts`, `colapso-aprovacao.int.test.ts`). Foi essa forma de fixture que escondeu a deriva da #532/#533 — ela semeava uma forma que nenhum escritor produz.
+
+**Oráculo de mutação** (helper reduzido a só-aninhado, o defeito da #553):
+
+| Fixture          | Helper mutado | Resultado                                   |
+| :--------------- | :------------ | :------------------------------------------ |
+| aninhado (antes) | só-aninhado   | **5 passed** — verde com o defeito presente |
+| flat (agora)     | só-aninhado   | **4 failed** (`evidence` 1 → 0)             |
+
+Ou seja: o fixture aninhado era um teste verde que não testava nada. `fase4-evidence-rls` passa sob a mutação porque seu payload é decorativo (não alimenta o on-approve) — realinhado por coerência, sem ganho de cobertura.
+
+`conteudoDoSubtipo` **permanece tolerante de propósito**: tolerância na leitura, forma única na escrita.
+
+---
+
 ## 🏁 Sessão 01/09/2026 — issue #517 (C5): recepção fica como está, opção 3
 
 **Decisão do Rômulo:** `admin_recepcao` não agenda e não vê a semana — opção 3, fica como está. Agendar continua ato exclusivo do coordenador, alinhado ao modelo de negócio atual onde é o coordenador quem define a demanda. Ressalva do próprio Rômulo: pode mudar se o modelo mudar, mas não faz sentido abrir escrita hoje.

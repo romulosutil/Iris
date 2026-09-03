@@ -67,13 +67,18 @@ const ctxOutroTerapeuta = {
   role: "terapeuta",
 } as const;
 
+// #553 — forma FLAT, a canônica da coluna `extraction.payload`: é o objeto do
+// subtipo já desembrulhado, que é o que os três providers e o seed de demo
+// gravam (`payloadDoSubtipo` devolve `e.evidencia`, não `{evidencia: …}`).
+// Medição em produção 03/09/2026: 310 de 310 extrações `evidencia` com
+// `payload ? 'evidencia'` = false. Este fixture nasceu aninhado e por isso
+// nunca exercitou o caminho real — foi essa forma de fixture que escondeu a
+// deriva da #532/#533 até a aprovação gerar zero `evidence` em silêncio.
 function alvoPayload(descricao: string) {
   return {
-    evidencia: {
-      descricao,
-      funcao: "mando",
-      alvos: [{ goal_id: GOAL, protocol_id: "vbmapp", dominio_id: "mando" }],
-    },
+    descricao,
+    funcao: "mando",
+    alvos: [{ goal_id: GOAL, protocol_id: "vbmapp", dominio_id: "mando" }],
   };
 }
 

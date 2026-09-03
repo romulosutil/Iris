@@ -21,9 +21,29 @@
  * backfill que produziu a deriva da #553. Quem ler payload de `extraction`
  * chama daqui — não reimplementa.
  *
- * A forma CANÔNICA do jsonb (flat vs. aninhado, e a migração do que existe)
- * segue em aberto na #553 item (2) — este helper é a ponte enquanto isso, não
- * a decisão.
+ * ─── FORMA CANÔNICA: **FLAT** (#553 item 2 — RATIFICADA pelo Rômulo em
+ * 03/09/2026, sobre medição, não sobre leitura de código).
+ *
+ * Escritores de `extraction.payload`, todos flat: `payloadDoSubtipo`
+ * (`llm-provider.ts`), `DemoStubProvider`, `NullProvider` e o seed de demo
+ * (`scripts/seed-demo-account.ts`). Não existe escritor aninhado, e nunca
+ * existiu: antes da D57 (`7886e8f4`) produção rodava `NullProvider` — o `.env`
+ * não tinha chave de LLM, então a flag não tinha efeito.
+ *
+ * Medição em produção (psql como owner, 03/09/2026):
+ *   `SELECT (payload ? 'evidencia'), count(*) FROM extraction
+ *      WHERE subtipo='evidencia' GROUP BY 1;` → **f: 310** (zero aninhadas).
+ * Não há dado a migrar. O aninhado só existia em fixture de int-test — e foi
+ * exatamente essa fixture que escondeu a deriva.
+ *
+ * ⚠️ O contrato de SAÍDA DO AGENTE (`docs/agente/output-schema.json`) continua
+ * ANINHADO (`{tipo, evidencia: {…}}`) e não muda: são camadas distintas.
+ * `payloadDoSubtipo` é a fronteira que desembrulha uma na outra. Trocar a forma
+ * da coluna não é mexer no schema do agente.
+ *
+ * Este helper permanece tolerante de propósito: fixtures antigas e qualquer
+ * payload aninhado que apareça continuam lidos corretamente. Tolerância na
+ * leitura, forma única na escrita.
  */
 export function conteudoDoSubtipo(
   payload: unknown,
