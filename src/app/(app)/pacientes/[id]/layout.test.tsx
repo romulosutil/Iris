@@ -171,6 +171,97 @@ describe("PacienteLayout - Abas do Prontuário", () => {
     expect(
       screen.getByText(/para este prontuário gerar dados/i),
     ).not.toBeNull();
+    // Gesto primário DO COORDENADOR: ele é `papelQueResolve` do primeiro
+    // degrau pendente (`ficha_clinica`), então o cartão dá o botão. Afirmar só
+    // "o cartão renderizou" deixaria passar a troca do botão pelo texto de
+    // espera — que é exatamente a diferença entre os papéis.
+    const gesto = screen.getByTestId("gesto-primario");
+    expect(gesto.textContent).toContain("Preencher a ficha clínica");
+    expect(gesto.getAttribute("href")).toBe(
+      "/pacientes/pac_1/cadastro-clinico",
+    );
+  });
+
+  // ── Os dois terapeutas (spec §6: 4 papéis × gesto primário) ──────────────
+  // A #512 passou com 31 testes verdes na action e ZERO na rota: o defeito
+  // atravessou pelo buraco de "a matriz da função pura já cobre". Cobre a
+  // função; não cobre QUAL papel o `ctx` da rota entrega ao cartão.
+
+  it("terapeuta NA equipe: cartão sem botão, gesto delegado à coordenação", async () => {
+    mockModalidade("protocol_driven");
+    // `role: "terapeuta"` é o padrão do mock de `getTenantContext`; explícito
+    // aqui para o caso não depender da ordem dos testes.
+    vi.mocked(getTenantContext).mockResolvedValueOnce({
+      clinicId: "clinic_1",
+      userId: "user_1",
+      role: "terapeuta",
+    });
+
+    const LayoutComponent = await PacienteLayout({
+      children: <div data-testid="child-content">Conteúdo</div>,
+      params: Promise.resolve({ id: "pac_1" }),
+    });
+
+    render(LayoutComponent);
+
+    expect(
+      screen.getByText(/para este prontuário gerar dados/i),
+    ).not.toBeNull();
+    // Nenhum botão morto: `ficha_clinica.papelQueResolve === "coordenador"`,
+    // então `montarProntidao` zera a `rota` para o terapeuta e o cartão troca
+    // o `Button` pelo texto de espera. Um link aqui levaria ao `notFound()`
+    // do `requireRole` do destino.
+    expect(screen.queryByTestId("gesto-primario")).toBeNull();
+    expect(
+      screen.getByText(/Aguardando Coordenação: Preencher a ficha clínica/),
+    ).not.toBeNull();
+  });
+
+  it("terapeuta FORA da equipe (cobertura): lê os fatos e NÃO finge bloqueado", async () => {
+    // D-A10 ratificado pela opção (b) — o definer `app_fatos_prontidao`
+    // (`0149`) espelha `goal_select` MAIS o recorte de cobertura. O terapeuta
+    // de cobertura enxerga os MESMOS fatos que o coordenador enxerga.
+    //
+    // Sob a régua descartada ("está na equipe de cuidado"), os seis `EXISTS`
+    // voltariam `false` para linhas que EXISTEM e este prontuário — completo —
+    // apareceria BLOQUEADO só para ele: bloqueio funcional novo, gerado por uma
+    // regra que não é sobre esse papel. É a metade simétrica da §4a: o cartão
+    // não pode fingir pronto, e também não pode fingir bloqueado.
+    mockModalidade("protocol_driven");
+    vi.mocked(obterFatosProntidao).mockClear();
+    vi.mocked(obterFatosProntidao).mockResolvedValueOnce({
+      fatos: {
+        temFichaClinica: true,
+        temAnamnese: true,
+        temProtocoloAtivo: true,
+        temMetaAtiva: true,
+        temInstrumentoAplicado: false,
+        temSessaoConsolidada: true,
+      },
+      modalidade: "protocol_driven",
+    });
+    vi.mocked(getTenantContext).mockResolvedValueOnce({
+      clinicId: "clinic_1",
+      userId: "user_cobertura",
+      role: "terapeuta",
+    });
+
+    const LayoutComponent = await PacienteLayout({
+      children: <div data-testid="child-content">Conteúdo</div>,
+      params: Promise.resolve({ id: "pac_1" }),
+    });
+
+    render(LayoutComponent);
+
+    // Ele NÃO é barrado como a recepção: a leitura acontece.
+    expect(obterFatosProntidao).toHaveBeenCalledTimes(1);
+    // Escada cumprida (`proximo === null`) ⇒ o cartão some inteiro. Nenhum
+    // gesto primário, e — o ponto de D-A10 — nenhuma espera fabricada.
+    expect(screen.queryByText(/para este prontuário gerar dados/i)).toBeNull();
+    expect(screen.queryByTestId("gesto-primario")).toBeNull();
+    expect(screen.queryByText(/Aguardando/)).toBeNull();
+    // A casca do prontuário continua de pé para ele.
+    expect(screen.getByTestId("child-content")).not.toBeNull();
   });
 
   it("não consulta os fatos para a recepção", async () => {
@@ -193,5 +284,14 @@ describe("PacienteLayout - Abas do Prontuário", () => {
     render(LayoutComponent);
 
     expect(obterFatosProntidao).not.toHaveBeenCalled();
+    // §4a — e não basta não consultar: nenhum gesto e nenhum degrau clínico
+    // nomeado. A escada afirmaria "falta meta" sobre prontuário completo, ao
+    // papel que a política proíbe de ler dado clínico.
+    expect(screen.queryByText(/para este prontuário gerar dados/i)).toBeNull();
+    expect(screen.queryByTestId("gesto-primario")).toBeNull();
+    // "Ficha Clínica" sozinho não serve de sonda: é rótulo de ABA, sempre
+    // presente. A sonda é a descrição do DEGRAU, que só a escada renderiza.
+    expect(screen.queryByText(/Diagnóstico, medicações/i)).toBeNull();
+    expect(screen.queryByText(/Aguardando/)).toBeNull();
   });
 });
