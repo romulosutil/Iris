@@ -14,7 +14,10 @@ import {
   detalheSemPii,
   registrarHeartbeat,
 } from "@/lib/jobs/heartbeat";
-import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+import {
+  descreverErroSemPII,
+  logarErroSemPII,
+} from "@/lib/observabilidade/logar-erro";
 
 /**
  * Gatilho interno do fechamento de ciclo (#36).
@@ -34,9 +37,20 @@ import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Texto de erro sem inventar causa: `Error.message` quando há, senão o valor cru. */
-function mensagemDoErro(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+/**
+ * Diagnostico de etapa abortada para o CORPO da resposta (#531, S-03).
+ *
+ * O corpo deste job nao e UI, mas tambem nao e privado: o script que dispara a
+ * rota imprime a resposta no stdout do container, lido pelo painel do Easypanel
+ * em HTTP puro. `err.message` de um `DrizzleQueryError` e
+ * "Failed query: <sql>
+params: <valores>" — e numa escrita de billing os
+ * valores sao id de clinica e cobranca. `descreverErroSemPII` da o mesmo poder
+ * de diagnostico (classe do erro + SQLSTATE + constraint + HTTP) sem o texto,
+ * e o `correlacao=` amarra a linha do corpo a linha do log.
+ */
+function diagnosticoDaEtapa(err: unknown, correlacaoId: string): string {
+  return descreverErroSemPII(err, correlacaoId);
 }
 
 /**
@@ -101,8 +115,11 @@ export async function POST(request: Request): Promise<Response> {
     try {
       retentativas = await comandarRetentativasPendentes({ dryRun });
     } catch (err) {
-      retentativaAbortada = mensagemDoErro(err);
-      logarErroSemPII("[billing-fechamento] etapa de retentativa abortou", err);
+      const correlacao = logarErroSemPII(
+        "[billing-fechamento] etapa de retentativa abortou",
+        err,
+      );
+      retentativaAbortada = diagnosticoDaEtapa(err, correlacao);
     }
     const retentativasComErro = retentativas.filter((r) => r.erro);
 
@@ -125,8 +142,11 @@ export async function POST(request: Request): Promise<Response> {
     try {
       cortes = await cancelarAssinaturasComCarenciaVencida({ dryRun });
     } catch (err) {
-      carenciaAbortada = mensagemDoErro(err);
-      logarErroSemPII("[billing-fechamento] etapa de carência abortou", err);
+      const correlacao = logarErroSemPII(
+        "[billing-fechamento] etapa de carência abortou",
+        err,
+      );
+      carenciaAbortada = diagnosticoDaEtapa(err, correlacao);
     }
     const cortesComErro = cortes.filter((c) => c.erro);
 
@@ -158,8 +178,11 @@ export async function POST(request: Request): Promise<Response> {
     try {
       backstop = await aplicarBackstopDePrazo({ dryRun });
     } catch (err) {
-      backstopAbortado = mensagemDoErro(err);
-      logarErroSemPII("[billing-fechamento] etapa de backstop abortou", err);
+      const correlacao = logarErroSemPII(
+        "[billing-fechamento] etapa de backstop abortou",
+        err,
+      );
+      backstopAbortado = diagnosticoDaEtapa(err, correlacao);
     }
     const backstopComErro = backstop.filter((b) => b.erro);
 
@@ -315,12 +338,14 @@ export async function POST(request: Request): Promise<Response> {
     // mesmas chaves nos dois caminhos, e chave ausente exigiria que ele
     // adivinhasse se a etapa correu ou nem chegou a ser tentada.
     //
-    // O texto real do erro vai no corpo: uma mensagem genérica aqui
-    // transformaria o diagnóstico de faturamento parado numa caçada às cegas.
-    // #531 (S-03): o helper substitui o `console.error(rotulo, err)` — a
-    // `message` do driver carrega SQL + params. `detalheDoErro` do heartbeat
-    // já é conjunto fechado (nome + SQLSTATE) e continua indo para o banco.
-    logarErroSemPII("[billing-fechamento] falha na varredura", err);
+    // O diagnóstico vai no corpo — uma mensagem genérica aqui transformaria
+    // "faturamento parado" numa caçada às cegas —, mas em conjunto fechado:
+    // classe + SQLSTATE + correlação, nunca a `message` do driver (SQL +
+    // params). `detalheDoErro` do heartbeat já obedecia à mesma regra.
+    const correlacao = logarErroSemPII(
+      "[billing-fechamento] falha na varredura",
+      err,
+    );
     if (!dryRun) {
       await registrarHeartbeat("billing", false, detalheDoErro(err));
     }
@@ -330,7 +355,7 @@ export async function POST(request: Request): Promise<Response> {
         retentativaAbortada: null,
         carenciaAbortada: null,
         backstopAbortado: null,
-        error: mensagemDoErro(err),
+        error: diagnosticoDaEtapa(err, correlacao),
       },
       { status: 500 },
     );

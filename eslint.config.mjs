@@ -63,6 +63,11 @@ const config = [
     // `console.error(String(err))`, um alias (`const falha = err`) ou o erro
     // dentro de template string passam. A revisão de PR cobre esse resto; a
     // regra existe para o padrão que estava em 85 lugares.
+    //
+    // Os seletores casam uma FORMA de AST, e um seletor que deixa de casar não
+    // vira erro de config — vira silêncio verde. `scripts/lint/
+    // console-erro-sem-pii.test.ts` (roda no `pnpm test`) mede este arquivo
+    // pela API do ESLint e fica vermelho se a regra parar de acusar.
     files: ["src/app/**/*.{ts,tsx}", "src/lib/**/*.{ts,tsx}"],
     ignores: ["**/*.test.{ts,tsx}", "**/*.stories.{ts,tsx}"],
     rules: {

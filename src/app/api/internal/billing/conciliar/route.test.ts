@@ -22,10 +22,7 @@ const { POST } = await import("./route");
 
 const TOKEN = "token-de-teste-375";
 
-function req(
-  headers: Record<string, string> = {},
-  corpo?: unknown,
-): Request {
+function req(headers: Record<string, string> = {}, corpo?: unknown): Request {
   return new Request("https://exemplo.test/api/internal/billing/conciliar", {
     method: "POST",
     headers,
@@ -35,6 +32,18 @@ function req(
 
 function vazio() {
   return { conferidos: 0, divergencias: [], falhas: [], truncado: false };
+}
+
+/**
+ * #531 (S-03): o discriminador de etapa vai no CORPO da resposta, e o script
+ * que dispara o job loga o corpo no stdout do container (painel do Easypanel,
+ * em HTTP puro). Ele pode nomear o tipo do erro e a correlacao — nunca a
+ * `message`, que num `DrizzleQueryError` e "Failed query: <sql> params: <os
+ * valores vinculados>".
+ */
+function esperarDiagnosticoSemMensagem(valor: unknown, mensagem: string): void {
+  expect(valor).toMatch(/^Error correlacao=[0-9a-f]{8}$/);
+  expect(String(valor)).not.toContain(mensagem);
 }
 
 describe("POST /api/internal/billing/conciliar", () => {
@@ -117,7 +126,7 @@ describe("POST /api/internal/billing/conciliar", () => {
     expect(r.status).toBe(200);
     const corpo = await r.json();
     expect(corpo.ciclos.conferidos).toBe(5);
-    expect(corpo.vinculosAbortado).toBe("gateway fora");
+    esperarDiagnosticoSemMensagem(corpo.vinculosAbortado, "gateway fora");
     expect(corpo.ok).toBe(false);
   });
 
