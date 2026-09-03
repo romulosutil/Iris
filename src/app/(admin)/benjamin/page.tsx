@@ -1,6 +1,16 @@
 import Link from "next/link";
 import { getSuperAdminKpis, getSuperAdminClinicas } from "./queries";
-import { KpiCard } from "@/components/admin/kpi-card";
+import { MetricCard } from "@/components/ui/metric-card";
+import { Pill } from "@/components/ui/primitives/pill";
+import { StatusClinicaPill } from "@/components/admin/status-clinica-pill";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { formatarBRL } from "@/lib/billing/calculator";
 
 export default async function SuperAdminDashboardPage() {
@@ -14,10 +24,10 @@ export default async function SuperAdminDashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-slate-100 sm:text-3xl">
+        <h1 className="font-display text-2xl font-bold text-[var(--text-primary)] sm:text-3xl">
           Visão Geral da Plataforma
         </h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <p className="mt-1 text-sm text-[var(--text-secondary)]">
           Métricas consolidadas de saúde financeira, base de fichas e trials
           ativos. O MRR aqui é TETO pelo critério &quot;ficha não
           arquivada&quot;: a fatura real conta só ficha cadastrada ou com
@@ -25,128 +35,143 @@ export default async function SuperAdminDashboardPage() {
         </p>
       </div>
 
-      {/* Grid de Cards KPI */}
+      {/* Grid de Cards KPI. `densidade="compacta"` porque o MRR é moeda
+          formatada: no peso hero (40px) o valor estoura a coluna da grade de
+          cinco. O selo é um <Pill> do DS — a cor vem do colorScheme dele, o
+          chamador nunca abre paleta. */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <KpiCard
+        <MetricCard
+          densidade="compacta"
+          destaque
           titulo="MRR Estimado"
           valor={formatarBRL(kpis.mrrEstimadoCentavos)}
-          subtitulo="Teto estimado — não é a fatura apurada"
-          highlight
-          badge={{ texto: "Pay-as-you-grow", cor: "emerald" }}
+          descricao="Teto estimado — não é a fatura apurada"
+          selo={
+            <Pill colorScheme="menta" size="sm">
+              Pay-as-you-grow
+            </Pill>
+          }
         />
 
-        <KpiCard
+        <MetricCard
+          densidade="compacta"
           titulo="Clínicas Ativas"
           valor={kpis.clinicasAtivas}
-          subtitulo="Pagantes e Isentas ativas"
-          badge={{ texto: "Operacional", cor: "indigo" }}
+          descricao="Pagantes e Isentas ativas"
+          selo={
+            <Pill colorScheme="azul" size="sm">
+              Operacional
+            </Pill>
+          }
         />
 
-        <KpiCard
+        <MetricCard
+          densidade="compacta"
           titulo="Fichas na Base"
           valor={kpis.fichasNaBaseTotais}
-          subtitulo="Fichas não arquivadas; nem toda ficha é faturada"
-          badge={{ texto: "Base Total", cor: "slate" }}
+          descricao="Fichas não arquivadas; nem toda ficha é faturada"
+          selo={
+            <Pill colorScheme="neutral" size="sm">
+              Base Total
+            </Pill>
+          }
         />
 
-        <KpiCard
+        <MetricCard
+          densidade="compacta"
           titulo="Clínicas em Trial"
           valor={kpis.clinicasEmTrial}
-          subtitulo="7 dias a partir do 1º paciente"
-          badge={{ texto: "Em Trial", cor: "amber" }}
+          descricao="7 dias a partir do 1º paciente"
+          selo={
+            <Pill colorScheme="ouro" size="sm">
+              Em Trial
+            </Pill>
+          }
         />
 
-        <KpiCard
+        <MetricCard
+          densidade="compacta"
           titulo="Clínicas Isentas"
           valor={kpis.clinicasIsentas}
-          subtitulo="Contas legadas sem gate"
-          badge={{ texto: "Isento", cor: "slate" }}
+          descricao="Contas legadas sem gate"
+          selo={
+            <Pill colorScheme="neutral" size="sm">
+              Isento
+            </Pill>
+          }
         />
       </div>
 
-      {/* Tabela de Destaques: Top Clínicas por Receita */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-        <div className="mb-4 flex items-center justify-between">
+      {/* Tabela de Destaques: Top Clínicas por Receita. O <Table> do DS já
+          traz a moldura (borda âncora + sombra) e o wrapper com rolagem
+          horizontal própria — por isso o painel externo com borda saiu: dois
+          quadros aninhados é ruído, não hierarquia. */}
+      <section>
+        <div className="mb-4 flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-slate-200">
+            <h2 className="font-display text-lg font-semibold text-[var(--text-primary)]">
               Top Clínicas por Receita Projetada
             </h2>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-[var(--text-secondary)]">
               Clínicas com maior volumen de faturamento estimado neste ciclo.
             </p>
           </div>
           <Link
             href="/benjamin/clinicas"
-            className="text-xs font-medium text-teal-400 transition-colors hover:text-teal-300"
+            className="focus-visible:outline-focus rounded-[var(--radius-sm)] text-xs font-semibold text-[var(--action-primary)] underline underline-offset-2 transition-colors outline-none hover:text-[var(--text-primary)] focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
           >
             Ver todas as clínicas &rarr;
           </Link>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="border-b border-slate-800 bg-slate-950/50 text-xs font-semibold text-slate-400 uppercase">
-              <tr>
-                <th className="px-4 py-3">Clínica</th>
-                <th className="px-4 py-3">Dono / E-mail</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Fichas na Base</th>
-                <th className="px-4 py-3 text-right">Valor Estimado</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {top5.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={5}
-                    className="px-4 py-6 text-center text-slate-500"
-                  >
-                    Nenhuma clínica cadastrada na plataforma.
-                  </td>
-                </tr>
-              ) : (
-                top5.map((c) => (
-                  <tr
-                    key={c.id}
-                    className="hover:bg-slate-850/50 transition-colors"
-                  >
-                    <td className="px-4 py-3.5 font-medium text-slate-100">
-                      {c.nome}
-                    </td>
-                    <td className="px-4 py-3.5 text-xs text-slate-400">
-                      <div>{c.donoNome || "Sem nome"}</div>
-                      <div className="font-mono text-slate-500">
-                        {c.donoEmail || "Sem e-mail"}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <span
-                        className={`inline-flex items-center rounded border px-2 py-0.5 text-xs font-medium ${
-                          c.status === "ativa"
-                            ? "border-emerald-800/50 bg-emerald-950/80 text-emerald-300"
-                            : c.status === "trial"
-                              ? "border-amber-800/50 bg-amber-950/80 text-amber-300"
-                              : c.status === "isenta"
-                                ? "border-indigo-800/50 bg-indigo-950/80 text-indigo-300"
-                                : "border-rose-800/50 bg-rose-950/80 text-rose-300"
-                        }`}
-                      >
-                        {c.status.toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono text-slate-200">
-                      {c.fichasNaBaseCount}
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-mono font-semibold text-teal-400">
-                      {formatarBRL(c.valorEstimadoCentavos)}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        <Table>
+          <caption className="sr-only">
+            Cinco clínicas com maior faturamento estimado no ciclo atual.
+          </caption>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Clínica</TableHead>
+              <TableHead>Dono / E-mail</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Fichas na Base</TableHead>
+              <TableHead className="text-right">Valor Estimado</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {top5.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={5}
+                  className="py-6 text-center text-[var(--text-secondary)]"
+                >
+                  Nenhuma clínica cadastrada na plataforma.
+                </TableCell>
+              </TableRow>
+            ) : (
+              top5.map((c) => (
+                <TableRow key={c.id}>
+                  <TableCell className="font-medium">{c.nome}</TableCell>
+                  <TableCell className="text-xs">
+                    <div>{c.donoNome || "Sem nome"}</div>
+                    <div className="font-mono text-[var(--text-secondary)]">
+                      {c.donoEmail || "Sem e-mail"}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <StatusClinicaPill status={c.status} />
+                  </TableCell>
+                  <TableCell className="text-right font-mono">
+                    {c.fichasNaBaseCount}
+                  </TableCell>
+                  <TableCell className="text-right font-mono font-semibold text-[var(--action-primary)]">
+                    {formatarBRL(c.valorEstimadoCentavos)}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </section>
     </div>
   );
 }
