@@ -1058,6 +1058,13 @@
       "when": 1788190233804,
       "tag": "0150_alerta_risco_profissional_responsavel",
       "breakpoints": true
+    },
+    {
+      "idx": 151,
+      "version": "7",
+      "when": 1788190234804,
+      "tag": "0151_session_sob_sigilo_guard_tenant",
+      "breakpoints": true
     }
   ]
 }
