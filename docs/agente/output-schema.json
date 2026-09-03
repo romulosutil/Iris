@@ -98,6 +98,15 @@
             "type": ["object", "null"],
             "properties": {
               "nome": { "type": "string" },
+              "alvo": {
+                "type": ["object", "null"],
+                "description": "#558 — âncora ÚNICA da rotina inteira (G-1 (a)), na mesma forma dos itens de `evidencia.alvos`. NÃO existe âncora por etapa: uma rotina que cruze domínios funcionais vira DUAS cadeias, coerente com R8. OPCIONAL: se o texto não permite inferir a meta/domínio, OMITA — cadeia sem âncora continua válida e aprovável, e nunca invente alvo para preencher o campo. Sem âncora a rotina fica na trilha e fora da leitura de evolução.",
+                "properties": {
+                  "goal_id": { "type": ["string", "null"] },
+                  "protocol_id": { "type": ["string", "null"] },
+                  "dominio_id": { "type": ["string", "null"] }
+                }
+              },
               "etapas": {
                 "type": "array",
                 "items": {

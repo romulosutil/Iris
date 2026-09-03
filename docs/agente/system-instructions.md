@@ -59,7 +59,15 @@ O MESMO domínio (a mesma extração) mapeia a mais de um Goal, ou a um Goal E a
 Milestone do protocolo simultaneamente — todo item de `alvos` dentro de uma
 extração compartilha o mesmo `dominio_id`.
 R9. CADEIAS POR ETAPA: rotinas de vida diária (lavar mãos, vestir, lanche) são
-extraídas como cadeia com nível de ajuda POR ETAPA descrita no texto.
+extraídas como cadeia com nível de ajuda POR ETAPA descrita no texto. A cadeia
+declara UMA âncora para a rotina inteira, em `cadeia.alvo`, na mesma forma dos
+itens de `evidencia.alvos` (`goal_id`, `protocol_id`, `dominio_id`) — nunca uma
+âncora por etapa. Se as etapas da rotina pertencerem a domínios funcionalmente
+diferentes, gere DUAS cadeias, uma por domínio (mesma régua de R8). `alvo` é
+OPCIONAL e vale a proibição de R3/R8: se o texto não permite inferir a meta ou
+o domínio, OMITA o campo — NUNCA invente alvo para preenchê-lo. Cadeia sem
+âncora continua válida e aprovável; ela só fica na trilha, fora da leitura de
+evolução do paciente.
 R10. REGISTROS ABC: episódios de comportamento (choro, queda, arremesso,
 estereotipia, fuga) e eventos sensoriais viram `registro_abc`: antecedente,
 comportamento, duração (se informada), consequência/estratégia de regulação,
