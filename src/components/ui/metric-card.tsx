@@ -18,6 +18,32 @@ export interface MetricCardProps extends React.HTMLAttributes<HTMLDivElement> {
   tendencia?: MetricTrend;
   /** Progresso 0–100 exibido na barra do rodapé. Omitido => sem barra. */
   progresso?: number;
+  /**
+   * Selo de classificação alinhado ao rótulo (canto superior direito).
+   * Recebe um nó pronto — na prática um `<Pill>` do DS, para que a cor venha
+   * do `colorScheme` dele e o chamador nunca precise abrir paleta. Diferente
+   * de `tendencia`, que é o delta do próprio número.
+   */
+  selo?: React.ReactNode;
+  /**
+   * Linha de rodapé com a ressalva do número (unidade, recorte, o que ele NÃO
+   * mede). Existe para que um KPI ambíguo carregue a ressalva junto do valor
+   * em vez de deixá-la num parágrafo distante.
+   */
+  descricao?: React.ReactNode;
+  /**
+   * Destaca o cartão principal de uma grade. O canal é a BORDA em
+   * `--action-primary` mais um degrau de elevação — nunca um fundo diferente:
+   * fundo colorido brigaria com os tints semânticos de status.
+   */
+  destaque?: boolean;
+  /**
+   * Peso tipográfico do valor. `hero` (40px, padrão) é o número curto de
+   * dashboard. `compacta` (28px) existe para valor LONGO em grade densa —
+   * moeda formatada ("R$ 12.345,67") estoura a coluna no peso hero e o número
+   * vira duas linhas ou vaza do cartão.
+   */
+  densidade?: "hero" | "compacta";
 }
 
 /**
@@ -27,7 +53,18 @@ export interface MetricCardProps extends React.HTMLAttributes<HTMLDivElement> {
  */
 export const MetricCard = React.forwardRef<HTMLDivElement, MetricCardProps>(
   function MetricCard(
-    { className, titulo, valor, tendencia, progresso, ...props },
+    {
+      className,
+      titulo,
+      valor,
+      tendencia,
+      progresso,
+      selo,
+      descricao,
+      destaque = false,
+      densidade = "hero",
+      ...props
+    },
     ref,
   ) {
     const pct =
@@ -40,18 +77,30 @@ export const MetricCard = React.forwardRef<HTMLDivElement, MetricCardProps>(
         ref={ref}
         className={cn(
           surface("solida", {
-            className: "bg-[var(--surface-card)] p-[22px]",
+            elevation: destaque ? "hover" : "base",
+            className: cn(
+              "bg-[var(--surface-card)] p-[22px]",
+              destaque && "border-[var(--action-primary)]",
+            ),
           }),
           className,
         )}
         {...props}
       >
-        <p className="font-display text-[12px] font-semibold tracking-wide text-[var(--text-secondary)] uppercase">
-          {titulo}
-        </p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="font-display text-[12px] font-semibold tracking-wide text-[var(--text-secondary)] uppercase">
+            {titulo}
+          </p>
+          {selo ? <span className="shrink-0">{selo}</span> : null}
+        </div>
 
         <div className="mt-2 flex items-center gap-3">
-          <span className="font-display text-[40px] leading-none font-bold text-[var(--text-primary)]">
+          <span
+            className={cn(
+              "font-display leading-none font-bold text-[var(--text-primary)]",
+              densidade === "compacta" ? "text-[28px]" : "text-[40px]",
+            )}
+          >
             {valor}
           </span>
 
@@ -71,6 +120,12 @@ export const MetricCard = React.forwardRef<HTMLDivElement, MetricCardProps>(
             </span>
           )}
         </div>
+
+        {descricao ? (
+          <p className="mt-2 text-xs text-[var(--text-secondary)]">
+            {descricao}
+          </p>
+        ) : null}
 
         {pct !== null && (
           <div

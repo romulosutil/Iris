@@ -467,7 +467,8 @@ html {
 */
 .dark,
 [data-mode="dark"],
-[data-theme="dark"] {
+[data-theme="dark"],
+[data-mode="admin"] {
   color-scheme: dark;
 
   /* Superfícies e Layout */
@@ -527,6 +528,40 @@ html {
   /* Superfície silenciosa (par escuro) */
   --surface-muted: #27272a;
   --surface-muted-border: #3f3f46;
+}
+
+/*
+  Modo admin — backoffice do super admin (`src/app/(admin)/**`, rota /benjamin).
+
+  O painel é escuro POR NATUREZA (é uma sala de máquinas, não a tela clínica) e
+  não segue o tema escolhido pelo usuário: o escopo é o <div data-mode="admin">
+  do layout, não o <html data-mode="clinico"> da aplicação. Por isso ele entra
+  no seletor do bloco escuro acima em vez de recopiar a rampa: os hex ficam num
+  lugar só e admin não pode divergir do dark em silêncio quando alguém corrigir
+  um contraste lá. NENHUMA cor nova foi criada para este modo — só o mapeamento
+  dos papéis já existentes. Contraste medido na PR da #566.
+
+  Este bloco carrega apenas o DELTA do backoffice sobre a rampa escura.
+*/
+[data-mode="admin"] {
+  /* Densidade de backoffice: grade de KPIs + duas tabelas largas por tela. A
+     sombra dura CHEIA (3px) vira ruído nessa densidade — some a informação de
+     hierarquia debaixo do próprio peso. Um degrau abaixo mantém o "levanta"
+     brutalista sem empastar a página. Mesmo mecanismo do modo família, que já
+     desce um degrau pelo motivo inverso (calma). Sombra não carrega
+     informação aqui: zero impacto em contraste. */
+  --ds-shadow: var(--shadow-brutal-sm);
+  --ds-shadow-hover: var(--elevation-2);
+  --ds-shadow-inset: var(--shadow-brutal-inset-sm);
+
+  /* O #3f3f46 herdado do dark dá 1.70:1 sobre --surface-card: reprova o piso
+     de 3:1 do WCAG 2.2 SC 1.4.11 como borda. O backoffice não estreia com
+     borda abaixo do piso, então aqui a superfície silenciosa reusa o grafite
+     de repouso já medido (--border-muted, 3.67:1 sobre o card). Não é cor
+     nova: é o token de borda de repouso deste mesmo modo. O dark do app
+     continua com o valor antigo — corrigir lá muda a tela clínica e é outra
+     issue. */
+  --surface-muted-border: var(--border-muted);
 }
 
 /*
