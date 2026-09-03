@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
 
 /**
- * Sem servidor MCP real hoje. `search_clinical_evidence` existe só como
- * ferramenta client-side estática do WebMCPProvider (dado mockado, sem
- * acesso a dossiê real) — não republicar aqui como se fosse endpoint de
- * servidor com dado de paciente por trás.
+ * Sem servidor MCP real hoje. A única ferramenta client-side que resta no
+ * `WebMCPProvider` (só na landing) é `get_iris_overview`, uma descrição
+ * institucional estática — a antiga `search_clinical_evidence` (evidência
+ * fabricada) foi removida em S-08/#530. Não republicar nada aqui como se
+ * fosse endpoint de servidor com dado de paciente por trás.
  */
 export function GET() {
   const serverCard = {
-    $schema:
-      "https://modelcontextprotocol.io/schemas/mcp-server-card/v1.json",
+    $schema: "https://modelcontextprotocol.io/schemas/mcp-server-card/v1.json",
     serverInfo: {
       name: "Iris",
       version: "0.0.0",

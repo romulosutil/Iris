@@ -6,6 +6,7 @@ import { withTenant, type TenantContext } from "@/db/rls";
 import { instrumentoAplicacao, instrumentoItemTexto } from "@/db/schema";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { registrarAlertaRiscoInstrumentoManual } from "@/lib/risco/registrar";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 /**
  * #393 — arquivo separado de `logic.ts` de propósito (`logic.ts` já cresceu
@@ -166,7 +167,7 @@ async function salvarInstrumentoAplicacaoCore(
 
     return { id: resultado.id };
   } catch (err) {
-    console.error("salvarInstrumentoAplicacao:", err);
+    logarErroSemPII("salvarInstrumentoAplicacao:", err);
     return { error: "Não foi possível salvar a aplicação do instrumento." };
   }
 }

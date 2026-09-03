@@ -11,11 +11,13 @@ import { Banner } from "@/components/ui/banner";
 import { FaixaTrial } from "@/components/app/faixa-trial";
 import { FaixaRecusa } from "@/components/app/faixa-recusa";
 import { estadoEstagio2 } from "./alertas-risco/queries";
+import { contarBadgesGovernanca } from "@/lib/governanca/contadores";
 import { contarTravadas } from "@/lib/sessao/fila";
 import { obterSituacaoConta, obterAvisoRecusa } from "./queries";
 import { SignOutButton } from "./sign-out-button";
 import { AppHeader } from "./app-header";
 import { montarNav } from "./nav";
+import { logarAvisoSemPII } from "@/lib/observabilidade/logar-erro";
 
 /**
  * Shell protegido com suporte responsivo a Mobile e Desktop.
@@ -23,6 +25,7 @@ import { montarNav } from "./nav";
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const ctx = await getTenantContext();
   const ehClinico = ctx.role === "coordenador" || ctx.role === "terapeuta";
+  const ehCoordenador = ctx.role === "coordenador";
 
   const [
     clinicas,
@@ -31,6 +34,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     { quantidade: riscoEstagio2, protocoloInterno },
     situacaoConta,
     avisoRecusa,
+    badgesGovernanca,
   ] = await Promise.all([
     listarClinicasDoUsuario(ctx.userId),
     // #512 · T08 (R-24) — papéis NÃO resolvidos na clínica ativa, só para o
@@ -72,12 +76,24 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     obterAvisoRecusa(ctx).catch((erro: unknown) => {
       // Sem PII: nada de nome de clínica nem dado de paciente. `clinicId` é
       // aceitável — é o suficiente para localizar o caso sem expor conteúdo.
-      console.warn(
-        `[faixa-recusa] falha ao ler aviso de recusa (clinicId=${ctx.clinicId}):`,
-        erro instanceof Error ? erro.message : String(erro),
-      );
+      // Nem `erro.message` (#531): erro de driver carrega os params da query.
+      logarAvisoSemPII("[faixa-recusa] falha ao ler aviso de recusa", erro, {
+        clinicId: ctx.clinicId,
+      });
       return null;
     }),
+    // #533 (`PR-01`/`PR-02`) — os dois badges de governança (Validação,
+    // Alertas de risco) numa única ida ao banco, só para o coordenador (único
+    // papel com esses itens em `nav.ts`); os outros nem tocam o banco. Sem
+    // cache de propósito — o porquê está em `contarBadgesGovernanca`. Mesmo
+    // `.catch` de `contarTravadas`: contagem que falha vira badge 0, nunca
+    // `error.tsx` em toda rota do app por causa de um número na nav.
+    ehCoordenador
+      ? contarBadgesGovernanca(ctx).catch(() => ({
+          validacao: 0,
+          alertasAbertos: 0,
+        }))
+      : Promise.resolve({ validacao: 0, alertasAbertos: 0 }),
   ]);
 
   const totalTravadas = travadas.total;
@@ -95,6 +111,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const { itemsNav, itemsAdmin } = montarNav({
     role: ctx.role,
     totalTravadas,
+    totalValidacao: badgesGovernanca.validacao,
+    totalAlertasAbertos: badgesGovernanca.alertasAbertos,
   });
 
   return (

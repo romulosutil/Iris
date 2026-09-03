@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { montarRequisicao, executarExportacao } from "./exportacao-acervo.mjs";
+import {
+  montarRequisicao,
+  executarExportacao,
+  contarBundlesFalhos,
+} from "./exportacao-acervo.mjs";
 
 describe("scripts/exportacao-acervo.mjs — gatilho do job de exportação", () => {
   it("monta um POST com Bearer no header e corpo vazio", () => {
@@ -45,6 +49,84 @@ describe("scripts/exportacao-acervo.mjs — gatilho do job de exportação", () 
     });
     expect(res).toMatchObject({ ok: true });
     expect(JSON.parse(res.corpo)).toMatchObject({ expirados: 2 });
+  });
+
+  it("bundle `falhou` no corpo de um 200 é FALHA do disparo, não sucesso (Q-07, #530)", async () => {
+    // O "exit 0 mentiroso" da #105 recorrendo: HTTP ok com todo bundle em
+    // `falhou` saía `0` e o acervo ficava pendente "para sempre" sem sinal.
+    const res = await executarExportacao("https://x.test/j", "s", {
+      fetch: async () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            processados: [
+              { bundleId: "b1", status: "falhou", erro: "storage fora" },
+              { bundleId: "b2", status: "pronto" },
+            ],
+            totalProcessados: 2,
+            expirados: 0,
+          }),
+          { status: 200 },
+        ),
+    });
+    expect(res).toMatchObject({ ok: false, falha: "bundle" });
+    expect(res.erro).toContain("1");
+    // O corpo vai inteiro para o log — é a única memória da passada.
+    expect(res.corpo).toContain("storage fora");
+  });
+
+  it("500 com bundle `falhou` no corpo nomeia a causa `bundle`, não só o status (revisão PR #545)", async () => {
+    // É o caminho REAL de produção depois de Q-07: a rota responde 500
+    // justamente quando há bundle falho. Se o script classificasse por status
+    // antes de ler o corpo, o modo `bundle` seria inalcançável e o log diria
+    // "HTTP 500" onde a causa é "1 bundle falhou".
+    const res = await executarExportacao("https://x.test/j", "s", {
+      fetch: async () =>
+        new Response(
+          JSON.stringify({
+            ok: false,
+            processados: [
+              { bundleId: "b1", status: "falhou", erro: "storage fora" },
+            ],
+            bundlesFalhos: 1,
+            expirados: 0,
+          }),
+          { status: 500 },
+        ),
+    });
+    expect(res).toMatchObject({ ok: false, falha: "bundle" });
+    expect(res.erro).toContain("1 bundle");
+    expect(res.erro).toContain("HTTP 500");
+    expect(res.corpo).toContain("storage fora");
+  });
+
+  it("500 sem JSON legível continua sendo falha de `status`", async () => {
+    const res = await executarExportacao("https://x.test/j", "s", {
+      fetch: async () => new Response("Internal Server Error", { status: 500 }),
+    });
+    expect(res).toMatchObject({ ok: false, falha: "status", erro: "HTTP 500" });
+  });
+
+  it("`ok:false` no corpo de um 200 também é falha (rota e script concordam)", async () => {
+    const res = await executarExportacao("https://x.test/j", "s", {
+      fetch: async () =>
+        new Response(JSON.stringify({ ok: false, processados: [] }), {
+          status: 200,
+        }),
+    });
+    expect(res).toMatchObject({ ok: false, falha: "bundle" });
+  });
+
+  it("contarBundlesFalhos: JSON inválido conta 0 (o status HTTP já decidiu)", () => {
+    expect(contarBundlesFalhos("não é json")).toBe(0);
+    expect(contarBundlesFalhos('{"ok":true,"processados":[]}')).toBe(0);
+    expect(
+      contarBundlesFalhos(
+        '{"ok":false,"processados":[{"status":"falhou"},{"status":"falhou"}]}',
+      ),
+    ).toBe(2);
+    // `ok:false` sem lista de bundles ainda conta como falha (>= 1).
+    expect(contarBundlesFalhos('{"ok":false}')).toBe(1);
   });
 
   it("nunca imprime o segredo no objeto de requisição serializado", () => {

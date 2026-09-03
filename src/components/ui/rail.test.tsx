@@ -227,6 +227,60 @@ describe("Rail — T08 (R-24 … R-27)", () => {
       ).toBeDefined();
     });
 
+    // #533 (revisão pós-PR) — a governança saiu da nav diária e virou item de
+    // `itemsAdmin`. Se o item de administração não acender pela mesma régua,
+    // ficar em `/alertas-risco` deixa o rail SEM nenhum item ativo.
+    it("acende o item de administração ativo e carrega aria-current", async () => {
+      const ADMIN_ATIVO: NavItem[] = [
+        { href: "/alertas-risco", label: "Alertas de risco", active: true },
+        { href: "/equipe", label: "Equipe" },
+      ];
+      render(
+        <Rail
+          itemsNav={[{ href: "/agenda", label: "Agenda" }]}
+          itemsAdmin={ADMIN_ATIVO}
+        />,
+      );
+      const usuario = userEvent.setup();
+      await usuario.click(
+        screen.getByRole("button", { name: /Menu do usuário/i }),
+      );
+      const ativo = screen.getByRole("link", { name: "Alertas de risco" });
+      expect(ativo.getAttribute("aria-current")).toBe("page");
+      expect(ativo.className).toContain("--brand-tint");
+      const inerte = screen.getByRole("link", { name: "Equipe" });
+      expect(inerte.getAttribute("aria-current")).toBeNull();
+      expect(inerte.className).not.toContain("--brand-tint");
+    });
+
+    // Popover fechado é o estado normal: o gatilho é o único âncora visível.
+    it("marca o gatilho quando a rota atual mora na Administração", () => {
+      const { unmount } = render(
+        <Rail
+          itemsNav={[{ href: "/agenda", label: "Agenda" }]}
+          itemsAdmin={[{ href: "/equipe", label: "Equipe", active: true }]}
+        />,
+      );
+      expect(
+        screen
+          .getByRole("button", { name: /Menu do usuário/i })
+          .getAttribute("data-secao-ativa"),
+      ).toBe("true");
+      unmount();
+
+      render(
+        <Rail
+          itemsNav={[{ href: "/agenda", label: "Agenda", active: true }]}
+          itemsAdmin={[{ href: "/equipe", label: "Equipe" }]}
+        />,
+      );
+      expect(
+        screen
+          .getByRole("button", { name: /Menu do usuário/i })
+          .getAttribute("data-secao-ativa"),
+      ).toBeNull();
+    });
+
     it("não renderiza o gatilho quando itemsAdmin está vazio/ausente", () => {
       render(<Rail itemsNav={ITENS} />);
       expect(

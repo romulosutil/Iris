@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
+import { higienizarEventoSentry } from "@/lib/observabilidade/sentry-sem-pii";
 
 /**
  * Observabilidade do browser → GlitchTip. No-op sem `NEXT_PUBLIC_SENTRY_DSN`.
@@ -15,6 +16,9 @@ if (dsn) {
     environment: process.env.NODE_ENV,
     tracesSampleRate: 0,
     sendDefaultPii: false,
+    // #531 (S-03): mesmo filtro do servidor — `error.tsx` manda a exceção
+    // inteira, e a `message` de erro de driver carrega SQL + params.
+    beforeSend: (event, hint) => higienizarEventoSentry(event, hint),
   });
 }
 

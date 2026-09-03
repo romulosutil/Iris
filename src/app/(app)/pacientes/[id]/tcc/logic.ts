@@ -14,6 +14,7 @@ import {
   type SalvarRpdInput,
 } from "./constants";
 import { detectarSinaisDeRiscoRPD } from "./deteccao-risco";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 export {
   DISTORCOES_COGNITIVAS_OPCOES,
@@ -163,7 +164,7 @@ async function salvarRPDCore(
       ? { id: resultado.id, alertaRiscoErro }
       : { id: resultado.id };
   } catch (err) {
-    console.error("salvarRPD:", err);
+    logarErroSemPII("salvarRPD:", err);
     return { error: "Não foi possível salvar o RPD." };
   }
 }

@@ -6,6 +6,7 @@ import { getAppBaseUrl } from "@/lib/app-url";
 import { criarTemplateAvisoCancelamentoAssinatura } from "@/lib/email/templates";
 import { enviarEmailTransacional } from "@/lib/email/transacional";
 import { levantarDebito } from "./debito";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 export interface ResultadoNotificacaoCancelamento {
   enviado: boolean;
@@ -128,7 +129,7 @@ export async function notificarCancelamentoAssinatura(
 
     return { enviado: resultadoEnvio.enviado };
   } catch (err) {
-    console.error(
+    logarErroSemPII(
       "[billing-cancelamento] Exceção capturada ao despachar e-mail de cancelamento:",
       err,
     );

@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole, RoleError } from "@/auth/require-role";
 import { salvarDadosClinica } from "./logic";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+import { textoErroInterno } from "@/lib/copy/erros";
 
 /**
  * #262 — só WRAPPERS aqui. O core ctx-accepting vive em `logic.ts`
@@ -43,7 +45,7 @@ export async function salvarDadosClinicaAction(
     return { error: r.error };
   } catch (err) {
     if (err instanceof RoleError) return { error: err.message };
-    console.error("wrapper clinica/dados:", err);
-    return { error: "Erro interno no servidor." };
+    const correlacaoId = logarErroSemPII("wrapper clinica/dados:", err);
+    return { error: textoErroInterno(correlacaoId) };
   }
 }

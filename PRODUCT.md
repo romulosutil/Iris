@@ -71,7 +71,7 @@ Emocionalmente, o produto deve evocar confiança e controle, não ansiedade.
   tem tratamento estruturalmente diferente de "aprovado" (não só cor: borda,
   peso de sombra, selo de estado sempre visível). "Candidato" nunca se parece com
   "conquistado".
-- **Fricção é ferramenta, não bug.** O sistema proíbe aprovações mecânicas ou em lote ("rubber-stamping"). Toda evidência requer revisão individual consciente; o peso do gesto e a confirmação escalam com o risco da decisão clínica.
+- **Fricção é ferramenta, não bug.** O peso do gesto e a confirmação escalam com o risco da decisão clínica, e a régua é uma só (`src/lib/extraction/review-policy.ts`), em três níveis: (1) **confiança alta e consistente com o histórico** → fricção baixa, pode ser aprovada em lote — com trilha própria em `audit_log` (`evidencia_aprovada_lote`), distinta da aprovação individual; (2) **confiança média ou baixa** → fricção deliberada de nível médio: sem lote, abrir e confirmar cada evidência antes de aprovar; (3) **inconsistência com o histórico** (regressão real ou erro de extração — o cenário de maior risco de erro silencioso) → fricção alta, vence a confiança e **nunca vai a lote**. O que o sistema proíbe é o "rubber-stamping" — aprovar sem olhar o que a régua mandou olhar.
 - **Transparência sem vigilância.** O que o coordenador vê do terapeuta usa
   exatamente os mesmos componentes que o terapeuta vê de si — nunca uma variante
   "modo supervisor" com informação escondida.

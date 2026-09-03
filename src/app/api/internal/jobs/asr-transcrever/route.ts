@@ -1,5 +1,5 @@
-import { timingSafeEqual } from "node:crypto";
 import { sql } from "drizzle-orm";
+import { autorizarBearer } from "@/lib/security/autorizar-bearer";
 import { asrWorkerDb } from "@/db/client";
 import { ler, apagar } from "@/lib/asr/storage";
 import {
@@ -115,22 +115,6 @@ function diagnosticoDoErro(err: unknown): string {
   const nome = err instanceof Error ? err.name : typeof err;
   const codigo = codigoPg(err);
   return codigo ? `${nome} (SQLSTATE ${codigo})` : nome;
-}
-
-/**
- * Bearer em tempo constante. Env ausente → recusa, mesmo padrão de
- * `billing/fechar-ciclos/route.ts`.
- */
-function autorizado(header: string | null): boolean {
-  const esperado = process.env.ASR_JOB_TOKEN;
-  if (!esperado || !header) return false;
-  const prefixo = "Bearer ";
-  if (!header.startsWith(prefixo)) return false;
-  const recebido = header.slice(prefixo.length);
-  const a = Buffer.from(recebido, "utf8");
-  const b = Buffer.from(esperado, "utf8");
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
 }
 
 async function reservarLote(limite: number): Promise<LinhaReservada[]> {
@@ -249,7 +233,14 @@ async function processarClipe(clipe: LinhaReservada): Promise<ResultadoClipe> {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  if (!autorizado(request.headers.get("authorization"))) {
+  // Bearer em tempo constante; env ausente → recusa (`autorizarBearer`,
+  // A-05/#530 — implementação única compartilhada com billing e exportação).
+  if (
+    !autorizarBearer(
+      request.headers.get("authorization"),
+      process.env.ASR_JOB_TOKEN,
+    )
+  ) {
     return Response.json({ error: "não autorizado" }, { status: 401 });
   }
 

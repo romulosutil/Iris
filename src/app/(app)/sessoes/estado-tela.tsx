@@ -85,49 +85,10 @@ export function AvisoVolumeAlto({ totalNoEscopo }: { totalNoEscopo: number }) {
   );
 }
 
-const CHAVE_HINT_VALIDACAO = "iris_sessoes_hint_validacao_visto";
-
-/**
- * Dica de primeira visita p/ quem chega por `/validacao` (#512 · T14 · R-35).
- *
- * "Central de Validação" era o item primário do coordenador — sumir com o
- * nome sem aviso é ruim. `/validacao/page.tsx` redireciona com
- * `?de=validacao`; este componente mostra a dica só enquanto o navegador
- * nunca a viu (mesmo padrão de `AvisoPrimeiraVisita`: `localStorage` em
- * `try/catch`, nunca impede a tela de renderizar se a leitura/escrita
- * estourar). Da segunda visita em diante — mesmo vindo pelo link antigo de
- * novo — a dica não volta.
- */
-export function AvisoCentralValidacao({ de }: { de?: string }) {
-  const veioDeValidacao = de === "validacao";
-
-  const [naoVista] = React.useState<boolean>(() => {
-    if (!veioDeValidacao || typeof window === "undefined") return false;
-    try {
-      return window.localStorage.getItem(CHAVE_HINT_VALIDACAO) === null;
-    } catch {
-      return true;
-    }
-  });
-
-  React.useEffect(() => {
-    if (!veioDeValidacao) return;
-    try {
-      window.localStorage.setItem(CHAVE_HINT_VALIDACAO, "1");
-    } catch {
-      // Sem storage disponível: nada a persistir, sem quebrar a tela.
-    }
-  }, [veioDeValidacao]);
-
-  if (!veioDeValidacao || !naoVista) return null;
-
-  return (
-    <Alert severidade="info" titulo="A Central de Validação virou Sessões">
-      Você chegou por um link ou favorito antigo. As sessões que precisam da sua
-      revisão continuam aqui, junto com o resto do que está travado.
-    </Alert>
-  );
-}
+// #533 — `AvisoCentralValidacao` ("A Central de Validação virou Sessões",
+// #512 · T14 · R-35) saiu: `/validacao` voltou a ser a fila por evidência
+// (PR-01) e não redireciona mais com `?de=validacao`. A dica nunca dispararia
+// e, se disparasse, mentiria.
 
 /**
  * "Sem permissão" (R-31): `admin_recepcao` não tem fila própria (R-23,

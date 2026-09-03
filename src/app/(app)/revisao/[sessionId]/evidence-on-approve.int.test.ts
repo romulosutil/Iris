@@ -212,4 +212,46 @@ describe.skipIf(!hasDb)("evidence on-approve (Fase 4)", () => {
       await owner`SELECT id FROM evidence WHERE extraction_id = ${EX_SEM_NUMERO}`;
     expect(rows.length).toBe(0);
   });
+
+  // #533 — payload na forma que `LlmExtractionProvider.payloadDoSubtipo`
+  // grava desde a D57 (`payload = e.evidencia`: `alvos` na RAIZ, sem a chave
+  // `evidencia`) — a mesma do `DemoStubProvider` e a que `resumo.ts` lê. Até
+  // aqui só a forma aninhada (fixtures acima) gerava evidence; a forma real
+  // saía em silêncio com zero linhas. Régua de mutação: voltar
+  // `inserirEvidenciasOnApprove` a ler só `conteudo.evidencia` derruba este
+  // teste e nenhum dos anteriores.
+  test("payload com `alvos` na RAIZ (forma do provider real e do stub demo) também insere evidence", async () => {
+    const EX_RAIZ = "00000000-0000-0000-0000-00000e0a0004";
+    await owner`INSERT INTO extraction
+        (id, session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload) VALUES
+      (${EX_RAIZ}, ${SESS}, ${CLINIC}, 'sugerida', 'evidencia', 'nomeou o cachorro', 'baixa',
+        ${owner.json({
+          descricao: "nomeou o cachorro",
+          funcao: "tato",
+          polaridade: "positiva",
+          alvos: [{ goal_id: GOAL, protocol_id: "vbmapp", dominio_id: "tato" }],
+        })})`;
+
+    const r = await A.aprovarExtracao(ctxT1, {
+      extractionId: EX_RAIZ,
+      versao: 1,
+    });
+    expect(r.ok).toBe(true);
+
+    const rows =
+      await owner`SELECT * FROM evidence WHERE extraction_id = ${EX_RAIZ}`;
+    expect(rows.length).toBe(1);
+    const ev = rows[0]!;
+    expect(ev.goal_id).toBe(GOAL);
+    expect(ev.milestone_id).toBe(MILESTONE_TATO);
+    // `classificacao_original` mescla o conteúdo clínico (sem `alvos`) + o alvo.
+    expect(ev.classificacao_original).toMatchObject({
+      descricao: "nomeou o cachorro",
+      polaridade: "positiva",
+      alvo: { goal_id: GOAL, dominio_id: "tato" },
+    });
+    expect(
+      (ev.classificacao_original as Record<string, unknown>).alvos,
+    ).toBeUndefined();
+  });
 });
