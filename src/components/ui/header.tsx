@@ -278,7 +278,16 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
                   Administração
                 </p>
                 {itemsAdmin.map((item) => {
-                  const content = <span>{item.label}</span>;
+                  // #533 — mesmo badge do rail para Validação / Alertas de
+                  // risco; o drawer mobile não pode esconder a contagem.
+                  const content = (
+                    <span className="flex w-full items-center justify-between">
+                      <span>{item.label}</span>
+                      {item.badge !== undefined && item.badge > 0 ? (
+                        <NavBadge valor={item.badge} tom={item.badgeTom} />
+                      ) : null}
+                    </span>
+                  );
                   return (
                     <div
                       key={item.href}

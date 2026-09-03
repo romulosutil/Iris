@@ -26,6 +26,7 @@ import {
   type EstadoAcao,
 } from "./actions";
 import { ComboboxEntidade, type Opcao } from "./combobox-entidade";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 const TIPOS_AVULSA = [
   { v: "avaliacao", label: "Avaliação" },
@@ -116,7 +117,7 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
       })
       .catch((err) => {
         if (!cancelado) {
-          console.error(
+          logarErroSemPII(
             "Erro ao listar disciplinas da equipe para agendamento:",
             err,
           );

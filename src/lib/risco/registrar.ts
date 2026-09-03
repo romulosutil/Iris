@@ -8,6 +8,7 @@ import {
   destinatariosCriacao,
   destinatariosCriacaoPorResponsavel,
 } from "./notificacao";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 /** Trecho literal + categoria/severidade/certeza — mesma forma de `AlertaRiscoAgente`,
  * mas produzido por regra determinística (#391), não pelo LLM. */
@@ -77,7 +78,7 @@ export async function registrarAlertaRisco(
     // Falha ao registrar risco NUNCA é silenciosa: quem chama decide o que
     // fazer, mas o erro sai no log com destaque. Um risco perdido em silêncio é
     // o pior modo de falha possível deste sistema.
-    console.error("ALERTA DE RISCO NÃO REGISTRADO:", err);
+    logarErroSemPII("ALERTA DE RISCO NÃO REGISTRADO:", err);
     return { erro: "Não foi possível registrar o alerta de risco." };
   }
 }
@@ -137,7 +138,7 @@ export async function registrarAlertaRiscoRPD(
       return { alertaId };
     });
   } catch (err) {
-    console.error("ALERTA DE RISCO (RPD) NÃO REGISTRADO:", err);
+    logarErroSemPII("ALERTA DE RISCO (RPD) NÃO REGISTRADO:", err);
     return { erro: "Não foi possível registrar o alerta de risco." };
   }
 }
@@ -216,7 +217,7 @@ export async function registrarAlertaRiscoRPDSugerido(
       return { alertaId };
     });
   } catch (err) {
-    console.error("ALERTA DE RISCO (RPD SUGERIDO) NÃO REGISTRADO:", err);
+    logarErroSemPII("ALERTA DE RISCO (RPD SUGERIDO) NÃO REGISTRADO:", err);
     return { erro: "Não foi possível registrar o alerta de risco." };
   }
 }
@@ -327,7 +328,7 @@ export async function registrarAlertaRiscoInstrumento(
       return { alertaId };
     });
   } catch (err) {
-    console.error("ALERTA DE RISCO (INSTRUMENTO) NÃO REGISTRADO:", err);
+    logarErroSemPII("ALERTA DE RISCO (INSTRUMENTO) NÃO REGISTRADO:", err);
     return { erro: "Não foi possível registrar o alerta de risco." };
   }
 }
@@ -410,7 +411,10 @@ export async function registrarAlertaRiscoInstrumentoManual(
       return { alertaId };
     });
   } catch (err) {
-    console.error("ALERTA DE RISCO (INSTRUMENTO MANUAL) NÃO REGISTRADO:", err);
+    logarErroSemPII(
+      "ALERTA DE RISCO (INSTRUMENTO MANUAL) NÃO REGISTRADO:",
+      err,
+    );
     return { erro: "Não foi possível registrar o alerta de risco." };
   }
 }

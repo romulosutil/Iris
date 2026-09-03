@@ -63,21 +63,16 @@ export function AppHeader({
     .filter((c) => c.clinicId !== ativaId)
     .map((c) => ({ id: c.clinicId, nome: c.nome }));
 
-  const navItemsComEstado: HeaderNavItem[] = itemsNav.map((item) => {
-    const isExact = pathname === item.href;
-    const isGovernanca =
-      item.href === "/validacao" &&
-      (pathname.startsWith("/validacao") ||
-        pathname.startsWith("/excecoes") ||
-        pathname.startsWith("/supervisao") ||
-        pathname.startsWith("/alertas-risco"));
-    const isSubPath = item.href !== "/" && pathname.startsWith(item.href);
-
-    return {
-      ...item,
-      active: isExact || isGovernanca || isSubPath,
-    };
-  });
+  // #533 — o antigo cálculo "governança ativa" (`/validacao` acesa em
+  // `/excecoes`, `/supervisao`, `/alertas-risco`) saiu: cada superfície de
+  // governança agora é item próprio em `itemsAdmin` (`nav.ts`), e acende pela
+  // mesma régua exata/subcaminho de qualquer outro item.
+  const navItemsComEstado: HeaderNavItem[] = itemsNav.map((item) => ({
+    ...item,
+    active:
+      pathname === item.href ||
+      (item.href !== "/" && pathname.startsWith(item.href)),
+  }));
 
   const itemsAdminComEstado: HeaderNavItem[] = itemsAdmin.map((item) => ({
     ...item,

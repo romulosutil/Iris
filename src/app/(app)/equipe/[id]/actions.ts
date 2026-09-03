@@ -4,6 +4,7 @@ import { getTenantContext } from "@/auth/tenant";
 import { RoleError } from "@/auth/require-role";
 import { type FaixaDia } from "@/lib/agenda/janela";
 import { salvarJanelas } from "./queries";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 export type SalvarJanelasState = { error?: string; ok?: boolean };
 
@@ -26,7 +27,7 @@ export async function salvarJanelasAction(
   } catch (err) {
     if (err instanceof RoleError)
       return { error: "Você não tem permissão para editar disponibilidade." };
-    console.error("salvarJanelasAction:", err);
+    logarErroSemPII("salvarJanelasAction:", err);
     return { error: "Não foi possível salvar. Tente novamente." };
   }
 }

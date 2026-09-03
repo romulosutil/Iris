@@ -19,6 +19,8 @@ import {
 } from "@/lib/evidence/resolver";
 import { podeAutoValidar } from "@/lib/sessao/aprovacao";
 import { avaliarFriccao } from "@/lib/extraction/review-policy";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+import { textoErroInterno } from "@/lib/copy/erros";
 
 // ─── Colapso da aprovação (T07, spec R-07/R-10/R-11, §3.5) ─────────────────
 // Quando `podeAutoValidar(ctx, sessão)` é true (coordenador === terapeuta da
@@ -448,7 +450,11 @@ async function transicionar(
     // com os params (= dado clínico). Só nome + SQLSTATE + hash da message,
     // que é o mesmo hash gravado no DLQ abaixo — correlação sem PHI.
     const detalhe = detalheDoErro(err);
-    console.error("Erro na transição da extração:", {
+    // S-10 (#531): nem no `erro_validacao_detalhe` nem na tela entra
+    // `err.message` — é aqui que o `DrizzleQueryError` carrega o INSERT de
+    // `evidence` com o conteúdo clínico nos params. O helper reduz o erro a
+    // nome + SQLSTATE + hash; `detalhe` já é conjunto fechado de primitivos.
+    logarErroSemPII("Erro na transição da extração:", err, {
       extractionId,
       ...detalhe,
     });
@@ -483,10 +489,9 @@ async function transicionar(
         }
       });
     } catch (dbErr) {
-      console.error(
-        "Falha ao persistir erro de validação (DLQ):",
-        detalheDoErro(dbErr),
-      );
+      logarErroSemPII("Falha ao persistir erro de validação (DLQ):", dbErr, {
+        extractionId,
+      });
     }
 
     // Só a referência (hash) chega à tela: o SQLSTATE fica no log — o

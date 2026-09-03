@@ -8,6 +8,10 @@ import {
 } from "@/lib/billing/conciliacao";
 import { listarCobrancasDeCicloNaoConciliadas } from "@/lib/billing/erro-aplicacao";
 import { detalheSemPii, registrarHeartbeat } from "@/lib/jobs/heartbeat";
+import {
+  descreverErroSemPII,
+  logarErroSemPII,
+} from "@/lib/observabilidade/logar-erro";
 
 /**
  * Conciliação manual de billing (#375).
@@ -28,8 +32,20 @@ import { detalheSemPii, registrarHeartbeat } from "@/lib/jobs/heartbeat";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function mensagemDoErro(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+/**
+ * Diagnostico de etapa abortada para o CORPO da resposta (#531, S-03).
+ *
+ * O corpo deste job nao e UI, mas tambem nao e privado: o script que dispara a
+ * rota imprime a resposta no stdout do container, lido pelo painel do Easypanel
+ * em HTTP puro. `err.message` de um `DrizzleQueryError` e
+ * "Failed query: <sql>
+params: <valores>" — e numa escrita de billing os
+ * valores sao id de clinica e cobranca. `descreverErroSemPII` da o mesmo poder
+ * de diagnostico (classe do erro + SQLSTATE + constraint + HTTP) sem o texto,
+ * e o `correlacao=` amarra a linha do corpo a linha do log.
+ */
+function diagnosticoDaEtapa(err: unknown, correlacaoId: string): string {
+  return descreverErroSemPII(err, correlacaoId);
 }
 
 /**
@@ -112,8 +128,11 @@ export async function POST(request: Request): Promise<Response> {
       offset: ciclosOffset,
     });
   } catch (err) {
-    ciclosAbortado = mensagemDoErro(err);
-    console.error("[billing-conciliacao] varredura de ciclos abortou", err);
+    const correlacao = logarErroSemPII(
+      "[billing-conciliacao] varredura de ciclos abortou",
+      err,
+    );
+    ciclosAbortado = diagnosticoDaEtapa(err, correlacao);
   }
 
   let vinculos = vazioVinculos;
@@ -124,8 +143,11 @@ export async function POST(request: Request): Promise<Response> {
       offset: vinculosOffset,
     });
   } catch (err) {
-    vinculosAbortado = mensagemDoErro(err);
-    console.error("[billing-conciliacao] varredura de vínculos abortou", err);
+    const correlacao = logarErroSemPII(
+      "[billing-conciliacao] varredura de vínculos abortou",
+      err,
+    );
+    vinculosAbortado = diagnosticoDaEtapa(err, correlacao);
   }
 
   /**
@@ -167,8 +189,11 @@ export async function POST(request: Request): Promise<Response> {
         : lote;
     }
   } catch (err) {
-    cobrancasSemCicloAbortado = mensagemDoErro(err);
-    console.error("[billing-conciliacao] fila de eventos órfãos abortou", err);
+    const correlacao = logarErroSemPII(
+      "[billing-conciliacao] fila de eventos órfãos abortou",
+      err,
+    );
+    cobrancasSemCicloAbortado = diagnosticoDaEtapa(err, correlacao);
   }
 
   const totalDivergencias =
