@@ -1,9 +1,49 @@
-import type { Page } from "@playwright/test";
+import type { APIResponse, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 import { eq } from "drizzle-orm";
 import { TOTP, URI } from "otpauth";
 import { authDb } from "@/db/client";
 import { appUser, authThrottle, twoFactor } from "@/db/schema";
+
+/**
+ * Reexecuta um POST enquanto o servidor responder **429**.
+ *
+ * Por que existe (e por que é UM só): o Better-Auth tem rate limit PRÓPRIO, em
+ * memória no processo do servidor — independente do `auth_throttle` da
+ * aplicação e por isso não zerável pelo banco. Com vários specs autenticando a
+ * mesma conta em sequência, uma chamada legítima leva 429 e a suíte falha por
+ * ORDEM de execução, não por regressão. Esperar e repetir é a concessão certa:
+ * a proteção continua ligada e exercitada pelo spec de brute-force; aqui ela só
+ * não pode reprovar um login válido.
+ *
+ * Os dois pontos que sofrem disso têm baldes SEPARADOS (a chave do limitador é
+ * IP + rota) e o mesmo limite apertado: `/sign-in/*` — janela 10s, máx. 3 — e
+ * `/two-factor/*`, janela 10s, máx. 3 pela regra do próprio plugin de segundo
+ * fator. Até #598 só o `sign-in/email` reexecutava; um 429 no `verify-totp`
+ * derrubava o teste com `verify-totp falhou`, por motivo que não era o do
+ * teste. Uma política só, usada nos dois, porque duas divergem no primeiro
+ * ajuste.
+ *
+ * `executar` é uma FÁBRICA, não uma resposta pronta: o corpo é remontado a cada
+ * tentativa. É isso que torna o retry utilizável no `verify-totp`, cujo código
+ * TOTP tem janela de tempo — repetir o código da tentativa anterior é retry que
+ * envelhece junto com a espera.
+ */
+async function postarAteSair429(
+  page: Page,
+  executar: () => Promise<APIResponse>,
+): Promise<APIResponse> {
+  let resposta = await executar();
+  for (
+    let tentativa = 0;
+    tentativa < 3 && resposta.status() === 429;
+    tentativa++
+  ) {
+    await page.waitForTimeout(6000);
+    resposta = await executar();
+  }
+  return resposta;
+}
 
 /**
  * Login de papel CLÍNICO nos testes E2E.
@@ -60,27 +100,13 @@ export async function entrarComMfa(
   // regressão. A proteção continua coberta pelo spec que a exercita.
   await authDb.delete(authThrottle);
 
-  // O Better-Auth tem rate limit PRÓPRIO, em memória no processo do servidor —
-  // independente do `auth_throttle` da aplicação, e por isso não zerável pelo
-  // banco. Com vários specs autenticando a mesma conta em sequência, o
-  // sign-in legítimo leva 429 e a suíte falha por ORDEM de execução. Esperar e
-  // repetir é a concessão certa: a proteção continua ligada e exercitada pelo
-  // spec de brute-force; aqui ela só não pode reprovar um login válido.
-  let login = await api.post("/api/auth/sign-in/email", {
-    data: { email, password: senha },
-    headers,
-  });
-  for (
-    let tentativa = 0;
-    tentativa < 3 && login.status() === 429;
-    tentativa++
-  ) {
-    await page.waitForTimeout(6000);
-    login = await api.post("/api/auth/sign-in/email", {
+  // Rate limit em memória do Better-Auth: ver `postarAteSair429`.
+  const login = await postarAteSair429(page, () =>
+    api.post("/api/auth/sign-in/email", {
       data: { email, password: senha },
       headers,
-    });
-  }
+    }),
+  );
   expect(
     login.ok(),
     `sign-in falhou para ${email}: ${await login.text()}`,
@@ -97,10 +123,14 @@ export async function entrarComMfa(
   );
 
   const { totpURI } = (await enable.json()) as { totpURI: string };
-  const verificado = await api.post("/api/auth/two-factor/verify-totp", {
-    data: { code: totpDe(totpURI) },
-    headers,
-  });
+  // Mesma política de 429 do sign-in (#598). `totpDe` fica DENTRO da fábrica de
+  // propósito: cada tentativa deriva um código novo do mesmo segredo.
+  const verificado = await postarAteSair429(page, () =>
+    api.post("/api/auth/two-factor/verify-totp", {
+      data: { code: totpDe(totpURI) },
+      headers,
+    }),
+  );
   expect(
     verificado.ok(),
     `verify-totp falhou: ${await verificado.text()}`,
@@ -132,21 +162,12 @@ export async function entrarSemMfa(
   await zerarSegundoFator(email);
   await authDb.delete(authThrottle);
 
-  let login = await api.post("/api/auth/sign-in/email", {
-    data: { email, password: senha },
-    headers,
-  });
-  for (
-    let tentativa = 0;
-    tentativa < 3 && login.status() === 429;
-    tentativa++
-  ) {
-    await page.waitForTimeout(6000);
-    login = await api.post("/api/auth/sign-in/email", {
+  const login = await postarAteSair429(page, () =>
+    api.post("/api/auth/sign-in/email", {
       data: { email, password: senha },
       headers,
-    });
-  }
+    }),
+  );
   expect(
     login.ok(),
     `sign-in falhou para ${email}: ${await login.text()}`,
