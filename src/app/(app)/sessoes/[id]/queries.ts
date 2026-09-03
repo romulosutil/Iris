@@ -28,7 +28,7 @@ import { obterFatosProntidaoNaTx } from "@/lib/patient/prontidao-queries";
  * {coordenador, terapeuta} (`PAPEIS_COM_LEITURA_CLINICA`, `prontidao.ts`) —
  * então nunca vale a pena LER de verdade para eles.
  *
- * Isso deixou de ser só otimização com a Task 7c (0144): `session_select`
+ * Isso deixou de ser só otimização com a Task 7c (0149): `session_select`
  * (`db/migrations/0006_fase2_rls.sql`) deixa `admin_recepcao` enxergar
  * QUALQUER sessão da clínica — mas o guard de `app_fatos_prontidao` não a
  * autoriza (D-A11) e RAISE quando reprova (D-A13), em vez do `false`

@@ -103,7 +103,7 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     await owner`INSERT INTO care_team_membership (patient_id, user_id, papel_na_equipe, disciplina)
       VALUES (${PAC}, ${U_T1}, 'terapeuta_referencia', 'ABA')`;
     // U_COBERTURA propositalmente FORA da care team: `app_fatos_prontidao`
-    // (migração `0144`, Task 7c) autoriza a leitura clínica pelo recorte de
+    // (migração `0149`, Task 7c) autoriza a leitura clínica pelo recorte de
     // cobertura (`session.terapeuta_id = app.user_id`), não por vínculo de
     // equipe. Uma linha de `care_team_membership` aqui mascararia a própria
     // coisa que este describe prova.
