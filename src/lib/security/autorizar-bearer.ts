@@ -16,7 +16,7 @@ import { timingSafeEqual } from "node:crypto";
  * - Comprimento em BYTES verificado antes da comparação (`timingSafeEqual`
  *   lança em buffers de tamanhos distintos) e comparação em tempo constante.
  *
- * Cada rota passa o SEU segredo (`process.env.X_JOB_TOKEN`). Não há fallback
+ * Cada rota passa o SEU segredo (`<SUPERFICIE>_JOB_TOKEN`). Não há fallback
  * entre segredos de superfícies diferentes: vazar o token do billing não pode
  * dar poder sobre a exportação do acervo, e vice-versa.
  */
