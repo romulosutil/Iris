@@ -13,7 +13,7 @@ import {
   salvarRpdSchema,
   type SalvarRpdInput,
 } from "./constants";
-import { detectarSinaisDeRiscoRPD } from "./deteccao-risco";
+import { detectarSinaisDeRiscoRPD } from "@/lib/risco/deteccao-risco";
 import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 export {

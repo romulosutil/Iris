@@ -41,12 +41,30 @@ F1 (guard)  ──>  F2 ──> F3 ──> F4   (migrações, uma PR cada, ordem
 - **Onde dói**: `agenda/queries.ts` tem 1.185 linhas.
 - **Pronto quando**: os três consumidores importam de `lib/`; `agenda/queries.ts` encolhe pelo que saiu.
 
-### F4 · `diario/[sessionId]/logic.ts`
+### F4 · `diario/[sessionId]/logic.ts` (entregue)
 
 - **O quê**: 1.114 linhas, 8 ações + ASR + extração + risco. Promover a módulo de `src/lib/sessao/`, com actions finas na rota. Inclui `diario` ← `pacientes/[id]/tcc/deteccao-risco`.
 - **Por que por último**: é o arquivo com mais regra clínica e mais int-tests apontados para ele. Fatia mais cara e mais arriscada.
 - **Pronto quando**: a rota só orquestra; a regra é testável sem montar a rota.
 - **Fronteira dura**: nesta fatia é proibido mudar comportamento. Refactor e correção de defeito não viajam na mesma PR.
+
+**Medido em 04/09/2026, ao fechar a fatia.** O arquivo já estava em **1.201 linhas** (o plano media 1.114; a #560/F4 e a #558 mexeram nele desde então). A `actions.ts` da rota já era fina — resolve `ctx`, traduz `RoleError`/`ProntuarioIncompletoError` e revalida caminho —, então a fatia foi de fato só tirar o núcleo de dentro da pasta da rota.
+
+Destino, por coesão, e não um módulo de 1.201 linhas em `src/lib` (o tamanho **é** o achado):
+
+| Novo módulo                             | O que levou                                                                |
+| --------------------------------------- | -------------------------------------------------------------------------- |
+| `src/lib/sessao/diario-comum.ts`        | `mensagemDeConsentimento` + a nota do guard de escrita (`comEscrita`)      |
+| `src/lib/sessao/diario-captura.ts`      | captura rápida, escopo de protocolo, áudio local                           |
+| `src/lib/sessao/diario-asr.ts`          | envio do lote, estado dos clipes, lote mais recente, aceite da transcrição |
+| `src/lib/sessao/diario-consolidacao.ts` | nota final, número sequencial, extração e as Fases D/E/F de risco          |
+| `src/lib/risco/deteccao-risco.ts`       | `detectarSinaisDeRiscoRPD`, que vinha de `pacientes/[id]/tcc/`             |
+
+- **`deteccao-risco` tinha de sair junto**, não por elegância: com a consolidação em `src/lib`, o import de `@/app/(app)/pacientes/[id]/tcc/` viraria uma violação NOVA do guard `fronteira/sem-import-de-app` da F1 — o baseline não teria como absorvê-la, porque ele só pode cair. A função é pura, sem import nenhum, e tem três consumidores em dois contextos.
+- **Prova de que nada mudou de comportamento**: script que recorta o `logic.ts` de `HEAD` nas faixas de linha movidas e confere que **cada linha** reaparece nos módulos novos — zero ausências. As únicas exclusões deliberadas são duas linhas mortas: o `type Tx` importado e nunca usado, e o `export { POLLING_INTERVALO_MS, POLLING_TETO_MS }` reexportado de `@/lib/asr/polling` sem nenhum consumidor (`ditado-voz.tsx` sempre importou do módulo neutro, que é o certo — o `logic.ts` era `server-only`).
+- **Testes**: `logic.asr-lote.test.ts` acompanhou o módulo (`src/lib/sessao/diario-asr.test.ts`), como a F3 fez com `horas-queries.int.test.ts`. Os dois int-tests grandes (`actions.int.test.ts`, 66 KB, e `gate-documentar.int.test.ts`) **ficaram na rota**: exercitam o par action+núcleo, e movê-los inflaria o diff sem provar nada a mais — só o especificador de import mudou. `db/tests/{profissional-responsavel,sessao-detalhe}.int.test.ts` também importavam o `logic.ts` por caminho relativo e foram atualizados (varrer só `src/` teria deixado os dois quebrados no CI).
+- **Verificado**: typecheck 0, lint 0, unit 3160/3160, int 77/77 com banco real (nenhum `skipped`).
+- **Ordem**: entrou depois da #560/F4 (PR #615), como o plano exigia — a assinatura de log dos mesmos arquivos mudou lá.
 
 ### F5 · Ciclo `lib/email ⇄ lib/billing`
 

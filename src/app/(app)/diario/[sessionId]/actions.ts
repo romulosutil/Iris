@@ -8,15 +8,17 @@ import { sessionNote } from "@/db/schema";
 import { ProntuarioIncompletoError } from "@/lib/patient/assert-pode-documentar";
 import {
   capturarDiario,
-  consolidarSessao,
   corrigirEscopoProtocolo,
+  registrarAudioLocal,
+} from "@/lib/sessao/diario-captura";
+import {
   aceitarTranscricaoLote,
   enviarLoteAsr,
   obterEstadoLote,
   obterLoteMaisRecente,
-  registrarAudioLocal,
   type EstadoClipeAsr,
-} from "./logic";
+} from "@/lib/sessao/diario-asr";
+import { consolidarSessao } from "@/lib/sessao/diario-consolidacao";
 import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 
 // ─── Wrappers para `useActionState` (resolvem o tenant do request) ────────────
@@ -150,7 +152,7 @@ export async function consolidarSessaoAction(
 
 // Ditado de voz (#72, T09). Chamado diretamente pelo componente de gravação
 // (não por `useActionState`/FormData — ainda não há UI de T11 nesta task),
-// com os Blobs gravados no cliente. O core (`enviarLoteAsr`, logic.ts) é
+// com os Blobs gravados no cliente. O core (`enviarLoteAsr`, `@/lib/sessao/diario-asr`) é
 // ctx-accepting e NUNCA pode ser exportado direto daqui: exportá-lo permitiria
 // a um cliente forjar `ctx` (clinicId/userId/role) e contornar a RLS — ver
 // memória do repo `ctx-forjavel-use-server`. Este wrapper resolve o `ctx` real
@@ -197,7 +199,8 @@ export async function enviarLoteAsrAction(input: {
 
 // Ditado de voz (#72, T10). Leitura, chamada pela UI de polling (T11) e pela
 // própria página no carregamento (via `obterLoteMaisRecenteAction`, R26). O
-// core (`obterEstadoLote`/`obterLoteMaisRecente`, logic.ts) é ctx-accepting
+// core (`obterEstadoLote`/`obterLoteMaisRecente`,
+// `@/lib/sessao/diario-asr`) é ctx-accepting
 // e NUNCA pode ser exportado direto daqui, mesmo sendo leitura — mesmo
 // motivo de `enviarLoteAsrAction`: exportá-lo permitiria a um cliente forjar
 // `ctx` e contornar a RLS (memória `ctx-forjavel-use-server`).

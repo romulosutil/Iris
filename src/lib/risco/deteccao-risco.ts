@@ -1,4 +1,12 @@
 /**
+ * Morava em `src/app/(app)/pacientes/[id]/tcc/deteccao-risco.ts` até a #559
+ * (F4). Mudou porque `diario/[sessionId]` a importava de dentro de OUTRA rota
+ * — o acoplamento rota→rota do achado `A-02` — e a consolidação da sessão,
+ * que é quem a chama, passou a morar em `src/lib/sessao/`. Uma função pura,
+ * sem import nenhum, usada por três módulos de dois contextos diferentes, é
+ * exatamente o que `src/lib` existe para guardar; fica ao lado de
+ * `registrar.ts`, que é o outro lado do mesmo fluxo (detectar → registrar).
+ *
  * #391 — varredura determinística (por PALAVRA-CHAVE, não semântica/LLM) dos
  * campos de texto livre do RPD, em busca de sinais de risco.
  *

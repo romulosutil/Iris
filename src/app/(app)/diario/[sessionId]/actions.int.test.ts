@@ -54,20 +54,17 @@ const ctxSolo = {
 } as const;
 
 let owner: ReturnType<typeof postgres>;
-let capturarDiario: typeof import("./logic").capturarDiario;
-let corrigirEscopoProtocolo: typeof import("./logic").corrigirEscopoProtocolo;
-let registrarAudioLocal: typeof import("./logic").registrarAudioLocal;
-let enviarLoteAsr: typeof import("./logic").enviarLoteAsr;
+let capturarDiario: typeof import("@/lib/sessao/diario-captura").capturarDiario;
+let corrigirEscopoProtocolo: typeof import("@/lib/sessao/diario-captura").corrigirEscopoProtocolo;
+let registrarAudioLocal: typeof import("@/lib/sessao/diario-captura").registrarAudioLocal;
+let enviarLoteAsr: typeof import("@/lib/sessao/diario-asr").enviarLoteAsr;
 let appSql: typeof import("@/db/client").sql;
 
 describe.skipIf(!hasDb)("diário · captura", () => {
   beforeAll(async () => {
-    ({
-      capturarDiario,
-      corrigirEscopoProtocolo,
-      registrarAudioLocal,
-      enviarLoteAsr,
-    } = await import("./logic"));
+    ({ capturarDiario, corrigirEscopoProtocolo, registrarAudioLocal } =
+      await import("@/lib/sessao/diario-captura"));
+    ({ enviarLoteAsr } = await import("@/lib/sessao/diario-asr"));
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
     await owner`TRUNCATE clinic, app_user, user_role, patient, protocol, session,
@@ -216,7 +213,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
   });
 
   test("consolidar grava nota, popula numero_sequencial e é idempotente", async () => {
-    const { consolidarSessao } = await import("./logic");
+    const { consolidarSessao } =
+      await import("@/lib/sessao/diario-consolidacao");
     const r1 = await consolidarSessao(ctxT1, {
       sessionId: SESS,
       texto: "Nota final revisada da sessão.",
@@ -247,7 +245,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       },
     });
 
-    const { consolidarSessao, AVISO_EXTRACAO_FALHOU } = await import("./logic");
+    const { consolidarSessao, AVISO_EXTRACAO_FALHOU } =
+      await import("@/lib/sessao/diario-consolidacao");
     const r = await consolidarSessao(ctxT1, {
       sessionId: SESS,
       texto: "Nota que o LLM não conseguiu analisar.",
@@ -271,7 +270,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     vi.mocked(resolveProvider).mockReturnValueOnce({
       extrair: async () => ({ drafts: [], alertaRisco: null }),
     });
-    const { consolidarSessao } = await import("./logic");
+    const { consolidarSessao } =
+      await import("@/lib/sessao/diario-consolidacao");
     const r = await consolidarSessao(ctxT1, {
       sessionId: SESS,
       texto: "Nota analisada com sucesso pelo provider.",
@@ -308,7 +308,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
         },
       }),
     });
-    const { consolidarSessao } = await import("./logic");
+    const { consolidarSessao } =
+      await import("@/lib/sessao/diario-consolidacao");
     const r = await consolidarSessao(ctxT1, {
       sessionId: SESS,
       texto: "Pediu água apontando. Rastreio DA-02.",
@@ -337,7 +338,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
         throw Object.assign(new Error("503 overloaded"), { status: 503 });
       },
     });
-    const { consolidarSessao, AVISO_EXTRACAO_FALHOU } = await import("./logic");
+    const { consolidarSessao, AVISO_EXTRACAO_FALHOU } =
+      await import("@/lib/sessao/diario-consolidacao");
     const r = await consolidarSessao(ctxT1, {
       sessionId: SESS,
       texto: "Nota cuja extração falhou — latência ainda assim medida.",
@@ -364,7 +366,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
 
   test("clínica demo gera extrações sugeridas ao consolidar", async () => {
     await owner`UPDATE clinic SET is_demo = true WHERE id = ${CLINIC_A}`;
-    const { consolidarSessao } = await import("./logic");
+    const { consolidarSessao } =
+      await import("@/lib/sessao/diario-consolidacao");
     await consolidarSessao(ctxT1, {
       sessionId: SESS,
       texto: "Pediu água. Falou 'á' sozinho. Não respondeu depois.",
@@ -388,7 +391,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     await owner`UPDATE goal SET estado = 'ativa' WHERE id IN (${GOAL_PAC}, ${GOAL_PAC2})`;
 
     await owner`UPDATE clinic SET is_demo = true WHERE id = ${CLINIC_A}`;
-    const { consolidarSessao } = await import("./logic");
+    const { consolidarSessao } =
+      await import("@/lib/sessao/diario-consolidacao");
     await consolidarSessao(ctxT1, {
       sessionId: SESS,
       texto: "Pediu água. Falou 'á' sozinho.",
@@ -411,7 +415,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
   test("clínica de produção fica pendente de reprocessamento (sem LLM)", async () => {
     // limpa extrações da sessão do caso anterior
     await owner`DELETE FROM extraction WHERE session_id = ${SESS}`;
-    const { consolidarSessao } = await import("./logic");
+    const { consolidarSessao } =
+      await import("@/lib/sessao/diario-consolidacao");
     await consolidarSessao(ctxT1, {
       sessionId: SESS,
       texto: "Nota de produção.",
@@ -428,7 +433,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     // sessões visíveis a ele (subestimado → daria 1, duplicando). O helper
     // SECURITY DEFINER enxerga todas as sessões do paciente → deve dar 2.
     await owner`DELETE FROM extraction WHERE session_id = ${SESS_COBERTURA}`;
-    const { consolidarSessao } = await import("./logic");
+    const { consolidarSessao } =
+      await import("@/lib/sessao/diario-consolidacao");
     const r = await consolidarSessao(ctxCobertura, {
       sessionId: SESS_COBERTURA,
       texto: "Sessão de cobertura consolidada.",
@@ -472,7 +478,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
     // Paciente já ativo (teste anterior). `audit_log` é append-only para
     // `app_role`: uma duplicata aqui não teria como ser apagada depois.
     await capturarDiario(ctxT1, { sessionId: SESS, texto: "Segunda nota." });
-    const { consolidarSessao } = await import("./logic");
+    const { consolidarSessao } =
+      await import("@/lib/sessao/diario-consolidacao");
     await consolidarSessao(ctxT1, { sessionId: SESS, texto: "Consolidada." });
     expect(await trilha()).toBe(1);
   });
@@ -581,7 +588,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
           estado: "sugerida",
         },
       ]);
-      const { consolidarSessao } = await import("./logic");
+      const { consolidarSessao } =
+        await import("@/lib/sessao/diario-consolidacao");
       const r = await consolidarSessao(ctxT1, {
         sessionId: SESS,
         texto: "Aplicação de escala nesta sessão.",
@@ -613,7 +621,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
           estado: "sugerida",
         },
       ]);
-      const { consolidarSessao } = await import("./logic");
+      const { consolidarSessao } =
+        await import("@/lib/sessao/diario-consolidacao");
       const r = await consolidarSessao(ctxT1, {
         sessionId: SESS,
         texto: "Aplicação de escala com recusa de item.",
@@ -638,7 +647,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
           estado: "sugerida",
         },
       ]);
-      const { consolidarSessao } = await import("./logic");
+      const { consolidarSessao } =
+        await import("@/lib/sessao/diario-consolidacao");
       const r = await consolidarSessao(ctxT1, {
         sessionId: SESS,
         texto: "Aplicação de escala sem sinal de risco.",
@@ -664,7 +674,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
           estado: "sugerida",
         },
       ]);
-      const { consolidarSessao } = await import("./logic");
+      const { consolidarSessao } =
+        await import("@/lib/sessao/diario-consolidacao");
       const r = await consolidarSessao(ctxT1, {
         sessionId: SESS,
         texto: "Sessão comum, sem instrumento.",
@@ -717,7 +728,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
           estado: "sugerida",
         },
       ]);
-      const { consolidarSessao } = await import("./logic");
+      const { consolidarSessao } =
+        await import("@/lib/sessao/diario-consolidacao");
       const r = await consolidarSessao(ctxT1, {
         sessionId: SESS,
         texto: "RPD sugerido sem sinal de risco.",
@@ -745,7 +757,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
           estado: "sugerida",
         },
       ]);
-      const { consolidarSessao } = await import("./logic");
+      const { consolidarSessao } =
+        await import("@/lib/sessao/diario-consolidacao");
       const r = await consolidarSessao(ctxT1, {
         sessionId: SESS,
         texto: "RPD sugerido com ideação.",
@@ -781,7 +794,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
           estado: "sugerida",
         },
       ]);
-      const { consolidarSessao } = await import("./logic");
+      const { consolidarSessao } =
+        await import("@/lib/sessao/diario-consolidacao");
       const r = await consolidarSessao(ctxT1, {
         sessionId: SESS,
         texto: "RPD sugerido com ideação no trecho fonte.",
@@ -1294,7 +1308,7 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       await owner`INSERT INTO audio_capture (session_id, clinic_id, lote_id, ordem, asr_status)
         VALUES (${SESS_B}, ${CLINIC_B}, ${loteId}, 0, 'na_fila')`;
 
-      const { obterEstadoLote } = await import("./logic");
+      const { obterEstadoLote } = await import("@/lib/sessao/diario-asr");
       const clipes = await obterEstadoLote(ctxT1, loteId);
       expect(clipes).toEqual([]);
     });
@@ -1305,7 +1319,7 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       await owner`INSERT INTO audio_capture (session_id, clinic_id, lote_id, ordem, asr_status)
         VALUES (${SESS_B}, ${CLINIC_B}, ${loteId}, 0, 'na_fila')`;
 
-      const { obterLoteMaisRecente } = await import("./logic");
+      const { obterLoteMaisRecente } = await import("@/lib/sessao/diario-asr");
       // ctxT1 (clínica A) nem enxerga SESS_B (session_id de outra clínica) via
       // RLS — o resultado é nulo, não um erro que distinguisse os dois casos.
       const encontrado = await obterLoteMaisRecente(ctxT1, SESS_B);
@@ -1325,7 +1339,7 @@ describe.skipIf(!hasDb)("diário · captura", () => {
           (${SESS}, ${CLINIC_A}, ${loteId}, 1, 'na_fila', NULL, NULL),
           (${SESS}, ${CLINIC_A}, ${loteId}, 2, 'falhou', NULL, NULL)`;
 
-      const { obterEstadoLote } = await import("./logic");
+      const { obterEstadoLote } = await import("@/lib/sessao/diario-asr");
       const clipes = await obterEstadoLote(ctxT1, loteId);
       expect(clipes).toEqual([
         {
@@ -1347,14 +1361,14 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       await owner`INSERT INTO audio_capture (session_id, clinic_id, lote_id, ordem, asr_status, criado_em)
         VALUES (${SESS}, ${CLINIC_A}, ${loteRecente}, 0, 'na_fila', now())`;
 
-      const { obterLoteMaisRecente } = await import("./logic");
+      const { obterLoteMaisRecente } = await import("@/lib/sessao/diario-asr");
       const encontrado = await obterLoteMaisRecente(ctxT1, SESS);
       expect(encontrado).toBe(loteRecente);
     });
 
     test("obterLoteMaisRecente devolve nulo quando não há lote na sessão", async () => {
       await limpar();
-      const { obterLoteMaisRecente } = await import("./logic");
+      const { obterLoteMaisRecente } = await import("@/lib/sessao/diario-asr");
       const encontrado = await obterLoteMaisRecente(ctxT1, SESS);
       expect(encontrado).toBeNull();
     });
@@ -1401,7 +1415,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       const loteId = "00000000-0000-0000-0000-0000000c0001";
       await semearLote(loteId, ["primeiro", "segundo", "terceiro"]);
 
-      const { aceitarTranscricaoLote } = await import("./logic");
+      const { aceitarTranscricaoLote } =
+        await import("@/lib/sessao/diario-asr");
       const r = await aceitarTranscricaoLote(ctxT1, loteId);
       expect(r.error).toBeUndefined();
       expect(r.paragrafos).toEqual(["primeiro", "segundo", "terceiro"]);
@@ -1422,7 +1437,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       const loteId = "00000000-0000-0000-0000-0000000c0002";
       await semearLote(loteId, ["um", "dois"]);
 
-      const { aceitarTranscricaoLote } = await import("./logic");
+      const { aceitarTranscricaoLote } =
+        await import("@/lib/sessao/diario-asr");
       const r1 = await aceitarTranscricaoLote(ctxT1, loteId);
       expect(r1.paragrafos).toEqual(["um", "dois"]);
 
@@ -1445,7 +1461,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
         userId: U_T1,
         role: "terapeuta",
       } as const;
-      const { aceitarTranscricaoLote } = await import("./logic");
+      const { aceitarTranscricaoLote } =
+        await import("@/lib/sessao/diario-asr");
       const r = await aceitarTranscricaoLote(ctxOutraClinica, loteId);
       expect(r.paragrafos ?? []).toEqual([]);
 
@@ -1470,7 +1487,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
         (session_id, clinic_id, lote_id, ordem, asr_status, transcricao_texto, transcrito_em)
         VALUES (${SESS_COBERTURA}, ${CLINIC_A}, ${loteId}, 0, 'transcrito', 'texto do colega', now())`;
 
-      const { aceitarTranscricaoLote } = await import("./logic");
+      const { aceitarTranscricaoLote } =
+        await import("@/lib/sessao/diario-asr");
       // ctxT1 é terapeuta da mesma clínica, mas SESS_COBERTURA é de
       // U_COBERTURA — a leitura passa, a escrita não.
       const r = await aceitarTranscricaoLote(ctxT1, loteId);
@@ -1493,7 +1511,8 @@ describe.skipIf(!hasDb)("diário · captura", () => {
       const loteId = "00000000-0000-0000-0000-0000000c0004";
       await semearLote(loteId, ["intocado"]);
 
-      const { aceitarTranscricaoLote } = await import("./logic");
+      const { aceitarTranscricaoLote } =
+        await import("@/lib/sessao/diario-asr");
       const r = await aceitarTranscricaoLote(ctxT1, "nao-e-uuid");
       expect(r.error).toBeTruthy();
       expect(r.paragrafos).toBeUndefined();

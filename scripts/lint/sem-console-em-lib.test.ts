@@ -204,7 +204,6 @@ describe("#560/F3 — fiação em src/app/api (rotas de API e jobs internos)", (
       "logarErroSemPII",
     );
   }, 120_000);
-
 });
 
 describe("#560/F4 — fiação nos `logic.ts` de rota e em src/auth", () => {
@@ -223,8 +222,11 @@ describe("#560/F4 — fiação nos `logic.ts` de rota e em src/auth", () => {
       "src/app/(auth)/cadastro/logic.ts",
       "src/app/(auth)/esqueci-senha/logic.ts",
       "src/app/(auth)/redefinir-senha/logic.ts",
-      "src/app/(app)/diario/[sessionId]/logic.ts",
       "src/app/(app)/revisao/[sessionId]/logic.ts",
+      // `diario/[sessionId]/logic.ts` não está aqui porque não existe mais:
+      // a #559 (F4) o promoveu a `src/lib/sessao/diario-*`, coberto pelo glob
+      // de `src/lib/**`. A `actions.ts` que ficou na rota segue coberta.
+      //
       // Não só `logic.ts`: o glob cobre a árvore de rota inteira, senão o
       // próximo `console` nasce numa `page.tsx` `async` ou numa `actions.ts`,
       // que rodam no mesmo servidor e escrevem no mesmo stdout.
@@ -255,7 +257,7 @@ describe("#560/F4 — fiação nos `logic.ts` de rota e em src/auth", () => {
     // que a #531 mais cobre: os `logic.ts` de rota. Alargar o `files` desta
     // regra não pode ter custado o guard vizinho.
     const cfg = await eslint.calculateConfigForFile(
-      path.join(RAIZ, "src/app/(app)/diario/[sessionId]/logic.ts"),
+      path.join(RAIZ, "src/app/(app)/revisao/[sessionId]/logic.ts"),
     );
     expect(cfg.rules[REGRA_PHI]?.[0]).toBe(2);
     expect(JSON.stringify(cfg.rules[REGRA_PHI]?.slice(1) ?? [])).toContain(
