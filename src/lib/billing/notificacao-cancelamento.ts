@@ -7,6 +7,7 @@ import { criarTemplateAvisoCancelamentoAssinatura } from "@/lib/email/templates"
 import { enviarEmailTransacional } from "@/lib/email/transacional";
 import { levantarDebito } from "./debito";
 import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+import { logger } from "@/lib/observabilidade/logger";
 
 export interface ResultadoNotificacaoCancelamento {
   enviado: boolean;
@@ -25,7 +26,7 @@ export interface ResultadoNotificacaoCancelamento {
  *    Prioridade 1: `clinic.responsavel_conta_id` → `app_user.email`.
  *    Prioridade 2: `clinic.email_financeiro` (se houver).
  *    Prioridade 3: Usuário com papel `coordenador` em `user_role` daquela clínica.
- *    Se nenhum existir: loga `console.warn` e degrada graciosamente sem lançar.
+ *    Se nenhum existir: registra em nível `warn` e degrada graciosamente sem lançar.
  * 3. **Tolerância total a falhas (Zero Impacto no Billing)**:
  *    Toda execução é protegida por `try/catch` e nunca lança exceção para o chamador.
  *    Uma falha no envio do e-mail NUNCA pode derrubar nem reverter o congelamento do ciclo.
@@ -46,9 +47,7 @@ export async function notificarCancelamentoAssinatura(
       .limit(1);
 
     if (!clinica) {
-      console.warn(
-        `[billing-cancelamento] Clínica ${clinicId} não encontrada para envio de aviso de cancelamento`,
-      );
+      logger.warn("billing-cancelamento.clinica-nao-encontrada", { clinicId });
       return { enviado: false, motivo: "clinica_nao_encontrada" };
     }
 
@@ -102,9 +101,11 @@ export async function notificarCancelamentoAssinatura(
     }
 
     if (!emailDestino) {
-      console.warn(
-        `[billing-cancelamento] Nenhum destinatário de e-mail encontrado para a clínica ${clinicId}`,
-      );
+      // O clinicId é identificador opaco e é o que se filtra. O e-mail que
+      // NÃO foi encontrado nunca entrou aqui — e continua fora.
+      logger.warn("billing-cancelamento.destinatario-nao-encontrado", {
+        clinicId,
+      });
       return { enviado: false, motivo: "destinatario_nao_encontrado" };
     }
 

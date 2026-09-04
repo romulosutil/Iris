@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { Webhook } from "svix";
 import { POST as handleWebhook } from "./route";
 import { POST as handleHookAlias } from "@/app/api/hooks/resend/route";
+import { capturarLog } from "@/lib/observabilidade/captura-de-log";
 
 describe("POST /api/webhooks/resend & /api/hooks/resend", () => {
   const secret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
@@ -74,36 +75,38 @@ describe("POST /api/webhooks/resend & /api/hooks/resend", () => {
     const ts = new Date();
     const sig = wh.sign("msg_bounce_1", ts, payload);
 
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const log = capturarLog();
 
-    const req = criarRequisicao(
-      "https://irisclinica.ia.br/api/webhooks/resend",
-      payload,
-      {
-        "svix-id": "msg_bounce_1",
-        "svix-timestamp": String(Math.floor(ts.getTime() / 1000)),
-        "svix-signature": sig,
-      },
-    );
+    try {
+      const req = criarRequisicao(
+        "https://irisclinica.ia.br/api/webhooks/resend",
+        payload,
+        {
+          "svix-id": "msg_bounce_1",
+          "svix-timestamp": String(Math.floor(ts.getTime() / 1000)),
+          "svix-signature": sig,
+        },
+      );
 
-    const res = await handleWebhook(req);
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ received: true });
+      const res = await handleWebhook(req);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ received: true });
 
-    expect(warnSpy).toHaveBeenCalledWith(
-      "[resend-webhook] email.bounced",
-      expect.objectContaining({
-        type: "email.bounced",
+      expect(log.evento("resend-webhook.email-bounced")).toMatchObject({
+        tipoEvento: "email.bounced",
         emailId: "resend_msg_001",
         createdAt: "2026-08-22T04:30:00.000Z",
         bounceType: "hard_bounce",
-      }),
-    );
+      });
 
-    // Verificação de isolamento LGPD
-    const loggedStr = JSON.stringify(warnSpy.mock.calls);
-    expect(loggedStr).not.toContain("terapeuta@clinica.com.br");
-    expect(loggedStr).not.toContain("Convite de acesso");
+      // Verificação de isolamento LGPD
+      expect(log.bruto()).not.toContain("terapeuta@clinica.com.br");
+      expect(log.bruto()).not.toContain("Convite de acesso");
+      // `bounce.message` do MTA nunca entra: é campo livre de terceiro.
+      expect(log.bruto()).not.toContain("Recipiente desconhecido");
+    } finally {
+      log.restaurar();
+    }
   });
 
   it("retorna 200 para email.complained através da rota alias /api/hooks/resend", async () => {
@@ -117,30 +120,31 @@ describe("POST /api/webhooks/resend & /api/hooks/resend", () => {
     const ts = new Date();
     const sig = wh.sign("msg_complaint_2", ts, payload);
 
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const log = capturarLog();
 
-    const req = criarRequisicao(
-      "https://irisclinica.ia.br/api/hooks/resend",
-      payload,
-      {
-        "svix-id": "msg_complaint_2",
-        "svix-timestamp": String(Math.floor(ts.getTime() / 1000)),
-        "svix-signature": sig,
-      },
-    );
+    try {
+      const req = criarRequisicao(
+        "https://irisclinica.ia.br/api/hooks/resend",
+        payload,
+        {
+          "svix-id": "msg_complaint_2",
+          "svix-timestamp": String(Math.floor(ts.getTime() / 1000)),
+          "svix-signature": sig,
+        },
+      );
 
-    const res = await handleHookAlias(req);
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ received: true });
+      const res = await handleHookAlias(req);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ received: true });
 
-    expect(warnSpy).toHaveBeenCalledWith(
-      "[resend-webhook] email.complained",
-      expect.objectContaining({
-        type: "email.complained",
+      expect(log.evento("resend-webhook.email-complained")).toMatchObject({
+        tipoEvento: "email.complained",
         emailId: "resend_msg_002",
         createdAt: "2026-08-22T04:35:00.000Z",
-      }),
-    );
+      });
+    } finally {
+      log.restaurar();
+    }
   });
 
   it("retorna 400 para corpo que não é JSON válido com assinatura válida", async () => {

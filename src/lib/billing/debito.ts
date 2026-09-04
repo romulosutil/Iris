@@ -2,6 +2,8 @@ import "server-only";
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { authDb } from "@/db/client";
 import { billingCycle, subscription } from "@/db/schema";
+import { logarAvisoSemPII } from "@/lib/observabilidade/logar-erro";
+import { logger } from "@/lib/observabilidade/logger";
 import { PREFIXO_REFERENCIA_DEBITO } from "./erro-aplicacao";
 import { conciliarPagamentoDeCiclo } from "./subscription";
 import {
@@ -410,15 +412,17 @@ export async function resolverGateDeDebito(
        * segue — os ciclos ficam `devido` e a próxima tentativa reabre a decisão.
        * Reativação barrada é reversível; cobrança dupla não é.
        */
-      console.warn(
-        "[billing-reuso] gateway indisponível na consulta de reuso",
-        {
-          clinicId,
-          cicloId: ciclo.id,
-          providerChargeId: ciclo.providerChargeId,
-          err: e instanceof Error ? e.message : String(e),
-        },
-      );
+      // MUDANÇA DE COMPORTAMENTO (#560, F2): o campo `err` carregava
+      // `e.message`. Num erro do gateway isso é o corpo devolvido pelo Asaas;
+      // num erro que atravesse o driver é o SQL + os params. Nenhum dos dois
+      // é diagnóstico — é vazamento. `logarAvisoSemPII` publica a classe do
+      // erro, o SQLSTATE/HTTP status e o hash da mensagem, que correlaciona
+      // ocorrências iguais sem revelar nenhuma.
+      logarAvisoSemPII("billing-reuso.gateway-indisponivel-na-consulta", e, {
+        clinicId,
+        cicloId: ciclo.id,
+        providerChargeId: ciclo.providerChargeId,
+      });
       return {
         tipo: "bloqueado",
         totalCentavos: debito.totalCentavos,
@@ -445,11 +449,16 @@ export async function resolverGateDeDebito(
     if (estado.reuso === "morta") {
       // D-7 — estado terminal é ramo explícito, nunca exceção: um `throw` aqui
       // travaria o gate desta clínica para sempre.
-      console.warn("[billing-reuso] cobrança antiga não é reaproveitável", {
+      // `motivoNaoReuso`, e não `motivo`: `motivo` está na lista de chaves
+      // redigidas (`redacao.ts`), porque no domínio ele é texto livre
+      // (`motivo_descarte`). Aqui o valor é o enum `MotivoNaoReuso` — conjunto
+      // fechado, e o único dado que explica a linha. Renomear a chave é o que
+      // mantém o valor visível SEM afrouxar a lista.
+      logger.warn("billing-reuso.cobranca-antiga-nao-reaproveitavel", {
         clinicId,
         cicloId: ciclo.id,
         providerChargeId: ciclo.providerChargeId,
-        motivo: estado.motivo,
+        motivoNaoReuso: estado.motivo,
       });
       /**
        * **Só `nao_encontrada` (404) segue para (b). Todo outro desfecho
@@ -710,7 +719,7 @@ function indexarAgrupados(ciclos: CicloDevido[]): {
       continue;
     }
     if (ciclo.agrupadoEm) {
-      console.warn("[billing-reuso] ciclo agrupado sob âncora que não deve", {
+      logger.warn("billing-reuso.ciclo-agrupado-sob-ancora-indevida", {
         cicloId: ciclo.id,
         agrupadoEm: ciclo.agrupadoEm,
       });
@@ -791,7 +800,7 @@ async function emitirConsolidada(dados: {
    */
   const ancora = dados.ciclos.find((c) => !c.providerChargeId && !c.agrupadoEm);
   if (!ancora) {
-    console.warn("[billing-reuso] sem âncora de referência virgem no débito", {
+    logger.warn("billing-reuso.sem-ancora-de-referencia-virgem", {
       clinicId: dados.clinicId,
       cicloIds: dados.ciclos.map((c) => c.id),
     });
@@ -815,11 +824,12 @@ async function emitirConsolidada(dados: {
     });
   } catch (e) {
     if (recusaDefinitivaDoGateway(e)) {
-      console.warn("[billing-debito] gateway recusou a cobrança de débito", {
+      // Idem ao sítio de cima: `err: e.message` era o corpo cru do gateway.
+      // `httpStatus` do resumo já entrega o `e.status` do
+      // `BillingProviderError` — o campo `status` manual ficou redundante.
+      logarAvisoSemPII("billing-debito.gateway-recusou-a-cobranca", e, {
         clinicId: dados.clinicId,
         totalCentavos: dados.totalCentavos,
-        status: e instanceof BillingProviderError ? e.status : undefined,
-        err: e instanceof Error ? e.message : String(e),
       });
       return {
         tipo: "ok",
@@ -867,7 +877,7 @@ async function emitirConsolidada(dados: {
    * vencida continua pagável — devolver o mesmo copia-e-cola é o certo.
    */
   if (cobranca.status === "estornada") {
-    console.warn("[billing-debito] cobrança de débito estornada trava o gate", {
+    logger.warn("billing-debito.cobranca-estornada-trava-o-gate", {
       clinicId: dados.clinicId,
       providerChargeId: cobranca.providerChargeId,
       totalCentavos: dados.totalCentavos,

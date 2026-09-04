@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { logger } from "@/lib/observabilidade/logger";
 
 /**
  * Forma persistida de `session_snapshot.repertorio_state` e `.segmentacao`
@@ -85,9 +86,11 @@ export type EmissorDeAviso = (aviso: AvisoSnapshot) => void;
 
 /** Sem `err`, sem ids: só a categoria e quantas entradas foram ignoradas. */
 export const avisarNoConsole: EmissorDeAviso = ({ categoria, quantidade }) => {
-  console.warn(
-    `[snapshot-schema] ${categoria}: ${quantidade} entrada(s) ignorada(s)`,
-  );
+  // A categoria é um conjunto fechado (`CategoriaAvisoSnapshot`) e sai como
+  // CAMPO, não interpolada na frase: é por ela que se agrega quantas leituras
+  // de snapshot descartaram entrada, e uma frase montada em runtime não
+  // agrega.
+  logger.warn("snapshot-schema.entradas-ignoradas", { categoria, quantidade });
 };
 
 function ehObjeto(v: unknown): v is Record<string, unknown> {

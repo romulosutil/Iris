@@ -12,6 +12,8 @@ import {
 } from "drizzle-orm";
 import { authDb } from "@/db/client";
 import { auditLog, billingCycle, subscription } from "@/db/schema";
+import { logarAvisoSemPII } from "@/lib/observabilidade/logar-erro";
+import { logger } from "@/lib/observabilidade/logger";
 
 export const ACAO_ASSINATURA_CANCELADA_POR_INADIMPLENCIA =
   "assinatura_cancelada_por_inadimplencia";
@@ -978,7 +980,7 @@ export async function cancelarAssinaturasComCarenciaVencida(opcoes?: {
     // programática; este log é o que sobrevive se o cliente do job desistir
     // antes da resposta — que é justamente o cenário que o teto existe para
     // evitar.
-    console.warn("[billing-corte-truncado] elegíveis além do teto da passada", {
+    logger.warn("billing-corte.truncado-pelo-teto-da-passada", {
       teto: TETO_CORTES_POR_PASSADA,
       agora: agora.toISOString(),
     });
@@ -1112,9 +1114,14 @@ export async function cancelarAssinaturaDaClinica(
     // Tag fixa e greppável. O cancelamento JÁ aconteceu no gateway e no banco;
     // relançar aqui faria a tela dizer "falhou" sobre um ato irreversível que
     // deu certo.
-    console.warn("[billing-cancelamento-aviso] e-mail não enviado", {
+    // MUDANÇA DE COMPORTAMENTO (#560, F2): o campo `erro` carregava
+    // `e.message`. Este caminho envolve `enviarEmailTransacional` e o banco —
+    // a `message` aqui pode ser tanto a resposta do Resend (que embute o
+    // ENDEREÇO do destinatário) quanto o SQL + params do driver. É exatamente
+    // o par de vazamentos que a #546 fechou no caminho do erro, reaberto por
+    // um campo de contexto.
+    logarAvisoSemPII("billing-cancelamento-aviso.email-nao-enviado", e, {
       clinicId: linha.clinicId,
-      erro: e instanceof Error ? e.message : String(e),
     });
   }
 
@@ -1393,10 +1400,9 @@ async function revogarVinculoIdempotente(
     // Greppável: o corte prossegue, mas o operador precisa poder ver que a
     // autorização já não estava lá — é o rastro de "o cliente revogou pelo app
     // do banco" ou de uma resposta perdida no timeout.
-    console.warn(
-      "[billing-corte] vínculo já inexistente no gateway; corte prossegue",
-      { providerVinculoId },
-    );
+    logger.warn("billing-corte.vinculo-ja-inexistente-no-gateway", {
+      providerVinculoId,
+    });
   }
 }
 
@@ -1599,7 +1605,7 @@ export async function aplicarBackstopDePrazo(opcoes?: {
     : elegiveis;
 
   if (truncado) {
-    console.warn("[billing-backstop-truncado] elegíveis além do teto", {
+    logger.warn("billing-backstop.truncado-pelo-teto-da-passada", {
       teto: TETO_BACKSTOP_POR_PASSADA,
       agora: agoraIso,
     });
@@ -1705,13 +1711,10 @@ async function confirmarAutorizacaoMorta(assinatura: {
     // Greppável: é a linha que prova, em produção, se o catálogo de G3 é
     // confiável ou se o gateway devolve códigos de autorização morta com a
     // autorização viva.
-    console.warn(
-      "[billing-backstop-g3] gateway não confirmou autorização morta",
-      {
-        providerVinculoId: assinatura.providerSubscriptionId,
-        status,
-      },
-    );
+    logger.warn("billing-backstop-g3.gateway-nao-confirmou-autorizacao-morta", {
+      providerVinculoId: assinatura.providerSubscriptionId,
+      statusReconsultado: status,
+    });
     return {
       morta: false,
       erro: `[g3] gateway respondeu \`${status}\`, não \`cancelada\` — corte não confirmado, tratado como G7`,
@@ -2103,10 +2106,10 @@ export async function comandarRetentativasPendentes(opcoes?: {
     : elegiveis;
 
   if (truncado) {
-    console.warn(
-      "[billing-retentativa-truncado] elegíveis além do teto da passada",
-      { teto: TETO_RETENTATIVAS_POR_PASSADA, agora: agoraIso },
-    );
+    logger.warn("billing-retentativa.truncado-pelo-teto-da-passada", {
+      teto: TETO_RETENTATIVAS_POR_PASSADA,
+      agora: agoraIso,
+    });
   }
 
   const resultados: ResultadoComandoRetentativa[] = [];
@@ -2368,7 +2371,7 @@ export async function comandarRetentativasPendentes(opcoes?: {
  * - `conciliarPagamentoDeCiclo` cai no `return true` final (`pendente` não move
  *   nada), então a rota carimba `aplicado_em = now()` com
  *   `erro_aplicacao = NULL` — indistinguível de uma aplicação limpa;
- * - e o `console.warn` do ramo `recusada` fica justamente onde o estado JÁ é
+ * - e o aviso do ramo `recusada` fica justamente onde o estado JÁ é
  *   visível no banco, não onde ele some.
  *
  * Resultado: o runbook do `infra/README.md` manda medir "quando a primeira
@@ -2395,10 +2398,11 @@ export function avisarRecusaQueNaoConciliou(
     tipoEvento === "cobranca.recusada" || tipoEvento === "cobranca.vencida";
   if (!eventoDizRecusa || statusReconsultado === "recusada") return;
 
-  console.warn(
-    "[billing-recusa] evento de recusa NÃO virou recusa na reconsulta (#286)",
-    { providerChargeId, tipoEvento, statusReconsultado },
-  );
+  logger.warn("billing-recusa.evento-nao-virou-recusa-na-reconsulta", {
+    providerChargeId,
+    tipoEvento,
+    statusReconsultado,
+  });
 }
 
 /**
@@ -2583,7 +2587,10 @@ export async function conciliarPagamentoDeCiclo(
     // Log com tag fixa e greppável: é por ele que a primeira recusa real de
     // produção vira sinal em vez de linha morta na tabela. O grupo entra junto
     // porque é ele que explica por que o estado mudou (ou não mudou).
-    console.warn("[billing-recusa] cobrança de ciclo recusada", {
+    // `motivoRecusa` é o código FECHADO do gateway (`MAXIMUM_AMOUNT_EXCEEDED`,
+    // …), não texto livre — e não colide com a chave `motivo` da lista de
+    // redaction, que existe por causa de `motivo_descarte` no schema.
+    logger.warn("billing-recusa.cobranca-de-ciclo-recusada", {
       providerChargeId,
       motivoRecusa,
       grupo: politica.grupo,
@@ -2598,10 +2605,10 @@ export async function conciliarPagamentoDeCiclo(
       // produção (sem id de instrução, o adapter não tem onde buscar o motivo).
       // Enquanto essa linha aparecer com `null`, a classificação inteira está
       // rodando às cegas e NENHUMA recusa produz consequência.
-      console.warn(
-        "[billing-recusa-desconhecida] código fora do catálogo da #318",
-        { providerChargeId, motivoRecusa },
-      );
+      logger.warn("billing-recusa-desconhecida.codigo-fora-do-catalogo", {
+        providerChargeId,
+        motivoRecusa,
+      });
     }
 
     if (politica.conciliaComoPago) {
@@ -2642,7 +2649,7 @@ export async function conciliarPagamentoDeCiclo(
       // Grupo IGUAL é a única situação em que não se perde informação: a 2ª e a
       // 3ª tentativa falharam pelo mesmo motivo da 1ª, e reescrever só trocaria
       // o carimbo por um carimbo idêntico.
-      console.warn("[billing-recusa] recusa de RETENTATIVA preservada", {
+      logger.warn("billing-recusa.recusa-de-retentativa-preservada", {
         providerChargeId,
         motivoRecusa,
         grupo: politica.grupo,

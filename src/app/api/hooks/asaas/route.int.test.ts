@@ -19,6 +19,7 @@ vi.mock("server-only", () => ({}));
 
 const { authDb } = await import("@/db/client");
 const { POST } = await import("./route");
+const { capturarLog } = await import("@/lib/observabilidade/captura-de-log");
 const { listarCobrancasDeCicloNaoConciliadas } =
   await import("@/lib/billing/erro-aplicacao");
 
@@ -894,14 +895,15 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       respondeCobranca("OVERDUE");
       respondeInstrucoes([]);
 
-      // O `console.warn` com tag greppável ("[billing-recusa]") é o mecanismo
-      // pelo qual a primeira recusa real de produção vira sinal em vez de
-      // linha morta na tabela — sem esta asserção, removê-lo seria invisível.
-      const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
+      // O aviso `billing-recusa.*` é o mecanismo pelo qual a primeira recusa
+      // real de produção vira sinal em vez de linha morta na tabela — sem esta
+      // asserção, removê-lo seria invisível. (#560/F2: era um espião de
+      // `console.warn`; o sítio migrou para o logger estruturado.)
+      const aviso = capturarLog();
 
       // `try/finally`: qualquer `expect` que falhe aqui dentro lança, e sem o
-      // `finally` o dublê de `console.warn` vazaria para os testes seguintes
-      // do arquivo (silenciando avisos que eles deveriam ver).
+      // `finally` o sink de captura vazaria para os testes seguintes do
+      // arquivo (engolindo avisos que eles deveriam ver).
       try {
         const id = novoIdEvento();
         const res = await POST(
@@ -920,22 +922,17 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
         expect(ciclo.status).toBe("aguardando_pagamento");
         expect(ciclo.erro).toBeNull();
 
-        expect(aviso).toHaveBeenCalledWith(
-          "[billing-recusa] cobrança de ciclo recusada",
-          expect.objectContaining({ providerChargeId: paymentId, grupo: "G0" }),
-        );
-        // A tag PRÓPRIA do desconhecido, com o literal recebido (`null` aqui):
-        // é assim que "o catálogo cresceu" — ou "o motivo não está chegando" —
-        // vira trabalho agendado em vez de incidente.
-        expect(aviso).toHaveBeenCalledWith(
-          "[billing-recusa-desconhecida] código fora do catálogo da #318",
-          expect.objectContaining({
-            providerChargeId: paymentId,
-            motivoRecusa: null,
-          }),
-        );
+        expect(
+          aviso.evento("billing-recusa.cobranca-de-ciclo-recusada"),
+        ).toMatchObject({ providerChargeId: paymentId, grupo: "G0" });
+        // O evento PRÓPRIO do desconhecido, com o literal recebido (`null`
+        // aqui): é assim que "o catálogo cresceu" — ou "o motivo não está
+        // chegando" — vira trabalho agendado em vez de incidente.
+        expect(
+          aviso.evento("billing-recusa-desconhecida.codigo-fora-do-catalogo"),
+        ).toMatchObject({ providerChargeId: paymentId, motivoRecusa: null });
       } finally {
-        aviso.mockRestore();
+        aviso.restaurar();
       }
     });
 
@@ -1046,7 +1043,7 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
       // justamente na divergência que o motivo importa para o diagnóstico.
       respondeInstrucao("MAXIMUM_AMOUNT_EXCEEDED");
 
-      const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const aviso = capturarLog();
       try {
         const id = novoIdEvento();
         const res = await POST(
@@ -1077,19 +1074,18 @@ describe.skipIf(!hasDb)("POST /api/hooks/asaas", () => {
         expect(evento.aplicado_em).not.toBeNull();
         expect(evento.erro_aplicacao).toBeNull();
 
-        // ...e é por isso que o sinal tem que vir do log. Mesma tag
-        // `[billing-recusa]` da recusa conciliada: um grep só traz as duas
+        // ...e é por isso que o sinal tem que vir do log. Mesmo prefixo
+        // `billing-recusa.` da recusa conciliada: um grep só traz as duas
         // metades da hipótese.
-        expect(aviso).toHaveBeenCalledWith(
-          "[billing-recusa] evento de recusa NÃO virou recusa na reconsulta (#286)",
-          expect.objectContaining({
-            providerChargeId: paymentId,
-            tipoEvento: "cobranca.recusada",
-            statusReconsultado: "pendente",
-          }),
-        );
+        expect(
+          aviso.evento("billing-recusa.evento-nao-virou-recusa-na-reconsulta"),
+        ).toMatchObject({
+          providerChargeId: paymentId,
+          tipoEvento: "cobranca.recusada",
+          statusReconsultado: "pendente",
+        });
       } finally {
-        aviso.mockRestore();
+        aviso.restaurar();
       }
     });
 

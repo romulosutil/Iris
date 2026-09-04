@@ -7,6 +7,7 @@ import {
   formatarMetricaSegmentacao,
   type AvisoSnapshot,
 } from "./snapshot-schema";
+import { capturarLog } from "@/lib/observabilidade/captura-de-log";
 
 /**
  * #558 — todo snapshot gravado ANTES desta feature não tem
@@ -145,14 +146,21 @@ describe("snapshot-schema (A-06, #538)", () => {
     ]);
   });
 
-  it("o emissor padrão escreve só categoria e quantidade no console", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    lerRepertorioState({ [GOAL]: "x" });
-    expect(warn).toHaveBeenCalledTimes(1);
-    const msg = String(warn.mock.calls[0]?.[0]);
-    expect(msg).toContain("repertorio_entrada_invalida");
-    expect(msg).not.toContain(GOAL);
-    warn.mockRestore();
+  it("o emissor padrão registra só categoria e quantidade", () => {
+    const log = capturarLog();
+    try {
+      lerRepertorioState({ [GOAL]: "x" });
+      expect(log.registros).toHaveLength(1);
+      const registro = log.evento("snapshot-schema.entradas-ignoradas");
+      // #560/F2: a categoria virou CAMPO. Antes ia interpolada na frase, o que
+      // impedia agregar por categoria sem parsear a string.
+      expect(registro?.categoria).toBe("repertorio_entrada_invalida");
+      expect(registro?.quantidade).toBe(1);
+      // O id do goal continua fora: ele identifica o paciente por associação.
+      expect(log.bruto()).not.toContain(GOAL);
+    } finally {
+      log.restaurar();
+    }
   });
 
   it("o tipo é snake_case: camelCase não é o campo que o banco tem", () => {

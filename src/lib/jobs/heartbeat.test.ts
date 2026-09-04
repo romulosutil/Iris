@@ -3,6 +3,7 @@
  * `.mjs` (scripts/lib/heartbeat.test.mjs), agora do lado do app.
  */
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { capturarLog } from "@/lib/observabilidade/captura-de-log";
 
 const chamadas: { texto: string; valores: unknown[] }[] = [];
 let proximoErro: unknown = null;
@@ -58,16 +59,28 @@ describe("heartbeat.ts — registrarHeartbeat (#536)", () => {
   });
 
   test("banco lança → devolve false, loga name+code, NUNCA propaga nem loga a message", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // #560/F2: o registro passou a sair pelo logger estruturado. A captura lê
+    // o registro ANTES do transporte — que é onde a garantia mora (a redaction
+    // roda em `registrar`, não no sink).
+    const log = capturarLog();
     proximoErro = Object.assign(new Error("params: Paciente Fulano"), {
       name: "PostgresError",
       code: "42501",
     });
 
-    expect(await registrarHeartbeat("asr", false, "erro=x")).toBe(false);
+    try {
+      expect(await registrarHeartbeat("asr", false, "erro=x")).toBe(false);
 
-    const logado = warn.mock.calls[0]!.join(" ");
-    expect(logado).toContain("42501");
-    expect(logado).not.toContain("Fulano");
+      const registro = log.evento("heartbeat.gravacao-falhou");
+      expect(registro).toBeDefined();
+      expect(registro?.codigo).toBe("42501");
+      expect(registro?.erroNome).toBe("PostgresError");
+      // O job entra como CAMPO, não interpolado numa frase: é por ele que se
+      // filtra qual job parou de bater.
+      expect(registro?.job).toBe("asr");
+      expect(log.bruto()).not.toContain("Fulano");
+    } finally {
+      log.restaurar();
+    }
   });
 });

@@ -22,6 +22,7 @@
  */
 import { sql } from "@/db/client";
 import { codigoPg } from "@/db/pg-error";
+import { logarAvisoSemPII } from "@/lib/observabilidade/logar-erro";
 
 /** Nomes válidos — casam com `LIMITES_HEARTBEAT` em scripts/alarme-jobs.mjs. */
 export type JobComHeartbeatNaRota =
@@ -54,9 +55,14 @@ export async function registrarHeartbeat(
     await sql`SELECT app_job_heartbeat_gravar(${job}, ${ok}, ${detalhe})`;
     return true;
   } catch (err) {
-    console.warn(
-      `[heartbeat] ${job}: não foi possível gravar o heartbeat (${detalheDoErro(err)}) — o detector de alarme vai acusar.`,
-    );
+    // `logarAvisoSemPII`, e não `logger.warn`: o que se loga aqui É um erro do
+    // banco, e a `message` do driver é o SQL + os params — que num `UPDATE` do
+    // diário é a nota clínica. O helper reduz ao conjunto fechado (classe do
+    // erro, SQLSTATE, constraint, hash) antes de chegar ao registro.
+    //
+    // A frase inteira virou campo: `job` é o que se filtra, e a consequência
+    // ("o detector de alarme vai acusar") é documentação, não dado de log.
+    logarAvisoSemPII("heartbeat.gravacao-falhou", err, { job });
     return false;
   }
 }

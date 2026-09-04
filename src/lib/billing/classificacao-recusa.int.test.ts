@@ -16,6 +16,7 @@ vi.mock("server-only", () => ({}));
 
 const { conciliarPagamentoDeCiclo } = await import("./subscription");
 const { classificarRecusa } = await import("./classificacao-recusa");
+const { capturarLog } = await import("@/lib/observabilidade/captura-de-log");
 
 /**
  * #318 — um caso por grupo de desfecho, com a régua de comportamento do §5.2:
@@ -159,49 +160,38 @@ async function limpar(): Promise<void> {
 }
 
 /**
- * Espião do `console.warn`.
+ * Captura dos registros do logger.
  *
  * Não é zelo: para **G6, G7 e G0 o log é o único canal que existe**. Os três não
  * escrevem nada no banco (a tabela da #318 diz "a clínica vê: nada"), então sem
  * observar o aviso os três casos ficariam indistinguíveis entre si — e um mapa
  * que jogasse G6 em G0 passaria verde medindo só o banco. É exatamente o defeito
  * [teste-verde-que-nao-testa-nada].
+ *
+ * #560/F2: era um espião de `console.warn` lendo `calls[0][1].grupo` — o objeto
+ * de contexto como segundo argumento. O sítio migrou para o logger estruturado,
+ * que emite UM registro já redigido; a captura o lê antes do transporte.
  */
-function espiarWarn() {
-  return vi.spyOn(console, "warn").mockImplementation(() => {});
-}
+let aviso: ReturnType<typeof capturarLog>;
 
-let aviso: ReturnType<typeof espiarWarn>;
-
-/** As linhas de `console.warn` publicadas no caso corrente. */
-function linhasDeAviso(): [string, Record<string, unknown>?][] {
-  return aviso.mock.calls as unknown as [string, Record<string, unknown>?][];
-}
-
-/** O grupo que a linha `[billing-recusa]` publicou. */
+/** O grupo que o registro `billing-recusa.*` publicou. */
 function grupoAvisado(): unknown {
-  const chamada = linhasDeAviso().find(
-    ([msg]) => msg === "[billing-recusa] cobrança de ciclo recusada",
-  );
-  return chamada?.[1]?.grupo;
+  return aviso.evento("billing-recusa.cobranca-de-ciclo-recusada")?.grupo;
 }
 
-/** Se a tag PRÓPRIA do código desconhecido saiu. */
+/** Se o evento PRÓPRIO do código desconhecido saiu. */
 function avisouDesconhecida(): boolean {
-  return linhasDeAviso().some(
-    ([msg]) =>
-      msg === "[billing-recusa-desconhecida] código fora do catálogo da #318",
-  );
+  return aviso.houve("billing-recusa-desconhecida.codigo-fora-do-catalogo");
 }
 
 describe.skipIf(!hasDb)("#318 · desfecho da recusa por grupo", () => {
   beforeEach(async () => {
     await limpar();
-    aviso = espiarWarn();
+    aviso = capturarLog();
   });
 
   afterEach(() => {
-    aviso.mockRestore();
+    aviso.restaurar();
   });
 
   afterAll(async () => {

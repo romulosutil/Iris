@@ -1,6 +1,8 @@
 import "server-only";
 
 import { timingSafeEqual } from "node:crypto";
+import { logarAvisoSemPII } from "@/lib/observabilidade/logar-erro";
+import { logger } from "@/lib/observabilidade/logger";
 import { PISO_TETO_AUTORIZACAO_CENTAVOS } from "../calculator";
 import {
   BillingProviderError,
@@ -600,14 +602,14 @@ function normalizarEventoAsaas(payload: unknown): EventoWebhookNormalizado {
       (retentativa.proposito === "RETRY_AFTER_DUE_DATE" &&
         retentativa.tentativa === null))
   ) {
-    console.warn(
-      "[billing-retentativa-envelope-inesperado] purpose/retryAttempt fora do contrato lido da doc (#322, D46)",
-      {
-        providerInstructionId: idInstrucao,
-        purposeBruto: instrucao.purpose,
-        retryAttemptBruto: instrucao.retryAttempt,
-      },
-    );
+    // `purposeBruto`/`retryAttemptBruto` são o valor CRU do envelope do
+    // gateway, e é o ponto do log: descobrir o código novo que a doc não
+    // lista. São campos de contrato de faturamento — nunca dado do paciente.
+    logger.warn("billing-retentativa.envelope-inesperado", {
+      providerInstructionId: idInstrucao,
+      purposeBruto: instrucao.purpose,
+      retryAttemptBruto: instrucao.retryAttempt,
+    });
   }
 
   if (idCobranca) {
@@ -1064,9 +1066,10 @@ export class AsaasProvider implements BillingProvider {
       const payload = comoTexto(qr.payload);
       return payload ? { pixCopiaECola: payload } : {};
     } catch (e) {
-      console.warn("[billing-debito] falha ao obter BR Code da cobrança", {
+      // MUDANÇA DE COMPORTAMENTO (#560, F2): `err: e.message` era o corpo cru
+      // devolvido pelo Asaas. Sai a classe do erro + o HTTP status.
+      logarAvisoSemPII("billing-debito.falha-ao-obter-br-code", e, {
         providerChargeId,
-        err: e instanceof Error ? e.message : String(e),
       });
       return {};
     }
@@ -1162,7 +1165,7 @@ export class AsaasProvider implements BillingProvider {
       // 5xx, 401/408/429) SOBE — "não consegui verificar" virando "não existe"
       // é o caminho direto para a cobrança dupla (precedente #157).
       if (e instanceof BillingProviderError && e.status === 404) {
-        console.warn("[billing-reuso] cobrança não encontrada no gateway", {
+        logger.warn("billing-reuso.cobranca-nao-encontrada-no-gateway", {
           providerChargeId,
         });
         return { reuso: "morta", motivo: "nao_encontrada" };
@@ -1210,7 +1213,7 @@ export class AsaasProvider implements BillingProvider {
       // Viva e pagável no gateway, mas sem valor legível. Não é `pagavel`:
       // apresentar um copia-e-cola ao lado de "R$ 0,00" é a mesma mentira do QR
       // vazio. E não é do grupo "pode emitir outra" — a cobrança segue viva.
-      console.warn("[billing-reuso] cobrança pagável sem valor legível", {
+      logger.warn("billing-reuso.cobranca-pagavel-sem-valor-legivel", {
         providerChargeId,
         valor: valorBruto,
       });
@@ -1242,7 +1245,7 @@ export class AsaasProvider implements BillingProvider {
     // Existe e está pagável no gateway, mas não veio forma nenhuma de pagar.
     // Não é `pagavel`: renderizar um QR vazio faria a clínica achar que pagou o
     // que não pagou. Vira cobrança nova consolidada.
-    console.warn("[billing-reuso] cobrança pagável sem link nem copia-e-cola", {
+    logger.warn("billing-reuso.cobranca-pagavel-sem-forma-de-pagamento", {
       providerChargeId,
     });
     return { reuso: "morta", motivo: "sem_forma_de_pagamento" };
@@ -1380,11 +1383,16 @@ export class AsaasProvider implements BillingProvider {
 
       return comoTexto(instrucao.refusalReason);
     } catch (e) {
-      console.warn("[billing-recusa] falha ao ler a instrução de pagamento", {
-        providerChargeId,
-        providerInstructionId,
-        err: e instanceof Error ? e.message : String(e),
-      });
+      // MUDANÇA DE COMPORTAMENTO (#560, F2): `err: e.message` era o corpo cru
+      // devolvido pelo Asaas.
+      logarAvisoSemPII(
+        "billing-recusa.falha-ao-ler-instrucao-de-pagamento",
+        e,
+        {
+          providerChargeId,
+          providerInstructionId,
+        },
+      );
       return null;
     }
   }

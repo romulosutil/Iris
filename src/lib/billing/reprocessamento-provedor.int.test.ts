@@ -19,6 +19,7 @@ vi.mock("server-only", () => ({}));
 
 const { authDb } = await import("@/db/client");
 const { reprocessarEventosPendentes } = await import("./subscription");
+const { capturarLog } = await import("@/lib/observabilidade/captura-de-log");
 
 /**
  * Varredura de pendentes do Asaas (#36).
@@ -630,7 +631,7 @@ describe.skipIf(!hasDb)("reprocessarEventosPendentes", () => {
       // O gateway discorda do evento: para ele a cobrança segue viva.
       respondeCobrancaAsaas("PENDING");
 
-      const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const aviso = capturarLog();
       try {
         const r = await reprocessarEventosPendentes();
         expect(r).toEqual({ aplicados: 1, falhas: 0 });
@@ -640,16 +641,15 @@ describe.skipIf(!hasDb)("reprocessarEventosPendentes", () => {
           "aguardando_pagamento",
         );
 
-        expect(aviso).toHaveBeenCalledWith(
-          "[billing-recusa] evento de recusa NÃO virou recusa na reconsulta (#286)",
-          expect.objectContaining({
-            providerChargeId: paymentId,
-            tipoEvento: "cobranca.recusada",
-            statusReconsultado: "pendente",
-          }),
-        );
+        expect(
+          aviso.evento("billing-recusa.evento-nao-virou-recusa-na-reconsulta"),
+        ).toMatchObject({
+          providerChargeId: paymentId,
+          tipoEvento: "cobranca.recusada",
+          statusReconsultado: "pendente",
+        });
       } finally {
-        aviso.mockRestore();
+        aviso.restaurar();
       }
     });
   });
