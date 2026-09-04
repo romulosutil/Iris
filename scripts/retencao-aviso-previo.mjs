@@ -280,6 +280,15 @@ export async function main(args = process.argv.slice(2)) {
   // em 100% dos ticks, e "falhou" sem o nome vira caçada no painel.
   const url = process.env.RETENCAO_DATABASE_URL;
   if (!url) {
+    // R352.E4 exige NOMEAR a variável ausente. O `throw` continua nomeando (é
+    // o que o teste unitário lê), mas no container quem imprime é `logarErro`,
+    // que troca a `message` por `hashMensagem`. Sem esta linha o requisito
+    // valeria no teste e não no painel — que é onde ele importa.
+    log.error("retencao.env-ausente", {
+      env: "RETENCAO_DATABASE_URL",
+      role: "iris_retencao",
+      runbook: "infra/README.md §Aviso prévio de expurgo",
+    });
     throw new Error(
       "RETENCAO_DATABASE_URL não definida — o job de aviso prévio de expurgo precisa da role " +
         "de login que herda `iris_retencao`. Ver §Aviso prévio de expurgo em .env.example.",

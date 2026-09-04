@@ -18,6 +18,13 @@
 # código lá dentro, que é a única coisa que prova que o que o processo importa
 # chegou na imagem.
 #
+# O <trecho-esperado> de cada guarda de env é um PEDAÇO DO REGISTRO JSON, não
+# uma frase solta: desde a #560/F3b os jobs `.mjs` escrevem pelo emissor
+# estruturado, e a guarda sai como
+# {"env":"X",...,"evento":"<job>.env-ausente"}. Casar pelo CAMPO (`"env":"X"`)
+# é mais forte do que casar pela frase antiga: é o dado que o operador
+# procura no painel, e ele sobrevive a qualquer reescrita da mensagem.
+#
 # Regra de leitura de cada asserção (vale para os dois serviços):
 #   - exit != 0 com a mensagem de guarda ESPERADA  -> VERDE. O módulo carregou
 #     inteiro e o programa morreu onde deveria: na env que falta.
@@ -158,7 +165,7 @@ carga_escalonamento() {
 	# conexão — e é exatamente essa falha que se exige aqui.
 	esperar_falha_com \
 		"escalonamento: carga por caminho ABSOLUTO" \
-		"ESCALONAMENTO_DATABASE_URL não definida" \
+		'"env":"ESCALONAMENTO_DATABASE_URL"' \
 		-- docker run --rm "${TAG_ESCALONAMENTO}" \
 		node /app/scripts/escalonamento-risco.mjs --dry-run
 
@@ -168,7 +175,7 @@ carga_escalonamento() {
 	# varrer nada). Se essa guarda regredir, esta asserção pega o exit 0.
 	esperar_falha_com \
 		"escalonamento: carga por caminho RELATIVO (forma do compose)" \
-		"ESCALONAMENTO_DATABASE_URL não definida" \
+		'"env":"ESCALONAMENTO_DATABASE_URL"' \
 		-- docker run --rm -w /app "${TAG_ESCALONAMENTO}" \
 		node scripts/escalonamento-risco.mjs --dry-run
 
@@ -466,7 +473,7 @@ carga_billing() {
 	# uma mensagem genérica aqui viraria caçada no painel.
 	esperar_falha_com \
 		"billing: carga por caminho ABSOLUTO" \
-		"variável(is) de ambiente ausente(s): BILLING_JOB_URL, BILLING_JOB_TOKEN" \
+		'"faltando":["BILLING_JOB_URL","BILLING_JOB_TOKEN"]' \
 		-- docker run --rm "${TAG_BILLING}" \
 		node /app/scripts/fechamento-ciclo-billing.mjs --once
 
@@ -476,7 +483,7 @@ carga_billing() {
 	# exit 0, porque `esperar_falha_com` trata exit 0 como falha do teste.
 	esperar_falha_com \
 		"billing: carga por caminho RELATIVO (forma do compose)" \
-		"variável(is) de ambiente ausente(s): BILLING_JOB_URL, BILLING_JOB_TOKEN" \
+		'"faltando":["BILLING_JOB_URL","BILLING_JOB_TOKEN"]' \
 		-- docker run --rm -w /app "${TAG_BILLING}" \
 		node scripts/fechamento-ciclo-billing.mjs --once
 
@@ -528,7 +535,7 @@ carga_retencao() {
 	# exatamente essa falha, NOMEANDO a variável, que se exige aqui.
 	esperar_falha_com \
 		"retencao: carga por caminho ABSOLUTO" \
-		"RETENCAO_DATABASE_URL não definida" \
+		'"env":"RETENCAO_DATABASE_URL"' \
 		-- docker run --rm "${TAG_RETENCAO}" \
 		node /app/scripts/retencao-aviso-previo.mjs --dry-run
 
@@ -539,7 +546,7 @@ carga_retencao() {
 	# regredir, esta asserção pega o exit 0.
 	esperar_falha_com \
 		"retencao: carga por caminho RELATIVO" \
-		"RETENCAO_DATABASE_URL não definida" \
+		'"env":"RETENCAO_DATABASE_URL"' \
 		-- docker run --rm -w /app "${TAG_RETENCAO}" \
 		node scripts/retencao-aviso-previo.mjs --dry-run
 
@@ -584,7 +591,7 @@ carga_alarme() {
 
 	esperar_falha_com \
 		"alarme: carga por caminho ABSOLUTO" \
-		"variável de ambiente ausente: ALARME_DATABASE_URL" \
+		'"env":"ALARME_DATABASE_URL"' \
 		-- docker run --rm "${TAG_ALARME}" \
 		node /app/scripts/alarme-jobs.mjs
 
@@ -630,14 +637,14 @@ carga_exportacao() {
 	# produção é tocada por este teste.
 	esperar_falha_com \
 		"exportacao: carga por caminho ABSOLUTO" \
-		"EXPORT_JOB_URL e EXPORT_JOB_TOKEN são obrigatórias" \
+		'"env":["EXPORT_JOB_URL","EXPORT_JOB_TOKEN"]' \
 		-- docker run --rm "${TAG_EXPORTACAO}" \
 		node /app/scripts/exportacao-acervo.mjs
 
 	# Forma RELATIVA: é a documentada em infra/docker-compose.yml.
 	esperar_falha_com \
 		"exportacao: carga por caminho RELATIVO (forma do compose)" \
-		"EXPORT_JOB_URL e EXPORT_JOB_TOKEN são obrigatórias" \
+		'"env":["EXPORT_JOB_URL","EXPORT_JOB_TOKEN"]' \
 		-- docker run --rm -w /app "${TAG_EXPORTACAO}" \
 		node scripts/exportacao-acervo.mjs
 
@@ -688,7 +695,7 @@ carga_arquivamento() {
 	# exatamente essa falha, NOMEANDO a variável, que se exige aqui.
 	esperar_falha_com \
 		"arquivamento: carga por caminho ABSOLUTO" \
-		"ARQUIVAMENTO_DATABASE_URL não definida" \
+		'"env":"ARQUIVAMENTO_DATABASE_URL"' \
 		-- docker run --rm "${TAG_ARQUIVAMENTO}" \
 		node /app/scripts/auto-arquivamento.mjs --dry-run
 
@@ -698,7 +705,7 @@ carga_arquivamento() {
 	# asserção pega o exit 0.
 	esperar_falha_com \
 		"arquivamento: carga por caminho RELATIVO (forma do compose)" \
-		"ARQUIVAMENTO_DATABASE_URL não definida" \
+		'"env":"ARQUIVAMENTO_DATABASE_URL"' \
 		-- docker run --rm -w /app "${TAG_ARQUIVAMENTO}" \
 		node scripts/auto-arquivamento.mjs --dry-run
 
@@ -753,7 +760,7 @@ carga_expurgo_audit_log() {
 
 	esperar_falha_com \
 		"expurgo-audit-log: carga por caminho ABSOLUTO" \
-		"EXPURGO_DATABASE_URL não definida" \
+		'"env":"EXPURGO_DATABASE_URL"' \
 		-- docker run --rm "${TAG_EXPURGO_AUDIT_LOG}" \
 		node /app/scripts/expurgo-audit-log.mjs
 
@@ -764,7 +771,7 @@ carga_expurgo_audit_log() {
 	# regredir, esta asserção pega o exit 0.
 	esperar_falha_com \
 		"expurgo-audit-log: carga por caminho RELATIVO" \
-		"EXPURGO_DATABASE_URL não definida" \
+		'"env":"EXPURGO_DATABASE_URL"' \
 		-- docker run --rm -w /app "${TAG_EXPURGO_AUDIT_LOG}" \
 		node scripts/expurgo-audit-log.mjs
 
@@ -774,7 +781,7 @@ carga_expurgo_audit_log() {
 	# "estoura 42501 a cada tick".
 	esperar_falha_com \
 		"expurgo-audit-log: NÃO cai em DATABASE_URL (fail-closed na role)" \
-		"EXPURGO_DATABASE_URL não definida" \
+		'"env":"EXPURGO_DATABASE_URL"' \
 		-- docker run --rm -e DATABASE_URL=postgres://app:app@127.0.0.1:5432/iris \
 		"${TAG_EXPURGO_AUDIT_LOG}" node /app/scripts/expurgo-audit-log.mjs
 

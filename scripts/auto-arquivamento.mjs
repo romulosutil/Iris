@@ -193,6 +193,14 @@ export async function main(args = process.argv.slice(2)) {
 
   const url = process.env.ARQUIVAMENTO_DATABASE_URL;
   if (!url) {
+    // Ver a nota gêmea em escalonamento-risco.mjs: o `throw` é o contrato do
+    // teste unitário, mas quem o captura é `logarErro`, que hasheia a
+    // `message`. O nome da env sai aqui, em campo, para sobreviver ao hash.
+    log.error("arquivamento.env-ausente", {
+      env: "ARQUIVAMENTO_DATABASE_URL",
+      role: "iris_arquivamento",
+      runbook: "infra/README.md §Auto-arquivamento por inatividade",
+    });
     throw new Error(
       "ARQUIVAMENTO_DATABASE_URL não definida — o job de auto-arquivamento precisa da role " +
         "de login que herda `iris_arquivamento`. Ver §Auto-arquivamento por inatividade em infra/README.md.",

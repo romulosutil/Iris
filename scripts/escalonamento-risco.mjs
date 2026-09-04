@@ -318,6 +318,16 @@ async function main() {
 
   const url = process.env.ESCALONAMENTO_DATABASE_URL;
   if (!url) {
+    // O evento sai ANTES do `throw`: quem captura a exceção lá embaixo é
+    // `logarErro`, que troca a `message` por `hashMensagem` (a `message` de um
+    // driver é a query com os params). O hash protege o incidente com PHI e
+    // apaga justamente o dado que o operador precisa aqui — o NOME da env. Por
+    // isso o nome viaja num campo de conjunto fechado, como nos jobs vizinhos.
+    log.error("escalonamento.env-ausente", {
+      env: "ESCALONAMENTO_DATABASE_URL",
+      role: "iris_escalonamento",
+      runbook: "infra/README.md §Motor de escalonamento",
+    });
     throw new Error(
       "ESCALONAMENTO_DATABASE_URL não definida — o motor de escalonamento precisa da role " +
         "de login que herda `iris_escalonamento`. Ver §Motor de escalonamento em infra/README.md.",
