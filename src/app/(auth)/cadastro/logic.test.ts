@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { capturarLog } from "@/lib/observabilidade/captura-de-log";
 
 // ─── Dublês ──────────────────────────────────────────────────────────────────
 // O núcleo (Task 5) e o throttle persistente (este slice) são mockados: aqui
@@ -646,14 +647,7 @@ describe("executarCadastro", () => {
     // ganhava o oráculo de graça, e o custo do próprio log caía FORA da janela
     // normalizada. O canal saiu; observabilidade de estouro fica com métrica
     // genérica de duração de requisição, que não distingue ramo.
-    const warns: unknown[][] = [];
-    const errors: unknown[][] = [];
-    const w = vi
-      .spyOn(console, "warn")
-      .mockImplementation((...a) => void warns.push(a));
-    const e = vi
-      .spyOn(console, "error")
-      .mockImplementation((...a) => void errors.push(a));
+    const log = capturarLog();
     try {
       criarContaEClinica.mockImplementation(async () => {
         await new Promise((r) => setTimeout(r, PISO_RESPOSTA_MS + 200));
@@ -661,15 +655,12 @@ describe("executarCadastro", () => {
       });
       await executarCadastro(fd(completo));
     } finally {
-      w.mockRestore();
-      e.mockRestore();
+      log.restaurar();
     }
-    const tudo = [...warns, ...errors]
-      .map((l) => l.map((x) => String(x)).join(" "))
-      .join(" | ");
-    expect(tudo).not.toContain("PISO");
-    expect(warns).toHaveLength(0);
-    expect(errors).toHaveLength(0);
+    // #560 (F4): mede o registro antes do transporte, e não o `console` — o
+    // oráculo continua sendo "nenhuma linha correlacionada ao ramo saiu".
+    expect(log.bruto()).not.toContain("PISO");
+    expect(log.registros).toHaveLength(0);
   }, 30_000);
 
   // ── Log de erro do núcleo ──────────────────────────────────────────────────
@@ -679,12 +670,7 @@ describe("executarCadastro", () => {
     // parâmetros da query — aqui, e-mail do titular e potencialmente o hash da
     // senha. Log de servidor não é lugar de dado pessoal (LGPD) e o objeto cru
     // também vaza estrutura interna para quem lê o log.
-    const linhas: unknown[][] = [];
-    const espiao = vi
-      .spyOn(console, "error")
-      .mockImplementation((...a: unknown[]) => {
-        linhas.push(a);
-      });
+    const log = capturarLog();
     try {
       const erroDeDriver = Object.assign(
         new Error("insert into user ... failed"),
@@ -698,23 +684,23 @@ describe("executarCadastro", () => {
       });
       await executarCadastro(fd(completo));
     } finally {
-      espiao.mockRestore();
+      log.restaurar();
     }
 
-    expect(linhas.length).toBeGreaterThan(0);
-    const tudo = linhas
-      .map((l) => l.map((x) => String(x)).join(" "))
-      .join("\n");
+    const registro = log.evento("cadastro.falha-ao-criar-conta-e-clinica");
+    expect(registro?.nivel).toBe("error");
+    // A asserção negativa varre TUDO que foi capturado, não só o registro
+    // esperado: o e-mail não pode reaparecer por outro caminho.
+    const tudo = log.bruto();
     expect(tudo).not.toContain(completo.email);
     expect(tudo).not.toContain("scrypt$hash$secreto");
-    // Nenhum argumento pode ser o objeto de erro em si — `String(err)` esconde
-    // as propriedades, mas o console de produção serializa o objeto inteiro.
-    for (const linha of linhas) {
-      for (const arg of linha) expect(arg).not.toBeInstanceOf(Error);
-    }
-    // E ainda assim precisa ser diagnosticável: nome do erro + código.
-    expect(tudo).toContain("Error");
-    expect(tudo).toContain("23505");
+    // Nem a `message` do driver, que é onde o SQL e os params moram.
+    expect(tudo).not.toContain("insert into user");
+    // E ainda assim precisa ser diagnosticável: classe do erro + SQLSTATE, em
+    // campos próprios. `erroNome` e não `nome`: `nome` é chave de PII na
+    // redaction (é o nome do paciente no domínio) e sairia `[redigido]`.
+    expect(registro?.erroNome).toBe("Error");
+    expect(registro?.codigo).toBe("23505");
   }, 20_000);
 
   // ── Concorrência ───────────────────────────────────────────────────────────

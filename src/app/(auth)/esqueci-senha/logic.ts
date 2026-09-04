@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { auth } from "@/auth/auth";
 import { registrarTentativa } from "@/lib/throttle";
 import { consumirTentativa } from "@/lib/rate-limit";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 import { mensagemUniforme } from "./mensagem";
 
 export type EstadoEsqueciSenha = { error?: string; mensagem?: string };
@@ -160,14 +161,6 @@ function validarEsqueciSenha(
   return { ok: true, email };
 }
 
-function descreverErro(err: unknown): string {
-  const nome = err instanceof Error ? err.name : typeof err;
-  const codigo = (err as { code?: unknown })?.code;
-  return typeof codigo === "string" || typeof codigo === "number"
-    ? `${nome}(code=${codigo})`
-    : nome;
-}
-
 /**
  * Núcleo público (`server-only`, sem `"use server"`) da recuperação de senha.
  * A superfície invocável pelo cliente é só `./actions.ts` (Issue #55).
@@ -263,14 +256,16 @@ export async function executarEsqueciSenha(
     // Fix round 1 (finding M4 do review): antes este catch falhava em
     // silêncio total — um outage de throttle (Postgres ou processo) virava
     // "todo mundo bloqueado" sem NENHUM sinal em log para o operador
-    // perceber. `descreverErro` (mesma função usada abaixo, na chamada ao
-    // Better-Auth) já garante que só nome+código do erro são logados, nunca
-    // o objeto cru — que poderia carregar parâmetros de query com o e-mail
-    // do titular (mesmo cuidado do achado M1 da Task 7).
-    console.error(
-      "executarEsqueciSenha: throttle indisponível, bloqueando (fail-closed):",
-      descreverErro(err),
-    );
+    // perceber. O registro nunca leva o objeto cru — que poderia carregar
+    // parâmetros de query com o e-mail do titular (mesmo cuidado do achado
+    // M1 da Task 7).
+    //
+    // #560 (F4): o `descreverErro` local daqui montava `nome(code=…)`.
+    // `logarErroSemPII` produz um SUPERCONJUNTO disso em campos separados
+    // (`erroNome`, `codigo`, `constraint`, `causaNome`, `httpStatus`,
+    // `hashMensagem`, `correlacaoId`) e passa pela redaction por chave, que
+    // um `console.error` com string pronta contornava.
+    logarErroSemPII("esqueci-senha.throttle-indisponivel-fail-closed", err);
     permitido = false;
   }
 
@@ -280,10 +275,7 @@ export async function executarEsqueciSenha(
         body: { email: validado.email, redirectTo: "/redefinir-senha" },
       });
     } catch (err) {
-      console.error(
-        "executarEsqueciSenha: falha ao solicitar redefinição:",
-        descreverErro(err),
-      );
+      logarErroSemPII("esqueci-senha.falha-ao-solicitar-redefinicao", err);
     }
   }
 
