@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Scrubber } from "./scrubber";
 import { DeltaSessaoLateral } from "./delta-sessao";
 import { EstadoDeErro } from "./estado-de-erro";
 import { GraficoEspectro } from "./grafico-espectro";
 import { VistaNav, type VistaEvolucao } from "./vista-nav";
+import { BlocoRotinas } from "./bloco-rotinas";
 import {
   carregarDeltaSessaoAction,
   carregarComparacaoAction,
@@ -16,7 +18,9 @@ import type {
   TimelineSnapshot,
   TimelineData,
   ResumoEvidenciaTrecho,
+  RotinaDaSessao,
 } from "./queries";
+import type { Papel } from "@/auth/papel-ativo";
 import type { ResultadoSegmentacao } from "@/lib/evidence/snapshot-schema";
 import { estadoDoMarco, type DeltaSessao as DeltaSessaoType } from "./logic";
 import { Button } from "@/components/ui/button";
@@ -85,6 +89,14 @@ interface TimelineClientProps {
   pacienteNome: string;
   initialData: TimelineData;
   vista: VistaEvolucao;
+  /**
+   * Rotinas (#558 · T5). `null` é FALHA DE LEITURA, não ausência de rotina —
+   * a distinção é o que impede o bloco de afirmar "nenhuma rotina" quando na
+   * verdade a consulta caiu (R4.3).
+   */
+  rotinas: RotinaDaSessao[] | null;
+  /** Papel ativo do leitor — o bloco de rotinas é clínico (D-A9). */
+  papel: Papel;
 }
 
 export function TimelineClient({
@@ -92,7 +104,10 @@ export function TimelineClient({
   pacienteNome,
   initialData,
   vista,
+  rotinas,
+  papel,
 }: TimelineClientProps) {
+  const router = useRouter();
   const { snapshots, metasAtivas, milestonesAtivos } = initialData;
 
   // Lista ordenada crescente de números de sessões disponíveis
@@ -956,6 +971,15 @@ export function TimelineClient({
             <div className="flex flex-col gap-6 lg:col-span-2">
               {renderTrajetoriaMetas()}
               {renderGraficoProtocolo()}
+              {/* #558 · T5 — a rotina COMO ROTINA, etapa a etapa ao longo das
+                  sessões. Vive na vista "No tempo" porque é exatamente a
+                  pergunta dela; a barra de marcos acima continua contando
+                  METAS (G-4 (b)). */}
+              <BlocoRotinas
+                rotinas={rotinas}
+                papel={papel}
+                onTentarDeNovo={() => router.refresh()}
+              />
             </div>
             <div className="flex flex-col gap-6">{renderComparador()}</div>
           </div>

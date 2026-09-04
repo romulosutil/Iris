@@ -34,6 +34,7 @@ import {
   type RepertorioState,
   type Segmentacao,
 } from "@/lib/evidence/snapshot-schema";
+import { classificarNivelAjuda } from "@/lib/evidence/nivel-ajuda";
 
 export interface TimelineSnapshot {
   sessionNumero: number;
@@ -565,5 +566,160 @@ export async function carregarEvidenciasPorTrecho(
           : null,
       };
     });
+  });
+}
+
+// ─── Bloco de rotinas (#558 · T5, G-4 (b)) ─────────────────────────────────
+//
+// Desde a #558 · T2 uma extração `cadeia` aprovada grava UMA linha de
+// `evidence` por ETAPA, com `alvo_ordinal` = índice da etapa e o subtipo
+// gravado dentro de `classificacao_original` (é o subtipo que desambigua a
+// dupla semântica de `alvo_ordinal`). O que faltava era a superfície: sem ela
+// a rotina só empurrava a média do eixo do hexágono, e o coordenador não via
+// que houve rotina — nem etapa a etapa, nem ao longo das sessões.
+//
+// A barra de marcos (`renderGraficoProtocolo`) continua contando METAS:
+// cadeia nunca é somada aos marcos (G-4 (b)).
+
+/** Quantas rotinas (extrações `cadeia`) o bloco lê, da mais recente para trás. */
+const LIMITE_ROTINAS = 10;
+
+/** Forma da RAIZ de `classificacao_original` gravada por `inserirEtapasDeCadeia`. */
+const ClassificacaoCadeiaSchema = z.object({
+  nome: z.string().nullable().optional(),
+  descricao: z.string().nullable().optional(),
+  nivel_ajuda: z.string().nullable().optional(),
+});
+
+export interface EtapaRotina {
+  /** Índice da etapa no array do agente — é a ORDEM da rotina (G-2 (a)). */
+  ordinal: number;
+  descricao: string | null;
+  nivelAjuda: string | null;
+  /**
+   * `false` quando havia nível declarado e a `taxonomia_ajuda` do protocolo
+   * não o conhece (G-6 (a)). Nível ausente NÃO é não classificado — são duas
+   * ausências diferentes, e a tela as diz de formas diferentes.
+   */
+  naoClassificado: boolean;
+}
+
+export interface RotinaDaSessao {
+  extractionId: string;
+  nome: string | null;
+  sessionNumero: number;
+  dataSessao: Date;
+  /**
+   * `false` = cadeia aprovada sem âncora resolvível. Continua sendo um registro
+   * válido (R2.5), mas fica FORA da materialização — e a tela precisa dizer
+   * isso, senão o coordenador supõe que aprovou dado que o gráfico ignora.
+   */
+  ancorada: boolean;
+  /** Descrição da meta ancorada, quando houver. */
+  metaDescricao: string | null;
+  etapas: EtapaRotina[];
+}
+
+/**
+ * Rotinas (cadeias de suporte) do paciente, etapa a etapa, da sessão mais
+ * recente para trás. Leitura escopada por RLS (`withTenant`).
+ *
+ * Duas consultas de propósito: a primeira escolhe QUAIS extrações entram
+ * (as `LIMITE_ROTINAS` mais recentes), a segunda traz TODAS as etapas dessas
+ * extrações. Um `LIMIT` sobre as linhas de etapa cortaria uma rotina no meio e
+ * a tela mostraria uma cadeia truncada como se fosse a cadeia inteira.
+ */
+export async function carregarRotinas(
+  ctx: TenantContext,
+  patientId: string,
+): Promise<RotinaDaSessao[]> {
+  return withTenant(ctx, async (tx) => {
+    const ehCadeia = sql`${evidence.classificacaoOriginal} ->> 'subtipo' = 'cadeia'`;
+
+    const recentes = await tx
+      .selectDistinctOn([evidence.sessionNumero, evidence.extractionId], {
+        extractionId: evidence.extractionId,
+        sessionNumero: evidence.sessionNumero,
+      })
+      .from(evidence)
+      .where(and(eq(evidence.patientId, patientId), ehCadeia))
+      .orderBy(desc(evidence.sessionNumero), evidence.extractionId)
+      .limit(LIMITE_ROTINAS);
+
+    if (recentes.length === 0) return [];
+
+    const extractionIds = recentes.map((r) => r.extractionId);
+
+    const linhas = await tx
+      .select({
+        extractionId: evidence.extractionId,
+        sessionNumero: evidence.sessionNumero,
+        dataSessao: session.agendadaPara,
+        alvoOrdinal: evidence.alvoOrdinal,
+        protocolId: evidence.protocolId,
+        goalId: evidence.goalId,
+        metaDescricao: goal.descricao,
+        taxonomiaAjuda: protocol.taxonomiaAjuda,
+        classificacaoOriginal: evidence.classificacaoOriginal,
+      })
+      .from(evidence)
+      .innerJoin(session, eq(evidence.sessionId, session.id))
+      .leftJoin(goal, eq(evidence.goalId, goal.id))
+      .leftJoin(protocol, eq(evidence.protocolId, protocol.id))
+      .where(
+        // Sem repetir `ehCadeia`: `extractionIds` já saiu da consulta acima,
+        // que filtra por subtipo, e uma extração tem UM subtipo — o predicado
+        // aqui seria redundante e, sendo redundante, nenhum teste conseguiria
+        // provar que ele faz algo (mutante sobrevivente).
+        and(
+          eq(evidence.patientId, patientId),
+          inArray(evidence.extractionId, extractionIds),
+        ),
+      )
+      .orderBy(desc(evidence.sessionNumero), evidence.alvoOrdinal);
+
+    const porExtracao = new Map<string, RotinaDaSessao>();
+
+    for (const l of linhas) {
+      // Leniente, como o drill-down: classificação fora da forma vira os
+      // fallbacks abaixo, não um bloco quebrado.
+      const classif =
+        ClassificacaoCadeiaSchema.safeParse(l.classificacaoOriginal ?? {})
+          .data ?? {};
+
+      let rotina = porExtracao.get(l.extractionId);
+      if (!rotina) {
+        rotina = {
+          extractionId: l.extractionId,
+          nome: classif.nome ?? null,
+          sessionNumero: l.sessionNumero,
+          dataSessao: l.dataSessao,
+          ancorada: !!l.goalId,
+          metaDescricao: l.metaDescricao ?? null,
+          etapas: [],
+        };
+        porExtracao.set(l.extractionId, rotina);
+      }
+
+      const nivelAjuda = classif.nivel_ajuda ?? null;
+      rotina.etapas.push({
+        ordinal: l.alvoOrdinal,
+        descricao: classif.descricao ?? null,
+        nivelAjuda,
+        naoClassificado: classificarNivelAjuda(
+          l.protocolId,
+          nivelAjuda,
+          // `taxonomia_ajuda` é jsonb: o tipo estático é `unknown`-ish e a
+          // forma real é validada aqui, não presumida. Coluna fora da forma
+          // (ou nula) vira taxonomia VAZIA — e taxonomia vazia com nível
+          // declarado é exatamente "não classificado", nunca ordinal 0.
+          Array.isArray(l.taxonomiaAjuda)
+            ? l.taxonomiaAjuda.filter((x): x is string => typeof x === "string")
+            : [],
+        ).naoClassificado,
+      });
+    }
+
+    return [...porExtracao.values()];
   });
 }

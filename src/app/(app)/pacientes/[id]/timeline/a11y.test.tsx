@@ -7,6 +7,14 @@ import type { TimelineData } from "./queries";
 // TimelineClient importa ./actions ("use server") → getTenantContext →
 // @/db/client (abre conexão no load). No jsdom só renderizamos; as actions
 // disparadas pelos efeitos de carga viram dublês que resolvem vazio.
+// `TimelineClient` usa `useRouter().refresh()` para o "Tentar de novo" do bloco
+// de rotinas (#558 · T5). Sem o mock, o render em jsdom morre com "invariant
+// expected app router to be mounted" — e a asserção de ausência seguinte
+// ficaria verde sobre uma tela que nunca renderizou.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  usePathname: () => "/pacientes/p1",
+}));
 vi.mock("server-only", () => ({}));
 vi.mock("@/db/client", () => ({ db: {}, sql: {}, authDb: {}, authSql: {} }));
 vi.mock("./actions", () => ({
@@ -159,6 +167,36 @@ const dados: TimelineData = {
   ],
 };
 
+/**
+ * Rotina de verdade (#558 · T5) para o axe medir o bloco montado, e não o
+ * texto de estado vazio. Inclui a etapa com nível FORA da taxonomia, que é o
+ * caminho onde o significado corre mais risco de virar só cor.
+ */
+const ROTINAS = [
+  {
+    extractionId: "ext_rotina_1",
+    nome: "Lanche",
+    sessionNumero: 2,
+    dataSessao: new Date("2026-09-01T13:00:00Z"),
+    ancorada: true,
+    metaDescricao: "Alimentar-se com autonomia",
+    etapas: [
+      {
+        ordinal: 0,
+        descricao: "Abrir a lancheira",
+        nivelAjuda: "independente",
+        naoClassificado: false,
+      },
+      {
+        ordinal: 1,
+        descricao: "Apontar o suco",
+        nivelAjuda: "quase sozinho",
+        naoClassificado: true,
+      },
+    ],
+  },
+];
+
 test("TimelineClient — vista 'No tempo' (marcos conquistado/candidato/não atingido + barra) sem violações axe", async () => {
   await semViolacoes(
     <TimelineClient
@@ -166,6 +204,8 @@ test("TimelineClient — vista 'No tempo' (marcos conquistado/candidato/não ati
       pacienteNome="Paciente Teste"
       initialData={dados}
       vista="tempo"
+      rotinas={ROTINAS}
+      papel="coordenador"
     />,
   );
   // Estado pelo status OFICIAL (meta dominada / candidatura registrada), não
@@ -187,6 +227,8 @@ test("TimelineClient — vista 'Esta sessão' sem violações axe", async () => 
       pacienteNome="Paciente Teste"
       initialData={dados}
       vista="sessao"
+      rotinas={[]}
+      papel="coordenador"
     />,
   );
 });
@@ -198,6 +240,8 @@ test("TimelineClient — sem snapshots (estado vazio) sem violações axe", asyn
       pacienteNome="Paciente Teste"
       initialData={{ ...dados, snapshots: [], milestonesAtivos: [] }}
       vista="tempo"
+      rotinas={[]}
+      papel="coordenador"
     />,
   );
 });

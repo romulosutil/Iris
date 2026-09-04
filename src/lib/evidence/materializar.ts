@@ -57,6 +57,10 @@ import {
 } from "./segmentacao";
 import type { Tx } from "@/db/rls";
 import type { RepertorioState, Segmentacao } from "./snapshot-schema";
+import {
+  classificarNivelAjuda,
+  type ClassificacaoNivelAjuda,
+} from "./nivel-ajuda";
 
 export type EvidenciaObservada = {
   sessionNumero: number;
@@ -579,16 +583,18 @@ export async function materializarSnapshot(
   // segundo campo diz POR QUE: `naoClassificado` só é true quando havia um
   // nível declarado e a régua do protocolo não soube lê-lo — o que é contado
   // e exibido, em vez de sumir junto com "não havia nível nenhum".
+  // A régua vive em `nivel-ajuda.ts` desde a #558 · T5: o bloco de rotinas da
+  // aba Evolução precisa classificar pelo MESMO critério que o snapshot, e
+  // duas cópias do `indexOf` divergiriam sem que nenhum teste percebesse.
   function ordinalDe(
     protocolId: string | null,
     nivelAjuda: string | null,
-  ): { ordinal: number | null; naoClassificado: boolean } {
-    if (!nivelAjuda) return { ordinal: null, naoClassificado: false };
-    if (!protocolId) return { ordinal: null, naoClassificado: true };
-    const taxonomia = taxonomiaPorProtocolo.get(protocolId) ?? [];
-    const idx = taxonomia.indexOf(nivelAjuda);
-    if (idx >= 0) return { ordinal: idx, naoClassificado: false };
-    return { ordinal: null, naoClassificado: true };
+  ): ClassificacaoNivelAjuda {
+    return classificarNivelAjuda(
+      protocolId,
+      nivelAjuda,
+      protocolId ? (taxonomiaPorProtocolo.get(protocolId) ?? []) : [],
+    );
   }
 
   function tipoEstruturaDe(e: EvidenciaObservada): TipoEstrutura {
