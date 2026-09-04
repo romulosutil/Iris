@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
   LIMITES_HEARTBEAT,
   atualizarContadorIndeterminado,
+  avaliarExtracao,
   avaliarHeartbeat,
   decidirEnvios,
   deveAlertar,
@@ -16,6 +17,7 @@ import {
   verificarBackupOffsite,
   verificarBilling,
   verificarEscalonamento,
+  verificarExtracao,
   verificarHeartbeats,
 } from "./alarme-jobs.mjs";
 
@@ -725,6 +727,248 @@ describe("alarme-jobs.mjs — heartbeats dos jobs (#536)", () => {
     for (let i = 0; i < 10; i++) {
       const resultado = await atualizarContadorIndeterminado(heartbeatDir, {
         motivo: "retencao",
+        estado: "indeterminado",
+      });
+      expect(resultado.cegou).toBe(false);
+    }
+  });
+});
+
+describe("alarme-jobs.mjs — verificarExtracao / limiar (#560 F5)", () => {
+  const OK = { estado: "ok", motivo: "extracao", detalhe: "" };
+
+  test("janela sem extração nenhuma → ok (NÃO indeterminado: madrugada é rotina)", async () => {
+    expect(await verificarExtracao(sqlDubleQueRetorna([]))).toEqual(OK);
+  });
+
+  test("amostra abaixo do piso não alerta, mesmo com 100% de falha", async () => {
+    // A clínica solo é o caso-base: a primeira e única extração do dia
+    // falhando não pode mandar e-mail.
+    const linhas = [
+      {
+        modelo: "gemini-2.5-flash",
+        chamadas: 1,
+        falhas: 1,
+        p95_latencia_ms: 900,
+      },
+    ];
+    expect(avaliarExtracao(linhas)).toEqual(OK);
+  });
+
+  test("taxa de falha acima do teto → problema citando contagem e modelo", () => {
+    const linhas = [
+      {
+        modelo: "gemini-2.5-flash",
+        chamadas: 10,
+        falhas: 6,
+        p95_latencia_ms: 1200,
+      },
+    ];
+    const r = avaliarExtracao(linhas);
+    expect(r.estado).toBe("problema");
+    expect(r.motivo).toBe("extracao");
+    expect(r.detalhe).toContain("6 de 10");
+    expect(r.detalhe).toContain("60%");
+    expect(r.detalhe).toContain("gemini-2.5-flash");
+  });
+
+  test("taxa de falha ABAIXO do teto → ok (transitória com retry é rotina)", () => {
+    const linhas = [
+      {
+        modelo: "gemini-2.5-flash",
+        chamadas: 10,
+        falhas: 2,
+        p95_latencia_ms: 1200,
+      },
+    ];
+    expect(avaliarExtracao(linhas)).toEqual(OK);
+  });
+
+  test("teto de falha é ESTRITO: exatamente 30% não alerta", () => {
+    const linhas = [
+      {
+        modelo: "gemini-2.5-flash",
+        chamadas: 10,
+        falhas: 3,
+        p95_latencia_ms: 1200,
+      },
+    ];
+    expect(avaliarExtracao(linhas)).toEqual(OK);
+  });
+
+  test("taxa somada entre modelos, mas o detalhe discrimina por modelo", () => {
+    const linhas = [
+      {
+        modelo: "gemini-2.5-flash",
+        chamadas: 6,
+        falhas: 5,
+        p95_latencia_ms: 1000,
+      },
+      { modelo: "stub", chamadas: 4, falhas: 0, p95_latencia_ms: 5 },
+    ];
+    const r = avaliarExtracao(linhas);
+    expect(r.estado).toBe("problema");
+    expect(r.detalhe).toContain("5 de 10");
+    expect(r.detalhe).toContain("gemini-2.5-flash: 5/6");
+    // Modelo sem falha não polui o e-mail.
+    expect(r.detalhe).not.toContain("stub: 0/4");
+  });
+
+  test("p95 acima do teto → problema, mesmo com zero falha", () => {
+    const linhas = [
+      {
+        modelo: "gemini-2.5-flash",
+        chamadas: 8,
+        falhas: 0,
+        p95_latencia_ms: 41000,
+      },
+    ];
+    const r = avaliarExtracao(linhas);
+    expect(r.estado).toBe("problema");
+    expect(r.detalhe).toContain("41000 ms");
+    expect(r.detalhe).toContain("p95");
+  });
+
+  test("p95 alto num modelo SEM amostra suficiente não alerta", () => {
+    const linhas = [
+      {
+        modelo: "gemini-2.5-flash",
+        chamadas: 2,
+        falhas: 0,
+        p95_latencia_ms: 44000,
+      },
+      { modelo: "stub", chamadas: 8, falhas: 0, p95_latencia_ms: 5 },
+    ];
+    expect(avaliarExtracao(linhas)).toEqual(OK);
+  });
+
+  test("p95 do modelo LENTO não some diluído no modelo rápido", () => {
+    const linhas = [
+      {
+        modelo: "gemini-2.5-flash",
+        chamadas: 6,
+        falhas: 0,
+        p95_latencia_ms: 40000,
+      },
+      { modelo: "stub", chamadas: 90, falhas: 0, p95_latencia_ms: 3 },
+    ];
+    const r = avaliarExtracao(linhas);
+    expect(r.estado).toBe("problema");
+    expect(r.detalhe).toContain("gemini-2.5-flash");
+    expect(r.detalhe).not.toContain("stub");
+  });
+
+  test("latência não medida (NULL) não vira zero nem estoura", () => {
+    const linhas = [
+      { modelo: null, chamadas: 9, falhas: 0, p95_latencia_ms: null },
+    ];
+    expect(avaliarExtracao(linhas)).toEqual(OK);
+  });
+
+  test("modelo NULL vira rótulo legível no e-mail, nunca 'null'", () => {
+    const linhas = [
+      { modelo: null, chamadas: 10, falhas: 9, p95_latencia_ms: 10 },
+    ];
+    const r = avaliarExtracao(linhas);
+    expect(r.detalhe).toContain("(sem modelo)");
+    expect(r.detalhe).not.toContain("null");
+  });
+
+  test("os dois limiares juntos saem num alarme só (um dedup, um e-mail)", () => {
+    const linhas = [
+      {
+        modelo: "gemini-2.5-flash",
+        chamadas: 10,
+        falhas: 8,
+        p95_latencia_ms: 43000,
+      },
+    ];
+    const r = avaliarExtracao(linhas);
+    expect(r.estado).toBe("problema");
+    expect(r.motivo).toBe("extracao");
+    expect(r.detalhe).toContain("8 de 10");
+    expect(r.detalhe).toContain("43000 ms");
+  });
+
+  test("banco fora do ar → indeterminado, não 'ok' silencioso", async () => {
+    const r = await verificarExtracao(sqlDubleQueLanca("conexão recusada"));
+    expect(r.estado).toBe("indeterminado");
+    expect(r.motivo).toBe("extracao");
+    expect(r.detalhe).toContain("não foi possível checar");
+  });
+
+  test("a message do driver NÃO entra no detalhe — ele vai no corpo do e-mail", async () => {
+    // A `message` do driver de Postgres é a query com os params. Este
+    // `detalhe` é interpolado no e-mail de alarme, então uma message crua aqui
+    // sai do container e vai para uma caixa de entrada.
+    const erro = Object.assign(
+      new Error(
+        `syntax error at or near "SELECT * FROM extraction WHERE trecho_fonte = 'o paciente relatou'"`,
+      ),
+      { name: "PostgresError", code: "42601" },
+    );
+    const sql = () => Promise.reject(erro);
+
+    const r = await verificarExtracao(sql);
+
+    expect(r.estado).toBe("indeterminado");
+    // O que o operador precisa para agir: classe do erro e SQLSTATE.
+    expect(r.detalhe).toContain("erro=PostgresError");
+    expect(r.detalhe).toContain("code=42601");
+    // O que nunca pode sair.
+    expect(r.detalhe).not.toContain("trecho_fonte");
+    expect(r.detalhe).not.toContain("o paciente relatou");
+    expect(r.detalhe).not.toContain("SELECT");
+  });
+
+  test("o CONTADOR sai no log em todo tick — inclusive no tick saudável", async () => {
+    // É esta linha que faz a fatia ser "métrica", e não só alarme: sem série
+    // no tick saudável não há régua para dizer o que é degradado.
+    const linhas = [
+      {
+        modelo: "gemini-2.5-flash",
+        chamadas: 30,
+        falhas: 0,
+        p95_latencia_ms: 1800,
+      },
+    ];
+    const escrito = [];
+    const original = process.stdout.write;
+    process.stdout.write = (chunk) => {
+      escrito.push(String(chunk));
+      return true;
+    };
+    try {
+      await verificarExtracao(sqlDubleQueRetorna(linhas));
+    } finally {
+      process.stdout.write = original;
+    }
+    const registro = escrito
+      .flatMap((l) => l.split("\n"))
+      .filter(Boolean)
+      .map((l) => JSON.parse(l))
+      .find((r) => r.evento === "alarme-jobs.metricas-extracao");
+    expect(registro).toBeDefined();
+    expect(registro.chamadas).toBe(30);
+    expect(registro.falhas).toBe(0);
+    // 30 chamadas em 1h = 0,5/min. É o "extrações/min" que a issue pede.
+    expect(registro.chamadasPorMin).toBe(0.5);
+    expect(registro.porModelo).toEqual([
+      {
+        modelo: "gemini-2.5-flash",
+        chamadas: 30,
+        falhas: 0,
+        p95LatenciaMs: 1800,
+      },
+    ]);
+  });
+
+  test("extracao NÃO entra no escalonamento de detector cego", async () => {
+    // Ela lê o MESMO banco de billing/escalonamento: um detector cego já é
+    // acusado por aqueles dois, repetir o alarme não ajuda ninguém.
+    for (let i = 0; i < 10; i++) {
+      const resultado = await atualizarContadorIndeterminado(heartbeatDir, {
+        motivo: "extracao",
         estado: "indeterminado",
       });
       expect(resultado.cegou).toBe(false);

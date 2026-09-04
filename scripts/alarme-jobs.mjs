@@ -174,6 +174,160 @@ export async function verificarEscalonamento(sql) {
   }
 }
 
+// ─── #560 F5 (DA-04): contadores da extração ────────────────────────────────
+//
+// Os três números que a issue pede — extrações/min, latência do provider,
+// falhas por provider — saem de UMA chamada a `app_alarme_extracao` (0153) e
+// vão para DOIS lugares com propósitos diferentes:
+//
+//   1. `log.info("alarme-jobs.metricas-extracao")` a CADA tick, sempre. É o
+//      contador propriamente dito: um número que muda quando o sistema é
+//      exercitado, legível no Console do Easypanel sem abrir o banco.
+//   2. e-mail, SÓ quando cruza limiar. "Métrica que ninguém lê é log com outro
+//      nome" — e um resumo diário que chega mesmo quando está tudo bem vira
+//      filtro de caixa de entrada em duas semanas.
+//
+// A leitura por CLÍNICA continua sendo a view da 0148 no /supervisao; aqui é a
+// leitura do OPERADOR, cross-tenant e de janela curta.
+
+/** Janela de apuração. Curta de propósito: o alarme é sobre AGORA. */
+const JANELA_EXTRACAO = "1 hour";
+/**
+ * Piso de amostra para o limiar de falha morder. Sem ele, a primeira e única
+ * extração da manhã falhando é "100% de falha" e manda e-mail — a clínica solo
+ * é o caso-base deste produto, não a exceção.
+ */
+const MIN_CHAMADAS_EXTRACAO = 5;
+/**
+ * 30% das chamadas da janela sem resolver. Não é 1 falha (transitória é
+ * rotina, e o retry do terapeuta resolve) nem 100% (esperar a parada total
+ * torna o alarme inútil).
+ */
+const TETO_TAXA_FALHA_EXTRACAO = 0.3;
+/**
+ * p95 de 30s contra o timeout de 45s de `resiliencia.ts`
+ * (`EXTRACAO_TIMEOUT_MS`): acusa a degradação ANTES de ela virar timeout, que
+ * é quando ainda existe decisão a tomar. Acima do timeout o número já não
+ * cresce — toda chamada ruim vira falha e sai pelo outro limiar.
+ */
+const TETO_P95_LATENCIA_MS = 30_000;
+const MINUTOS_JANELA_EXTRACAO = 60;
+/**
+ * ESPELHO de `EXTRACAO_TIMEOUT_MS` (`src/lib/extraction/resiliencia.ts`), que
+ * não é importável daqui — o job roda em imagem sem `src/`. Entra só para o
+ * e-mail poder dizer contra o que os 30s se comparam; nenhuma decisão depende
+ * dele. Se o timeout mudar lá e não aqui, o texto envelhece — o limiar, não.
+ */
+const TIMEOUT_EXTRACAO_MS_REF = 45_000;
+
+/** Modelo é NULL em provider sem modelo (NullProvider) e em linha pré-0147. */
+function rotuloModelo(modelo) {
+  return modelo ?? "(sem modelo)";
+}
+
+/**
+ * Decide o desfecho a partir das linhas já lidas. Pura, para o limiar ser
+ * testável sem banco (mesmo motivo de `decidirEnvios` e do `decidirDesfecho`
+ * da conciliação, #375).
+ *
+ * `chamadas === 0` é **ok**, e não `indeterminado`: janela sem extração
+ * nenhuma é o estado normal de uma clínica pequena à noite ou num fim de
+ * semana. Marcar `indeterminado` aqui acumularia o contador de detector cego e
+ * mandaria "o detector pode estar cego" toda madrugada — alarme que grita no
+ * silêncio ensina a ignorar a caixa de entrada.
+ */
+export function avaliarExtracao(linhas) {
+  const ok = { estado: "ok", motivo: "extracao", detalhe: "" };
+  const chamadas = linhas.reduce((s, l) => s + Number(l.chamadas ?? 0), 0);
+  if (chamadas < MIN_CHAMADAS_EXTRACAO) return ok;
+
+  const falhas = linhas.reduce((s, l) => s + Number(l.falhas ?? 0), 0);
+  const taxaFalha = falhas / chamadas;
+
+  // p95 por modelo, e não global: um modelo lento diluído num modelo rápido
+  // some da média. Só entra no limiar o modelo com amostra suficiente.
+  const lento = linhas
+    .filter(
+      (l) =>
+        Number(l.chamadas ?? 0) >= MIN_CHAMADAS_EXTRACAO &&
+        l.p95_latencia_ms != null,
+    )
+    .reduce(
+      (pior, l) =>
+        pior === null ||
+        Number(l.p95_latencia_ms) > Number(pior.p95_latencia_ms)
+          ? l
+          : pior,
+      null,
+    );
+
+  const achados = [];
+  if (taxaFalha > TETO_TAXA_FALHA_EXTRACAO) {
+    const porModelo = linhas
+      .filter((l) => Number(l.falhas ?? 0) > 0)
+      .map((l) => `${rotuloModelo(l.modelo)}: ${l.falhas}/${l.chamadas}`)
+      .join("; ");
+    achados.push(
+      `${falhas} de ${chamadas} extração(ões) da última ${JANELA_EXTRACAO} está(ão) pendente(s) de reprocessamento (${Math.round(taxaFalha * 100)}%, acima do teto de ${Math.round(TETO_TAXA_FALHA_EXTRACAO * 100)}%). Por modelo — ${porModelo}.`,
+    );
+  }
+  if (lento && Number(lento.p95_latencia_ms) > TETO_P95_LATENCIA_MS) {
+    achados.push(
+      `p95 de latência do modelo ${rotuloModelo(lento.modelo)} em ${lento.p95_latencia_ms} ms na última ${JANELA_EXTRACAO} (teto: ${TETO_P95_LATENCIA_MS} ms; o timeout da chamada é ${TIMEOUT_EXTRACAO_MS_REF} ms), sobre ${lento.chamadas} chamada(s).`,
+    );
+  }
+  if (achados.length === 0) return ok;
+  return { estado: "problema", motivo: "extracao", detalhe: achados.join(" ") };
+}
+
+/**
+ * Lê os contadores, EMITE o registro de métrica (sempre) e devolve o desfecho.
+ *
+ * O log sai antes de qualquer decisão de limiar de propósito: o valor da série
+ * temporal está em existir todo tick, inclusive — principalmente — nos ticks
+ * saudáveis, que é o que dá régua para saber o que "degradado" significa neste
+ * produto.
+ */
+export async function verificarExtracao(sql) {
+  let linhas;
+  try {
+    linhas =
+      await sql`SELECT * FROM app_alarme_extracao(${JANELA_EXTRACAO}::interval)`;
+  } catch (err) {
+    return {
+      estado: "indeterminado",
+      motivo: "extracao",
+      // `detalheDoErro`, e NUNCA `err.message`: este `detalhe` vai no CORPO DO
+      // E-MAIL de alarme, e a `message` do driver de Postgres é a query com os
+      // params. O helper reduz ao conjunto fechado `erro=<name> code=<code>` —
+      // mesmo caminho que `verificarHeartbeats` já usa. As duas checagens da
+      // #294 (billing/escalonamento) ainda interpolam a message: são anteriores
+      // a esta regra e são dívida à parte, não precedente a copiar.
+      detalhe: `não foi possível checar: ${detalheDoErro(err)}`,
+    };
+  }
+
+  const chamadas = linhas.reduce((s, l) => s + Number(l.chamadas ?? 0), 0);
+  const falhas = linhas.reduce((s, l) => s + Number(l.falhas ?? 0), 0);
+  // Campos, nunca frase interpolada: o operador filtra `chamadasPorMin` sem
+  // escrever um regex por sítio (mesma regra que a F4 aplicou aos `logic.ts`).
+  log.info("alarme-jobs.metricas-extracao", {
+    janela: JANELA_EXTRACAO,
+    chamadas,
+    falhas,
+    chamadasPorMin: Number((chamadas / MINUTOS_JANELA_EXTRACAO).toFixed(3)),
+    porModelo: linhas.map((l) => ({
+      modelo: rotuloModelo(l.modelo),
+      chamadas: Number(l.chamadas ?? 0),
+      falhas: Number(l.falhas ?? 0),
+      p95LatenciaMs:
+        l.p95_latencia_ms == null ? null : Number(l.p95_latencia_ms),
+    })),
+  });
+
+  return avaliarExtracao(linhas);
+}
+
 export function abrirConexao(databaseUrl) {
   return postgres(databaseUrl, { max: 1 });
 }
@@ -428,6 +582,7 @@ export async function main() {
   try {
     resultados.push(await verificarBilling(sql));
     resultados.push(await verificarEscalonamento(sql));
+    resultados.push(await verificarExtracao(sql));
     resultados.push(...(await verificarHeartbeats(sql)));
   } finally {
     await sql.end({ timeout: 5 });
