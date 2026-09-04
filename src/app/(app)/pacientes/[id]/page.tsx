@@ -4,7 +4,7 @@ import { getTenantContext } from "@/auth/tenant";
 import { requireRole } from "@/auth/require-role";
 import { withTenant } from "@/db/rls";
 import { patient } from "@/db/schema";
-import { carregarTimeline } from "./timeline/queries";
+import { carregarTimeline, carregarRotinas } from "./timeline/queries";
 import { TimelineClient } from "./timeline/timeline-client";
 import { Stack, Cluster } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
@@ -176,6 +176,23 @@ export default async function PacientePage({
   const timeline = await carregarTimeline(ctx, id);
   const temSnapshots = timeline && timeline.snapshots.length > 0;
 
+  // #558 · T5 — leitura SEPARADA da timeline, e com falha separada: se a
+  // consulta de rotinas cair, o resto da aba continua servindo. `null` viaja
+  // até o bloco como "não sabemos" e vira estado de ERRO lá (R4.3); colapsar
+  // em `[]` aqui faria uma oscilação de rede afirmar que o paciente não tem
+  // rotina registrada — afirmação clínica falsa.
+  const rotinas = temSnapshots
+    ? await carregarRotinas(ctx, id).catch((erro: unknown) => {
+        // Sem `console.*` com `message` de driver (R4.4): o helper emite o
+        // conjunto FECHADO (`nome`, código PG, constraint, hash, correlação).
+        // `warn`, não `error`: degrada UM bloco, a aba segue útil.
+        logarAvisoSemPII("[rotinas] falha ao ler cadeias", erro, {
+          patientId: id,
+        });
+        return null;
+      })
+    : [];
+
   // Mesmo predicado do `requireRole` do core (`logic.ts`): mostrar o botão a
   // quem a policy `patient_update` não deixa escrever produziria um "arquivado"
   // na tela em cima de 0 linhas afetadas — RLS filtra em silêncio.
@@ -265,6 +282,8 @@ export default async function PacientePage({
             pacienteNome={paciente.nome}
             initialData={timeline}
             vista={vista}
+            rotinas={rotinas}
+            papel={ctx.role}
           />
         )}
       </Stack>

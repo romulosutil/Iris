@@ -8,6 +8,7 @@ import {
   carregarDeltaSessao,
   carregarComparacao,
   carregarEvidenciasPorTrecho,
+  carregarRotinas,
 } from "./queries";
 import { hasDb } from "@tests/integration-env";
 
@@ -349,5 +350,140 @@ describe.skipIf(!hasDb)("queries.ts (timeline integrated tests)", () => {
     expect(res0.delta.evidenciasNovas).toBe(0);
     const item0 = res0.delta.itens.find((i) => i.id === MARCO_ID);
     expect(item0?.tipo).toBe("novo");
+  });
+  // --- Bloco de rotinas (#558 - T5) ---------------------------------------
+  //
+  // Fixtures em SESSAO 4, fora dos intervalos (1-2 e 3-3) que os testes de
+  // drill-down acima usam: guard novo que muda a contagem de fixture alheia
+  // reprova o vizinho sem que nada esteja errado com ele.
+  describe("carregarRotinas", () => {
+    const CLINIC_B = "00000000-0000-0000-0000-0000000000fb";
+    const U_COORD_B = "00000000-0000-0000-0000-00000000c0fb";
+    const PAC_B1 = "00000000-0000-0000-0000-00000000acfb";
+    let SESS_A4_ID: string;
+    let EXT_ANCORADA: string;
+    let EXT_SEM_ANCORA: string;
+
+    beforeAll(async () => {
+      SESS_A4_ID = crypto.randomUUID();
+      await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, numero_sequencial_paciente, disciplina)
+        VALUES (${SESS_A4_ID}, ${CLINIC_A}, ${PAC_A1}, ${U_T1_A}, '2026-07-04 10:00:00Z', 'realizada', 4, 'aba')`;
+
+      // Rotina ANCORADA: 3 etapas, uma delas com nivel fora da taxonomia.
+      const [extA] =
+        await owner`INSERT INTO extraction (session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload)
+        VALUES (${SESS_A4_ID}, ${CLINIC_A}, 'aprovada', 'cadeia', 'no lanche abriu a lancheira sozinho', 'alta', ${owner.json({})}) RETURNING id`;
+      EXT_ANCORADA = extA!.id as string;
+
+      const etapas = [
+        { descricao: "Abrir a lancheira", nivel_ajuda: "independente" },
+        { descricao: "Abrir o pote", nivel_ajuda: "dica_fisica" },
+        // Nivel LIVRE do agente que a taxonomia do protocolo nao conhece.
+        { descricao: "Apontar o suco", nivel_ajuda: "quase sozinho" },
+      ];
+      for (let i = 0; i < etapas.length; i++) {
+        await owner`INSERT INTO evidence
+          (extraction_id, patient_id, session_id, session_numero, alvo_ordinal, protocol_id, goal_id, milestone_id, classificacao_original, aprovado_por)
+          VALUES (${EXT_ANCORADA}, ${PAC_A1}, ${SESS_A4_ID}, 4, ${i}, ${PROTOCOL_ID}, ${GOAL_ID}, ${MARCO_ID},
+            ${owner.json({ subtipo: "cadeia", nome: "Lanche", etapa_ordinal: i, ...etapas[i] })}, ${U_T1_A})`;
+      }
+
+      // Rotina SEM ancora: FKs nulas (R2.5) - registro valido, fora do grafico.
+      const [extS] =
+        await owner`INSERT INTO extraction (session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload)
+        VALUES (${SESS_A4_ID}, ${CLINIC_A}, 'aprovada', 'cadeia', 'lavou as maos', 'media', ${owner.json({})}) RETURNING id`;
+      EXT_SEM_ANCORA = extS!.id as string;
+
+      await owner`INSERT INTO evidence
+        (extraction_id, patient_id, session_id, session_numero, alvo_ordinal, protocol_id, goal_id, milestone_id, classificacao_original, aprovado_por)
+        VALUES (${EXT_SEM_ANCORA}, ${PAC_A1}, ${SESS_A4_ID}, 4, 0, ${null}, ${null}, ${null},
+          ${owner.json({ subtipo: "cadeia", nome: "Lavar as maos", etapa_ordinal: 0, descricao: "Ensaboar", nivel_ajuda: "dica_verbal" })}, ${U_T1_A})`;
+
+      // Tenant vizinho, com rotina propria - para o teste cross-tenant.
+      await owner`INSERT INTO clinic (id, nome, is_demo) VALUES (${CLINIC_B}, 'Clinica B (rotinas)', false)`;
+      await owner`INSERT INTO app_user (id, name, email) VALUES (${U_COORD_B}, 'Coord B', 'coord.b.rotinas@t.com')`;
+      await owner`INSERT INTO user_role (user_id, clinic_id, papel) VALUES (${U_COORD_B}, ${CLINIC_B}, 'coordenador')`;
+      await owner`INSERT INTO patient (id, clinic_id, nome) VALUES (${PAC_B1}, ${CLINIC_B}, 'Paciente B1 (rotinas)')`;
+
+      const sessB = crypto.randomUUID();
+      await owner`INSERT INTO session (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, numero_sequencial_paciente, disciplina)
+        VALUES (${sessB}, ${CLINIC_B}, ${PAC_B1}, ${U_COORD_B}, '2026-07-04 10:00:00Z', 'realizada', 1, 'aba')`;
+      const [extB] =
+        await owner`INSERT INTO extraction (session_id, clinic_id, estado, subtipo, trecho_fonte, confianca, payload)
+        VALUES (${sessB}, ${CLINIC_B}, 'aprovada', 'cadeia', 'rotina do vizinho', 'alta', ${owner.json({})}) RETURNING id`;
+      await owner`INSERT INTO evidence
+        (extraction_id, patient_id, session_id, session_numero, alvo_ordinal, protocol_id, goal_id, milestone_id, classificacao_original, aprovado_por)
+        VALUES (${extB!.id}, ${PAC_B1}, ${sessB}, 1, 0, ${null}, ${null}, ${null},
+          ${owner.json({ subtipo: "cadeia", nome: "Rotina do vizinho", etapa_ordinal: 0, descricao: "Etapa do vizinho", nivel_ajuda: "independente" })}, ${U_COORD_B})`;
+    });
+
+    test("agrupa por extracao e devolve as etapas na ordem do array", async () => {
+      const res = await carregarRotinas(ctxCoordA, PAC_A1);
+
+      const lanche = res.find((r) => r.extractionId === EXT_ANCORADA);
+      expect(lanche).toBeTruthy();
+      expect(lanche!.nome).toBe("Lanche");
+      expect(lanche!.sessionNumero).toBe(4);
+      // As TRES etapas, inteiras: um LIMIT sobre linhas de etapa devolveria
+      // uma cadeia truncada com cara de cadeia inteira.
+      expect(lanche!.etapas.map((e) => e.ordinal)).toEqual([0, 1, 2]);
+      expect(lanche!.etapas.map((e) => e.descricao)).toEqual([
+        "Abrir a lancheira",
+        "Abrir o pote",
+        "Apontar o suco",
+      ]);
+    });
+
+    test("ancora resolvida vem com a meta; cadeia sem ancora vem marcada", async () => {
+      const res = await carregarRotinas(ctxCoordA, PAC_A1);
+
+      const lanche = res.find((r) => r.extractionId === EXT_ANCORADA)!;
+      expect(lanche.ancorada).toBe(true);
+      expect(lanche.metaDescricao).toBe("Pedir água de forma independente");
+
+      const maos = res.find((r) => r.extractionId === EXT_SEM_ANCORA)!;
+      expect(maos.ancorada).toBe(false);
+      expect(maos.metaDescricao).toBeNull();
+    });
+
+    // G-6 (a): `indexOf` devolve -1 e -1 NUNCA vira 0 (0 = "independente").
+    test("nivel fora da taxonomia do protocolo vem como nao classificado", async () => {
+      const res = await carregarRotinas(ctxCoordA, PAC_A1);
+      const lanche = res.find((r) => r.extractionId === EXT_ANCORADA)!;
+
+      const conhecidos = lanche.etapas.filter((e) => !e.naoClassificado);
+      expect(conhecidos.map((e) => e.nivelAjuda)).toEqual([
+        "independente",
+        "dica_fisica",
+      ]);
+
+      const desconhecida = lanche.etapas.filter((e) => e.naoClassificado);
+      expect(desconhecida).toHaveLength(1);
+      expect(desconhecida[0]!.nivelAjuda).toBe("quase sozinho");
+    });
+
+    // O filtro e por `subtipo` dentro do jsonb - e ele que desambigua a dupla
+    // semantica de `alvo_ordinal`. Sem ele, as evidencias comuns das sessoes
+    // 1-3 entrariam no bloco como se fossem etapas de rotina.
+    test("evidencia comum nao vira rotina", async () => {
+      const res = await carregarRotinas(ctxCoordA, PAC_A1);
+      expect(res.map((r) => r.extractionId).sort()).toEqual(
+        [EXT_ANCORADA, EXT_SEM_ANCORA].sort(),
+      );
+    });
+
+    test("rotina de outra clinica nao aparece", async () => {
+      // O oraculo NAO pode codificar "invisivel pela policy = inexistente"
+      // (memo R-1): primeiro provamos, como owner, que a linha do vizinho
+      // EXISTE - senao o `[]` abaixo ficaria verde num banco vazio.
+      const [contagem] = await owner`
+        SELECT count(*)::int AS n FROM evidence
+        WHERE patient_id = ${PAC_B1}
+          AND classificacao_original ->> 'subtipo' = 'cadeia'`;
+      expect(contagem!.n).toBe(1);
+
+      const res = await carregarRotinas(ctxCoordA, PAC_B1);
+      expect(res).toEqual([]);
+    });
   });
 });

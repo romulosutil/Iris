@@ -6,6 +6,14 @@ import * as actions from "./actions";
 import type { TimelineData, TimelineSnapshot } from "./queries";
 import { ORDEM_EIXOS, ROTULO_EIXO } from "@/lib/evidence/espectro";
 
+// `TimelineClient` usa `useRouter().refresh()` para o "Tentar de novo" do bloco
+// de rotinas (#558 · T5). Sem o mock, o render em jsdom morre com "invariant
+// expected app router to be mounted" — e a asserção de ausência seguinte
+// ficaria verde sobre uma tela que nunca renderizou.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  usePathname: () => "/pacientes/p1",
+}));
 vi.mock("./actions", () => ({
   carregarDeltaSessaoAction: vi.fn(),
   carregarComparacaoAction: vi.fn(),
@@ -70,6 +78,8 @@ describe("TimelineClient — T28 (Carregamento de delta com marco 0)", () => {
         pacienteNome="Paciente Teste"
         initialData={mockTimelineData([0])}
         vista="sessao"
+        rotinas={[]}
+        papel="coordenador"
       />,
     );
 
@@ -93,6 +103,8 @@ describe("TimelineClient — T28 (Carregamento de delta com marco 0)", () => {
         pacienteNome="Paciente Teste"
         initialData={mockTimelineData([])}
         vista="sessao"
+        rotinas={[]}
+        papel="coordenador"
       />,
     );
 
@@ -111,6 +123,8 @@ describe("TimelineClient — T28 (Carregamento de delta com marco 0)", () => {
         pacienteNome="Paciente Teste"
         initialData={mockTimelineData([0])}
         vista="sessao"
+        rotinas={[]}
+        papel="coordenador"
       />,
     );
 
@@ -143,6 +157,8 @@ describe("TimelineClient — T29 (Abertura do Scrubber)", () => {
         pacienteNome="Paciente Teste"
         initialData={mockTimelineData([0])}
         vista="tempo"
+        rotinas={[]}
+        papel="coordenador"
       />,
     );
 
@@ -161,6 +177,8 @@ describe("TimelineClient — T29 (Abertura do Scrubber)", () => {
         pacienteNome="Paciente Teste"
         initialData={mockTimelineData([])}
         vista="tempo"
+        rotinas={[]}
+        papel="coordenador"
       />,
     );
 
@@ -175,6 +193,8 @@ describe("TimelineClient — T29 (Abertura do Scrubber)", () => {
         pacienteNome="Paciente Teste"
         initialData={mockTimelineData([1, 2, 3])}
         vista="tempo"
+        rotinas={[]}
+        papel="coordenador"
       />,
     );
 
