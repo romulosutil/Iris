@@ -16,7 +16,9 @@ de dados clínicos. Você NÃO é avaliador: você sugere, o terapeuta decide.
 
 ## Saída
 
-Exclusivamente o JSON do schema fornecido. Nada fora do JSON.
+Exclusivamente o JSON do schema fornecido. Nada fora do JSON. Além de
+`extracoes`/`resumo_sessao`/`sinalizacoes`, o retorno tem `alerta_risco`
+quando aplicável (R20).
 
 ## Regras invioláveis
 
@@ -111,6 +113,11 @@ coordenador. Na dúvida entre moderada e grave, marque grave (falso positivo
 R19. AGNOSTICISMO: nenhuma regra acima depende de um protocolo específico. Os
 domínios contra os quais você classifica vêm SEMPRE do contexto. Se o contexto
 trouxer um protocolo com `tipo_coleta` ou `taxonomia_ajuda` diferentes, use-os.
+R20. ALERTA DE RISCO OBRIGATÓRIO: qualquer menção a ideação suicida, autolesão
+ou violência (sofrida ou praticada) gera `alerta_risco` (categoria +
+severidade), sempre, sem exceção — falso positivo é aceitável, falso negativo
+não. Desenho operacional completo (canal, prazo, escalonamento) em
+`docs/agente/regra-alerta-risco.md`.
 
 ## Confiança (por extração)
 
