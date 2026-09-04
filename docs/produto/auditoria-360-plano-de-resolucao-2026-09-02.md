@@ -166,7 +166,7 @@ gate de flake por arquivo (#585) e as duas pontas do e2e (#600, #602, #605).
 
 | Item                     | O que falta                                                                                                                                                                                                        |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| #558 (`PR-04`)           | Decisões G-1 a G-6 **já ratificadas** em 03/09/2026 (`context.md` da spec #574) — ver correção abaixo. Falta só gerar `tasks.md` e aplicar a label `jules`                                                       |
+| #558 (`PR-04`)           | **Fechada.** T1-T6 implementadas e mergeadas (PRs #601/#610/#612) — ver correção abaixo                                                                                                                          |
 | D79 (`PR-07`, #537)      | `report_tipo.avaliativo_interdisciplinar` segue órfão (`src/db/schema.ts:1562`, zero consumidor em `src`/`scripts`) — decisão de produto do Rômulo: spec do relatório interdisciplinar × remover o valor do enum |
 | Baseline de flake mobile | `mobile-navegacao`, `mobile-toque`, `mobile-app` com 1 flake cada em `scripts/ci/e2e-flaky.baseline.json` — dívida herdada, sem issue                                                                            |
 
@@ -190,16 +190,19 @@ via CDP, timeout em `toHaveURL`, não em `toBeInViewport()`), fix `test.slow()`,
 piso por arquivo em #585. Confirmado flaky=0 em 5 rodadas de CI consecutivas
 (2026-09-04 12:35Z–21:15Z, runs 33873572724 a 33920202774).
 
-**Auditoria 360: só #558 segue aberta — e as 6 decisões já estão ratificadas.**
-Correção da reconciliação acima: a primeira varredura (`grep -A 3` nas headers
-`## G-` de `context.md`) parou antes das linhas "Ratificada pelo Rômulo em
-03/09/2026" mais abaixo em cada seção e concluiu, errado, que nada tinha sido
-decidido. `.specs/features/558-cadeia-suporte-evidence/context.md` abre com
-**"As 6 decisões estão FECHADAS"** e cada uma tem a ratificação: G-1 (a)
-âncora única na cadeia · G-2 (a) índice do array, resolvida por medição · G-3
-(a) etapa = linha em `evidence` · G-4 (b) hexágono + bloco próprio de rotinas
-· G-5 (a) linha de corte, sem backfill · G-6 (a) não classificado e reportado.
-Falta só gerar `tasks.md` e aplicar a label `jules`. **Admissão de paciente
+**Auditoria 360: #558 fechada — CLOSED.** Duas correções de medição na mesma
+sessão, em cascata: a primeira varredura (`grep -A 3` nas headers `## G-` de
+`context.md`) parou antes das linhas "Ratificada pelo Rômulo em 03/09/2026" e
+concluiu, errado, que nada tinha sido decidido — releitura integral mostrou as
+6 decisões FECHADAS desde 03/09/2026 (G-1 a, G-2 a, G-3 a, G-4 b, G-5 a, G-6
+a). A segunda checagem foi mais grave: nem verificou se `tasks.md` já
+existia — existia, com T1-T6 definidas, e as 6 **já estavam implementadas e
+mergeadas**: PR #601 (T1-T4, contrato do agente + persistência +
+materialização + taxonomia), PR #612 (T5, bloco de rotinas na aba Evolução),
+PR #610 (T6, procedência da âncora no resumo da revisão). Gates de #601
+(referência) todos verdes: typecheck/lint/test/test-rls/test-e2e/build/CodeQL.
+Issue #558 fechada nesta sessão, com as 3 PRs linkadas no comentário de
+fechamento. **A auditoria 360 está 100% encerrada.** **Admissão de paciente
 (D83): fechado**, 10 PRs mergeadas 03/09/2026, sem pendência de código — só os
 passos de prova de mutação/suíte do plano, deixados `[ ]` de propósito (não
 deixam artefato).
