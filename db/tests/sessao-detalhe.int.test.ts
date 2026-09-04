@@ -46,12 +46,12 @@ const H2_ATRAS = new Date(AGORA.getTime() - 2 * 3600_000);
 let owner: ReturnType<typeof postgres>;
 let appSql: typeof import("@/db/client").sql;
 let queries: typeof import("../../src/app/(app)/sessoes/[id]/queries");
-let diarioLogic: typeof import("../../src/app/(app)/diario/[sessionId]/logic");
+let diarioCaptura: typeof import("../../src/lib/sessao/diario-captura");
 
 describe.skipIf(!hasDb)("T06 · /sessoes/[id] — queries de leitura", () => {
   beforeAll(async () => {
     queries = await import("../../src/app/(app)/sessoes/[id]/queries");
-    diarioLogic = await import("../../src/app/(app)/diario/[sessionId]/logic");
+    diarioCaptura = await import("../../src/lib/sessao/diario-captura");
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
 
@@ -130,7 +130,7 @@ describe.skipIf(!hasDb)("T06 · /sessoes/[id] — queries de leitura", () => {
   });
 
   test("R-36: duas capturas na mesma sessão deixam 1 linha, a segunda sobrescreve", async () => {
-    const r1 = await diarioLogic.capturarDiario(ctxT1, {
+    const r1 = await diarioCaptura.capturarDiario(ctxT1, {
       sessionId: S_CAPTURA,
       texto: "primeira captura",
     });
@@ -139,7 +139,7 @@ describe.skipIf(!hasDb)("T06 · /sessoes/[id] — queries de leitura", () => {
     const antes = await queries.carregarSessao(ctxT1, S_CAPTURA, AGORA);
     expect(antes?.temCaptura).toBe(true);
 
-    const r2 = await diarioLogic.capturarDiario(ctxT1, {
+    const r2 = await diarioCaptura.capturarDiario(ctxT1, {
       sessionId: S_CAPTURA,
       texto: "primeira captura\n\nsegunda captura (acumulada no cliente)",
     });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { loteJaResolvido, ordensPendentesDeUpload } from "./logic";
+import { loteJaResolvido, ordensPendentesDeUpload } from "./diario-asr";
 
 // #494/T20 — o predicado de idempotência do reenvio de lote de ASR.
 //

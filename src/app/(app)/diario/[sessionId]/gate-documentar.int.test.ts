@@ -42,8 +42,8 @@ const ctxT1 = { clinicId: CLINIC_A, userId: U_T1, role: "terapeuta" } as const;
 const CRITERIO = { tipo: "n_acertos_m_sessoes", n: 3, m: 3 };
 
 let owner: ReturnType<typeof postgres>;
-let capturarDiario: typeof import("./logic").capturarDiario;
-let consolidarSessao: typeof import("./logic").consolidarSessao;
+let capturarDiario: typeof import("@/lib/sessao/diario-captura").capturarDiario;
+let consolidarSessao: typeof import("@/lib/sessao/diario-consolidacao").consolidarSessao;
 let appSql: typeof import("@/db/client").sql;
 
 /** Meta direto pelo dono (bypassa RLS) — mesmo helper de `prontidao.int.test.ts`. */
@@ -70,7 +70,8 @@ async function contarNotas(tipo: string): Promise<number> {
 
 describe.skipIf(!hasDb)("gate de documentação nas actions", () => {
   beforeAll(async () => {
-    ({ capturarDiario, consolidarSessao } = await import("./logic"));
+    ({ capturarDiario } = await import("@/lib/sessao/diario-captura"));
+    ({ consolidarSessao } = await import("@/lib/sessao/diario-consolidacao"));
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
     await owner`TRUNCATE clinic, app_user, user_role, patient, protocol, session,

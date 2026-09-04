@@ -76,7 +76,8 @@ let schema: typeof import("@/db/schema");
 let fila: typeof import("@/lib/sessao/fila");
 let sessaoQueries: typeof import("../../src/app/(app)/sessoes/[id]/queries");
 let revisaoQueries: typeof import("../../src/app/(app)/revisao/[sessionId]/queries");
-let diarioLogic: typeof import("../../src/app/(app)/diario/[sessionId]/logic");
+let diarioCaptura: typeof import("../../src/lib/sessao/diario-captura");
+let diarioConsolidacao: typeof import("../../src/lib/sessao/diario-consolidacao");
 
 describe.skipIf(!hasDb)("#539 · profissional responsável pela sessão", () => {
   beforeAll(async () => {
@@ -87,7 +88,9 @@ describe.skipIf(!hasDb)("#539 · profissional responsável pela sessão", () => 
     sessaoQueries = await import("../../src/app/(app)/sessoes/[id]/queries");
     revisaoQueries =
       await import("../../src/app/(app)/revisao/[sessionId]/queries");
-    diarioLogic = await import("../../src/app/(app)/diario/[sessionId]/logic");
+    diarioCaptura = await import("../../src/lib/sessao/diario-captura");
+    diarioConsolidacao =
+      await import("../../src/lib/sessao/diario-consolidacao");
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
 
     await owner`TRUNCATE clinic, app_user, user_role, patient, care_team_membership,
@@ -332,7 +335,7 @@ describe.skipIf(!hasDb)("#539 · profissional responsável pela sessão", () => 
   // ─── 4. Ações do diário no contexto do substituto ─────────────────────────
 
   test("substituto grava captura rápida (capturarDiario) com autor_id = ele", async () => {
-    const r = await diarioLogic.capturarDiario(ctxSub, {
+    const r = await diarioCaptura.capturarDiario(ctxSub, {
       sessionId: S_SUB_LOGIC,
       texto: "Cobertura: sessão de hoje",
     });
@@ -353,7 +356,7 @@ describe.skipIf(!hasDb)("#539 · profissional responsável pela sessão", () => 
   });
 
   test("substituto consolida a sessão (consolidarSessao): nota, número sequencial e extração", async () => {
-    const r = await diarioLogic.consolidarSessao(ctxSub, {
+    const r = await diarioConsolidacao.consolidarSessao(ctxSub, {
       sessionId: S_SUB_LOGIC,
       texto: "Nota consolidada pelo substituto.",
     });
@@ -383,7 +386,7 @@ describe.skipIf(!hasDb)("#539 · profissional responsável pela sessão", () => 
   });
 
   test("terapeuta alheio continua barrado em capturarDiario", async () => {
-    const r = await diarioLogic.capturarDiario(ctxOutro, {
+    const r = await diarioCaptura.capturarDiario(ctxOutro, {
       sessionId: S_SUB_LOGIC,
       texto: "indevido",
     });

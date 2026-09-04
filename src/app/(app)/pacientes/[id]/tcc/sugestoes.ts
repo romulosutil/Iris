@@ -8,7 +8,7 @@ import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
 import { registrarAlertaRiscoRPD } from "@/lib/risco/registrar";
 
-import { detectarSinaisDeRiscoRPD } from "./deteccao-risco";
+import { detectarSinaisDeRiscoRPD } from "@/lib/risco/deteccao-risco";
 import {
   salvarRpdSchema,
   validarTaxonomiaDistorcoes,
