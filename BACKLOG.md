@@ -69,6 +69,31 @@
 
 ---
 
+## 🏁 Sessão 04/09/2026 — #560 F3 fechada em duas PRs: rotas de API e jobs de infra saem do `console`
+
+**Onde parou:** PRs **#613** (F3a) e **#614** (F3b, empilhada sobre a #613) abertas em Draft, todos os gates verdes. Mergear a #613 primeiro; a #614 tem `base` apontando para ela.
+
+**O que a fatia media, e o que ela era de verdade.** O plano dizia "jobs e rotas de API, ~144 `console.*`". A varredura fechou em números bem menores e mais desiguais: **4 sítios** em `src/app/api` (todos em `internal/jobs/asr-transcrever/route.ts` — o `console.warn` que a busca acusava em `fechar-ciclos` era menção em comentário) e **47 sítios** nos `.mjs` de infra. Cinco destes eram `console.error(err)`: o erro inteiro, `message` e `stack`, no painel do Easypanel servido em HTTP puro. Era a metade que importava.
+
+**A decisão que definiu o desenho (validada com o Rômulo antes de escrever código).** A advertência do plano — "a imagem dos jobs não herda as dependências do app" — é mais forte do que parecia: `infra/billing/Dockerfile` documenta **zero `npm install`, de propósito**, porque "uma imagem sem dependência nenhuma não tem essa classe de falha" (#36/#156, o motor de escalonamento que morreu com CI verde). `pino` está fora, e `src/lib` também — não é copiado para imagem nenhuma. A saída foi um emissor **sem dependência** (`scripts/lib/log-estruturado.mjs`, Node puro, só `node:crypto`) com a mesma forma de registro do logger da app e `execucaoId` no lugar do `requestId`: não há request num job, o que correlaciona as linhas de um tick é a rodada.
+
+**Decisões novas, para não serem redescobertas:**
+
+- **A lista de PII do `.mjs` é ESPELHO de `redacao.ts`, com teste de paridade** (`log-estruturado.paridade.test.ts`). Duas listas que podem divergir seriam o defeito: a chave nova entra de um lado e o campo continua saindo em claro do outro, em silêncio.
+- **`motivo` e `nome` são chaves REDIGIDAS — o log de infra precisa de outro nome.** O detector de alarme chama `r.motivo` ao conjunto fechado dele; logado com esse nome, o valor sairia `[redigido]` e a linha perderia a única coisa que a faz existir. Virou `alarme` (e `bloqueio`, no escalonamento). Mesmo raciocínio que a F1 já tinha aplicado a `erroNome`.
+- **Texto livre de terceiro não entra: sai o hash.** `envio.erro` (Resend) e `resultado.erro` do e-mail ao RT viraram `hashErro` — responde "é a mesma falha de ontem" sem carregar o destinatário que uma mensagem de bounce embute.
+- **Corpo de rota vira CAMPO, não string concatenada.** Assim a redaction consegue percorrer o objeto; concatenado, nada podia.
+- **`LOG_LEVEL` é a variável da app, com default próprio.** Sempre `info` nos jobs, nunca `debug`: um job roda em container de produção mesmo disparado à mão, e `debug` ali é uma linha por objeto varrido.
+- **A CLI de desenvolvimento fica FORA do guard, de propósito.** `scripts/` mistura log de container com terminal de humano. `guardrail-conexao.mjs` imprime um aviso com `⚠️` antes de deixar alguém rodar seed contra banco remoto — JSON numa linha pioraria a única coisa que ele faz. Ele está na imagem do escalonamento só porque aquele Dockerfile copia `scripts/lib/` inteiro; o job não o executa. Por isso o escopo do lint é lista explícita de arquivos, não `scripts/**`.
+
+**Prova que não é `pnpm test`** (o plano exige, e é o que a #156 teria pego): as 8 imagens de infra buildam, cada script copiado **importa dentro da imagem** com `--network=none`, `verificar-deps-imagem.mjs` resolve todos os specifiers, e `node scripts/expurgo-audit-log.mjs` na imagem real emite JSON. Mutante: remover o `COPY scripts/lib/log-estruturado.mjs` de um Dockerfile — o **build continua passando** e o guard fica vermelho. É exatamente a #156.
+
+**Gates:** `typecheck` 0 · `lint` 0 erros / 8 warnings pré-existentes · `test` 3155/3155 (369 arquivos) · `test:rls` 1421/1421 (161 arquivos, papel `iris_app(norls)`).
+
+**Próximo passo:** **F4** — os 11 `logic.ts` de rota. Ordem obrigatória registrada no plano: vai **antes** do F4 do plano da #559, que move esses mesmos arquivos. O escopo do guard já tem um teste que fica vermelho se alguém alargar para `src/app/**` sem migrar.
+
+---
+
 ## 🏁 Sessão 03/09/2026 (tarde) — #567 fechada: a `metrica` do snapshot passou a ter UM formatador
 
 **O defeito, em uma frase:** `session_snapshot.segmentacao[*][*].metrica` tem duas formas em produção (objeto `{ eixo, ordinalRecente }` de toda sessão normal; string `"nivel_ajuda"` da anamnese marco-zero) e dois dos três leitores tratavam como `string` — sem que nada disso fosse erro de tipo, porque `sinais.ts` mentia na declaração e `briefing/queries.ts` resolvia com `String()`.
