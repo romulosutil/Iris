@@ -15,7 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { FAIXAS_PRECIFICACAO, formatarBRL } from "@/lib/billing/calculator";
+import { FAIXAS_PRECIFICACAO } from "@/lib/billing/calculator";
+import { formatarBRL } from "@/lib/moeda";
 import { AvisoPastDue } from "./aviso-past-due";
 import { CancelarAssinatura } from "./cancelar-assinatura";
 import { CartaoAssinatura } from "./cartao-assinatura";

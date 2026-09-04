@@ -1,5 +1,5 @@
 import { getSuperAdminClinicas } from "../queries";
-import { formatarBRL } from "@/lib/billing/calculator";
+import { formatarBRL } from "@/lib/moeda";
 import { StatusClinicaPill } from "@/components/admin/status-clinica-pill";
 import { Button } from "@/components/ui/button";
 import { surface } from "@/components/ui/primitives/surface";

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { QrCode } from "@/components/ui/qr-code";
 import { CopyButton } from "@/components/ui/patterns/copy-button";
-import { formatarBRL } from "@/lib/billing/calculator";
+import { formatarBRL } from "@/lib/moeda";
 import { ativarAssinatura } from "./actions";
 import type { AtivacaoState } from "./logic";
 // `import type` de propósito: `debito.ts` puxa Drizzle e o banco, e um import de

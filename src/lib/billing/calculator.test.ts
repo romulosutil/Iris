@@ -5,7 +5,6 @@ import {
   calcularMensalidadeCentavos,
   calculateMonthlyFee,
   detalharMensalidade,
-  formatarBRL,
   FAIXAS_PRECIFICACAO,
   VALOR_PRIMEIRO_PACIENTE_CENTAVOS,
 } from "./calculator";
@@ -164,20 +163,6 @@ describe("FAIXAS_PRECIFICACAO", () => {
       { ateQuantidade: 40, valorCentavos: 3200 },
       { ateQuantidade: null, valorCentavos: 2500 },
     ]);
-  });
-});
-
-describe("formatarBRL", () => {
-  it("formata 74500 centavos com o separador decimal brasileiro", () => {
-    expect(formatarBRL(74500)).toContain("745,00");
-  });
-
-  it("mantém o símbolo da moeda", () => {
-    expect(formatarBRL(74500)).toContain("R$");
-  });
-
-  it("formata zero", () => {
-    expect(formatarBRL(0)).toContain("0,00");
   });
 });
 

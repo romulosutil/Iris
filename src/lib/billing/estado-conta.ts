@@ -2,7 +2,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import type { Tx } from "@/db/rls";
 import { calcularStatusTrial } from "@/lib/trial";
-import { formatarBRL } from "./calculator";
+import { formatarBRL } from "@/lib/moeda";
 
 /**
  * Decisão unificada sobre o que uma clínica pode fazer (#36 + #175).

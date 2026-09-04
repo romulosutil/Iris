@@ -2,7 +2,7 @@
  * Templates HTML e Texto de E-mails Transacionais do Iris.
  * Escrevendo com tom de voz de UX Writer Sênior: direto, empático, seguro e profissional.
  */
-import { formatarBRL } from "@/lib/billing/calculator";
+import { formatarBRL } from "@/lib/moeda";
 
 interface BaseEmailProps {
   tituloHeader: string;
