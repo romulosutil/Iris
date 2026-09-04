@@ -7,7 +7,7 @@ import { patient } from "@/db/schema";
 import {
   carregarHorasPaciente,
   type HorasDisciplina,
-} from "@/app/(app)/agenda/horas-queries";
+} from "@/lib/agenda/horas-queries";
 import { Stack } from "@/components/ui/layout";
 import { Alert } from "@/components/ui/alert";
 

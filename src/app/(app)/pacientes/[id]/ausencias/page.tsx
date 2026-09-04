@@ -4,7 +4,7 @@ import { getTenantContext } from "@/auth/tenant";
 import { requireRole } from "@/auth/require-role";
 import { withTenant } from "@/db/rls";
 import { patient } from "@/db/schema";
-import { listarBloqueios } from "@/app/(app)/agenda/bloqueio-queries";
+import { listarBloqueios } from "@/lib/agenda/bloqueio-queries";
 import { AusenciasForm } from "./ausencias-form";
 
 interface Props {

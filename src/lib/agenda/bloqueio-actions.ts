@@ -1,4 +1,21 @@
 "use server";
+
+// Server actions de bloqueio de agenda (#559, fatia F3 · achado A-02).
+//
+// Moradia em `src/lib/agenda/` e não na rota `agenda/`: os únicos chamadores
+// são formulários de OUTRAS rotas (`clinica/feriados`,
+// `equipe/[id]`, `pacientes/[id]/ausencias`) — a própria agenda não usa nada
+// daqui. Rota importando rota era o padrão que a auditoria 360 apontou.
+//
+// `"use server"` continua NECESSÁRIO e fica só aqui: a diretiva é do MÓDULO e
+// propaga por importação, e é ela que transforma estas funções em endpoint
+// para o `useActionState` dos formulários cliente. Nenhum módulo puro de
+// `src/lib/agenda/` importa este arquivo, então a diretiva não vaza.
+//
+// Nenhuma função exportada aceita `ctx`/`TenantContext` do chamador (achado
+// #55): o tenant é resolvido AQUI dentro, por `getTenantContext()`. O núcleo
+// ctx-accepting mora em `bloqueio-queries.ts`, que NÃO tem a diretiva.
+
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getTenantContext } from "@/auth/tenant";

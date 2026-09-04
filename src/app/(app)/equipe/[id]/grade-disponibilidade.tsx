@@ -3,7 +3,7 @@
 import { AvailabilityGrid } from "@/components/ui/availability-grid";
 // D61: a grade de disponibilidade não tem `clinic.timezone` no caminho da
 // request; a constante fica até a página passar o fuso real (#538, revisão).
-import { FUSO_CLINICA } from "@/app/(app)/agenda/fuso";
+import { FUSO_CLINICA } from "@/lib/agenda/fuso";
 
 export type GradeProps = {
   passoMin: number;

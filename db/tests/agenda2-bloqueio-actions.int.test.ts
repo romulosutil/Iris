@@ -9,8 +9,8 @@ const PAC_A1 = "bbbb0000-0000-0000-0000-0000000000e1";
 
 describe.skipIf(!hasDb)("bloqueio actions — validação + persistência", () => {
   let owner: ReturnType<typeof postgres>;
-  let actions: typeof import("@/app/(app)/agenda/bloqueio-actions");
-  let queries: typeof import("@/app/(app)/agenda/bloqueio-queries");
+  let actions: typeof import("@/lib/agenda/bloqueio-actions");
+  let queries: typeof import("@/lib/agenda/bloqueio-queries");
   let appSql: typeof import("@/db/client").sql;
   const ctxCoord = {
     clinicId: CLINIC_A,
@@ -19,8 +19,8 @@ describe.skipIf(!hasDb)("bloqueio actions — validação + persistência", () =
   } as const;
 
   beforeAll(async () => {
-    actions = await import("@/app/(app)/agenda/bloqueio-actions");
-    queries = await import("@/app/(app)/agenda/bloqueio-queries");
+    actions = await import("@/lib/agenda/bloqueio-actions");
+    queries = await import("@/lib/agenda/bloqueio-queries");
     ({ sql: appSql } = await import("@/db/client"));
     // getTenantContext lê cookies; sobrescrevemos para os testes de action:
     const tenant = await import("@/auth/tenant");

@@ -9,7 +9,7 @@ import { Alert } from "@/components/ui/alert";
 import {
   criarBloqueioAction,
   type BloqueioState,
-} from "@/app/(app)/agenda/bloqueio-actions";
+} from "@/lib/agenda/bloqueio-actions";
 
 type Bloqueio = {
   id: string;

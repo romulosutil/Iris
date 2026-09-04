@@ -1,3 +1,9 @@
+// Leitura de bloqueios de agenda (#559, fatia F3 · achado A-02).
+//
+// Sem `"use server"` de propósito: é função ctx-accepting, chamada por
+// `page.tsx` de servidor. Exportá-la de um módulo `"use server"` a
+// transformaria em endpoint que aceita o `TenantContext` do chamador — bypass
+// de RLS (achado #55).
 import { and, asc, eq } from "drizzle-orm";
 import { withTenant, type TenantContext } from "@/db/rls";
 import { bloqueio } from "@/db/schema";
