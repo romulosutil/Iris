@@ -100,15 +100,15 @@ Achados **novos** que as PRs expuseram (além do relatório): aprovação real g
 
 Sete issues sobraram. Duas nasceram do próprio W10 depois do merge de #556.
 
-| Onda | Issue | Item                                                                                                     | Estado                 |
-| ---- | ----- | -------------------------------------------------------------------------------------------------------- | ---------------------- |
-| A    | #553  | Forma canônica do payload + backfill                                                                     | **fechada** (#569)     |
-| A    | #567  | `metrica` objeto × string — `[object Object]` no briefing, linha "Métrica" sumindo do card de supervisão | em andamento           |
-| B    | #542  | Flake e2e `represcricao-mv4` (`Q-06`)                                                                    | despachada             |
-| B    | #566  | Painel admin no DS + fechar `ESCOPO_DS` do lint (`DS-01`, sequela do W10)                                | despachada             |
-| B    | #558  | `PR-04` cadeia de suporte por percentual                                                                 | **spec**, não execução |
-| C    | #560  | `DA-04` logger estruturado + id de correlação                                                            | fila                   |
-| C    | #559  | `A-02` regra em `logic.ts`, rota importando rota                                                         | fila                   |
+| Onda | Issue | Item                                                                                                     | Estado                                                          |
+| ---- | ----- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| A    | #553  | Forma canônica do payload + backfill                                                                     | **fechada** (#569)                                              |
+| A    | #567  | `metrica` objeto × string — `[object Object]` no briefing, linha "Métrica" sumindo do card de supervisão | **fechada** (#570)                                              |
+| B    | #542  | Flake e2e `represcricao-mv4` (`Q-06`)                                                                    | causa medida (#581) + gate por arquivo (#585); issue **aberta** |
+| B    | #566  | Painel admin no DS + fechar `ESCOPO_DS` do lint (`DS-01`, sequela do W10)                                | **fechada** (#580)                                              |
+| B    | #558  | `PR-04` cadeia de suporte por etapa (`nivel_ajuda`, não percentual)                                      | spec #574 + T1–T4 (#601); **faltam T5 e T6**                    |
+| C    | #560  | `DA-04` logger estruturado + id de correlação                                                            | F1 mergeada (#599); **faltam F2–F5**                            |
+| C    | #559  | `A-02` regra em `logic.ts`, rota importando rota                                                         | F1 guard (#603) + F2 (#579); **faltam F3, F4, F5**              |
 
 ### Por que esta ordem
 
@@ -136,8 +136,41 @@ Sete issues sobraram. Duas nasceram do próprio W10 depois do merge de #556.
 
 ### Pendências operacionais (não são issue)
 
-- `EXPORT_JOB_TOKEN` no Easypanel — pré-requisito de #545, já mergeada. **Verificar
-  medindo** se foi provisionado; issue fechada não prova serviço no painel.
-- Role `iris_expurgo_audit_log` + `EXPURGO_DATABASE_URL` — mesma situação (#551).
+- ~~`EXPORT_JOB_TOKEN` no Easypanel — pré-requisito de #545, já mergeada.~~
+  **Verificado pelo Rômulo (03/09/2026)**: provisionado no painel. Importa porque
+  a #545 tirou o fallback — a rota de exportação passou a ler **só**
+  `EXPORT_JOB_TOKEN` (`INTERNAL_JOB_TOKEN`/`BILLING_JOB_TOKEN` não valem mais),
+  então token ausente viraria 401 a cada tick do agendador em vez de erro visível.
+  A medição que fecha isso no runbook é a mesma da D62: log do serviço
+  `exportacao` com `[exportacao-acervo] ok {...}` (e não `HTTP 401`).
+- Role `iris_expurgo_audit_log` + `EXPURGO_DATABASE_URL` — **segue pendente**
+  (#551/#536). Runbook completo, passo a passo, em `infra/README.md` (§"Job de
+  Expurgo e Retenção do AuditLog"): criar a role de login que herda
+  `iris_expurgo_audit_log`, pôr `EXPURGO_DATABASE_URL` no serviço, clicar
+  **Implantar** e conferir `Varredura concluída com sucesso` no log.
 - Worktrees de `.claude/worktrees/` das 12 ondas seguem no disco; limpar com
   `git worktree prune` após confirmar que nada pendente vive neles.
+
+## Reconciliação de 04/09/2026 (varredura de todos os commits desde 31/08)
+
+Medido na `main` em `74a92d57`, com `gh` para issues/PRs e grep para o código.
+
+**Fechou desde o encerramento das 12 ondas:** #553 (#569), #567 (#570), #566
+(#580), #557 e toda a sequela D83 (10 PRs), #582 (#594), #536 imagem do job de
+expurgo (#590), #558 T1–T4 (#601), #560 F1 (#599), #559 F1/F2 (#603/#579),
+gate de flake por arquivo (#585) e as duas pontas do e2e (#600, #602, #605).
+
+**Segue aberto, medido arquivo a arquivo:**
+
+| Item                     | O que falta                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #558 (`PR-04`)           | **T5** bloco de rotinas na aba Evolução (`grep cadeia` em `timeline/` = 0 hits) e **T6** procedência da âncora em `revisao/[sessionId]/resumo.ts` (hoje lista as etapas e não avisa que cadeia sem âncora fica fora da evolução)                                                                                                                                |
+| #559 (`A-02`)            | **F3** agenda: 7 imports rota→rota vivos (`clinica/feriados`, `equipe/[id]`, `pacientes/[id]/{ausencias,horas}` → `agenda/bloqueio-*`, `agenda/horas-queries`); **F4** `diario/[sessionId]/logic.ts` com 1.194 linhas; **F5** ciclo `lib/email/templates.ts` ⇄ `lib/billing/notificacao-cancelamento.ts`. O baseline do guard congela 5 arquivos e só pode cair |
+| #560 (`DA-04`)           | **F2–F4**: 2 módulos importam `observabilidade/logger` contra 52 ainda na fachada `logarErroSemPII`; 66 `console.*` fora de teste em `src` (0 em `src/lib`). **F5** contadores                                                                                                                                                                                  |
+| #542 (`Q-06`)            | Causa medida em #581 e piso já vale (baseline de #585 não lista o arquivo). Fecha com rodadas de CI mostrando `flaky=0`                                                                                                                                                                                                                                         |
+| D79 (`PR-07`, #537)      | `report_tipo.avaliativo_interdisciplinar` segue órfão (`src/db/schema.ts:1562`, zero consumidor em `src`/`scripts`) — decisão de produto do Rômulo: spec do relatório interdisciplinar × remover o valor do enum                                                                                                                                                |
+| Baseline de flake mobile | `mobile-navegacao`, `mobile-toque`, `mobile-app` com 1 flake cada em `scripts/ci/e2e-flaky.baseline.json` — dívida herdada, sem issue                                                                                                                                                                                                                           |
+
+**Higiene de disco:** 9 worktrees das ondas W1–W12 seguem em `.claude/worktrees/`
+com branches já mergeadas (`git worktree list`) — `git worktree prune` depois de
+conferir que nada pendente vive neles.

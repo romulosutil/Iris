@@ -14,21 +14,21 @@ Legenda: ✅ coberto · 🟡 parcial · 🔴 ausente. Cada gap tem destino recom
 
 ## Estado em 09/2026 (revisão da auditoria 360)
 
-| Jornada (corpo abaixo)                      | Estado em jul/2026 | Estado em 09/2026 | Onde está / fechamento                                                                                                                                                                                                                                                 |
-| ------------------------------------------- | :----------------: | :---------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. Admissão — ficha clínica + consentimento |         🔴         |  ✅ / 🟡 jornada  | `src/app/(app)/pacientes/novo` (ficha, consentimento LGPD, responsável). A **jornada** até o prontuário pronto (escada de prontidão) fecha com a spec `docs/superpowers/specs/2026-09-01-jornada-admissao-paciente-design.md` (branch `feat/prontidao-do-prontuario`). |
-| 1. Admissão — anamnese estruturada          |         🔴         |        ✅         | Marco 0 da linha do tempo (#407/#409), aba "Anamnese" no prontuário, condicionada a `protocol_driven`.                                                                                                                                                                 |
-| 3. Plano/Metas — ciclo de vida da meta      |         🔴         |        ✅         | `src/app/(app)/pacientes/[id]/metas/logic.ts` — estados, transições e critério de domínio. A mesma spec de admissão acima fecha "meta ativa" como degrau da prontidão.                                                                                                 |
-| 4. Pré-sessão — briefing                    |         🔴         |        ✅         | `src/app/(app)/pacientes/[id]/briefing`.                                                                                                                                                                                                                               |
-| 4. Falta/cancelamento — assiduidade         |         🟡         |        ✅         | `src/app/(app)/supervisao/queries.ts` (`faltas_limiar`), fila de supervisão.                                                                                                                                                                                           |
-| 4. Perfil de reforçadores                   |         🟡         |        🟡         | Sem mudança de estado nesta revisão.                                                                                                                                                                                                                                   |
-| 4. Incidente grave (severidade no ABC)      |         🟡         |        🟡         | Alerta de risco existe (`/alertas-risco`, escalonamento); severidade no ABC não foi reavaliada aqui.                                                                                                                                                                   |
-| 5. Reunião interdisciplinar                 |         🟡         |        🔴         | Ausente. `report_tipo.avaliativo_interdisciplinar` existe no enum sem consumidor (`PR-07`, registrado no `BACKLOG.md`).                                                                                                                                                |
-| 7. Relatório escolar                        |         🔴         |        🔴         | Ausente (`report_tipo` sem `escola`).                                                                                                                                                                                                                                  |
-| 7. Treino parental / orientação para casa   |         🟡         |        🟡         | Ausente como jornada própria; segue só o "como apoiar em casa" do relatório.                                                                                                                                                                                           |
-| 7. Resumo diário para WhatsApp              |         🟡         |        🔴         | Ausente.                                                                                                                                                                                                                                                               |
-| 8. Transição/alta                           |         🔴         |        🟡         | Arquivamento/desarquivamento e retenção existem; relatório de alta e jornada completa continuam ausentes (D65).                                                                                                                                                        |
-| Sessão substituta                           |         🟡         |        🟡         | Agenda aceita `atendido_por_id`; RLS/`ehDono`/fila ainda leem só `terapeuta_id` (`PR-05`, W11).                                                                                                                                                                        |
+| Jornada (corpo abaixo)                      | Estado em jul/2026 | Estado em 09/2026 | Onde está / fechamento                                                                                                                                                                                                                                                               |
+| ------------------------------------------- | :----------------: | :---------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. Admissão — ficha clínica + consentimento |         🔴         |        ✅         | `src/app/(app)/pacientes/novo` (ficha, consentimento LGPD, responsável). A **jornada** até o prontuário pronto (escada de prontidão) fechou em 03/09/2026: #557 (`a3142384`) + sequela D83 em 10 PRs. Spec: `docs/superpowers/specs/2026-09-01-jornada-admissao-paciente-design.md`. |
+| 1. Admissão — anamnese estruturada          |         🔴         |        ✅         | Marco 0 da linha do tempo (#407/#409), aba "Anamnese" no prontuário, condicionada a `protocol_driven`.                                                                                                                                                                               |
+| 3. Plano/Metas — ciclo de vida da meta      |         🔴         |        ✅         | `src/app/(app)/pacientes/[id]/metas/logic.ts` — estados, transições e critério de domínio. A mesma spec de admissão acima fecha "meta ativa" como degrau da prontidão.                                                                                                               |
+| 4. Pré-sessão — briefing                    |         🔴         |        ✅         | `src/app/(app)/pacientes/[id]/briefing`.                                                                                                                                                                                                                                             |
+| 4. Falta/cancelamento — assiduidade         |         🟡         |        ✅         | `src/app/(app)/supervisao/queries.ts` (`faltas_limiar`), fila de supervisão.                                                                                                                                                                                                         |
+| 4. Perfil de reforçadores                   |         🟡         |        🟡         | Sem mudança de estado nesta revisão.                                                                                                                                                                                                                                                 |
+| 4. Incidente grave (severidade no ABC)      |         🟡         |        🟡         | Alerta de risco existe (`/alertas-risco`, escalonamento); severidade no ABC não foi reavaliada aqui.                                                                                                                                                                                 |
+| 5. Reunião interdisciplinar                 |         🟡         |        🔴         | Ausente. `report_tipo.avaliativo_interdisciplinar` existe no enum sem consumidor (`PR-07`, registrado no `BACKLOG.md`).                                                                                                                                                              |
+| 7. Relatório escolar                        |         🔴         |        🔴         | Ausente (`report_tipo` sem `escola`).                                                                                                                                                                                                                                                |
+| 7. Treino parental / orientação para casa   |         🟡         |        🟡         | Ausente como jornada própria; segue só o "como apoiar em casa" do relatório.                                                                                                                                                                                                         |
+| 7. Resumo diário para WhatsApp              |         🟡         |        🔴         | Ausente.                                                                                                                                                                                                                                                                             |
+| 8. Transição/alta                           |         🔴         |        🟡         | Arquivamento/desarquivamento e retenção existem; relatório de alta e jornada completa continuam ausentes (D65).                                                                                                                                                                      |
+| Sessão substituta                           |         🟡         |        🟡         | Agenda aceita `atendido_por_id`; RLS/`ehDono`/fila ainda leem só `terapeuta_id` (`PR-05`, W11).                                                                                                                                                                                      |
 
 ---
 
@@ -40,7 +40,18 @@ Legenda: ✅ coberto · 🟡 parcial · 🔴 ausente. Cada gap tem destino recom
    7. COMUNICAÇÃO EXTERNA (família/convênio/escola) → 8. TRANSIÇÃO/ALTA
 ```
 
-### 1. Admissão do paciente — 🔴 AUSENTE (crítico, promover ao MVP)
+### 1. Admissão do paciente — ✅ ENTREGUE (era 🔴 AUSENTE; fechado em 03/09/2026)
+
+> **Estado em 04/09/2026.** O texto abaixo é o achado original (09/2026) e fica
+> como registro. A jornada foi entregue: ficha clínica + consentimento em
+> `src/app/(app)/pacientes/novo`, anamnese estruturada como marco 0 (#407/#409),
+> termo de menor em `docs/legal/termo-consentimento-menor.md` (D59) e a **escada
+> de prontidão do prontuário** em #557 (`a3142384`), com a sequela D83 fechada em
+> 10 PRs (#571, #572, #575, #576, #577, #578, #579, #584, #586, #591 — prova de
+> alcance de rota, 4 papéis × gesto primário, conta somente-leitura, 5º passo do
+> onboarding, e2e costurando as três superfícies e o selo "Aguardando
+> coordenação"). Spec:
+> `docs/superpowers/specs/2026-09-01-jornada-admissao-paciente-design.md`.
 
 O paciente hoje "aparece" cadastrado no sistema. Falta a jornada de entrada:
 
@@ -136,7 +147,7 @@ avaliações (a infraestrutura já serve).
 | Terapeuta    | agenda, captura, revisão, linha do tempo | 🔴 briefing pré-sessão · 🟡 reforçadores · 🔴 participação na criação de metas                  |
 | Coordenador  | exceções, supervisão, validação, exports | 🔴 criação/revisão de metas · 🟡 assiduidade · 🟡 reunião interdisciplinar · 🟡 incidente grave |
 | Família      | relatório PDF                            | 🟡 treino parental · 🔴 consentimento na admissão (é jornada DELES)                             |
-| Clínica/dono | (herda coordenador)                      | 🟡 admissão do paciente · backlog: escola, alta                                                 |
+| Clínica/dono | (herda coordenador)                      | ✅ admissão do paciente (#557 + sequela D83) · backlog: escola, alta                            |
 
 ## Auditoria do dia terapêutico (hora a hora) — jul/2026
 
