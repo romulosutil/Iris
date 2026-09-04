@@ -105,6 +105,28 @@ export function resumirPayload(
     }
     case "cadeia": {
       push(linhas, "Cadeia", str(p.nome));
+      // #558 · T6 (R4.1/R4.2) — procedência da âncora. A âncora é ÚNICA e vive
+      // no nível da cadeia (G-1 (a)), com a forma de `alvoSchema`
+      // (`goal_id`/`protocol_id`/`dominio_id`). Este módulo é PURO: mostra os
+      // refs crus que o agente declarou, sem traduzir id em título (isso
+      // exigiria banco). O aviso de destino é a régua da US-2: o coordenador
+      // nunca deve supor que aprovou dado que a leitura de evolução ignora.
+      // Sem `goal_id` a etapa nasce com FK nula e a materialização a descarta
+      // (`materializar.ts` — `if (!e.goalId) continue`), então o aviso é
+      // disparado pela AUSÊNCIA DE META, não só pela ausência de âncora.
+      const alvo =
+        p.alvo && typeof p.alvo === "object" ? (p.alvo as Payload) : null;
+      const meta = alvo ? str(alvo.goal_id) : null;
+      push(linhas, "Meta vinculada", meta);
+      push(linhas, "Protocolo", alvo ? str(alvo.protocol_id) : null);
+      push(linhas, "Domínio", alvo ? str(alvo.dominio_id) : null);
+      if (!meta) {
+        push(
+          linhas,
+          "Evolução",
+          "sem meta vinculada — a rotina fica registrada na trilha da sessão e fora da leitura de evolução",
+        );
+      }
       const etapas = Array.isArray(p.etapas) ? (p.etapas as Payload[]) : [];
       etapas.forEach((et, i) => {
         const desc = str(et.descricao);
