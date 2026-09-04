@@ -39,6 +39,50 @@ describe("resumirPayload", () => {
     expect(linhas.find((l) => l.rotulo === "Etapa 2")?.valor).toBe("ensaboar");
   });
 
+  // #558 · T6 (R4.1/R4.2) — o coordenador nunca deve supor que aprovou dado
+  // que o gráfico ignora. Com âncora, o resumo mostra a procedência; sem
+  // âncora (ou sem meta na âncora), diz em texto que fica fora da evolução.
+  test("cadeia com âncora: mostra a procedência do alvo", () => {
+    const linhas = resumirPayload("cadeia", {
+      nome: "lanche",
+      alvo: {
+        goal_id: "8f14e45f-ceea-467a-9c2b-1b2e4a1d7a11",
+        protocol_id: "ablls",
+        dominio_id: "avds",
+      },
+      etapas: [{ descricao: "abrir a lancheira" }],
+    });
+    expect(linhas.find((l) => l.rotulo === "Meta vinculada")?.valor).toBe(
+      "8f14e45f-ceea-467a-9c2b-1b2e4a1d7a11",
+    );
+    expect(linhas.find((l) => l.rotulo === "Protocolo")?.valor).toBe("ablls");
+    expect(linhas.find((l) => l.rotulo === "Domínio")?.valor).toBe("avds");
+    expect(linhas.find((l) => l.rotulo === "Evolução")).toBeUndefined();
+  });
+
+  test("cadeia sem âncora: avisa que fica na trilha e fora da evolução", () => {
+    const linhas = resumirPayload("cadeia", {
+      nome: "lavar as mãos",
+      etapas: [{ descricao: "abrir a torneira" }],
+    });
+    expect(linhas.find((l) => l.rotulo === "Meta vinculada")).toBeUndefined();
+    const evolucao = linhas.find((l) => l.rotulo === "Evolução");
+    expect(evolucao?.valor).toContain("trilha");
+    expect(evolucao?.valor).toContain("fora da leitura de evolução");
+  });
+
+  test("cadeia com âncora sem meta: mostra a procedência E o aviso", () => {
+    const linhas = resumirPayload("cadeia", {
+      nome: "lanche",
+      alvo: { protocol_id: "ablls", dominio_id: "avds" },
+      etapas: [{ descricao: "abrir a lancheira" }],
+    });
+    expect(linhas.find((l) => l.rotulo === "Domínio")?.valor).toBe("avds");
+    expect(linhas.find((l) => l.rotulo === "Evolução")?.valor).toContain(
+      "fora da leitura de evolução",
+    );
+  });
+
   test("payload nulo/indefinido não quebra", () => {
     expect(resumirPayload("registro_abc", null)).toEqual([]);
     expect(resumirPayload("preferencia_reforcador", undefined)).toEqual([]);
