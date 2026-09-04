@@ -9,6 +9,10 @@ import {
   pluginDS,
 } from "./scripts/lint/regra-ds-paleta-crua.mjs";
 import {
+  ESCOPO_FRONTEIRA,
+  pluginFronteira,
+} from "./scripts/lint/regra-fronteira-lib-app.mjs";
+import {
   ESCOPO_RSC,
   FORA_DO_ESCOPO_RSC,
   pluginRSC,
@@ -22,6 +26,17 @@ import {
 const baselineDS = JSON.parse(
   readFileSync(
     new URL("./scripts/lint/ds-paleta-crua.baseline.json", import.meta.url),
+    "utf8",
+  ),
+);
+
+// A-02 (#559, F1): imports de `@/app/**` que ainda existem em `src/lib` e
+// `src/components/ui`, com a contagem atual por arquivo. Só pode CAIR — as
+// fatias F2–F5 da issue zeram cada entrada movendo o módulo. Ver o bloco da
+// regra no fim deste arquivo e `scripts/lint/fronteira-lib-app.test.ts`.
+const baselineFronteira = JSON.parse(
+  readFileSync(
+    new URL("./scripts/lint/fronteira-lib-app.baseline.json", import.meta.url),
     "utf8",
   ),
 );
@@ -107,6 +122,36 @@ const config = [
     ],
     plugins: { ds: pluginDS },
     rules: { "ds/sem-paleta-crua": "error" },
+  },
+  {
+    // A-02 (#559, fatia F1): fronteira `lib` ↛ `app`. `src/lib` e
+    // `src/components/ui` são os bounded contexts e o design system — eles não
+    // podem importar de `src/app`, que é a camada de rota. A inversão já
+    // existe (`lib/billing/rotulos-*` importa `@/app/(app)/assinatura/queries`)
+    // e é o que a auditoria 360 chamou de "lib dependendo de app".
+    //
+    // Esta regra é o degrau barato: PARA A SANGRIA antes do refactor grande
+    // (fatias F2–F5 movem o passivo). O baseline abaixo congela o que já
+    // existe; `scripts/lint/fronteira-lib-app.test.ts` (roda no `pnpm test`)
+    // reativa a regra sobre esses arquivos e falha se a contagem SUBIR — e
+    // pede para abaixar o baseline quando ela cai.
+    //
+    // Import de TIPO conta: `import type { X } from "@/app/..."` amarra o
+    // módulo de lib ao arquivo de rota em tempo de compilação e é exatamente
+    // o que impede mover o módulo depois.
+    //
+    // Regra própria (plugin inline, como `ds/` e `rsc/`) em vez de
+    // `no-restricted-imports`: aquela regra só visita import/export ESTÁTICO e
+    // casa a string do especificador, então `await import("@/app/...")`,
+    // `require("@/app/...")` e o relativo `"../../app/..."` passavam livres —
+    // medido. E fechar com `no-restricted-syntax` num bloco novo apagaria o
+    // guard de PHI/PII do `console.error`, que já usa essa regra em
+    // `src/lib/**` (flat config não soma opções da mesma regra entre blocos).
+    files: ESCOPO_FRONTEIRA,
+    // `(app)` e `[id]` dos caminhos de rota precisam de escape num glob.
+    ignores: Object.keys(baselineFronteira).map(comoGlobLiteral),
+    plugins: { fronteira: pluginFronteira },
+    rules: { "fronteira/sem-import-de-app": "error" },
   },
   {
     // #583: módulo que usa hook de cliente do React precisa declarar
