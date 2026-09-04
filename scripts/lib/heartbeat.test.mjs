@@ -13,6 +13,7 @@
  *    driver carrega SQL + params).
  */
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { capturarLogDeJob } from "../test-utils/captura-log.mjs";
 import { detalheDoErro, detalheSemPii, gravarHeartbeat } from "./heartbeat.mjs";
 
 function sqlDubleQueGrava(chamadas) {
@@ -119,21 +120,30 @@ describe("heartbeat.mjs — gravarHeartbeat (#536)", () => {
   });
 
   test("banco lança → NÃO propaga, devolve false, loga name+code e não a message", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const err = Object.assign(
       new Error(
         "SELECT app_job_heartbeat_gravar($1) -- params: Paciente Fulano",
       ),
       { name: "PostgresError", code: "42501" },
     );
-    const resultado = await gravarHeartbeat(sqlDubleQueLanca(err), "retencao", {
-      ok: true,
+
+    let resultado;
+    const log = await capturarLogDeJob(async () => {
+      resultado = await gravarHeartbeat(sqlDubleQueLanca(err), "retencao", {
+        ok: true,
+      });
     });
+
     expect(resultado).toBe(false);
-    expect(warn).toHaveBeenCalledTimes(1);
-    const logado = warn.mock.calls[0].join(" ");
-    expect(logado).toContain("PostgresError");
-    expect(logado).toContain("42501");
-    expect(logado).not.toContain("Fulano");
+    // #560/F3b: era `console.warn` com o diagnóstico interpolado na frase.
+    // Classe e SQLSTATE viraram campos; o `job` também, que é por onde se
+    // separa "qual job perdeu o heartbeat" sem parsear texto.
+    const registro = log.evento("heartbeat.gravacao-falhou");
+    expect(registro?.nivel).toBe("warn");
+    expect(registro?.erroNome).toBe("PostgresError");
+    expect(registro?.codigo).toBe("42501");
+    expect(registro?.job).toBe("retencao");
+    // A `message` do driver é a query com os params — e um deles é o paciente.
+    expect(log.bruto()).not.toContain("Fulano");
   });
 });

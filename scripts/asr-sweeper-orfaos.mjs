@@ -59,6 +59,7 @@ import {
   DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import { pathToFileURL } from "node:url";
+import { log, logarErro } from "./lib/log-estruturado.mjs";
 import postgres from "postgres";
 import {
   detalheDoErro,
@@ -72,9 +73,8 @@ const JOB = "asr-sweeper";
 
 const LIMITE_HORAS_DEFAULT = 6;
 
-function log(msg) {
-  console.log(`[asr-sweeper] ${new Date().toISOString()} ${msg}`);
-}
+// A hora deixou de ser interpolada: todo registro do emissor já sai com o
+// campo `hora` em ISO.
 
 /**
  * O PREDICADO — isolado e puro, exatamente o que o teste unitário cobre sem
@@ -234,18 +234,22 @@ export async function varrer(
       // é lixo.
       if (reivindicados.has(objeto.Key)) {
         emUso += 1;
-        log(
-          `preservado (ainda em uso: na_fila/transcrevendo): ${objeto.Key} ` +
-            `(mtime=${objeto.LastModified.toISOString()})`,
-        );
+        // `Key` é `loteId:ordem` (chave do bucket efêmero), não PII — e é o
+        // único jeito de casar uma decisão do sweeper com um objeto real.
+        log.debug("asr-sweeper.objeto-preservado", {
+          objetoRef: objeto.Key,
+          mtime: objeto.LastModified.toISOString(),
+          razao: "em-uso",
+        });
         continue;
       }
 
       if (dryRun) {
-        log(
-          `[dry-run] expirado (NÃO apagado): ${objeto.Key} ` +
-            `(mtime=${objeto.LastModified.toISOString()})`,
-        );
+        log.debug("asr-sweeper.objeto-expirado-nao-apagado", {
+          dryRun: true,
+          objetoRef: objeto.Key,
+          mtime: objeto.LastModified.toISOString(),
+        });
         seriamApagados += 1;
         continue;
       }
@@ -254,7 +258,10 @@ export async function varrer(
         new DeleteObjectCommand({ Bucket: bucket, Key: objeto.Key }),
       );
       apagados += 1;
-      log(`apagado (órfão, idade > ${limiteHoras}h): ${objeto.Key}`);
+      log.debug("asr-sweeper.objeto-apagado", {
+        objetoRef: objeto.Key,
+        limiteHoras,
+      });
     }
 
     continuationToken = pagina.IsTruncated
@@ -262,15 +269,18 @@ export async function varrer(
       : undefined;
   } while (continuationToken);
 
-  log(
-    dryRun
-      ? `varredura concluída: ${inspecionados} objeto(s) inspecionado(s), ` +
-          `${seriamApagados} seria(m) apagado(s), ${emUso} preservado(s) por ` +
-          `ainda estar(em) em uso (limite=${limiteHoras}h, dry-run — nada foi apagado).`
-      : `varredura concluída: ${inspecionados} objeto(s) inspecionado(s), ` +
-          `${apagados} apagado(s), ${emUso} preservado(s) por ainda estar(em) em uso ` +
-          `(limite=${limiteHoras}h).`,
-  );
+  // UM evento para os dois modos, com `dryRun` como campo: eventos diferentes
+  // por modo obrigariam quem consulta "quantos objetos o sweeper apagou nesta
+  // semana" a conhecer os dois nomes, e a primeira consulta escrita esqueceria
+  // um deles.
+  log.info("asr-sweeper.varredura-concluida", {
+    dryRun,
+    inspecionados,
+    apagados: dryRun ? 0 : apagados,
+    seriamApagados: dryRun ? seriamApagados : 0,
+    emUso,
+    limiteHoras,
+  });
 
   return {
     inspecionados,
@@ -331,8 +341,7 @@ if (
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
   main().catch((err) => {
-    console.error("[asr-sweeper] FALHA na varredura de órfãos:");
-    console.error(err);
+    logarErro("asr-sweeper.varredura-falhou", err);
     process.exit(1);
   });
 }
