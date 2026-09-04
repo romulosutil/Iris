@@ -7,12 +7,13 @@ import {
   AsrProviderError,
   type AsrClassificacaoErro,
 } from "@/lib/asr/provider";
-import { codigoPg } from "@/db/pg-error";
 import {
   detalheDoErro,
   detalheSemPii,
   registrarHeartbeat,
 } from "@/lib/jobs/heartbeat";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+import { logger } from "@/lib/observabilidade/logger";
 
 /**
  * Rota interna do worker de transcrição (#72, T07).
@@ -101,21 +102,18 @@ function categoriaDoErro(err: unknown): CategoriaErro {
   return err instanceof AsrProviderError ? err.classificacao : "erro_interno";
 }
 
-/**
- * Diagnóstico para o log da APP — nome do erro + SQLSTATE, nunca `.message`.
+/*
+ * O diagnóstico do log da APP (nome do erro + SQLSTATE, nunca `.message`)
+ * saiu daqui na F3 da #560: `logarErroSemPII` já produz um SUPERCONJUNTO do
+ * que a função local montava — classe, SQLSTATE, constraint, status HTTP,
+ * nome da causa e hash da mensagem — e ainda entrega isso como campos JSON,
+ * com `requestId`, passando pela redaction por chave. Duas funções para o
+ * mesmo diagnóstico é como uma delas envelhece sem ninguém notar.
  *
- * A regra do repo é que o log de servidor pode ser mais detalhado que a
- * resposta, mas aqui a mediana de risco é alta: o log do container é lido pelo
- * painel do Easypanel, servido em HTTP puro (memória
- * `easypanel-ambiente-expoe-segredos`). `err.name` + `codigoPg` mantêm o poder
- * de diagnóstico real ("22001 no concluir" já localiza o defeito) sem que a
- * nota ditada possa entrar na string.
+ * A razão de ser restritivo continua valendo e é por que nada aqui virou
+ * `err` cru: o log do container é lido pelo painel do Easypanel, servido em
+ * HTTP puro (memória `easypanel-ambiente-expoe-segredos`).
  */
-function diagnosticoDoErro(err: unknown): string {
-  const nome = err instanceof Error ? err.name : typeof err;
-  const codigo = codigoPg(err);
-  return codigo ? `${nome} (SQLSTATE ${codigo})` : nome;
-}
 
 async function reservarLote(limite: number): Promise<LinhaReservada[]> {
   const linhas = await asrWorkerDb.execute(
@@ -224,10 +222,11 @@ async function processarClipe(clipe: LinhaReservada): Promise<ResultadoClipe> {
         await apagar(clipe.objeto_ref);
       }
     } catch (err) {
-      console.error(
-        `[asr-transcrever] falha ao apagar objeto efêmero (${clipe.objeto_ref})`,
-        diagnosticoDoErro(err),
-      );
+      // `objetoRef` é a chave do storage efêmero (`loteId:ordem`), não PII —
+      // e é o único jeito de o operador achar o objeto que ficou para trás.
+      logarErroSemPII("asr-transcrever.objeto-efemero-nao-apagado", err, {
+        objetoRef: clipe.objeto_ref,
+      });
     }
   }
 }
@@ -253,15 +252,16 @@ export async function POST(request: Request): Promise<Response> {
     try {
       expirados = await expirarPresos();
       if (expirados > 0) {
-        console.warn(
-          `[asr-transcrever] backstop de idade expirou ${expirados} clipe(s) preso(s) há mais de ${ASR_BACKSTOP_HORAS}h — objeto liberado para o sweeper`,
-        );
+        // Contagem e régua como CAMPOS, não interpolados na frase: é por
+        // `expirados` que se vê o backstop saindo do zero, e uma mensagem
+        // montada obrigaria o operador a extrair o número por regex.
+        logger.warn("asr-transcrever.backstop-expirou-presos", {
+          expirados,
+          limiteHoras: ASR_BACKSTOP_HORAS,
+        });
       }
     } catch (err) {
-      console.error(
-        "[asr-transcrever] backstop de idade FALHOU (o tick segue)",
-        diagnosticoDoErro(err),
-      );
+      logarErroSemPII("asr-transcrever.backstop-falhou", err);
     }
 
     const reservados = await reservarLote(LOTE_PADRAO);
@@ -300,11 +300,10 @@ export async function POST(request: Request): Promise<Response> {
     });
   } catch (err) {
     // `err` inteiro NÃO entra aqui: a `.message` do `DrizzleQueryError` traz os
-    // params da query — e uma delas carrega a transcrição.
-    console.error(
-      "[asr-transcrever] falha no tick do worker",
-      diagnosticoDoErro(err),
-    );
+    // params da query — e uma delas carrega a transcrição. `logarErroSemPII`
+    // reduz ao conjunto fechado (classe, SQLSTATE, constraint, hash) antes de
+    // qualquer coisa chegar ao registro.
+    logarErroSemPII("asr-transcrever.tick-falhou", err);
     await registrarHeartbeat("asr", false, detalheDoErro(err));
     return Response.json(
       { ok: false, categoria: categoriaDoErro(err) },

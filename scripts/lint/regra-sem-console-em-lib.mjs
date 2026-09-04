@@ -49,7 +49,7 @@
 export const ARQUIVOS_QUE_SAO_O_SINK = ["src/lib/observabilidade/logger.ts"];
 
 const MENSAGEM =
-  "[#560/F2] `console.{{metodo}}` cru em `src/lib`: o registro sai sem `requestId`, sem JSON e — o que importa — SEM a redaction por chave, que roda dentro de `registrar()` e não no transporte. Use `logger.{{sugestao}}(evento, contexto)` de `@/lib/observabilidade/logger`, com `evento` de conjunto fechado (`billing-reuso.cobranca-antiga-nao-reaproveitavel`), nunca frase interpolada. Se o que se loga é um erro, use `logarErroSemPII`/`logarAvisoSemPII` de `@/lib/observabilidade/logar-erro`: `err.message` do driver é o SQL + os params.";
+  "[#560] `console.{{metodo}}` cru: o registro sai sem `requestId`, sem JSON e — o que importa — SEM a redaction por chave, que roda dentro de `registrar()` e não no transporte. Use `logger.{{sugestao}}(evento, contexto)` de `@/lib/observabilidade/logger`, com `evento` de conjunto fechado (`billing-reuso.cobranca-antiga-nao-reaproveitavel`), nunca frase interpolada. Se o que se loga é um erro, use `logarErroSemPII`/`logarAvisoSemPII` de `@/lib/observabilidade/logar-erro`: `err.message` do driver é o SQL + os params.";
 
 /** `console.log`/`console.trace` não têm nível próprio: caem em `info`. */
 const NIVEL_EQUIVALENTE = {
@@ -127,11 +127,25 @@ export const pluginObservabilidade = {
 };
 
 /**
- * Escopo: `src/lib/**` — a fatia F2. `src/app/**` (rotas e jobs) é a F3/F4 do
- * mesmo plano e entra quando aqueles sítios migrarem; ligar o escopo antes da
- * migração só produziria um baseline, e baseline é dívida com data marcada.
+ * Escopo: `src/lib/**` (fatia F2) **e** `src/app/api/**` (fatia F3 — rotas de
+ * API e jobs internos). Cada caminho só entra na lista DEPOIS que sua fatia
+ * migrou: ligar o escopo antes produziria um baseline, e baseline é dívida
+ * com data marcada. A varredura da F3 fechou em zero (4 sítios, todos em
+ * `internal/jobs/asr-transcrever/route.ts`).
+ *
+ * Ainda fora, de propósito:
+ *
+ * - os 11 `logic.ts` de rota (`src/app/(app)/**`, `src/app/(auth)/**`) — são a
+ *   F4, e são os arquivos que a #559 move. Entram lá;
+ * - os componentes `"use client"` (`button.tsx`, `registrar-sw.tsx`, os dois
+ *   de analytics) — ali o `console` é o canal do BROWSER, onde não há stdout
+ *   de container para ler nem `requestId` de servidor a correlacionar. Se
+ *   virarem escopo um dia, é por decisão própria, não de carona nesta lista.
  */
-export const ESCOPO_SEM_CONSOLE = ["src/lib/**/*.{ts,tsx}"];
+export const ESCOPO_SEM_CONSOLE = [
+  "src/lib/**/*.{ts,tsx}",
+  "src/app/api/**/*.{ts,tsx}",
+];
 
 /**
  * Teste e story ficam de fora — lá o `console` é instrumento de medida (é por
