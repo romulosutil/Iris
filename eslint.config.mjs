@@ -177,10 +177,13 @@ const config = [
     rules: { "rsc/use-client-obrigatorio": "error" },
   },
   {
-    // DA-04 (#560, fatia F2): nenhum `console.*` cru em `src/lib/**`. A F1
+    // DA-04 (#560): nenhum `console.*` cru onde o log é de SERVIDOR. A F1
     // entregou o logger estruturado (JSON, `requestId`, redaction por chave
-    // dentro de `registrar()`); esta fatia migrou os 31 sítios de `lib/` e
-    // esta regra é o que impede o 32º de nascer.
+    // dentro de `registrar()`); a F2 migrou os 31 sítios de `src/lib/**`, a
+    // F3a as rotas de API e a F4 os `logic.ts` de rota mais `src/auth/**` —
+    // e esta regra é o que impede o próximo de nascer. O escopo cresce
+    // fatia a fatia (ver `ESCOPO_SEM_CONSOLE`): um caminho só entra depois de
+    // migrado, senão o que entra junto é um baseline.
     //
     // O ponto que a regra guarda não é formatação: `redigirContexto` roda no
     // NÚCLEO do logger, não no transporte. Um objeto solto no `console` passa
@@ -194,10 +197,10 @@ const config = [
     // entre blocos — um bloco novo apagaria aquele guard nos arquivos de lib,
     // em silêncio, sem erro de config.
     //
-    // Piso é ZERO, sem baseline: a varredura desta fatia fechou em zero.
+    // Piso é ZERO, sem baseline: cada varredura fechou em zero.
     // `scripts/lint/sem-console-em-lib.test.ts` (roda no `pnpm test`) mede
     // ESTE arquivo pela API do ESLint e fica vermelho se a regra sair do
-    // config ou parar de acusar.
+    // config, se o glob encolher ou se a regra parar de acusar.
     files: ESCOPO_SEM_CONSOLE,
     ignores: FORA_DO_ESCOPO_SEM_CONSOLE,
     plugins: { obs: pluginObservabilidade },

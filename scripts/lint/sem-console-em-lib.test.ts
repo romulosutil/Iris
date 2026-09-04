@@ -19,17 +19,17 @@ import {
  *
  * 1. **Unidade** — a regra acusa o que deve acusar. Um seletor que para de
  *    casar não vira erro de config, vira silêncio verde.
- * 2. **Fiação** — o `eslint.config.mjs` REAL liga a regra em `src/lib/**` e
- *    (desde a F3) em `src/app/api/**`. Medir uma cópia do config passaria
+ * 2. **Fiação** — o `eslint.config.mjs` REAL liga a regra em `src/lib/**`,
+ *    em `src/app/**` e em `src/auth/**`. Medir uma cópia do config passaria
  *    verde justamente no caso que importa: alguém editar o config e não a
  *    regra. Esta camada também prova que o bloco novo NÃO apagou o guard de
  *    PHI do `console.error` (#531) — nem nos arquivos de lib, nem nas rotas
  *    de API, onde aquele guard também casa. É a armadilha de flat config que
  *    motivou a regra própria em vez de um segundo `no-restricted-syntax`.
- * 3. **Piso zero medido** — varre `src/lib/**` e `src/app/api/**` de verdade e
- *    exige zero achados em cada um. É esta camada que fica vermelha na prova
- *    de mutação (reintroduzir um `console.warn` cru num módulo de lib ou numa
- *    rota interna).
+ * 3. **Piso zero medido** — varre `src/lib/**`, `src/app/**` e `src/auth/**`
+ *    de verdade e exige zero achados em cada um. É esta camada que fica
+ *    vermelha na prova de mutação (reintroduzir um `console.warn` cru num
+ *    módulo de lib, numa rota interna ou num `logic.ts`).
  */
 
 const RAIZ = path.resolve(import.meta.dirname, "..", "..");
@@ -183,7 +183,11 @@ describe("#560/F3 — fiação em src/app/api (rotas de API e jobs internos)", (
       const cfg = await eslint.calculateConfigForFile(path.join(RAIZ, arquivo));
       expect(cfg.rules[REGRA]?.[0], arquivo).toBe(2);
     }
-    expect(ESCOPO_SEM_CONSOLE).toContain("src/app/api/**/*.{ts,tsx}");
+    // O glob que cobre estes arquivos deixou de ser `src/app/api/**` na F4 e
+    // passou a ser a árvore de rota inteira. O que a fatia F3 comprou não é o
+    // glob literal — é a regra ligada NESTES arquivos, que as asserções acima
+    // medem uma a uma pelo config real.
+    expect(ESCOPO_SEM_CONSOLE).toContain("src/app/**/*.{ts,tsx}");
   }, 120_000);
 
   it("NÃO apagou o guard de PHI do console.error (#531) nas rotas de API", async () => {
@@ -201,15 +205,72 @@ describe("#560/F3 — fiação em src/app/api (rotas de API e jobs internos)", (
     );
   }, 120_000);
 
-  it("deixa os `logic.ts` de rota de fora — eles são a F4", async () => {
-    // Fronteira da fatia, não descuido: os 11 `logic.ts` ainda têm `console.*`
-    // e são os arquivos que a #559 move. Ligar o escopo neles agora
-    // produziria um baseline, que é o que este plano decidiu não ter. Se
-    // alguém alargar `ESCOPO_SEM_CONSOLE` para `src/app/**` sem migrar, este
-    // teste fica vermelho antes do lint inteiro ficar.
+});
+
+describe("#560/F4 — fiação nos `logic.ts` de rota e em src/auth", () => {
+  const eslint = new ESLint({
+    cwd: RAIZ,
+    overrideConfigFile: path.join(RAIZ, "eslint.config.mjs"),
+  });
+
+  it("liga a regra como erro nos `logic.ts` que a F4 migrou", async () => {
+    // Até a F3 estes arquivos estavam FORA do escopo de propósito (tinham 8
+    // `console.*` vivos, e ligar a regra antes de migrar produziria um
+    // baseline). A F4 migrou os 8 e alargou o glob de `src/app/api/**` para
+    // `src/app/**`; esta asserção é o que impede o glob de encolher de volta
+    // num merge sem ninguém perceber.
     for (const arquivo of [
       "src/app/(auth)/cadastro/logic.ts",
+      "src/app/(auth)/esqueci-senha/logic.ts",
+      "src/app/(auth)/redefinir-senha/logic.ts",
       "src/app/(app)/diario/[sessionId]/logic.ts",
+      "src/app/(app)/revisao/[sessionId]/logic.ts",
+      // Não só `logic.ts`: o glob cobre a árvore de rota inteira, senão o
+      // próximo `console` nasce numa `page.tsx` `async` ou numa `actions.ts`,
+      // que rodam no mesmo servidor e escrevem no mesmo stdout.
+      "src/app/(app)/pacientes/[id]/page.tsx",
+      "src/app/(app)/diario/[sessionId]/actions.ts",
+    ]) {
+      const cfg = await eslint.calculateConfigForFile(path.join(RAIZ, arquivo));
+      expect(cfg.rules[REGRA]?.[0], arquivo).toBe(2);
+    }
+    expect(ESCOPO_SEM_CONSOLE).toContain("src/app/**/*.{ts,tsx}");
+  }, 120_000);
+
+  it("liga a regra como erro em src/auth", async () => {
+    // `auth.ts` tinha o sítio de pior classe da varredura inteira:
+    // `console.error("dispararEmail: …", err)` com o ERRO CRU — a `message`
+    // do provedor de e-mail embute o destinatário, a do driver é o SQL com os
+    // params. Um escopo que parasse na fronteira de `src/app` deixaria de
+    // fora justamente o arquivo que a issue existe para consertar.
+    for (const arquivo of ["src/auth/auth.ts", "src/auth/require-role.ts"]) {
+      const cfg = await eslint.calculateConfigForFile(path.join(RAIZ, arquivo));
+      expect(cfg.rules[REGRA]?.[0], arquivo).toBe(2);
+    }
+    expect(ESCOPO_SEM_CONSOLE).toContain("src/auth/**/*.{ts,tsx}");
+  }, 120_000);
+
+  it("NÃO apagou o guard de PHI do console.error (#531) nos `logic.ts`", async () => {
+    // Terceira medição da mesma armadilha de flat config, agora na população
+    // que a #531 mais cobre: os `logic.ts` de rota. Alargar o `files` desta
+    // regra não pode ter custado o guard vizinho.
+    const cfg = await eslint.calculateConfigForFile(
+      path.join(RAIZ, "src/app/(app)/diario/[sessionId]/logic.ts"),
+    );
+    expect(cfg.rules[REGRA_PHI]?.[0]).toBe(2);
+    expect(JSON.stringify(cfg.rules[REGRA_PHI]?.slice(1) ?? [])).toContain(
+      "logarErroSemPII",
+    );
+  }, 120_000);
+
+  it("os componentes `use client` de src/components seguem fora", async () => {
+    // Decisão, não descuido: ali o `console` é o canal do BROWSER — não há
+    // stdout de container para ler nem `requestId` de servidor a
+    // correlacionar. Se um dia entrarem, é por decisão própria.
+    for (const arquivo of [
+      "src/components/ui/button.tsx",
+      "src/components/pwa/registrar-sw.tsx",
+      "src/components/clarity.tsx",
     ]) {
       const cfg = await eslint.calculateConfigForFile(path.join(RAIZ, arquivo));
       expect(cfg.rules[REGRA], arquivo).toBeUndefined();
@@ -308,6 +369,22 @@ describe("#560 — piso zero medido", () => {
     // arquivos de produção hoje. O que ele guarda é o mesmo — um glob que
     // pare de casar não pode passar por "zero achados".
     expect(arquivos).toBeGreaterThan(5);
+    expect(problemas).toEqual([]);
+  }, 180_000);
+
+  it("nenhum console cru em src/app inteiro (F4)", async () => {
+    // A varredura que a fatia fechou: 8 sítios em 5 `logic.ts`, todos
+    // migrados. É esta camada que fica vermelha na prova de mutação —
+    // reintroduzir um `console.warn` cru em qualquer `logic.ts`, `page.tsx` ou
+    // `actions.ts` de rota.
+    const { problemas, arquivos } = await varrer("src/app/**/*.{ts,tsx}");
+    expect(arquivos).toBeGreaterThan(100);
+    expect(problemas).toEqual([]);
+  }, 300_000);
+
+  it("nenhum console cru em src/auth (F4)", async () => {
+    const { problemas, arquivos } = await varrer("src/auth/**/*.{ts,tsx}");
+    expect(arquivos).toBeGreaterThan(3);
     expect(problemas).toEqual([]);
   }, 180_000);
 });

@@ -18,6 +18,8 @@ import {
 } from "@/lib/email/templates";
 
 import { getAppBaseUrl } from "@/lib/app-url";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+import { logger } from "@/lib/observabilidade/logger";
 
 // Fase 6.2 (A5): fail-closed no boot se o bypass de MFA vazar para produção.
 // Roda na 1ª importação de qualquer caminho de auth/servidor.
@@ -52,7 +54,12 @@ function dispararEmail(
   input: Parameters<typeof enviarEmailTransacional>[0],
 ): void {
   void enviarEmailTransacional(input).catch((err) => {
-    console.error("dispararEmail: falha fora do caminho da requisição:", err);
+    // #560 (F4): era `console.error(rotulo, err)` com o ERRO CRU. `err` aqui
+    // vem do provedor de e-mail ou do driver: a `message` do Resend embute o
+    // destinatário (memória `campo-livre-de-terceiro-carrega-pii`) e a do
+    // `DrizzleQueryError` é o SQL com os params. `logarErroSemPII` reduz ao
+    // conjunto fechado antes de qualquer coisa chegar ao stdout do container.
+    logarErroSemPII("auth-email.falha-fora-do-caminho-da-requisicao", err);
   });
 }
 
@@ -63,10 +70,9 @@ if (
   !process.env.BETTER_AUTH_URL &&
   !process.env.NEXT_PUBLIC_APP_URL
 ) {
-  console.warn(
-    "ALERTA PRODUÇÃO: Nem BETTER_AUTH_URL nem NEXT_PUBLIC_APP_URL foram informadas. Usando URL fallback:",
-    appUrl,
-  );
+  logger.warn("auth-config.url-base-ausente-em-producao", {
+    urlFallback: appUrl,
+  });
 }
 
 const origensPadrao = [

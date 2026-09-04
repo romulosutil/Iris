@@ -1,8 +1,9 @@
 /**
  * Guard da #560 (`DA-04`): nenhum `console.*` cru onde o log é de SERVIDOR —
- * `src/lib/**` (F2), `src/app/api/**` (F3a) e os `.mjs` copiados para imagens
- * de infra (F3b). O nome do arquivo ficou de quando o escopo era só a lib;
- * renomeá-lo trocaria um caminho estável em três `import` por nada.
+ * `src/lib/**` (F2), `src/app/api/**` (F3a), os `.mjs` copiados para imagens
+ * de infra (F3b) e, desde a F4, `src/app/**` inteiro mais `src/auth/**`. O
+ * nome do arquivo ficou de quando o escopo era só a lib; renomeá-lo trocaria
+ * um caminho estável em três `import` por nada.
  *
  * Por que é uma regra e não uma revisão: a migração dos 31 sítios de `lib/`
  * para o logger estruturado é trabalho de UMA PR. O `console.*` volta na
@@ -101,7 +102,7 @@ export const semConsoleCru = {
     type: "problem",
     docs: {
       description:
-        "Proíbe `console.*` cru em src/lib: o log da aplicação sai pelo logger estruturado (#560).",
+        "Proíbe `console.*` cru onde o log é de servidor: o log da aplicação sai pelo logger estruturado (#560).",
     },
     schema: [],
     messages: { consoleCru: MENSAGEM },
@@ -130,24 +131,39 @@ export const pluginObservabilidade = {
 };
 
 /**
- * Escopo: `src/lib/**` (fatia F2) **e** `src/app/api/**` (fatia F3 — rotas de
- * API e jobs internos). Cada caminho só entra na lista DEPOIS que sua fatia
- * migrou: ligar o escopo antes produziria um baseline, e baseline é dívida
- * com data marcada. A varredura da F3 fechou em zero (4 sítios, todos em
- * `internal/jobs/asr-transcrever/route.ts`).
+ * Escopo: `src/lib/**` (fatia F2), `src/app/**` e `src/auth/**` (fatias F3 e
+ * F4). Cada caminho só entra na lista DEPOIS que sua fatia migrou: ligar o
+ * escopo antes produziria um baseline, e baseline é dívida com data marcada.
  *
- * Ainda fora, de propósito:
+ * A F4 fechou a população de `src/app/**`, então o glob deixou de ser
+ * `src/app/api/**` e passou a ser a árvore inteira: os 8 sítios restantes
+ * estavam nos `logic.ts` de rota (`diario`, `revisao`, `cadastro`,
+ * `esqueci-senha`, `redefinir-senha`) e foram migrados na mesma PR. Cobrir
+ * `src/app/**` — e não só `src/app/**\/logic.ts` — é o que impede o próximo
+ * `console` de nascer numa `page.tsx` `async` ou numa `actions.ts`, que rodam
+ * no mesmo servidor e têm o mesmo stdout de container.
  *
- * - os 11 `logic.ts` de rota (`src/app/(app)/**`, `src/app/(auth)/**`) — são a
- *   F4, e são os arquivos que a #559 move. Entram lá;
- * - os componentes `"use client"` (`button.tsx`, `registrar-sw.tsx`, os dois
- *   de analytics) — ali o `console` é o canal do BROWSER, onde não há stdout
- *   de container para ler nem `requestId` de servidor a correlacionar. Se
- *   virarem escopo um dia, é por decisão própria, não de carona nesta lista.
+ * `src/auth/**` entrou junto porque `auth.ts` tinha o sítio de pior classe da
+ * varredura: `console.error("dispararEmail: …", err)` com o objeto de erro
+ * CRU. O `err` ali vem do provedor de e-mail (a `message` do Resend embute o
+ * destinatário) ou do driver (a `message` é o SQL + os params). Um guard cujo
+ * escopo parasse na fronteira de `src/app` deixaria de fora justamente o
+ * arquivo que a issue existe para consertar.
+ *
+ * Ainda fora, de propósito: os componentes `"use client"` de
+ * `src/components/**` (`button.tsx`, `registrar-sw.tsx`, os dois de
+ * analytics) — ali o `console` é o canal do BROWSER, onde não há stdout de
+ * container para ler nem `requestId` de servidor a correlacionar. Se virarem
+ * escopo um dia, é por decisão própria, não de carona nesta lista. Note que
+ * `src/app/**` também contém módulos `"use client"` (`global-error.tsx`), e
+ * esses ficam SIM sob a regra: a varredura da F4 mediu zero `console` neles,
+ * então cobri-los não custou baseline — e um módulo de rota pode virar
+ * servidor no refactor seguinte sem ninguém lembrar de mexer nesta lista.
  */
 export const ESCOPO_SEM_CONSOLE = [
   "src/lib/**/*.{ts,tsx}",
-  "src/app/api/**/*.{ts,tsx}",
+  "src/app/**/*.{ts,tsx}",
+  "src/auth/**/*.{ts,tsx}",
 ];
 
 /**

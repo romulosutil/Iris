@@ -7,7 +7,10 @@ import { enviarEmailTransacional } from "@/lib/email/transacional";
 import { getAppBaseUrl } from "@/lib/app-url";
 import { criarTemplateTentativaCadastroExistente } from "@/lib/email/templates";
 import { VERSAO_TERMO } from "@/lib/legal";
-import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+import {
+  logarAvisoSemPII,
+  logarErroSemPII,
+} from "@/lib/observabilidade/logar-erro";
 
 export type EstadoCadastro = { error?: string };
 
@@ -256,39 +259,6 @@ export function validarCadastro(
 }
 
 /**
- * Reduz um erro desconhecido a uma string diagnosticável e sem dado pessoal:
- * nome da classe + `code` quando houver (SQLSTATE do Postgres, por exemplo).
- * A `message` fica de fora de propósito — é onde o driver costuma colar o SQL
- * com os valores.
- */
-function descreverErro(err: unknown): string {
-  if (!err) return "null/undefined";
-  if (err instanceof Error) {
-    const code =
-      (err as any).code ||
-      (err as any).body?.code ||
-      (err as any).statusCode ||
-      (err as any).status;
-    // #531: a `message` ficava aqui apesar do JSDoc dizer o contrário — e a
-    // do driver carrega o e-mail/nome nos params. Só nome + code + causa.
-    const parts = [err.name];
-    if (code) parts.push(`code=${code}`);
-    if ((err as any).cause) {
-      parts.push(`cause=${descreverErro((err as any).cause)}`);
-    }
-    return parts.join(" ");
-  }
-  if (typeof err === "object") {
-    try {
-      return JSON.stringify(err);
-    } catch {
-      return String(err);
-    }
-  }
-  return String(err);
-}
-
-/**
  * Espera o que faltar para fechar `PISO_RESPOSTA_MS` desde `iniciadoEm`.
  *
  * PISO SIMPLES, de novo (a rodada de correção 1 trocou por quantização e a
@@ -438,10 +408,7 @@ export async function executarCadastro(
       // propósito: se um dia algo mais passar a lançar antes do núcleo, ele cai
       // aqui por ser pré-núcleo, não por alguém ter lembrado de atualizar uma
       // lista.
-      console.warn(
-        "executarCadastro: recusado antes do núcleo:",
-        descreverErro(err),
-      );
+      logarAvisoSemPII("cadastro.recusado-antes-do-nucleo", err);
       await respeitarPiso(iniciadoEm);
       return {
         error:
@@ -503,10 +470,7 @@ export async function executarCadastro(
         );
       });
     } else {
-      console.error(
-        "executarCadastro: falha ao criar conta/clínica:",
-        descreverErro(err),
-      );
+      logarErroSemPII("cadastro.falha-ao-criar-conta-e-clinica", err);
     }
   }
 

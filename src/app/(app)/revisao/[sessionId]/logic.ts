@@ -25,6 +25,7 @@ import {
   camposEditaveisDe,
 } from "@/lib/extraction/campos-editaveis";
 import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+import { logger } from "@/lib/observabilidade/logger";
 import { textoErroInterno } from "@/lib/copy/erros";
 
 // ─── Colapso da aprovação (T07, spec R-07/R-10/R-11, §3.5) ─────────────────
@@ -645,9 +646,13 @@ async function transicionar(
           )
           .returning({ id: extraction.id });
         if (dlq.length === 0) {
-          console.warn(
-            `DLQ não gravado: extração ${extractionId} já saiu da versão ${versaoCliente} (transição concorrente venceu).`,
-          );
+          // #560 (F4): `extractionId` e `versaoCliente` em campo. É a linha
+          // que diz "outra transição venceu a corrida"; interpolada, só o
+          // `grep` do autor a encontrava.
+          logger.warn("revisao-dlq.transicao-concorrente-venceu", {
+            extractionId,
+            versaoCliente,
+          });
         }
       });
     } catch (dbErr) {

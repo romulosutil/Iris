@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { capturarLog } from "@/lib/observabilidade/captura-de-log";
 
 // ─── Dublês ──────────────────────────────────────────────────────────────────
 // Fix round 2 (finding N2 da re-review): `logic.ts` executa a TROCA DE SENHA
@@ -280,18 +281,27 @@ describe("executarRedefinirSenha — resposta uniforme (anti-oráculo de token)"
     const erroInfra = new Error("redis offline");
     registrarTentativa.mockRejectedValueOnce(erroInfra);
 
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    // #560 (F4): o oráculo lê o registro ANTES do transporte. Espionar o
+    // `console` continuaria funcionando (o sink escreve nele), mas leria uma
+    // string JSON num argumento só — e o primeiro teste que esquecesse o
+    // `JSON.parse` passaria verde comparando `undefined` com `undefined`.
+    const log = capturarLog();
+    try {
+      await executar(fd(SENHA_VALIDA));
+    } finally {
+      log.restaurar();
+    }
 
-    await executar(fd(SENHA_VALIDA));
-
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("fail-closed"),
-      "Error",
+    const registro = log.evento(
+      "redefinir-senha.throttle-indisponivel-fail-closed",
     );
+    expect(registro?.nivel).toBe("error");
+    expect(registro?.erroNome).toBe("Error");
+    // A `message` do erro de infra nunca entra: é o campo onde um driver cola
+    // o SQL com os params.
+    expect(log.bruto()).not.toContain("redis offline");
     expect(resetPassword).not.toHaveBeenCalled();
     expect(cookieStore.has(NOME_COOKIE_TOKEN)).toBe(true);
-
-    consoleSpy.mockRestore();
   });
 
   it("inclui o code do erro de infra no log, quando disponível (ex.: ECONNREFUSED de um driver real)", async () => {
@@ -300,18 +310,22 @@ describe("executarRedefinirSenha — resposta uniforme (anti-oráculo de token)"
       Object.assign(new Error("redis offline"), { code: "ECONNREFUSED" }),
     );
 
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const log = capturarLog();
+    try {
+      await executar(fd(SENHA_VALIDA));
+    } finally {
+      log.restaurar();
+    }
 
-    await executar(fd(SENHA_VALIDA));
-
-    expect(consoleSpy).toHaveBeenCalledWith(
-      "executarRedefinirSenha: throttle indisponível, bloqueando (fail-closed):",
-      "Error(code=ECONNREFUSED)",
+    // O `code` sai em CAMPO próprio (`codigo`), não colado numa string
+    // `Error(code=…)` que o operador teria de desmontar com regex.
+    const registro = log.evento(
+      "redefinir-senha.throttle-indisponivel-fail-closed",
     );
+    expect(registro?.erroNome).toBe("Error");
+    expect(registro?.codigo).toBe("ECONNREFUSED");
     expect(resetPassword).not.toHaveBeenCalled();
     expect(cookieStore.has(NOME_COOKIE_TOKEN)).toBe(true);
-
-    consoleSpy.mockRestore();
   });
 
   it("respeita o piso de tempo mesmo quando o throttle pula toda a chamada ao Better-Auth", async () => {

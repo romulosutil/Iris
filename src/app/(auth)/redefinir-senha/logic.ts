@@ -3,6 +3,7 @@ import { cookies, headers } from "next/headers";
 import { APIError } from "better-auth/api";
 import { auth } from "@/auth/auth";
 import { registrarTentativa } from "@/lib/throttle";
+import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 import { resolverIp } from "../esqueci-senha/logic";
 import { NOME_COOKIE_TOKEN, CAMINHO_COOKIE } from "./cookie";
 
@@ -69,14 +70,6 @@ export function validarNovaSenha(formData: FormData):
     return { ok: false, error: "As senhas não conferem." };
   }
   return { ok: true, novaSenha };
-}
-
-function descreverErro(err: unknown): string {
-  const nome = err instanceof Error ? err.name : typeof err;
-  const codigo = (err as { code?: unknown })?.code;
-  return typeof codigo === "string" || typeof codigo === "number"
-    ? `${nome}(code=${codigo})`
-    : nome;
 }
 
 /**
@@ -168,10 +161,11 @@ export async function executarRedefinirSenha(
     // (finding M4 do review): mesmo cuidado de `../esqueci-senha/logic.ts` —
     // loga nome+código do erro (nunca o objeto cru) para o outage não passar
     // em silêncio total, sem arriscar vazar token/IP em detalhe de driver.
-    console.error(
-      "executarRedefinirSenha: throttle indisponível, bloqueando (fail-closed):",
-      descreverErro(err),
-    );
+    //
+    // #560 (F4): quem reduz o erro agora é `logarErroSemPII`, com o mesmo
+    // conjunto fechado do `descreverErro` local que estava aqui — e mais
+    // `correlacaoId`, `constraint` e `httpStatus`, em campos.
+    logarErroSemPII("redefinir-senha.throttle-indisponivel-fail-closed", err);
     permitido = false;
   }
 
@@ -197,10 +191,11 @@ export async function executarRedefinirSenha(
       definitivo = true;
     } catch (err) {
       definitivo = tokenFoiRejeitado(err);
-      console.error(
-        `executarRedefinirSenha: falha ao redefinir senha (definitivo=${definitivo}):`,
-        descreverErro(err),
-      );
+      // `definitivo` é o que diz se o cookie foi queimado — em campo, e não
+      // interpolado no rótulo, para o operador poder filtrar por ele.
+      logarErroSemPII("redefinir-senha.falha-ao-redefinir", err, {
+        definitivo,
+      });
     }
     if (definitivo) await apagarCookieToken();
   }

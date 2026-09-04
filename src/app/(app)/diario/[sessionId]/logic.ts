@@ -40,6 +40,7 @@ import { asrHabilitado } from "@/lib/flags";
 import { chaveClipe } from "@/lib/audio/local-store";
 import { guardar } from "@/lib/asr/storage";
 import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+import { logger } from "@/lib/observabilidade/logger";
 
 // ─── Guard de escrita por situação da conta (#163+#159) ────────────────────
 // Todo o diário é escrita clínica: conta em somente-leitura (trial expirado,
@@ -605,11 +606,17 @@ async function enviarLoteAsrCore(
       // embutir valor de linha (memória `campo-livre-de-terceiro-carrega-pii`)
       // e `audio_capture` é dado de paciente. `loteId` é opaco e já é a chave
       // de correlação com o objeto no bucket.
-      console.error(
-        `enviarLoteAsr: lote ${loteId} incompleto — ${clipesComFalha} clipe(s) fora da fila (ordens com falha: ${
-          ordensComFalha.join(",") || "nenhuma"
-        }; pendentes sem blob no reenvio: ${pendentesSemBlob})`,
-      );
+      //
+      // #560 (F4): os números saem em CAMPOS, não interpolados numa frase. A
+      // frase obrigava o operador a escrever um regex por sítio para extrair
+      // "quantos clipes ficaram fora"; em campo, `clipesComFalha` é filtrável
+      // e somável. `ordensComFalha` é lista de índices (`0,3,7`), não de ids.
+      logger.error("diario-asr.lote-incompleto", {
+        loteId,
+        clipesComFalha,
+        ordensComFalha: ordensComFalha.join(",") || "nenhuma",
+        pendentesSemBlob,
+      });
       return { loteId, clipesComFalha };
     }
 
