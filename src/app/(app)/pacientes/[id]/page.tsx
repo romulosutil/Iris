@@ -9,9 +9,7 @@ import { TimelineClient } from "./timeline/timeline-client";
 import { Stack, Cluster } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
-import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/patterns/status-badge";
-import Link from "next/link";
 import { ArquivamentoDialog } from "./arquivamento-dialog";
 import { AltaDialog } from "./alta-dialog";
 import { AvisosArquivamento } from "./avisos-arquivamento";
@@ -233,16 +231,6 @@ export default async function PacientePage({
                   arquivado={!!paciente.arquivadoEm}
                 />
               ) : null}
-              <Link href={`/pacientes/${paciente.id}/cadastro-clinico`}>
-                <Button variante="neutra" tamanho="sm">
-                  Ficha Clínica
-                </Button>
-              </Link>
-              <Link href={`/pacientes/${paciente.id}/metas`}>
-                <Button variante="secundaria" tamanho="sm">
-                  PEI & Metas
-                </Button>
-              </Link>
             </Cluster>
           }
         />
@@ -250,7 +238,14 @@ export default async function PacientePage({
         {/* A faixa de abas vive em `layout.tsx` desde a Fatia C. Estava aqui,
             hardcoded, e por isso só existia NESTA aba: quem entrasse em
             "Briefing" ou "Horas" perdia a navegação e só voltava pelo botão do
-            browser. Além disso listava 4 das 7 rotas irmãs reais. */}
+            browser. Além disso listava 4 das 7 rotas irmãs reais.
+
+            #619 — os botões "Ficha Clínica" e "PEI & Metas" no `actions` acima
+            eram a mesma duplicação: hardcoded aqui, sem gate por modalidade
+            (linkavam `/metas` mesmo para paciente TCC/convencional), enquanto
+            `layout.tsx` já resolve a aba central certa via
+            `capacidadesDaModalidade`. Removidos — a faixa de abas abaixo é a
+            única fonte de navegação. */}
 
         {/* #174 — o que o job de arquivamento fez sozinho com a contagem de
             ativos, dito na tela em vez de só na fatura. */}
