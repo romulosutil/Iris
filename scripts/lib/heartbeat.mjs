@@ -19,6 +19,8 @@
  * a `message` carrega SQL + params).
  */
 
+import { logarAviso } from "./log-estruturado.mjs";
+
 /**
  * Serializa contagens como `chave=valor chave=valor`. Só NÚMEROS finitos e
  * BOOLEANOS passam; qualquer string — id, nome, trecho, mensagem de erro — é
@@ -67,11 +69,10 @@ export async function gravarHeartbeat(sql, job, { ok, detalhe = "" } = {}) {
     await sql`SELECT app_job_heartbeat_gravar(${job}, ${ok}, ${detalhe})`;
     return true;
   } catch (err) {
-    // `name` + `code`, nunca o erro inteiro: a `message` do driver carrega a
-    // query com os params.
-    console.warn(
-      `[heartbeat] ${job}: não foi possível gravar o heartbeat (${detalheDoErro(err)}) — o detector de alarme vai acusar.`,
-    );
+    // `logarAviso`, e não `log.warn`: o que se loga aqui É um erro do banco, e
+    // a `message` do driver carrega a query com os params. O helper reduz ao
+    // conjunto fechado (classe, SQLSTATE, constraint, hash) antes do registro.
+    logarAviso("heartbeat.gravacao-falhou", err, { job });
     return false;
   }
 }

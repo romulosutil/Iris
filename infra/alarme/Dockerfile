@@ -29,6 +29,13 @@ COPY scripts/alarme-jobs.mjs ./scripts/alarme-jobs.mjs
 COPY scripts/lib/resend-alarme.mjs ./scripts/lib/resend-alarme.mjs
 # #536 — alarme-jobs.mjs importa `detalheDoErro` daqui.
 COPY scripts/lib/heartbeat.mjs ./scripts/lib/heartbeat.mjs
+
+# #560/F3b — o log estruturado dos jobs. Módulo Node PURO (só `node:crypto`):
+# não é `pino`, não é `src/lib`, e por isso não muda a regra de dependência
+# desta imagem. Precisa do COPY porque é um import RELATIVO novo — a classe de
+# falha da #156 é exatamente esta: o import entra no script, não entra no
+# Dockerfile, e o processo morre em ERR_MODULE_NOT_FOUND com CI verde.
+COPY scripts/lib/log-estruturado.mjs ./scripts/lib/log-estruturado.mjs
 COPY infra/alarme/agendador.sh ./agendador.sh
 RUN chmod +x agendador.sh
 

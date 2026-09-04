@@ -35,6 +35,7 @@
  */
 
 import { fileURLToPath } from "node:url";
+import { log } from "./lib/log-estruturado.mjs";
 
 const PREFIXO = "[conciliacao-billing]";
 
@@ -304,9 +305,7 @@ async function main() {
   if (!url) faltando.push("BILLING_CONCILIACAO_URL");
   if (!token) faltando.push("BILLING_JOB_TOKEN");
   if (faltando.length > 0) {
-    console.error(
-      `${PREFIXO} ERRO: variável(is) de ambiente ausente(s): ${faltando.join(", ")}.`,
-    );
+    log.error("conciliacao-billing.env-ausente", { faltando });
     process.exit(1);
   }
 
@@ -380,21 +379,25 @@ async function main() {
 
   // UMA linha JSON: o log do Easypanel é o único observador, e linha única
   // sobrevive a interleaving de stdout. O token não entra aqui, nem truncado.
-  console.log(
-    JSON.stringify({
-      job: "conciliacao-billing",
-      quando: new Date().toISOString(),
-      ok: desfecho.okLogado,
-      status: resultado.status,
-      falha: resultado.falha ?? null,
-      erro: resultado.erro ?? null,
-      paginas,
-      ...resumo,
-      corpo: resultado.corpo ?? null,
-    }),
-  );
+  // Já era UMA linha JSON à mão; `job`/`quando` viram `evento`/`hora`, e o
+  // objeto passa a atravessar a redaction por chave.
+  log.info("conciliacao-billing.passada-concluida", {
+    ok: desfecho.okLogado,
+    status: resultado.status,
+    falha: resultado.falha ?? null,
+    erroCategoria: resultado.erro ?? null,
+    paginas,
+    ...resumo,
+    corpo: corpoParaLog(resultado.corpo),
+  });
 
-  for (const aviso of desfecho.avisos) console.error(aviso);
+  // Os avisos são frases montadas por `decidirDesfecho` para o operador ler.
+  // Continuam saindo em `error`, um registro por aviso, com o texto num campo:
+  // reescrevê-los como eventos fechados é mudança de comportamento do desfecho,
+  // não de log, e sai do escopo desta fatia.
+  for (const aviso of desfecho.avisos) {
+    log.error("conciliacao-billing.aviso", { aviso });
+  }
 
   process.exit(desfecho.exitCode);
 }

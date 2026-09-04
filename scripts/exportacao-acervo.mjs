@@ -21,8 +21,8 @@
  */
 
 import { fileURLToPath } from "node:url";
+import { log } from "./lib/log-estruturado.mjs";
 
-const PREFIXO = "[exportacao-acervo]";
 const TIMEOUT_MS = 15 * 60 * 1000;
 
 /**
@@ -130,24 +130,29 @@ async function main() {
   const token = process.env.EXPORT_JOB_TOKEN;
 
   if (!url || !token) {
-    console.error(
-      `${PREFIXO} EXPORT_JOB_URL e EXPORT_JOB_TOKEN são obrigatórias.`,
-    );
+    log.error("exportacao-acervo.env-ausente", {
+      env: ["EXPORT_JOB_URL", "EXPORT_JOB_TOKEN"],
+    });
     process.exit(1);
   }
 
   const resultado = await executarExportacao(url, token);
 
-  // O corpo da rota vai inteiro para o log: um 500 com a causa do lado do Next
-  // chegaria ao operador como "falhou" e nada mais.
-  console.log(
-    `${PREFIXO} ${resultado.ok ? "ok" : "FALHOU"} ${resultado.corpo ?? ""}`,
-  );
+  // O corpo da rota continua indo inteiro para o log — um 500 com a causa do
+  // lado do Next chegaria ao operador como "falhou" e nada mais. O que muda é
+  // que ele entra como CAMPO: se vier JSON, a redaction por chave percorre o
+  // objeto e censura o que for PII, coisa que a concatenação em string não
+  // tinha como fazer.
+  log.info("exportacao-acervo.disparo-concluido", {
+    ok: resultado.ok,
+    corpo: corpoParaLog(resultado.corpo),
+  });
 
   if (!resultado.ok) {
-    console.error(
-      `${PREFIXO} disparo FALHOU (${resultado.falha}): ${resultado.erro}`,
-    );
+    log.error("exportacao-acervo.disparo-falhou", {
+      falha: resultado.falha,
+      erroCategoria: resultado.erro ?? null,
+    });
     // Reexecutar é seguro: a varredura é idempotente por status (um bundle já
     // `pronto` não é reservado de novo) e nada aqui fala com terceiro.
     process.exit(1);

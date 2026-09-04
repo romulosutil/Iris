@@ -1,4 +1,5 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
+import { capturarLogDeJob } from "./test-utils/captura-log.mjs";
 import {
   JOB,
   executar,
@@ -92,13 +93,16 @@ describe("executarExpurgoAuditLog (#536)", () => {
 
 describe("executar — log e heartbeat (#536)", () => {
   it("loga a contagem por ação (só nome e número) e grava heartbeat ok=true", async () => {
-    const log = vi.spyOn(console, "log").mockImplementation(() => {});
     const sql = makeFakeSql({ porAcao: [{ acao: "login", apagadas: 7 }] });
 
-    await executar(sql);
+    const log = await capturarLogDeJob(() => executar(sql));
 
-    const linhas = log.mock.calls.map((c) => c.join(" "));
-    expect(linhas.some((l) => l.includes("login: 7"))).toBe(true);
+    // #560/F3b: a quebra por ação é CAMPO, não uma linha de texto por ação.
+    // `login: 7` num `console.log` obrigava quem lê a extrair o número por
+    // regex, e não sobrevive a nenhum agregador.
+    expect(log.evento("expurgo-audit-log.expurgo-por-acao")?.porAcao).toEqual({
+      login: 7,
+    });
     expect(sql.heartbeats).toEqual([
       [JOB, true, "pseudonimizados=3 expurgados=7"],
     ]);
@@ -125,10 +129,18 @@ describe("executar — log e heartbeat (#536)", () => {
 
 describe("main — env e exit code (#536)", () => {
   it("sem EXPURGO_DATABASE_URL: sai 1 nomeando a variável, sem tocar no banco", async () => {
-    const error = vi.spyOn(console, "error").mockImplementation(() => {});
     delete process.env.EXPURGO_DATABASE_URL;
 
-    expect(await main()).toBe(1);
-    expect(error.mock.calls[0].join(" ")).toContain("EXPURGO_DATABASE_URL");
+    let codigo;
+    const log = await capturarLogDeJob(async () => {
+      codigo = await main();
+    });
+
+    expect(codigo).toBe(1);
+    // O nome da env continua sendo o que o operador procura — agora como
+    // campo, e não enterrado numa frase.
+    expect(log.evento("expurgo-audit-log.env-ausente")?.env).toBe(
+      "EXPURGO_DATABASE_URL",
+    );
   });
 });

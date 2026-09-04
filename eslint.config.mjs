@@ -14,6 +14,7 @@ import {
 } from "./scripts/lint/regra-fronteira-lib-app.mjs";
 import {
   ESCOPO_SEM_CONSOLE,
+  ESCOPO_SEM_CONSOLE_JOBS,
   FORA_DO_ESCOPO_SEM_CONSOLE,
   pluginObservabilidade,
 } from "./scripts/lint/regra-sem-console-em-lib.mjs";
@@ -199,6 +200,17 @@ const config = [
     // config ou parar de acusar.
     files: ESCOPO_SEM_CONSOLE,
     ignores: FORA_DO_ESCOPO_SEM_CONSOLE,
+    plugins: { obs: pluginObservabilidade },
+    rules: { "obs/sem-console-cru": "error" },
+  },
+  {
+    // F3b (#560): os `.mjs` copiados para imagens de infra. Bloco separado do
+    // de cima por causa dos `ignores`: a lista de fora daquele bloco fala de
+    // `.test.{ts,tsx}` e do sink da app, que não descrevem esta população —
+    // aqui o que fica de fora é `*.test.mjs`, e o "sink" escreve em
+    // `process.stdout`, não no `console`, então não precisa de exceção.
+    files: ESCOPO_SEM_CONSOLE_JOBS,
+    ignores: ["**/*.test.mjs"],
     plugins: { obs: pluginObservabilidade },
     rules: { "obs/sem-console-cru": "error" },
   },

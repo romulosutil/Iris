@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   ARQUIVOS_QUE_SAO_O_SINK,
   ESCOPO_SEM_CONSOLE,
+  ESCOPO_SEM_CONSOLE_JOBS,
   FORA_DO_ESCOPO_SEM_CONSOLE,
   metodoDeConsole,
   pluginObservabilidade,
@@ -216,8 +217,8 @@ describe("#560/F3 — fiação em src/app/api (rotas de API e jobs internos)", (
   }, 120_000);
 });
 
-/** Sítios acusados pela regra ao varrer `padrao`, como `arquivo:linha`. */
-async function varrer(padrao: string): Promise<{
+/** Sítios acusados pela regra ao varrer `padroes`, como `arquivo:linha`. */
+async function varrer(...padroes: string[]): Promise<{
   problemas: string[];
   arquivos: number;
 }> {
@@ -225,7 +226,7 @@ async function varrer(padrao: string): Promise<{
     cwd: RAIZ,
     overrideConfigFile: path.join(RAIZ, "eslint.config.mjs"),
   });
-  const resultados = await eslint.lintFiles([padrao]);
+  const resultados = await eslint.lintFiles(padroes);
   return {
     arquivos: resultados.length,
     problemas: resultados.flatMap((r) =>
@@ -239,12 +240,65 @@ async function varrer(padrao: string): Promise<{
   };
 }
 
+describe("#560/F3b — fiação nos scripts .mjs de job de infra", () => {
+  const eslint = new ESLint({
+    cwd: RAIZ,
+    overrideConfigFile: path.join(RAIZ, "eslint.config.mjs"),
+  });
+
+  it("liga a regra como erro em cada script copiado para imagem de infra", async () => {
+    for (const arquivo of ESCOPO_SEM_CONSOLE_JOBS) {
+      const cfg = await eslint.calculateConfigForFile(path.join(RAIZ, arquivo));
+      expect(cfg.rules[REGRA]?.[0], arquivo).toBe(2);
+    }
+  }, 180_000);
+
+  it("deixa a CLI de desenvolvimento de fora — lá o console é a interface", async () => {
+    // `guardrail-conexao.mjs` imprime um aviso com `⚠️` no terminal de quem vai
+    // rodar seed contra banco remoto. Ele entra na imagem do escalonamento só
+    // porque aquele Dockerfile copia `scripts/lib/` inteiro; o job não o
+    // executa. Virar JSON numa linha pioraria a única coisa que ele faz.
+    for (const arquivo of [
+      "scripts/lib/guardrail-conexao.mjs",
+      "scripts/seed-local.ts",
+      "scripts/ci/verificar-deps-imagem.mjs",
+      "scripts/lint/gerar-baseline-ds.mjs",
+    ]) {
+      const cfg = await eslint.calculateConfigForFile(path.join(RAIZ, arquivo));
+      expect(cfg.rules[REGRA], arquivo).toBeUndefined();
+    }
+  }, 180_000);
+
+  it("cada arquivo listado no escopo EXISTE", async () => {
+    // Um caminho que some (arquivo renomeado, script aposentado) não vira erro
+    // de config: o `files` simplesmente não casa nada, e o guard fica verde por
+    // vacuidade sobre um arquivo que talvez tenha voltado a usar `console`.
+    const { access } = await import("node:fs/promises");
+    for (const arquivo of ESCOPO_SEM_CONSOLE_JOBS) {
+      await expect(
+        access(path.join(RAIZ, arquivo)),
+        arquivo,
+      ).resolves.toBeUndefined();
+    }
+  });
+});
+
 describe("#560 — piso zero medido", () => {
   it("nenhum console cru em src/lib (F2)", async () => {
     const { problemas, arquivos } = await varrer("src/lib/**/*.{ts,tsx}");
     // Sanidade: se a varredura não achasse arquivo nenhum, o `[]` acima seria
     // verde por vacuidade — o defeito [teste-verde-que-nao-testa-nada].
     expect(arquivos).toBeGreaterThan(50);
+    expect(problemas).toEqual([]);
+  }, 180_000);
+
+  it("nenhum console cru nos scripts de job de infra (F3b)", async () => {
+    const { problemas, arquivos } = await varrer(...ESCOPO_SEM_CONSOLE_JOBS);
+    // Aqui a sanidade é EXATA, não um piso: o escopo é uma lista de arquivos
+    // nomeados, então varrer menos do que ela tem significa que um caminho
+    // deixou de existir — e um `files` que não casa nada fica verde por
+    // vacuidade sobre um arquivo que talvez tenha voltado ao `console`.
+    expect(arquivos).toBe(ESCOPO_SEM_CONSOLE_JOBS.length);
     expect(problemas).toEqual([]);
   }, 180_000);
 

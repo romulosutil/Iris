@@ -53,6 +53,7 @@ import {
   gravarHeartbeat as gravarHeartbeatNoBanco,
 } from "./lib/heartbeat.mjs";
 import { enviarEmailRt } from "./lib/resend-rt.mjs";
+import { hashCurto, log, logarErro } from "./lib/log-estruturado.mjs";
 
 // Nome deste job em `job_heartbeat` (0146). O detector de alarme continua
 // medindo o escalonamento pelo EFEITO (alerta vencido sem escalar, 0129) — o
@@ -70,9 +71,8 @@ function heartbeatDir() {
   return process.env.ESCALONAMENTO_HEARTBEAT_DIR ?? "/heartbeat";
 }
 
-function log(msg) {
-  console.log(`[escalonamento] ${new Date().toISOString()} ${msg}`);
-}
+// A hora deixou de ser interpolada: todo registro do emissor já sai com o
+// campo `hora` em ISO.
 
 /**
  * HEARTBEAT — "o alerta sobre o alerta" (H1).
@@ -120,9 +120,11 @@ async function dryRun(sql) {
     WHERE deletado_em IS NULL
   `;
   const { estagio_1: e1, estagio_2: e2 } = linhas[0];
-  log(
-    `dry-run: ${e1} alerta(s) escalariam p/ estágio 1, ${e2} p/ estágio 2. Nada foi alterado.`,
-  );
+  log.info("escalonamento.dry-run-concluido", {
+    dryRun: true,
+    escalariamEstagio1: e1,
+    escalariamEstagio2: e2,
+  });
 }
 
 /**
@@ -153,9 +155,7 @@ export async function processarEmailRt(sql, alertaId) {
     // resolve em 3 varreduras de 5 minutos — depende de alguém arrumar o
     // cadastro. Adiar aqui só atrasaria o registro do problema na trilha.
     await sql`SELECT app_registrar_email_rt(${alertaId}, false, false, ${"RT nao encontrado ou sem papel vigente na clinica"})`;
-    log(
-      `e-mail RT: alerta_id=${alertaId} sem RT resolvido — falha registrada.`,
-    );
+    log.warn("escalonamento.email-rt-sem-destinatario", { alertaId });
     return;
   }
 
@@ -173,10 +173,13 @@ export async function processarEmailRt(sql, alertaId) {
   const { rt_email: rtEmail, motivo_bloqueio: motivoBloqueio } = rts[0];
   if (motivoBloqueio) {
     await sql`SELECT app_registrar_email_rt(${alertaId}, false, false, ${motivoBloqueio})`;
-    log(
-      `e-mail RT NÃO enviado por bloqueio de tenant (§4.2.1): alerta_id=${alertaId} ` +
-        `motivo=${motivoBloqueio} — falha permanente registrada.`,
-    );
+    // `motivo` está na lista de chaves redigidas (é texto livre no domínio
+    // clínico), e `motivoBloqueio` normalizado casa com ela — daí o nome
+    // `bloqueio`, que é conjunto fechado vindo de `app_rt_do_alerta`.
+    log.warn("escalonamento.email-rt-bloqueado-por-tenant", {
+      alertaId,
+      bloqueio: motivoBloqueio,
+    });
     return;
   }
 
@@ -184,15 +187,23 @@ export async function processarEmailRt(sql, alertaId) {
 
   if (resultado.ok) {
     await sql`SELECT app_registrar_email_rt(${alertaId}, true, false, ${resultado.providerMessageId})`;
-    log(
-      `e-mail RT enviado: alerta_id=${alertaId} providerMessageId=${resultado.providerMessageId}`,
-    );
+    log.info("escalonamento.email-rt-enviado", {
+      alertaId,
+      providerMessageId: resultado.providerMessageId,
+    });
   } else {
     await sql`SELECT app_registrar_email_rt(${alertaId}, false, ${resultado.transitorio === true}, ${resultado.erro})`;
-    log(
-      `e-mail RT FALHOU (transitorio=${resultado.transitorio === true}): ` +
-        `alerta_id=${alertaId} erro=${resultado.erro}`,
-    );
+    // `resultado.erro` é TEXTO LIVRE DO PROVEDOR e não entra no registro: uma
+    // mensagem de bounce do Resend embute o destinatário
+    // (memória `campo-livre-de-terceiro-carrega-pii`). O que sai é o hash — o
+    // bastante para ver "é a mesma falha de antes" — e o booleano que decide o
+    // retry. O texto continua indo para `app_registrar_email_rt`, no banco,
+    // sob RLS, que é onde ele pode ser lido com autorização.
+    log.warn("escalonamento.email-rt-falhou", {
+      alertaId,
+      transitorio: resultado.transitorio === true,
+      hashErro: hashCurto(String(resultado.erro ?? "")),
+    });
   }
 }
 
@@ -210,11 +221,13 @@ export async function varrer(sql) {
   // para correlacionar com a trilha em `audit_log`, que é onde a leitura
   // acontece sob RLS.
   for (const l of linhas) {
-    log(
-      `escalado alerta_id=${l.out_alerta_id} clinic_id=${l.out_clinic_id} ` +
-        `estagio=${l.out_estagio} severidade=${l.out_severidade} ` +
-        `prazo_minutos=${l.out_prazo_minutos}`,
-    );
+    log.info("escalonamento.alerta-escalado", {
+      alertaId: l.out_alerta_id,
+      clinicId: l.out_clinic_id,
+      estagio: l.out_estagio,
+      severidade: l.out_severidade,
+      prazoMinutos: l.out_prazo_minutos,
+    });
   }
 
   // #126 — recém-escalados pro estágio 2, nesta mesma varredura.
@@ -229,14 +242,12 @@ export async function varrer(sql) {
     try {
       await processarEmailRt(sql, l.out_alerta_id);
     } catch (err) {
-      log(
-        `e-mail RT: erro não tratado no alerta_id=${l.out_alerta_id} — ` +
-          `${err instanceof Error ? err.message : String(err)}`,
-      );
-      // Erro COMPLETO (stack + `cause`) em stderr. `log()` escreve em stdout e
-      // só a mensagem — engolir o resto produziria diagnóstico falso justamente
-      // no incidente em que ele custa mais caro (regra do repo).
-      console.error(err);
+      // Eram DUAS saídas: a `message` interpolada em stdout e o erro inteiro
+      // em stderr. A `message` de um erro de envio carrega o destinatário; o
+      // `stack` carrega o resto. Uma linha só agora, com o conjunto fechado.
+      logarErro("escalonamento.email-rt-erro-nao-tratado", err, {
+        alertaId: l.out_alerta_id,
+      });
     }
   }
 
@@ -252,15 +263,14 @@ export async function varrer(sql) {
     try {
       await processarEmailRt(sql, p.alerta_id);
     } catch (err) {
-      log(
-        `e-mail RT: erro não tratado no alerta_id=${p.alerta_id} (reconciliação) — ` +
-          `${err instanceof Error ? err.message : String(err)}`,
-      );
-      console.error(err);
+      logarErro("escalonamento.email-rt-erro-nao-tratado", err, {
+        alertaId: p.alerta_id,
+        reconciliacao: true,
+      });
     }
   }
 
-  log(`varredura concluída: ${linhas.length} alerta(s) escalado(s).`);
+  log.info("escalonamento.varredura-concluida", { escalados: linhas.length });
   return linhas.length;
 }
 
@@ -308,6 +318,16 @@ async function main() {
 
   const url = process.env.ESCALONAMENTO_DATABASE_URL;
   if (!url) {
+    // O evento sai ANTES do `throw`: quem captura a exceção lá embaixo é
+    // `logarErro`, que troca a `message` por `hashMensagem` (a `message` de um
+    // driver é a query com os params). O hash protege o incidente com PHI e
+    // apaga justamente o dado que o operador precisa aqui — o NOME da env. Por
+    // isso o nome viaja num campo de conjunto fechado, como nos jobs vizinhos.
+    log.error("escalonamento.env-ausente", {
+      env: "ESCALONAMENTO_DATABASE_URL",
+      role: "iris_escalonamento",
+      runbook: "infra/README.md §Motor de escalonamento",
+    });
     throw new Error(
       "ESCALONAMENTO_DATABASE_URL não definida — o motor de escalonamento precisa da role " +
         "de login que herda `iris_escalonamento`. Ver §Motor de escalonamento em infra/README.md.",
@@ -344,10 +364,11 @@ if (
     // Erro COMPLETO em stderr, incluindo stack e `cause`. Não engolir stderr é
     // regra deste repo: mensagem que afirma UMA causa provável produz
     // diagnóstico falso justamente no incidente em que ele custa mais caro.
-    console.error(
-      "[escalonamento] FALHA na varredura — heartbeat NÃO foi atualizado:",
-    );
-    console.error(err);
+    // Mesma troca dos jobs vizinhos: nada de frase adivinhando causa, nada da
+    // `message` do driver.
+    logarErro("escalonamento.varredura-falhou", err, {
+      heartbeatAtualizado: false,
+    });
     process.exit(1);
   });
 }

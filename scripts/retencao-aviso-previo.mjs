@@ -47,6 +47,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { log, logarErro } from "./lib/log-estruturado.mjs";
 import postgres from "postgres";
 import {
   detalheDoErro,
@@ -92,9 +93,8 @@ function heartbeatDir() {
   return process.env.RETENCAO_HEARTBEAT_DIR ?? "/heartbeat";
 }
 
-function log(msg) {
-  console.log(`[retencao] ${new Date().toISOString()} ${msg}`);
-}
+// A hora deixou de ser interpolada: todo registro do emissor já sai com o
+// campo `hora` em ISO.
 
 /**
  * HEARTBEAT — o sinal de vida do job.
@@ -179,15 +179,21 @@ export async function varrer(sql, { porLote = true } = {}) {
   // fora do controle de acesso clínico do produto (mesma decisão do motor de
   // escalonamento e do auto-arquivamento). A leitura nominal acontece na trilha
   // em `audit_log`, sob RLS, que é onde ela pode ser autorizada.
-  log(
-    `varredura concluída: ${avisados} aviso(s) prévio(s) emitido(s) em ` +
-      `${lotes} lote(s) (lote=${LOTE}, teto=${TETO_LOTES}, janela=${REGUA.diasAvisoPrevio}d).`,
-  );
+  log.info("retencao.varredura-concluida", {
+    avisados,
+    lotes,
+    lote: LOTE,
+    tetoLotes: TETO_LOTES,
+    janelaDias: REGUA.diasAvisoPrevio,
+  });
   if (avisados >= LOTE * TETO_LOTES) {
-    log(
-      `ATENÇÃO: teto de ${LOTE * TETO_LOTES} avisos atingido — pode haver ` +
-        `elegível remanescente. Nada se perde: ele entra no tick seguinte.`,
-    );
+    // Evento PRÓPRIO, não um campo do anterior: "a passada parou no teto" é o
+    // fato que alguém quer alertar/contar, e um campo booleano dentro do
+    // registro de conclusão some numa consulta por evento.
+    log.warn("retencao.teto-de-lotes-atingido", {
+      avisados,
+      teto: LOTE * TETO_LOTES,
+    });
   }
 
   return { avisados, lotes };
@@ -217,10 +223,10 @@ export async function dryRun(sql) {
   } catch (err) {
     if (err !== sentinela) throw err;
   }
-  log(
-    `dry-run: ROLLBACK aplicado — ${contagens.avisados} aviso(s) prévio(s) ` +
-      `foram DESFEITOS. Nada foi gravado em audit_log.`,
-  );
+  log.info("retencao.dry-run-desfeito", {
+    dryRun: true,
+    avisados: contagens.avisados,
+  });
   return contagens;
 }
 
@@ -274,6 +280,15 @@ export async function main(args = process.argv.slice(2)) {
   // em 100% dos ticks, e "falhou" sem o nome vira caçada no painel.
   const url = process.env.RETENCAO_DATABASE_URL;
   if (!url) {
+    // R352.E4 exige NOMEAR a variável ausente. O `throw` continua nomeando (é
+    // o que o teste unitário lê), mas no container quem imprime é `logarErro`,
+    // que troca a `message` por `hashMensagem`. Sem esta linha o requisito
+    // valeria no teste e não no painel — que é onde ele importa.
+    log.error("retencao.env-ausente", {
+      env: "RETENCAO_DATABASE_URL",
+      role: "iris_retencao",
+      runbook: "infra/README.md §Aviso prévio de expurgo",
+    });
     throw new Error(
       "RETENCAO_DATABASE_URL não definida — o job de aviso prévio de expurgo precisa da role " +
         "de login que herda `iris_retencao`. Ver §Aviso prévio de expurgo em .env.example.",
@@ -307,10 +322,10 @@ if (
     // Erro COMPLETO em stderr, incluindo stack e `cause`. Não engolir stderr é
     // regra deste repo: mensagem que afirma UMA causa provável produz
     // diagnóstico falso justamente no incidente em que ele custa mais caro.
-    console.error(
-      "[retencao] FALHA na varredura de aviso prévio — heartbeat NÃO foi atualizado:",
-    );
-    console.error(err);
+    // Mesma troca do arquivamento: nada de frase adivinhando causa, e nada da
+    // `message` do driver — que aqui traz os params de uma query sobre
+    // paciente.
+    logarErro("retencao.varredura-falhou", err, { heartbeatAtualizado: false });
     process.exit(1);
   });
 }

@@ -39,6 +39,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { log, logarErro } from "./lib/log-estruturado.mjs";
 import postgres from "postgres";
 import {
   detalheDoErro,
@@ -69,9 +70,9 @@ function heartbeatDir() {
   return process.env.ARQUIVAMENTO_HEARTBEAT_DIR ?? "/heartbeat";
 }
 
-function log(msg) {
-  console.log(`[arquivamento] ${new Date().toISOString()} ${msg}`);
-}
+// A hora deixou de ser interpolada: todo registro do emissor já sai com o
+// campo `hora` em ISO, e duas horas na mesma linha divergiriam na primeira vez
+// que alguém movesse a chamada.
 
 /**
  * HEARTBEAT — o sinal de vida do job.
@@ -105,10 +106,10 @@ export async function varrer(sql) {
   // fora do controle de acesso clínico do produto (mesma decisão do motor de
   // escalonamento). A leitura nominal acontece na trilha em `audit_log`, sob
   // RLS, que é onde ela pode ser autorizada.
-  log(
-    `varredura concluída: ${avisados} aviso(s) prévio(s) emitido(s), ` +
-      `${arquivados} paciente(s) arquivado(s).`,
-  );
+  log.info("arquivamento.varredura-concluida", {
+    avisados: Number(avisados),
+    arquivados: Number(arquivados),
+  });
   return { avisados: Number(avisados), arquivados: Number(arquivados) };
 }
 
@@ -136,10 +137,13 @@ export async function dryRun(sql) {
   } catch (err) {
     if (err !== sentinela) throw err;
   }
-  log(
-    `dry-run: ROLLBACK aplicado — ${contagens.avisados} aviso(s) e ` +
-      `${contagens.arquivados} arquivamento(s) foram DESFEITOS. Nada foi gravado.`,
-  );
+  // `dryRun: true` é campo, não adjetivo na frase: é por ele que se separa uma
+  // passada de ensaio de uma passada real ao ler o histórico do container.
+  log.info("arquivamento.dry-run-desfeito", {
+    dryRun: true,
+    avisados: contagens.avisados,
+    arquivados: contagens.arquivados,
+  });
   return contagens;
 }
 
@@ -189,6 +193,14 @@ export async function main(args = process.argv.slice(2)) {
 
   const url = process.env.ARQUIVAMENTO_DATABASE_URL;
   if (!url) {
+    // Ver a nota gêmea em escalonamento-risco.mjs: o `throw` é o contrato do
+    // teste unitário, mas quem o captura é `logarErro`, que hasheia a
+    // `message`. O nome da env sai aqui, em campo, para sobreviver ao hash.
+    log.error("arquivamento.env-ausente", {
+      env: "ARQUIVAMENTO_DATABASE_URL",
+      role: "iris_arquivamento",
+      runbook: "infra/README.md §Auto-arquivamento por inatividade",
+    });
     throw new Error(
       "ARQUIVAMENTO_DATABASE_URL não definida — o job de auto-arquivamento precisa da role " +
         "de login que herda `iris_arquivamento`. Ver §Auto-arquivamento por inatividade em infra/README.md.",
@@ -221,10 +233,15 @@ if (
     // Erro COMPLETO em stderr, incluindo stack e `cause`. Não engolir stderr é
     // regra deste repo: mensagem que afirma UMA causa provável produz
     // diagnóstico falso justamente no incidente em que ele custa mais caro.
-    console.error(
-      "[arquivamento] FALHA na varredura — heartbeat NÃO foi atualizado:",
-    );
-    console.error(err);
+    // ANTES: o erro INTEIRO, com `stack` e `cause`. A nota de então — "não
+    // engolir stderr, mensagem que afirma UMA causa provável produz
+    // diagnóstico falso" — continua valendo, e é por isso que aqui NÃO entrou
+    // uma frase adivinhando a causa. O que sai é o conjunto fechado: classe,
+    // SQLSTATE, constraint, hash da mensagem. A `message` do driver é a query
+    // com os params, e num job de arquivamento esses params são do prontuário.
+    logarErro("arquivamento.varredura-falhou", err, {
+      heartbeatAtualizado: false,
+    });
     process.exit(1);
   });
 }

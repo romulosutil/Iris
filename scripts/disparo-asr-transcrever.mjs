@@ -26,8 +26,7 @@
  */
 
 import { fileURLToPath } from "node:url";
-
-const PREFIXO = "[disparo-asr-transcrever]";
+import { log } from "./lib/log-estruturado.mjs";
 
 /**
  * Monta a requisição do disparo. Separada de `executarDisparo` para ser
@@ -189,43 +188,44 @@ async function main() {
   if (!url) faltando.push("ASR_JOB_URL");
   if (!token) faltando.push("ASR_JOB_TOKEN");
   if (faltando.length > 0) {
-    console.error(
-      `${PREFIXO} ERRO: variável(is) de ambiente ausente(s): ${faltando.join(", ")}.`,
-    );
+    log.error("disparo-asr.env-ausente", { faltando });
     process.exit(1);
   }
 
   const resultado = await executarDisparo(globalThis.fetch, { url, token });
   const resumo = resumoDoCorpo(resultado.corpo);
 
-  // UMA linha JSON: o log do Easypanel é o único observador deste processo, e
-  // linha única sobrevive a interleaving de stdout. O token não entra aqui —
-  // nem truncado: prefixo de segredo em log já basta para reduzir busca.
-  console.log(
-    JSON.stringify({
-      job: "disparo-asr-transcrever",
-      quando: new Date().toISOString(),
-      ok: resultado.ok,
-      status: resultado.status,
-      falha: resultado.falha ?? null,
-      erro: resultado.erro ?? null,
-      processados: resumo.processados,
-      transcritos: resumo.transcritos,
-      falhas: resumo.falhas,
-      revertidos: resumo.revertidos,
-      // `corpo` cru NÃO entra na linha (#494, T16): quem responde é uma rota
-      // que manipula texto clínico ditado, e um corpo inesperado (erro de
-      // proxy, stack de framework) poderia trazer a nota junto. Só os campos
-      // NOMEADOS acima, mais as categorias fechadas por clipe — nunca spread
-      // do corpo, nunca string livre.
-      categorias: resumo.categorias,
-    }),
-  );
+  // Este job já emitia UMA linha JSON à mão — a #494/T16 chegou nisso pelo
+  // mesmo caminho que a #560 generaliza. O que muda: `job`/`quando` saem
+  // (viraram `evento` e `hora`, com os mesmos nomes do resto do sistema), e o
+  // objeto passa a atravessar a redaction por chave em vez de confiar em quem
+  // monta o literal. O token continua fora — nem truncado: prefixo de segredo
+  // em log já basta para reduzir busca.
+  log.info("disparo-asr.tick-disparado", {
+    ok: resultado.ok,
+    status: resultado.status,
+    falha: resultado.falha ?? null,
+    erroCategoria: resultado.erro ?? null,
+    processados: resumo.processados,
+    transcritos: resumo.transcritos,
+    falhas: resumo.falhas,
+    revertidos: resumo.revertidos,
+    // `corpo` cru NÃO entra na linha (#494, T16): quem responde é uma rota
+    // que manipula texto clínico ditado, e um corpo inesperado (erro de proxy,
+    // stack de framework) poderia trazer a nota junto. Só os campos NOMEADOS
+    // acima, mais as categorias fechadas por clipe — nunca spread do corpo,
+    // nunca string livre.
+    categorias: resumo.categorias,
+  });
 
   if (!resultado.ok) {
-    console.error(
-      `${PREFIXO} disparo FALHOU (${resultado.falha}): ${resultado.erro}`,
-    );
+    log.error("disparo-asr.disparo-falhou", {
+      falha: resultado.falha,
+      // `erro` aqui é categoria fechada montada por `executarDisparo`, não
+      // texto de terceiro — mas o nome muda para deixar isso explícito.
+      erroCategoria: resultado.erro ?? null,
+      status: resultado.status,
+    });
     process.exit(1);
   }
 

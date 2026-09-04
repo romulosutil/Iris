@@ -38,12 +38,11 @@ import {
   detalheSemPii,
   gravarHeartbeat,
 } from "./lib/heartbeat.mjs";
+import { log, logarErro } from "./lib/log-estruturado.mjs";
 
 // Nome deste job em `job_heartbeat` — casa com `LIMITES_HEARTBEAT` em
 // scripts/alarme-jobs.mjs. Mudar um sem o outro cega o detector.
 export const JOB = "expurgo-audit-log";
-
-const PREFIXO = "[expurgo-audit-log]";
 
 /**
  * Função pura de verificação de elegibilidade (utilizada em utilitários de data).
@@ -98,16 +97,19 @@ export async function executar(sql) {
     throw err;
   }
 
-  console.log(
-    `${PREFIXO} Logs órfãos pseudonimizados: ${resultado.pseudonimizados}`,
-  );
-  console.log(
-    `${PREFIXO} Logs de acesso expirados (180+ dias) expurgados: ${resultado.expurgados}`,
-  );
-  // Só nome de ação e contagem — a função não devolve outra coisa.
-  for (const [acao, n] of Object.entries(resultado.porAcao)) {
-    console.log(`${PREFIXO}   ${acao}: ${n}`);
-  }
+  // As duas contagens saem num registro SÓ, como campos: são lidas juntas
+  // ("o que esta passada fez") e separá-las em duas linhas obrigava a
+  // correlacionar por proximidade no stdout.
+  log.info("expurgo-audit-log.varredura-concluida", {
+    pseudonimizados: resultado.pseudonimizados,
+    expurgados: resultado.expurgados,
+  });
+  // Só nome de ação e contagem — a função não devolve outra coisa. O mapa
+  // inteiro vira UM campo em vez de uma linha por ação: a quebra por ação é
+  // consulta sobre o mesmo fato, não fatos diferentes.
+  log.info("expurgo-audit-log.expurgo-por-acao", {
+    porAcao: resultado.porAcao,
+  });
 
   await gravarHeartbeat(sql, JOB, {
     ok: true,
@@ -122,26 +124,33 @@ export async function executar(sql) {
 export async function main() {
   const dbUrl = process.env.EXPURGO_DATABASE_URL;
   if (!dbUrl) {
-    console.error(
-      `${PREFIXO} ERRO: EXPURGO_DATABASE_URL não definida — o job precisa da role de login que herda \`iris_expurgo_audit_log\` (0145). Ver §Job de Expurgo do AuditLog em infra/README.md.`,
-    );
+    log.error("expurgo-audit-log.env-ausente", {
+      // A instrução para o operador fica no `evento` e nestes campos, não
+      // interpolada: o nome da env é o que ele precisa procurar.
+      env: "EXPURGO_DATABASE_URL",
+      role: "iris_expurgo_audit_log",
+      runbook: "infra/README.md §Job de Expurgo do AuditLog",
+    });
     return 1;
   }
 
   const sql = postgres(dbUrl, { max: 1 });
   try {
-    console.log(
-      `${PREFIXO} ${new Date().toISOString()} Iniciando varredura de expurgo (Marco Civil #116 / #536)...`,
-    );
+    // A hora sai no campo `hora` de todo registro: interpolá-la de novo na
+    // frase era o que fazia sentido quando a linha era texto solto.
+    log.info("expurgo-audit-log.varredura-iniciada");
     await executar(sql);
-    console.log(`${PREFIXO} Varredura concluída com sucesso.`);
+    log.info("expurgo-audit-log.job-concluido", { codigoSaida: 0 });
     return 0;
   } catch (err) {
-    // Erro COMPLETO em stderr (regra do repo: não engolir stderr). Ele vai
-    // para o log do container, não para e-mail — o heartbeat de erro, esse
-    // sim externo, só carrega name+code.
-    console.error(`${PREFIXO} FALHA na varredura:`);
-    console.error(err);
+    // ANTES desta fatia saía o erro INTEIRO aqui, com `message` e `stack`. A
+    // nota de então dizia "não engolir stderr", e a parte de não engolir
+    // continua — o que muda é o formato. A `message` de um `PostgresError` é a
+    // query com os params, e o log do container é lido no painel do Easypanel,
+    // servido em HTTP puro (memória `easypanel-ambiente-expoe-segredos`). Fica
+    // classe, SQLSTATE, constraint e um HASH da mensagem: o bastante para
+    // reconhecer "é o mesmo erro de ontem" sem carregar o conteúdo dela.
+    logarErro("expurgo-audit-log.varredura-falhou", err);
     return 1;
   } finally {
     await sql.end();
@@ -158,7 +167,7 @@ if (
   main()
     .then((codigo) => process.exit(codigo))
     .catch((err) => {
-      console.error(`${PREFIXO} ERRO fatal:`, err);
+      logarErro("expurgo-audit-log.erro-fatal", err);
       process.exit(1);
     });
 }

@@ -61,6 +61,13 @@ RUN npm install --no-package-lock --no-audit --no-fund postgres@3.4.9
 # seed que não têm nada que fazer aqui).
 COPY scripts/expurgo-audit-log.mjs ./scripts/expurgo-audit-log.mjs
 COPY scripts/lib/heartbeat.mjs ./scripts/lib/heartbeat.mjs
+
+# #560/F3b — o log estruturado dos jobs. Módulo Node PURO (só `node:crypto`):
+# não é `pino`, não é `src/lib`, e por isso não muda a regra de dependência
+# desta imagem. Precisa do COPY porque é um import RELATIVO novo — a classe de
+# falha da #156 é exatamente esta: o import entra no script, não entra no
+# Dockerfile, e o processo morre em ERR_MODULE_NOT_FOUND com CI verde.
+COPY scripts/lib/log-estruturado.mjs ./scripts/lib/log-estruturado.mjs
 COPY infra/expurgo-audit-log/agendador.sh ./agendador.sh
 RUN chmod +x agendador.sh
 
