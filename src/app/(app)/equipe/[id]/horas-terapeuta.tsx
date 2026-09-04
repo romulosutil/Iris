@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { HorasTerapeuta } from "@/app/(app)/agenda/horas-queries";
+import type { HorasTerapeuta } from "@/lib/agenda/horas-queries";
 
 /**
  * Bloco de carga horária do terapeuta: capacidade vs. alocado vs. vago (por

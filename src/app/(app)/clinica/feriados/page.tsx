@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole } from "@/auth/require-role";
 import { PageHeader } from "@/components/ui/page-header";
-import { listarBloqueios } from "@/app/(app)/agenda/bloqueio-queries";
+import { listarBloqueios } from "@/lib/agenda/bloqueio-queries";
 import { FeriadosForm } from "./feriados-form";
 
 export default async function FeriadosPage() {

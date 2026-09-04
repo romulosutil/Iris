@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole } from "@/auth/require-role";
-import { listarBloqueios } from "@/app/(app)/agenda/bloqueio-queries";
+import { listarBloqueios } from "@/lib/agenda/bloqueio-queries";
 import { horasDisponiveisSemana } from "@/lib/agenda/janela";
 import { faixasParaCelulas } from "@/lib/agenda/grade";
 import { withTenant } from "@/db/rls";
@@ -9,7 +9,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { appUser, clinic, userRole } from "@/db/schema";
 import { PageHeader } from "@/components/ui/page-header";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
-import { carregarHorasTerapeuta } from "@/app/(app)/agenda/horas-queries";
+import { carregarHorasTerapeuta } from "@/lib/agenda/horas-queries";
 import { carregarDisponibilidade } from "./queries";
 import { DisponibilidadeEditor } from "./disponibilidade-editor";
 import { BloqueiosTerapeuta } from "./bloqueios-terapeuta";

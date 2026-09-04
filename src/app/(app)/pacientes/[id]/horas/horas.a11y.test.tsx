@@ -9,7 +9,7 @@ import axe from "axe-core";
 // padrão de agenda/a11y.test.tsx.
 vi.mock("server-only", () => ({}));
 vi.mock("@/db/client", () => ({ db: {}, sql: {}, authDb: {}, authSql: {} }));
-vi.mock("@/app/(app)/agenda/horas-queries", () => ({
+vi.mock("@/lib/agenda/horas-queries", () => ({
   carregarHorasPaciente: vi.fn(),
 }));
 

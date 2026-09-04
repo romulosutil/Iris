@@ -1,3 +1,10 @@
+// Leitura de carga horária de paciente e de terapeuta (#559, fatia F3 ·
+// achado A-02). Antes em `src/app/(app)/agenda/horas-queries.ts`, mas os
+// consumidores são `equipe/[id]` e `pacientes/[id]/horas` — a agenda não lê
+// daqui. Cálculo puro segue em `horas.ts`/`janela.ts`, ao lado.
+//
+// Sem `"use server"`: ctx-accepting, mesmo motivo de `bloqueio-queries.ts`
+// (achado #55).
 import { and, eq, gte, isNull, lte, or } from "drizzle-orm";
 import { requireRole } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
