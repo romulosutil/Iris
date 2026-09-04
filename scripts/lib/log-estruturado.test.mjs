@@ -47,11 +47,11 @@ function capturar(fn) {
 }
 
 describe("#560/F3b — forma do registro", () => {
-  const nivelOriginal = process.env.LOG_NIVEL;
+  const nivelOriginal = process.env.LOG_LEVEL;
 
   afterEach(() => {
-    if (nivelOriginal === undefined) delete process.env.LOG_NIVEL;
-    else process.env.LOG_NIVEL = nivelOriginal;
+    if (nivelOriginal === undefined) delete process.env.LOG_LEVEL;
+    else process.env.LOG_LEVEL = nivelOriginal;
   });
 
   it("emite UMA linha de JSON com evento, nível, execucaoId e hora", () => {
@@ -89,7 +89,7 @@ describe("#560/F3b — forma do registro", () => {
       .spyOn(process.stderr, "write")
       .mockImplementation(() => (destinos.push("stderr"), true));
     try {
-      process.env.LOG_NIVEL = "debug";
+      process.env.LOG_LEVEL = "debug";
       log.error("x.a");
       log.warn("x.b");
       log.info("x.c");
@@ -101,17 +101,17 @@ describe("#560/F3b — forma do registro", () => {
     expect(destinos).toEqual(["stderr", "stderr", "stdout", "stdout"]);
   });
 
-  it("respeita LOG_NIVEL — debug não sai no default", () => {
+  it("respeita LOG_LEVEL — debug não sai no default", () => {
     expect(capturar(() => log.debug("x.silencioso"))).toEqual([]);
-    process.env.LOG_NIVEL = "debug";
+    process.env.LOG_LEVEL = "debug";
     expect(capturar(() => log.debug("x.audivel"))).toHaveLength(1);
   });
 
-  it("LOG_NIVEL inválido cai em info em vez de silenciar tudo", () => {
+  it("LOG_LEVEL inválido cai em info em vez de silenciar tudo", () => {
     // Fail-open no NÍVEL é o certo aqui: um valor digitado errado no painel
     // não pode apagar o log inteiro de um job — é o modo de falha em que
     // ninguém descobre que ficou cego.
-    process.env.LOG_NIVEL = "verboso";
+    process.env.LOG_LEVEL = "verboso";
     expect(capturar(() => log.info("x.ainda-sai"))).toHaveLength(1);
     expect(capturar(() => log.debug("x.nao-sai"))).toEqual([]);
   });

@@ -22,6 +22,7 @@
 import { execFile } from "node:child_process";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
+import { hashCurto, log, logarErro } from "./lib/log-estruturado.mjs";
 import { promisify } from "node:util";
 import postgres from "postgres";
 import { detalheDoErro } from "./lib/heartbeat.mjs";
@@ -416,9 +417,7 @@ export async function main() {
 
   const databaseUrl = process.env.ALARME_DATABASE_URL;
   if (!databaseUrl) {
-    console.error(
-      "alarme-jobs: ERRO: variável de ambiente ausente: ALARME_DATABASE_URL",
-    );
+    log.error("alarme-jobs.env-ausente", { env: "ALARME_DATABASE_URL" });
     return 1;
   }
 
@@ -452,15 +451,25 @@ export async function main() {
   ]);
 
   for (const r of aLogar) {
-    console.warn(`[alarme-jobs] INDETERMINADO: ${r.motivo} — ${r.detalhe}`);
+    // `alarme`, e não `motivo`: `motivo` está na lista de chaves redigidas (é
+    // texto livre clínico no domínio), e o valor aqui — que é conjunto fechado
+    // do detector — sairia como `[redigido]`, apagando justamente o dado que
+    // faz a linha existir.
+    log.warn("alarme-jobs.indeterminado", {
+      alarme: r.motivo,
+      detalhe: r.detalhe,
+    });
   }
 
   let algumEnvioFalhou = false;
   for (const r of aEnviar) {
-    console.warn(`[alarme-jobs] ATENÇÃO: ${r.motivo} — ${r.detalhe}`);
+    log.warn("alarme-jobs.alarme-detectado", {
+      alarme: r.motivo,
+      detalhe: r.detalhe,
+    });
 
     if (!(await deveAlertar(heartbeatDir, r.motivo, hoje))) {
-      console.log(`[alarme-jobs] ${r.motivo}: já alertado hoje, sem reenvio.`);
+      log.info("alarme-jobs.reenvio-suprimido-por-dedup", { alarme: r.motivo });
       continue;
     }
 
@@ -476,12 +485,16 @@ export async function main() {
       // Só marca depois de enviado: um envio que falhou tem que reentrar no
       // tick seguinte, senão o dedup silencia um alarme que nunca chegou.
       await marcarAlertado(heartbeatDir, r.motivo, hoje);
-      console.log(`[alarme-jobs] ${r.motivo}: e-mail de alarme enviado.`);
+      log.info("alarme-jobs.email-enviado", { alarme: r.motivo });
     } else {
       algumEnvioFalhou = true;
-      console.error(
-        `[alarme-jobs] ${r.motivo}: FALHA ao enviar e-mail: ${envio.erro}`,
-      );
+      // `envio.erro` é texto do PROVEDOR e não entra: uma mensagem de bounce
+      // embute o destinatário (memória `campo-livre-de-terceiro-carrega-pii`).
+      // O hash basta para ver que é a mesma falha de sempre.
+      log.error("alarme-jobs.email-falhou", {
+        alarme: r.motivo,
+        hashErro: hashCurto(String(envio.erro ?? "")),
+      });
     }
   }
 
@@ -499,7 +512,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   main()
     .then((codigo) => process.exit(codigo))
     .catch((err) => {
-      console.error("[alarme-jobs] ERRO fatal:", err);
+      logarErro("alarme-jobs.erro-fatal", err);
       process.exit(1);
     });
 }

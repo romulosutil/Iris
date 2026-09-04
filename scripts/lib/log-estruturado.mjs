@@ -135,8 +135,21 @@ export const execucaoId =
 
 const ORDEM = { debug: 10, info: 20, warn: 30, error: 40 };
 
+/**
+ * `LOG_LEVEL` é a MESMA variável do logger da app — um operador não deveria
+ * precisar decorar dois nomes para a mesma decisão.
+ *
+ * O default diverge de propósito: a app cai em `debug` fora de produção,
+ * enquanto aqui é sempre `info`. Um job roda em container de produção mesmo
+ * quando alguém o dispara à mão, e o nível `debug` destes scripts é uma linha
+ * POR OBJETO varrido (o sweeper de órfãos chega a milhares).
+ *
+ * Valor inválido cai em `info` em vez de silenciar: um nome digitado errado no
+ * painel não pode apagar o log inteiro de um job — é o modo de falha em que
+ * ninguém descobre que ficou cego.
+ */
 function nivelMinimo() {
-  const bruto = (process.env.LOG_NIVEL || "info").toLowerCase();
+  const bruto = (process.env.LOG_LEVEL || "info").toLowerCase();
   return bruto in ORDEM ? bruto : "info";
 }
 

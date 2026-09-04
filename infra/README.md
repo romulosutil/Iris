@@ -1242,10 +1242,17 @@ primeira linha esperada é:
 E, a cada minuto:
 
 ```
-[escalonamento] 2026-07-28T12:01:00.123Z varredura concluída: 0 alerta(s) escalado(s).
+{"escalados":0,"nivel":"info","evento":"escalonamento.varredura-concluida","execucaoId":"7aadf093","hora":"2026-07-28T12:01:00.123Z"}
 ```
 
-`0 alerta(s)` é o resultado normal e saudável — significa que nada venceu.
+`"escalados":0` é o resultado normal e saudável — significa que nada venceu.
+
+Desde a #560 (F3b) todo job de infra escreve **uma linha JSON por evento**, com
+os mesmos nomes de campo do log da aplicação: `evento` (conjunto fechado),
+`nivel`, `hora` em ISO e `execucaoId`, que é o id da RODADA — todas as linhas de
+uma mesma passada o compartilham, e é por ele que se junta o que aconteceu num
+tick. Para ler no console do painel, `node ... | jq -c` ajuda, mas não é
+necessário: a linha é legível como está.
 
 Agora confirme o **heartbeat**. Easypanel → serviço `escalonamento` → Console:
 
@@ -1449,8 +1456,8 @@ serviço `iris-expurgo-audit-log` existe no Easypanel; o e-mail do `iris-alarme`
 `iris-alarme` em produção (VPS `31.97.170.105`, projeto `espectro-mvp`):
 
 ```
-[alarme-jobs] ATENÇÃO: expurgo-audit-log — nenhum heartbeat registrado para "expurgo-audit-log" — o job nunca rodou desde a migração 0146 ou o serviço não está provisionado (ver infra/README.md, §Alarme automático).
-[alarme-jobs] expurgo-audit-log: já alertado hoje, sem reenvio.
+{"alarme":"expurgo-audit-log","detalhe":"nenhum heartbeat registrado para \"expurgo-audit-log\" — o job nunca rodou desde a migração 0146 ou o serviço não está provisionado (ver infra/README.md, §Alarme automático).","nivel":"warn","evento":"alarme-jobs.alarme-detectado","execucaoId":"7aadf093","hora":"..."}
+{"alarme":"expurgo-audit-log","nivel":"info","evento":"alarme-jobs.reenvio-suprimido-por-dedup","execucaoId":"7aadf093","hora":"..."}
 ```
 
 E a enumeração dos serviços do projeto no painel confirmou o outro ramo do
@@ -1558,10 +1565,10 @@ não foi clicado (ou o nome da variável saiu com typo).
 Ainda no log do serviço, dentro de um minuto do start:
 
 ```
-[expurgo-audit-log] <timestamp> Iniciando varredura de expurgo (Marco Civil #116 / #536)...
-[expurgo-audit-log] Logs órfãos pseudonimizados: N
-[expurgo-audit-log] Logs de acesso expirados (180+ dias) expurgados: N
-[expurgo-audit-log] Varredura concluída com sucesso.
+{"nivel":"info","evento":"expurgo-audit-log.varredura-iniciada","execucaoId":"...","hora":"..."}
+{"pseudonimizados":N,"expurgados":N,"nivel":"info","evento":"expurgo-audit-log.varredura-concluida","execucaoId":"...","hora":"..."}
+{"porAcao":{"login":N},"nivel":"info","evento":"expurgo-audit-log.expurgo-por-acao","execucaoId":"...","hora":"..."}
+{"codigoSaida":0,"nivel":"info","evento":"expurgo-audit-log.job-concluido","execucaoId":"...","hora":"..."}
 ```
 
 Contagens em zero são um resultado **válido** (pode não haver nada vencido); o
@@ -1767,7 +1774,7 @@ Issue fechada **não** prova serviço de pé — a conferência é no painel.
 
 **Como saber que deu certo:** no log do serviço aparece a linha
 `[agendador-retencao] ... ativo. intervalo=86400s`, e logo em seguida
-`[retencao] ... varredura concluída: N aviso(s) prévio(s) emitido(s) em M lote(s)`.
+`{"avisados":N,"lotes":M,...,"evento":"retencao.varredura-concluida",...}`.
 Depois do primeiro tick, o arquivo `/heartbeat/.ultima-retencao` existe e tem um
 timestamp dentro. Sem essas duas evidências, o serviço não está provisionado.
 
@@ -2845,15 +2852,15 @@ chamada (`app_alarme_job_heartbeats()`, EXECUTE só para `iris_alarme`).
 **Limite = cadência do agendador + margem** (`LIMITES_HEARTBEAT` em
 `scripts/alarme-jobs.mjs`; mudar aqui sem mudar lá cega o detector):
 
-| Job                 | Cadência (`INTERVALO_S`)              | Limite do `ultimo_ok` | Linha ausente |
-| ------------------- | ------------------------------------- | --------------------- | ------------- |
-| `retencao`          | 86400s (1x/dia)                       | 36h                   | `problema`    |
-| `arquivamento`      | 86400s (1x/dia)                       | 36h                   | `problema`    |
-| `exportacao`        | 300s (5min)                           | 1h                    | `problema`    |
-| `asr`               | 20s (asr-transcrever)                 | 30min                 | `problema`    |
-| `asr-sweeper`       | 3600s (1h)                            | 3h                    | `problema`    |
-| `expurgo-audit-log` | 86400s (1x/dia)                       | 36h                   | `problema`    |
-| `conciliacao`       | **sob demanda** (runbook #375)        | —                     | `ok`          |
+| Job                 | Cadência (`INTERVALO_S`)       | Limite do `ultimo_ok` | Linha ausente |
+| ------------------- | ------------------------------ | --------------------- | ------------- |
+| `retencao`          | 86400s (1x/dia)                | 36h                   | `problema`    |
+| `arquivamento`      | 86400s (1x/dia)                | 36h                   | `problema`    |
+| `exportacao`        | 300s (5min)                    | 1h                    | `problema`    |
+| `asr`               | 20s (asr-transcrever)          | 30min                 | `problema`    |
+| `asr-sweeper`       | 3600s (1h)                     | 3h                    | `problema`    |
+| `expurgo-audit-log` | 86400s (1x/dia)                | 36h                   | `problema`    |
+| `conciliacao`       | **sob demanda** (runbook #375) | —                     | `ok`          |
 
 Regras, iguais para todos:
 
@@ -2975,9 +2982,10 @@ Não espere um problema real acontecer. No Console do serviço `alarme`:
 node /app/scripts/alarme-jobs.mjs
 ```
 
-Esperado: linha `[alarme-jobs] ATENÇÃO: <checagem> — ...` no stdout **e** um
+Esperado: linha com `"evento":"alarme-jobs.alarme-detectado"` no stdout **e** um
 e-mail em `ALARME_EMAIL_DESTINO` dentro de minutos. Rodar de novo no mesmo dia
-UTC: a linha `ATENÇÃO` reaparece, mas **sem** e-mail novo (dedup). Depois:
+UTC: a linha `alarme-jobs.alarme-detectado` reaparece, seguida de
+`alarme-jobs.reenvio-suprimido-por-dedup`, mas **sem** e-mail novo. Depois:
 
 ```bash
 ls -a /heartbeat/     # .alertado-<checagem>-YYYY-MM-DD presente
@@ -2988,9 +2996,12 @@ sumiu, o volume persistente do passo 2 não foi criado.
 
 ### O que fazer se der errado
 
-1. **Nenhum e-mail chega, mas a linha `ATENÇÃO` aparece no log.** Ver o texto
-   depois de `[alarme-jobs] <checagem>: FALHA ao enviar e-mail:` — geralmente
-   `EMAIL_PROVIDER_API_KEY` ou `ALARME_EMAIL_DESTINO` ausente.
+1. **Nenhum e-mail chega, mas `alarme-jobs.alarme-detectado` aparece no log.**
+   Procurar `"evento":"alarme-jobs.email-falhou"`. Desde a #560 (F3b) ele NÃO
+   traz o texto do provedor — uma mensagem de bounce embute o destinatário — e
+   sim `hashErro`, que serve para ver se é sempre a mesma falha. A causa
+   costuma ser `EMAIL_PROVIDER_API_KEY` ou `ALARME_EMAIL_DESTINO` ausente;
+   confirme pela presença das variáveis no serviço, não pelo texto do erro.
 2. **Todas as checagens dizem `ok` e você sabe que não está tudo ok.** Testar
    `SELECT * FROM app_alarme_billing_atrasado('2 hours')` como
    `iris_alarme_login`. Se devolver `total = 0` com um ciclo vencido no banco,

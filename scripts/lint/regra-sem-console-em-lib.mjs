@@ -1,5 +1,8 @@
 /**
- * Guard da fatia F2 da #560 (`DA-04`): nenhum `console.*` cru em `src/lib/**`.
+ * Guard da #560 (`DA-04`): nenhum `console.*` cru onde o log é de SERVIDOR —
+ * `src/lib/**` (F2), `src/app/api/**` (F3a) e os `.mjs` copiados para imagens
+ * de infra (F3b). O nome do arquivo ficou de quando o escopo era só a lib;
+ * renomeá-lo trocaria um caminho estável em três `import` por nada.
  *
  * Por que é uma regra e não uma revisão: a migração dos 31 sítios de `lib/`
  * para o logger estruturado é trabalho de UMA PR. O `console.*` volta na
@@ -145,6 +148,42 @@ export const pluginObservabilidade = {
 export const ESCOPO_SEM_CONSOLE = [
   "src/lib/**/*.{ts,tsx}",
   "src/app/api/**/*.{ts,tsx}",
+];
+
+/**
+ * Scripts `.mjs` COPIADOS para imagens de infra (fatia F3b). Lista explícita,
+ * e não `scripts/**`, porque `scripts/` mistura duas populações com destinos
+ * opostos:
+ *
+ * - **job**: o stdout é log de container, lido no painel do Easypanel e
+ *   (um dia) por um agregador. É onde JSON, `execucaoId` e redaction por chave
+ *   valem — e é o que está listado aqui;
+ * - **CLI de desenvolvimento** (`seed*`, `ci/**`, `lint/**`,
+ *   `lib/guardrail-conexao.mjs`, `lib/guardrail-seed.ts`): o destino é o
+ *   TERMINAL DE UM HUMANO, agora. O guardrail de conexão imprime um aviso com
+ *   `⚠️` antes de deixar alguém rodar seed contra banco remoto; transformá-lo
+ *   em JSON numa linha piora exatamente a coisa que ele existe para fazer.
+ *   `guardrail-conexao.mjs` entra na imagem do escalonamento só porque aquele
+ *   Dockerfile copia `scripts/lib/` inteiro — o job não o executa.
+ *
+ * Um glob amplo aqui teria arrastado a segunda população junto, e o baseline
+ * que isso exigiria é dívida com data marcada.
+ */
+export const ESCOPO_SEM_CONSOLE_JOBS = [
+  "scripts/alarme-jobs.mjs",
+  "scripts/asr-sweeper-orfaos.mjs",
+  "scripts/auto-arquivamento.mjs",
+  "scripts/conciliacao-billing.mjs",
+  "scripts/disparo-asr-transcrever.mjs",
+  "scripts/escalonamento-risco.mjs",
+  "scripts/exportacao-acervo.mjs",
+  "scripts/expurgo-audit-log.mjs",
+  "scripts/fechamento-ciclo-billing.mjs",
+  "scripts/retencao-aviso-previo.mjs",
+  "scripts/lib/heartbeat.mjs",
+  "scripts/lib/log-estruturado.mjs",
+  "scripts/lib/resend-alarme.mjs",
+  "scripts/lib/resend-rt.mjs",
 ];
 
 /**

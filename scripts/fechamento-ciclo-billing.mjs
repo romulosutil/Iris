@@ -26,8 +26,7 @@
  */
 
 import { fileURLToPath } from "node:url";
-
-const PREFIXO = "[fechamento-ciclo-billing]";
+import { log } from "./lib/log-estruturado.mjs";
 
 /**
  * Monta a requisição do disparo. Separada de `executarFechamento` para ser
@@ -203,9 +202,7 @@ async function main() {
   if (!url) faltando.push("BILLING_JOB_URL");
   if (!token) faltando.push("BILLING_JOB_TOKEN");
   if (faltando.length > 0) {
-    console.error(
-      `${PREFIXO} ERRO: variável(is) de ambiente ausente(s): ${faltando.join(", ")}.`,
-    );
+    log.error("fechamento-billing.env-ausente", { faltando });
     process.exit(1);
   }
 
@@ -219,35 +216,32 @@ async function main() {
 
   const resumo = resumoDoCorpo(resultado.corpo);
 
-  // UMA linha JSON: o log do Easypanel é o único observador deste processo, e
-  // linha única sobrevive a interleaving de stdout. O token não entra aqui —
-  // nem truncado: prefixo de segredo em log já basta para reduzir busca.
-  console.log(
-    JSON.stringify({
-      job: "fechamento-ciclo-billing",
-      quando: new Date().toISOString(),
-      dryRun,
-      ok: resultado.ok,
-      status: resultado.status,
-      falha: resultado.falha ?? null,
-      provavelmenteProxy404: resultado.provavelmenteProxy404 ?? null,
-      erro: resultado.erro ?? null,
-      // Primeiro nível: qual etapa caiu, e quanto de irreversível já havia
-      // acontecido quando ela caiu.
-      retentativaAbortada: resumo.retentativaAbortada,
-      carenciaAbortada: resumo.carenciaAbortada,
-      backstopAbortado: resumo.backstopAbortado,
-      ciclosProcessados: resumo.ciclosProcessados,
-      cobrancasEmitidas: resumo.cobrancasEmitidas,
-      // Irreversível como `cobrancasEmitidas`, e pelo mesmo motivo sobe junto:
-      // cada retentativa comandada é uma instrução de débito agendada no banco
-      // pagador e uma das 3 tentativas da cobrança, gasta.
-      retentativasComandadas: resumo.retentativasComandadas,
-      retentativasTruncado: resumo.retentativasTruncado,
-      carenciaFalhas: resumo.carenciaFalhas,
-      corpo: resultado.corpo ?? null,
-    }),
-  );
+  // Este job já emitia UMA linha JSON à mão. O que muda com a #560: `job` e
+  // `quando` saem (viraram `evento` e `hora`, iguais aos do resto do sistema),
+  // e o objeto passa pela redaction por chave em vez de depender de quem monta
+  // o literal. O token continua fora — nem truncado.
+  log.info("fechamento-billing.passada-concluida", {
+    dryRun,
+    ok: resultado.ok,
+    status: resultado.status,
+    falha: resultado.falha ?? null,
+    provavelmenteProxy404: resultado.provavelmenteProxy404 ?? null,
+    erro: resultado.erro ?? null,
+    // Primeiro nível: qual etapa caiu, e quanto de irreversível já havia
+    // acontecido quando ela caiu.
+    retentativaAbortada: resumo.retentativaAbortada,
+    carenciaAbortada: resumo.carenciaAbortada,
+    backstopAbortado: resumo.backstopAbortado,
+    ciclosProcessados: resumo.ciclosProcessados,
+    cobrancasEmitidas: resumo.cobrancasEmitidas,
+    // Irreversível como `cobrancasEmitidas`, e pelo mesmo motivo sobe junto:
+    // cada retentativa comandada é uma instrução de débito agendada no banco
+    // pagador e uma das 3 tentativas da cobrança, gasta.
+    retentativasComandadas: resumo.retentativasComandadas,
+    retentativasTruncado: resumo.retentativasTruncado,
+    carenciaFalhas: resumo.carenciaFalhas,
+    corpo: corpoParaLog(resultado.corpo),
+  });
 
   const falhou =
     !resultado.ok ||
@@ -255,14 +249,16 @@ async function main() {
 
   if (falhou) {
     if (!resultado.ok) {
-      console.error(
-        `${PREFIXO} disparo FALHOU (${resultado.falha}): ${resultado.erro}`,
-      );
+      log.error("fechamento-billing.disparo-falhou", {
+        falha: resultado.falha,
+        erroCategoria: resultado.erro ?? null,
+        status: resultado.status,
+      });
     }
     if (resumo.carenciaFalhas !== null && resumo.carenciaFalhas > 0) {
-      console.error(
-        `${PREFIXO} disparo FALHOU: ${resumo.carenciaFalhas} corte(s) por carência falharam nesta passada.`,
-      );
+      log.error("fechamento-billing.cortes-por-carencia-falharam", {
+        carenciaFalhas: resumo.carenciaFalhas,
+      });
     }
     // Aviso separado, porque muda a reação: reexecutar o job aqui REEMITIRIA
     // cobrança. A etapa que caiu é a que precisa ser reexecutada, não a
@@ -274,12 +270,18 @@ async function main() {
     // comandou retentativa e caiu depois é indistinguível de uma que não fez
     // nada se o gatilho do aviso continuar sendo só `cobrancasEmitidas`.
     if (resumo.cobrancasEmitidas || resumo.retentativasComandadas) {
-      console.error(
-        `${PREFIXO} ATENÇÃO: ${resumo.cobrancasEmitidas ?? "?"} cobrança(s) e` +
-          ` ${resumo.retentativasComandadas ?? "?"} retentativa(s) JÁ foram comandadas nesta passada` +
-          ` (retentativaAbortada=${resumo.retentativaAbortada ?? "não"}, carenciaAbortada=${resumo.carenciaAbortada ?? "não"}, backstopAbortado=${resumo.backstopAbortado ?? "não"}, carenciaFalhas=${resumo.carenciaFalhas ?? 0}).` +
-          ` NÃO reexecute o fechamento sem antes conferir o estado dos ciclos.`,
-      );
+      // Evento próprio: é a linha que decide se um humano pode reexecutar o
+      // job. Um campo dentro do registro de conclusão a esconderia numa
+      // consulta por evento — e reexecutar aqui REEMITE cobrança.
+      log.error("fechamento-billing.efeito-irreversivel-antes-da-falha", {
+        cobrancasEmitidas: resumo.cobrancasEmitidas,
+        retentativasComandadas: resumo.retentativasComandadas,
+        retentativaAbortada: resumo.retentativaAbortada,
+        carenciaAbortada: resumo.carenciaAbortada,
+        backstopAbortado: resumo.backstopAbortado,
+        carenciaFalhas: resumo.carenciaFalhas ?? 0,
+        reexecucaoSegura: false,
+      });
     }
     // `process.exit(1)` NÃO precisou de ramo novo para `retentativaAbortada`: a
     // rota já responde 500 quando qualquer etapa aborta, e 500 vira
