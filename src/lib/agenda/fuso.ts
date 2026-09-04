@@ -1,3 +1,8 @@
+// Movido de `src/app/(app)/agenda/fuso.ts` na fatia F3 da #559 (achado A-02).
+// São duas constantes puras, sem import: módulo de lib por natureza, e a rota
+// `agenda/` não é consumidora — os únicos chamadores são
+// `equipe/[id]/grade-disponibilidade.tsx` e `scripts/lib/seed-demo-clinic.ts`.
+//
 // Fuso fixo de FALLBACK apenas (D61) — usado quando `clinic.timezone` não
 // pode ser lido: componentes de design system órfãos, sem caminho de request
 // (`calendar-root.tsx`, `calendar-header.tsx`, `calendar-event-sidebar.tsx` —

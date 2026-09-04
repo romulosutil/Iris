@@ -29,7 +29,7 @@ import {
   session,
 } from "@/db/schema";
 import { provisionUser } from "@/auth/provisioning";
-import { FUSO_CLINICA, FUSO_CLINICA_OFFSET } from "@/app/(app)/agenda/fuso";
+import { FUSO_CLINICA, FUSO_CLINICA_OFFSET } from "@/lib/agenda/fuso";
 
 export const TERAPEUTA_DEMO_EMAIL = "terapeuta.demo@iris.test";
 export const TERAPEUTA_DEMO_SENHA = "Senha Demo 123";
