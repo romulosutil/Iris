@@ -1,4 +1,9 @@
-import { instalarSink, restaurarSinkPadrao, type RegistroLog } from "./logger";
+import {
+  instalarSink,
+  restaurarSinkPadrao,
+  substituirNaoSerializavel,
+  type RegistroLog,
+} from "./logger";
 
 /**
  * Captura de registros do logger, para teste (#560, fatia F2).
@@ -41,7 +46,11 @@ export type CapturaDeLog = {
   houve: (nome: string) => boolean;
   /**
    * Tudo que foi capturado, serializado — para a asserção negativa ("o
-   * destinatário NÃO aparece em lugar nenhum do log").
+   * destinatário NÃO aparece em lugar nenhum do log"). Usa o mesmo replacer do
+   * `sinkConsole`: um `bigint` no contexto (o driver devolve
+   * `acervo.bytes_tamanho` e afins assim) faria o `JSON.stringify` nativo
+   * lançar `TypeError: Do not know how to serialize a BigInt` dentro da
+   * asserção, derrubando o teste por um motivo que não é o que ele mede.
    */
   bruto: () => string;
   /** Devolve o sink padrão. Chamar sempre em `finally`. */
@@ -57,7 +66,7 @@ export function capturarLog(): CapturaDeLog {
     registros,
     evento: (nome) => registros.find((r) => r.evento === nome),
     houve: (nome) => registros.some((r) => r.evento === nome),
-    bruto: () => JSON.stringify(registros),
+    bruto: () => JSON.stringify(registros, substituirNaoSerializavel),
     restaurar: () => restaurarSinkPadrao(),
   };
 }
