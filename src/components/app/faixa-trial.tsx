@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Banner } from "@/components/ui/banner";
 import { Container } from "@/components/ui/layout";
-import { formatarBRL } from "@/lib/billing/calculator";
+import { formatarBRL } from "@/lib/moeda";
 import type { EstadoConta } from "@/lib/billing/estado-conta";
 
 interface FaixaTrialProps {

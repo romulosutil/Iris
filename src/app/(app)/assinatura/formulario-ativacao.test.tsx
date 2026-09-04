@@ -3,7 +3,7 @@ import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { FormularioAtivacao } from "./formulario-ativacao";
 import type { AtivacaoState } from "./logic";
-import { formatarBRL } from "@/lib/billing/calculator";
+import { formatarBRL } from "@/lib/moeda";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({

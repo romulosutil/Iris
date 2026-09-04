@@ -1,7 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { DataRow } from "@/components/ui/data-row";
 import { StatusBadge } from "@/components/ui/patterns/status-badge";
-import { formatarBRL } from "@/lib/billing/calculator";
+import { formatarBRL } from "@/lib/moeda";
 import { ROTULOS_ASSINATURA } from "@/lib/billing/rotulos-assinatura";
 import type { CicloCorrente } from "./queries";
 

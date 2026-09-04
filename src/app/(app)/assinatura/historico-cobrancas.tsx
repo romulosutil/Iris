@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusBadge } from "@/components/ui/patterns/status-badge";
-import { formatarBRL } from "@/lib/billing/calculator";
+import { formatarBRL } from "@/lib/moeda";
 import { ROTULOS_CICLO } from "@/lib/billing/rotulos-ciclo";
 import type { CicloDoHistorico } from "./queries";
 
