@@ -897,6 +897,30 @@ describe("alarme-jobs.mjs — verificarExtracao / limiar (#560 F5)", () => {
     expect(r.detalhe).toContain("não foi possível checar");
   });
 
+  test("a message do driver NÃO entra no detalhe — ele vai no corpo do e-mail", async () => {
+    // A `message` do driver de Postgres é a query com os params. Este
+    // `detalhe` é interpolado no e-mail de alarme, então uma message crua aqui
+    // sai do container e vai para uma caixa de entrada.
+    const erro = Object.assign(
+      new Error(
+        `syntax error at or near "SELECT * FROM extraction WHERE trecho_fonte = 'o paciente relatou'"`,
+      ),
+      { name: "PostgresError", code: "42601" },
+    );
+    const sql = () => Promise.reject(erro);
+
+    const r = await verificarExtracao(sql);
+
+    expect(r.estado).toBe("indeterminado");
+    // O que o operador precisa para agir: classe do erro e SQLSTATE.
+    expect(r.detalhe).toContain("erro=PostgresError");
+    expect(r.detalhe).toContain("code=42601");
+    // O que nunca pode sair.
+    expect(r.detalhe).not.toContain("trecho_fonte");
+    expect(r.detalhe).not.toContain("o paciente relatou");
+    expect(r.detalhe).not.toContain("SELECT");
+  });
+
   test("o CONTADOR sai no log em todo tick — inclusive no tick saudável", async () => {
     // É esta linha que faz a fatia ser "métrica", e não só alarme: sem série
     // no tick saudável não há régua para dizer o que é degradado.

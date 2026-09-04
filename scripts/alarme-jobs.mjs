@@ -297,7 +297,13 @@ export async function verificarExtracao(sql) {
     return {
       estado: "indeterminado",
       motivo: "extracao",
-      detalhe: `não foi possível checar: ${err instanceof Error ? err.message : String(err)}`,
+      // `detalheDoErro`, e NUNCA `err.message`: este `detalhe` vai no CORPO DO
+      // E-MAIL de alarme, e a `message` do driver de Postgres é a query com os
+      // params. O helper reduz ao conjunto fechado `erro=<name> code=<code>` —
+      // mesmo caminho que `verificarHeartbeats` já usa. As duas checagens da
+      // #294 (billing/escalonamento) ainda interpolam a message: são anteriores
+      // a esta regra e são dívida à parte, não precedente a copiar.
+      detalhe: `não foi possível checar: ${detalheDoErro(err)}`,
     };
   }
 

@@ -81,7 +81,9 @@ F1 (núcleo + correlação) ──> F2 ──> F3 ──> F4   (migração dos 4
 
 **Prova de mutação (4 no `.mjs`, 2 no banco, todas revertidas com patch inverso):** teto de falha inerte (`> 1.1`) → 4 vermelhos; piso de amostra inerte (`< 0`) → 1; p95 sem piso por modelo → 1; contador não emitido → 1. No Postgres: função **sem** `SECURITY DEFINER` (`prosecdef=false` medido) → 2 vermelhos, e `GROUP BY e.id` no lugar de `e.session_id` → 1. Este último é o que prova a unidade: contando linha, `chamadas` daria 4 e o p95 1850 (interpolação sobre `[1000,1000,1000,2000]`); contando chamada, dá 2 e 1950. **Registrado porque quase passou batido:** a primeira tentativa da mutação `sem-definer` saiu **verde** — o `String.replace` do script trocou a primeira ocorrência de "SECURITY DEFINER", que está no comentário do cabeçalho, e não na assinatura. Mutante que não muta produção passa por prova e não é.
 
-**Gates:** `typecheck` 0 · `lint` 0 erros / 8 warnings pré-existentes · `test` 3175/3175 (369 arquivos) · `test:rls` 1424/1424 (162 arquivos, inclui o int-test novo 3/3 contra banco real) · carga da imagem `iris-alarme` 7/7 asserções (nenhum Dockerfile mudou: a fatia não acrescenta import).
+**Corrigido na revisão da PR #617:** o `catch` de `verificarExtracao` nasceu com `err.message` interpolado no `detalhe` — copiado de `verificarBilling`, o precedente errado. O `detalhe` é interpolado no **corpo do e-mail** por `enviarEmailAlarme`, e a `message` do driver de Postgres é a query com os params. Passou a usar `detalheDoErro(err)` (`erro=<name> code=<code>`), o mesmo caminho de `verificarHeartbeats`. Teste novo afirma a ausência do texto da message e a presença de `erro=`/`code=`; o mutante que volta ao `err.message` fica vermelho. Guard nenhum pegaria — os seletores de #531 casam `console.error(…err…)`, não interpolação em campo de dado (débito **D85**).
+
+**Gates:** `typecheck` 0 · `lint` 0 erros / 8 warnings pré-existentes · `test` 3176/3176 (369 arquivos) · `test:rls` 1424/1424 (162 arquivos, inclui o int-test novo 3/3 contra banco real) · carga da imagem `iris-alarme` 7/7 asserções (nenhum Dockerfile mudou: a fatia não acrescenta import).
 
 ## Fora de escopo
 
