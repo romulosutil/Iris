@@ -2829,13 +2829,16 @@ de mais dado no alerta, **muda a função**, não o grant.
 
 ### As checagens
 
-Três medem o **efeito** do job parado (a prova mais forte — não mudam):
+As três primeiras medem o **efeito** do job parado (a prova mais forte — não
+mudam); a quarta, `extracao`, não é sobre job parado e sim sobre o provider de
+IA degradado — tem subseção própria abaixo:
 
 | Checagem         | O que olha                                                                      | Limite |
 | ---------------- | ------------------------------------------------------------------------------- | ------ |
 | `billing`        | `billing_cycle` com `status = 'aberto'` e `fim` vencido                         | 2h     |
 | `escalonamento`  | `alerta_risco_clinico` com `status = 'aberto'` e `prazo_reconhecimento` vencido | 10min  |
 | `backup-offsite` | `lastModified` do objeto mais recente no bucket off-site (`mc ls --json`)       | 36h    |
+| `extracao`       | taxa de falha e p95 de latência da extração (ver abaixo)                        | 1h     |
 
 #### Heartbeat no banco (#536, DA-03) — os jobs sem efeito visível
 
@@ -2882,6 +2885,82 @@ Regras, iguais para todos:
   números/booleanos, e o banco trunca a 200 caracteres.
 - `--dry-run` de qualquer job **não** grava heartbeat (mascararia um job
   parado).
+
+#### Contadores da extração (#560, `DA-04`) — a checagem `extracao`
+
+As outras checagens perguntam "o job parou?". Esta pergunta é outra: **"o
+provider de IA degradou?"** — e a resposta não é binária, é um número. Roda no
+mesmo tick, lê `app_alarme_extracao('1 hour')` (`SECURITY DEFINER`, migração
+`0153`, EXECUTE só para `iris_alarme`) e produz **duas saídas com propósitos
+diferentes**:
+
+1. **Um registro de log a cada tick, sempre** — inclusive quando está tudo bem:
+
+   ```json
+   {
+     "evento": "alarme-jobs.metricas-extracao",
+     "janela": "1 hour",
+     "chamadas": 30,
+     "falhas": 0,
+     "chamadasPorMin": 0.5,
+     "porModelo": [
+       {
+         "modelo": "gemini-2.5-flash",
+         "chamadas": 30,
+         "falhas": 0,
+         "p95LatenciaMs": 1800
+       }
+     ]
+   }
+   ```
+
+   É o contador propriamente dito (extrações/min, latência, falhas por modelo),
+   legível no Console do Easypanel sem abrir o banco. A série do tick **saudável**
+   é o que dá régua para saber o que "degradado" significa neste produto.
+
+2. **E-mail, só quando cruza limiar** — porque um resumo que chega todo dia
+   mesmo quando está tudo bem vira filtro de caixa de entrada em duas semanas.
+
+| Limiar          | Valor     | Por quê                                                                                                  |
+| --------------- | --------- | -------------------------------------------------------------------------------------------------------- |
+| Piso de amostra | 5         | A clínica solo é o caso-base: a única extração da manhã falhando não é 100% de falha, é uma falha.       |
+| Taxa de falha   | > 30%     | 1 falha é rotina (o retry do terapeuta resolve); esperar 100% torna o alarme inútil.                     |
+| p95 de latência | > 30000ms | Acusa a degradação **antes** do timeout de 45s (`EXTRACAO_TIMEOUT_MS`), enquanto ainda há o que decidir. |
+
+O p95 é avaliado **por modelo**, e só em modelo com amostra ≥ 5: um modelo
+lento diluído num modelo rápido some da média. Os dois limiares, quando batem
+juntos, saem num alarme **só** (`motivo: "extracao"`) — um dedup, um e-mail.
+
+**O que `falhas` conta, exatamente.** Extração **não resolvida** — linha
+`pendente_reprocessamento` viva na janela —, não "falhas ocorridas". A Fase C
+da consolidação apaga e regrava as linhas da sessão, então a falha que o
+terapeuta re-tentou com sucesso some do histórico. Para um alarme isso é a
+métrica certa e não uma concessão: queda real do provider **mantém** as linhas
+de pé (ninguém consegue re-tentar com sucesso enquanto ele está fora), e a
+falha transitória que o retry resolveu é justamente a que não deve acordar
+ninguém. Contagem histórica fiel exigiria tabela-ledger nova — débito
+registrado, não improvisado aqui.
+
+**A unidade é a chamada, não a linha.** Uma chamada bem-sucedida grava N linhas
+(uma por item de evidência) e uma falha grava uma; contar linhas cruas mediria
+"itens de evidência" e diluiria a taxa de falha por um fator que muda com o
+tamanho da nota. O agregado colapsa por sessão dentro da função.
+
+**Janela sem extração nenhuma é `ok`, não `indeterminado`** — madrugada e fim
+de semana são o estado normal de uma clínica pequena, e `indeterminado` ali
+acumularia o contador de detector cego e mandaria "o detector pode estar cego"
+toda noite. `extracao` também **não** entra no escalonamento de detector cego,
+pelo mesmo motivo dos heartbeats: lê o mesmo banco que `billing`/
+`escalonamento`, que já acusam.
+
+**Não confundir com a view do `/supervisao`.**
+`metricas_extracao_por_clinica_semana` (`0148`, #535) é leitura **de tenant**
+— filtrada por `app_clinic_id_exigido()`, só o `coordenador` daquela clínica lê
+— e responde "como está a IA na minha clínica esta semana". Esta função é a
+leitura do **operador**: cross-tenant, janela curta, sem `clinic_id` na saída
+(o provider é global; quando degrada, degrada para todos, e a chave de
+investigação é o modelo). Alargar a view quebraria o isolamento que é a razão
+de ela existir.
 
 Cada checagem termina em um de **três** estados:
 

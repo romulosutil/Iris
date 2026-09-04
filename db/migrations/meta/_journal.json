@@ -1072,6 +1072,13 @@
       "when": 1788190235804,
       "tag": "0152_fatos_prontidao_errcodes",
       "breakpoints": true
+    },
+    {
+      "idx": 153,
+      "version": "7",
+      "when": 1788190236804,
+      "tag": "0153_alarme_extracao_degradada",
+      "breakpoints": true
     }
   ]
 }
