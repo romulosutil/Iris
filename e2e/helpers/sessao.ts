@@ -6,7 +6,8 @@ import { authDb } from "@/db/client";
 import { appUser, authThrottle, twoFactor } from "@/db/schema";
 
 /**
- * Reexecuta um POST enquanto o servidor responder **429**.
+ * Reexecuta um POST enquanto o servidor responder **429** — ou enquanto a
+ * conexão cair antes de virar resposta (**ECONNRESET**).
  *
  * Por que existe (e por que é UM só): o Better-Auth tem rate limit PRÓPRIO, em
  * memória no processo do servidor — independente do `auth_throttle` da
@@ -28,19 +29,55 @@ import { appUser, authThrottle, twoFactor } from "@/db/schema";
  * tentativa. É isso que torna o retry utilizável no `verify-totp`, cujo código
  * TOTP tem janela de tempo — repetir o código da tentativa anterior é retry que
  * envelhece junto com a espera.
+ *
+ * ## Por que ECONNRESET entra na MESMA política
+ *
+ * Sob carga do CI o `webServer` do Playwright às vezes derruba a conexão no
+ * instante do POST. Isso NÃO é resposta HTTP: não tem `.status()`, é exceção
+ * lançada pelo próprio `APIRequestContext` (`apiRequestContext.post: read
+ * ECONNRESET`, com `[WebServer] ⨯ Error: The destination stream closed early.`
+ * do outro lado). Tratando só o 429, a exceção escapava da função inteira
+ * ANTES do laço e o login morria por infra, não por regressão — flake medido
+ * em `represcricao-mv4.spec.ts:129` e antes em `mobile-navegacao.spec.ts:116`.
+ *
+ * Retentar aqui cobre os TRÊS pontos de uma vez (`sign-in/email`,
+ * `two-factor/verify-totp` e o `sign-in` de `entrarSemMfa`), que é o motivo de
+ * a correção morar no helper e não em cada chamada.
+ *
+ * Só `ECONNRESET` é tolerado, de propósito: é o único modo de falha medido em
+ * CI. Uma rede de segurança mais larga (qualquer erro de rede) começaria a
+ * mascarar servidor que não subiu, que é falha de verdade e deve reprovar.
  */
 async function postarAteSair429(
   page: Page,
   executar: () => Promise<APIResponse>,
 ): Promise<APIResponse> {
-  let resposta = await executar();
+  /** `null` = a conexão caiu antes de virar resposta; qualquer outro erro sobe. */
+  const tentar = async (): Promise<APIResponse | null> => {
+    try {
+      return await executar();
+    } catch (erro) {
+      if (erro instanceof Error && /ECONNRESET/.test(erro.message)) return null;
+      throw erro;
+    }
+  };
+
+  let resposta = await tentar();
   for (
     let tentativa = 0;
-    tentativa < 3 && resposta.status() === 429;
+    tentativa < 3 && (resposta === null || resposta.status() === 429);
     tentativa++
   ) {
     await page.waitForTimeout(6000);
-    resposta = await executar();
+    resposta = await tentar();
+  }
+  if (resposta === null) {
+    // Estourar aqui é melhor que devolver `null` e deixar o `expect(login.ok())`
+    // do chamador quebrar com "cannot read properties of null": a mensagem
+    // nomeia a causa em vez de apontar para a linha errada.
+    throw new Error(
+      "POST não completou: ECONNRESET persistente após 3 novas tentativas — o servidor de teste derrubou a conexão repetidamente.",
+    );
   }
   return resposta;
 }
