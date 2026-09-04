@@ -7,7 +7,9 @@
  * 1. **Toda aritmética em centavos, com inteiro.** Preço em `number` decimal
  *    acumula erro de ponto flutuante (0.1 + 0.2 !== 0.3) e diverge da fatura
  *    real, que é emitida em centavos pelo provedor de pagamento. Reais só
- *    aparecem na borda de exibição (`calculateMonthlyFee`, `formatarBRL`).
+ *    aparecem na borda de exibição (`calculateMonthlyFee`, e `formatarBRL` em
+ *    `@/lib/moeda` — que saiu daqui na #559, F5, para quebrar o ciclo
+ *    `lib/email` ⇄ `lib/billing`).
  *
  * 2. **Faixas MARGINAIS, não faixa única retroativa.** A 16ª ficha ativa não
  *    pode reprecificar as 15 anteriores — a clínica que cresce nunca vê a
