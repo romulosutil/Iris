@@ -7,7 +7,7 @@ import { appUser, authThrottle, twoFactor } from "@/db/schema";
 
 /**
  * Reexecuta um POST enquanto o servidor responder **429** — ou enquanto a
- * conexão cair antes de virar resposta (**ECONNRESET**).
+ * conexão cair antes de virar resposta (**ECONNRESET** / **socket hang up**).
  *
  * Por que existe (e por que é UM só): o Better-Auth tem rate limit PRÓPRIO, em
  * memória no processo do servidor — independente do `auth_throttle` da
@@ -30,7 +30,7 @@ import { appUser, authThrottle, twoFactor } from "@/db/schema";
  * TOTP tem janela de tempo — repetir o código da tentativa anterior é retry que
  * envelhece junto com a espera.
  *
- * ## Por que ECONNRESET entra na MESMA política
+ * ## Por que a queda de conexão entra na MESMA política
  *
  * Sob carga do CI o `webServer` do Playwright às vezes derruba a conexão no
  * instante do POST. Isso NÃO é resposta HTTP: não tem `.status()`, é exceção
@@ -44,20 +44,29 @@ import { appUser, authThrottle, twoFactor } from "@/db/schema";
  * `two-factor/verify-totp` e o `sign-in` de `entrarSemMfa`), que é o motivo de
  * a correção morar no helper e não em cada chamada.
  *
- * Só `ECONNRESET` é tolerado, de propósito: é o único modo de falha medido em
- * CI. Uma rede de segurança mais larga (qualquer erro de rede) começaria a
- * mascarar servidor que não subiu, que é falha de verdade e deve reprovar.
+ * A MESMA queda chega com DUAS mensagens diferentes, e tolerar só uma não
+ * resolve o flake: quando o socket é fechado durante a leitura o Playwright
+ * emite `read ECONNRESET`; quando é fechado ANTES de qualquer byte de resposta,
+ * emite `socket hang up` (o `ECONNRESET` do Node sem corpo). O primeiro reprovou
+ * `represcricao-mv4.spec.ts:129`; o segundo reprovou três casos de
+ * `mobile-app.spec.ts` na execução seguinte, com a correção do ECONNRESET já
+ * aplicada. São os dois modos de falha medidos em CI — e a lista continua
+ * FECHADA neles de propósito: uma rede mais larga (qualquer erro de rede)
+ * começaria a mascarar servidor que não subiu, que é falha de verdade e deve
+ * reprovar.
  */
 async function postarAteSair429(
   page: Page,
   executar: () => Promise<APIResponse>,
 ): Promise<APIResponse> {
   /** `null` = a conexão caiu antes de virar resposta; qualquer outro erro sobe. */
+  const quedaDeConexao = /ECONNRESET|socket hang up/;
   const tentar = async (): Promise<APIResponse | null> => {
     try {
       return await executar();
     } catch (erro) {
-      if (erro instanceof Error && /ECONNRESET/.test(erro.message)) return null;
+      if (erro instanceof Error && quedaDeConexao.test(erro.message))
+        return null;
       throw erro;
     }
   };
@@ -76,7 +85,7 @@ async function postarAteSair429(
     // do chamador quebrar com "cannot read properties of null": a mensagem
     // nomeia a causa em vez de apontar para a linha errada.
     throw new Error(
-      "POST não completou: ECONNRESET persistente após 3 novas tentativas — o servidor de teste derrubou a conexão repetidamente.",
+      "POST não completou: queda de conexão (ECONNRESET / socket hang up) persistente após 3 novas tentativas — o servidor de teste derrubou a conexão repetidamente.",
     );
   }
   return resposta;

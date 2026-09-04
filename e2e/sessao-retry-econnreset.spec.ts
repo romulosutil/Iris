@@ -30,59 +30,73 @@ import { entrarComMfa } from "./helpers/sessao";
  * que o Playwright emite, que é exatamente o que o helper inspeciona. E é
  * pontual — cai só o PRIMEIRO `sign-in/email`; todo o resto do fluxo fala com
  * o servidor real.
+ *
+ * ## Por que DUAS mensagens
+ *
+ * A mesma queda chega com dois textos, e cobrir só um deixa o flake vivo: com o
+ * retry já tratando `read ECONNRESET`, a execução seguinte reprovou três casos
+ * de `mobile-app.spec.ts` com `socket hang up` — socket fechado ANTES do
+ * primeiro byte de resposta. Cada mensagem é um caso, para que um predicado que
+ * volte a reconhecer só uma delas fique vermelho nomeando qual.
  */
-test("entrarComMfa reexecuta o sign-in quando a conexão cai com ECONNRESET", async ({
-  page,
-}) => {
-  // Uma queda custa 6s de backoff, e o fluxo ainda faz enable + verify-totp.
-  test.setTimeout(120_000);
+const QUEDAS_DE_CONEXAO = [
+  "apiRequestContext.post: read ECONNRESET",
+  "apiRequestContext.post: socket hang up",
+] as const;
+for (const mensagem of QUEDAS_DE_CONEXAO) {
+  test(`entrarComMfa reexecuta o sign-in quando a conexão cai com "${mensagem}"`, async ({
+    page,
+  }) => {
+    // Uma queda custa 6s de backoff, e o fluxo ainda faz enable + verify-totp.
+    test.setTimeout(120_000);
 
-  const original = page.request.post.bind(page.request);
-  const tentativas: { url: string; resultado: string }[] = [];
-  let jaDerrubou = false;
+    const original = page.request.post.bind(page.request);
+    const tentativas: { url: string; resultado: string }[] = [];
+    let jaDerrubou = false;
 
-  page.request.post = async (url, opcoes) => {
-    const alvo = String(url);
+    page.request.post = async (url, opcoes) => {
+      const alvo = String(url);
 
-    // Derruba SÓ o primeiro sign-in. O erro é lançado, não respondido — é
-    // esse o formato que escapava do laço antes da correção.
-    if (alvo.includes("/sign-in/email") && !jaDerrubou) {
-      jaDerrubou = true;
-      tentativas.push({ url: alvo, resultado: "ECONNRESET" });
-      throw new Error("apiRequestContext.post: read ECONNRESET");
+      // Derruba SÓ o primeiro sign-in. O erro é lançado, não respondido — é
+      // esse o formato que escapava do laço antes da correção.
+      if (alvo.includes("/sign-in/email") && !jaDerrubou) {
+        jaDerrubou = true;
+        tentativas.push({ url: alvo, resultado: mensagem });
+        throw new Error(mensagem);
+      }
+
+      const resposta = await original(url, opcoes);
+      tentativas.push({ url: alvo, resultado: String(resposta.status()) });
+      return resposta;
+    };
+
+    try {
+      await entrarComMfa(page, "terapeuta.demo@iris.test", "Senha Demo 123");
+    } finally {
+      page.request.post = original;
     }
 
-    const resposta = await original(url, opcoes);
-    tentativas.push({ url: alvo, resultado: String(resposta.status()) });
-    return resposta;
-  };
+    const logins = tentativas.filter((t) => t.url.includes("/sign-in/email"));
 
-  try {
-    await entrarComMfa(page, "terapeuta.demo@iris.test", "Senha Demo 123");
-  } finally {
-    page.request.post = original;
-  }
+    // 1. O arranjo realmente derrubou a conexão — sem isto o teste passaria
+    //    verde sem exercitar nada.
+    expect(
+      jaDerrubou,
+      "o espião nunca chegou a derrubar o sign-in; o helper mudou de rota?",
+    ).toBe(true);
+    expect(logins[0]?.resultado).toBe(mensagem);
 
-  const logins = tentativas.filter((t) => t.url.includes("/sign-in/email"));
+    // 2. O helper reexecutou em vez de propagar a exceção...
+    expect(
+      logins.length,
+      `esperava uma nova tentativa após a queda de conexão; tentativas: ${JSON.stringify(logins)}`,
+    ).toBeGreaterThan(1);
 
-  // 1. O arranjo realmente derrubou a conexão — sem isto o teste passaria
-  //    verde sem exercitar nada.
-  expect(
-    jaDerrubou,
-    "o espião nunca chegou a derrubar o sign-in; o helper mudou de rota?",
-  ).toBe(true);
-  expect(logins[0]?.resultado).toBe("ECONNRESET");
+    // 3. ...e a última foi aceita pelo servidor de verdade.
+    expect(logins.at(-1)?.resultado).toBe("200");
 
-  // 2. O helper reexecutou em vez de propagar a exceção...
-  expect(
-    logins.length,
-    `esperava uma nova tentativa após o ECONNRESET; tentativas: ${JSON.stringify(logins)}`,
-  ).toBeGreaterThan(1);
-
-  // 3. ...e a última foi aceita pelo servidor de verdade.
-  expect(logins.at(-1)?.resultado).toBe("200");
-
-  // 4. E o login concluiu de fato: sessão emitida, shell carregado. `/`
-  //    redireciona quem tem sessão para `/agenda`.
-  await expect(page).toHaveURL("/agenda");
-});
+    // 4. E o login concluiu de fato: sessão emitida, shell carregado. `/`
+    //    redireciona quem tem sessão para `/agenda`.
+    await expect(page).toHaveURL("/agenda");
+  });
+}
