@@ -160,16 +160,41 @@ Medido na `main` em `74a92d57`, com `gh` para issues/PRs e grep para o código.
 expurgo (#590), #558 T1–T4 (#601), #560 F1 (#599), #559 F1/F2 (#603/#579),
 gate de flake por arquivo (#585) e as duas pontas do e2e (#600, #602, #605).
 
-**Segue aberto, medido arquivo a arquivo:**
+**Segue aberto, medido arquivo a arquivo (estado 04/09/2026 antes da tarde):**
 
-| Item                     | O que falta                                                                                                                                                                                                                                                                                                                                                     |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| #558 (`PR-04`)           | **T5** bloco de rotinas na aba Evolução (`grep cadeia` em `timeline/` = 0 hits) e **T6** procedência da âncora em `revisao/[sessionId]/resumo.ts` (hoje lista as etapas e não avisa que cadeia sem âncora fica fora da evolução)                                                                                                                                |
-| #559 (`A-02`)            | **F3** agenda: 7 imports rota→rota vivos (`clinica/feriados`, `equipe/[id]`, `pacientes/[id]/{ausencias,horas}` → `agenda/bloqueio-*`, `agenda/horas-queries`); **F4** `diario/[sessionId]/logic.ts` com 1.194 linhas; **F5** ciclo `lib/email/templates.ts` ⇄ `lib/billing/notificacao-cancelamento.ts`. O baseline do guard congela 5 arquivos e só pode cair |
-| #560 (`DA-04`)           | **F2–F4**: 2 módulos importam `observabilidade/logger` contra 52 ainda na fachada `logarErroSemPII`; 66 `console.*` fora de teste em `src` (0 em `src/lib`). **F5** contadores                                                                                                                                                                                  |
-| #542 (`Q-06`)            | Causa medida em #581 e piso já vale (baseline de #585 não lista o arquivo). Fecha com rodadas de CI mostrando `flaky=0`                                                                                                                                                                                                                                         |
-| D79 (`PR-07`, #537)      | `report_tipo.avaliativo_interdisciplinar` segue órfão (`src/db/schema.ts:1562`, zero consumidor em `src`/`scripts`) — decisão de produto do Rômulo: spec do relatório interdisciplinar × remover o valor do enum                                                                                                                                                |
-| Baseline de flake mobile | `mobile-navegacao`, `mobile-toque`, `mobile-app` com 1 flake cada em `scripts/ci/e2e-flaky.baseline.json` — dívida herdada, sem issue                                                                                                                                                                                                                           |
+~~#559 (`A-02`) e #560 (`DA-04`)~~ — **fechadas na sessão da tarde de 04/09/2026**, ver reconciliação abaixo.
+
+| Item                     | O que falta                                                                                                                                                                                                        |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #558 (`PR-04`)           | Bloqueado em 6 decisões de produto abertas (G-1 a G-6, `context.md` da spec #574) — nenhuma fechada ainda. Não despachar `jules` antes disso (`AGENTS.md` §5.2)                                                  |
+| D79 (`PR-07`, #537)      | `report_tipo.avaliativo_interdisciplinar` segue órfão (`src/db/schema.ts:1562`, zero consumidor em `src`/`scripts`) — decisão de produto do Rômulo: spec do relatório interdisciplinar × remover o valor do enum |
+| Baseline de flake mobile | `mobile-navegacao`, `mobile-toque`, `mobile-app` com 1 flake cada em `scripts/ci/e2e-flaky.baseline.json` — dívida herdada, sem issue                                                                            |
+
+## Reconciliação de 04/09/2026 (tarde) — #559 e #560 fecharam inteiras
+
+Medido em `main` no commit `b7c8be12`, com `gh issue view --json state` e o
+timeline de cross-references de cada issue (não por leitura de BACKLOG).
+
+**#559 (`A-02`, rota importando rota) — CLOSED.** F1 guard de fronteira lib→app
+(#603), F2 (#579, empilhada na sequela da #557), F3 agenda (#611), F4
+`diario/[sessionId]/logic.ts` (#616), F5 ciclo `email⇄billing` via
+`formatarBRL` em `lib/moeda` (#607).
+
+**#560 (`DA-04`, logger estruturado) — CLOSED.** F1 logger + redaction + id de
+correlação (#599), F2 `src/lib` (#608), F3a rotas de API (#613), F3b jobs de
+infra sem dependência (#614), F4 `logic.ts` de rota + `src/auth` (#615), F5
+contadores da extração + alarme por limiar cross-tenant (#617).
+
+**#542 (`Q-06`, flake e2e) — CLOSED.** Causa medida em #581 (throttling de CPU
+via CDP, timeout em `toHaveURL`, não em `toBeInViewport()`), fix `test.slow()`,
+piso por arquivo em #585. Confirmado flaky=0 em 5 rodadas de CI consecutivas
+(2026-09-04 12:35Z–21:15Z, runs 33873572724 a 33920202774).
+
+**Auditoria 360: só #558 segue aberta**, travada nas 6 decisões de produto
+(G-1 a G-6) — nenhuma registrada em comentário de issue, comentário de PR ou
+`context.md` até esta reconciliação. **Admissão de paciente (D83): fechado**,
+10 PRs mergeadas 03/09/2026, sem pendência de código — só os passos de prova
+de mutação/suíte do plano, deixados `[ ]` de propósito (não deixam artefato).
 
 **Higiene de disco:** 9 worktrees das ondas W1–W12 seguem em `.claude/worktrees/`
 com branches já mergeadas (`git worktree list`) — `git worktree prune` depois de
