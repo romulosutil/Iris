@@ -40,6 +40,11 @@ F1 (núcleo + correlação) ──> F2 ──> F3 ──> F4   (migração dos 4
 - `src/app/api/internal/jobs/**`, scripts de infra.
 - **Atenção**: a imagem dos jobs **não herda as dependências do app** — se `pino` entrar num job, precisa estar no Dockerfile daquele serviço. Já mordeu antes (motor de escalonamento caiu com CI verde). Provar com build da imagem, não com `pnpm test`.
 
+**Medido em 04/09/2026, ao abrir a fatia** — a advertência acima é mais forte do que parecia. `infra/billing/Dockerfile` documenta **zero `npm install`, de propósito**: os jobs são gatilhos magros que só usam o `fetch` nativo, e "uma imagem sem dependência nenhuma não tem essa classe de falha" (#36/#156). Meter `pino` ali reabriria exatamente o modo de falha que a decisão fechou. Daí o corte em duas PRs:
+
+- **F3a — rotas de API (esta).** Superfície medida: **4 sítios**, todos em `internal/jobs/asr-transcrever/route.ts` (o `console.warn` de `fechar-ciclos` era menção em comentário). Rodam no runtime do Next, onde `pino` já existe. `diagnosticoDoErro` local sai: `logarErroSemPII` produz um superconjunto do que ela montava. Guard `obs/sem-console-cru` passa a cobrir `src/app/api/**`, com piso zero medido.
+- **F3b — jobs `.mjs`.** ~47 sítios em 13 scripts copiados para imagens de infra. Não importam `pino` nem `src/`: ganham um emissor **sem dependência** (`scripts/lib/log-estruturado.mjs`, Node puro) com a mesma forma do registro — `nivel`/`evento`/`hora`/contexto, redaction por chave, `execucaoId` por rodada no lugar do `requestId`. COPY relativo, `npm install` continua não existindo. Prova é build de imagem + `scripts/ci/verificar-deps-imagem.mjs`, não `pnpm test`.
+
 ### F4 · Migração — os 11 `logic.ts` de rota
 
 - **Última**, e a que colide com #559 e #558.

@@ -18,15 +18,17 @@ import {
  *
  * 1. **Unidade** — a regra acusa o que deve acusar. Um seletor que para de
  *    casar não vira erro de config, vira silêncio verde.
- * 2. **Fiação** — o `eslint.config.mjs` REAL liga a regra em `src/lib/**`.
- *    Medir uma cópia do config passaria verde justamente no caso que importa:
- *    alguém editar o config e não a regra. Esta camada também prova que o
- *    bloco novo NÃO apagou o guard de PHI do `console.error` (#531) nos
- *    arquivos de lib — que é a armadilha de flat config que motivou a regra
- *    própria em vez de um segundo `no-restricted-syntax`.
- * 3. **Piso zero medido** — varre `src/lib/**` de verdade e exige zero
- *    achados. É esta camada que fica vermelha na prova de mutação
- *    (reintroduzir um `console.warn` cru num módulo de lib).
+ * 2. **Fiação** — o `eslint.config.mjs` REAL liga a regra em `src/lib/**` e
+ *    (desde a F3) em `src/app/api/**`. Medir uma cópia do config passaria
+ *    verde justamente no caso que importa: alguém editar o config e não a
+ *    regra. Esta camada também prova que o bloco novo NÃO apagou o guard de
+ *    PHI do `console.error` (#531) — nem nos arquivos de lib, nem nas rotas
+ *    de API, onde aquele guard também casa. É a armadilha de flat config que
+ *    motivou a regra própria em vez de um segundo `no-restricted-syntax`.
+ * 3. **Piso zero medido** — varre `src/lib/**` e `src/app/api/**` de verdade e
+ *    exige zero achados em cada um. É esta camada que fica vermelha na prova
+ *    de mutação (reintroduzir um `console.warn` cru num módulo de lib ou numa
+ *    rota interna).
  */
 
 const RAIZ = path.resolve(import.meta.dirname, "..", "..");
@@ -162,24 +164,96 @@ describe("#560/F2 — fiação no eslint.config.mjs real", () => {
   }, 120_000);
 });
 
-describe("#560/F2 — piso zero medido", () => {
-  it("nenhum console cru em src/lib", async () => {
-    const eslint = new ESLint({
-      cwd: RAIZ,
-      overrideConfigFile: path.join(RAIZ, "eslint.config.mjs"),
-    });
-    const resultados = await eslint.lintFiles(["src/lib/**/*.{ts,tsx}"]);
-    const problemas = resultados.flatMap((r) =>
+describe("#560/F3 — fiação em src/app/api (rotas de API e jobs internos)", () => {
+  const eslint = new ESLint({
+    cwd: RAIZ,
+    overrideConfigFile: path.join(RAIZ, "eslint.config.mjs"),
+  });
+
+  it("liga a regra como erro nas rotas internas de job e nos webhooks", async () => {
+    for (const arquivo of [
+      "src/app/api/internal/jobs/asr-transcrever/route.ts",
+      "src/app/api/internal/jobs/exportacao-integral/route.ts",
+      "src/app/api/internal/billing/fechar-ciclos/route.ts",
+      "src/app/api/internal/billing/conciliar/route.ts",
+      "src/app/api/hooks/asaas/route.ts",
+      "src/app/api/hooks/resend/route.ts",
+    ]) {
+      const cfg = await eslint.calculateConfigForFile(path.join(RAIZ, arquivo));
+      expect(cfg.rules[REGRA]?.[0], arquivo).toBe(2);
+    }
+    expect(ESCOPO_SEM_CONSOLE).toContain("src/app/api/**/*.{ts,tsx}");
+  }, 120_000);
+
+  it("NÃO apagou o guard de PHI do console.error (#531) nas rotas de API", async () => {
+    // Mesma armadilha da camada de lib, medida do outro lado da fronteira: o
+    // `files` da #531 cobre `src/app/**`, então é EXATAMENTE aqui que um
+    // bloco novo com `no-restricted-syntax` teria apagado aquele guard em
+    // silêncio. Ligar o escopo desta regra em `src/app/api/**` não pode ter
+    // custado o guard vizinho.
+    const cfg = await eslint.calculateConfigForFile(
+      path.join(RAIZ, "src/app/api/internal/jobs/asr-transcrever/route.ts"),
+    );
+    expect(cfg.rules[REGRA_PHI]?.[0]).toBe(2);
+    expect(JSON.stringify(cfg.rules[REGRA_PHI]?.slice(1) ?? [])).toContain(
+      "logarErroSemPII",
+    );
+  }, 120_000);
+
+  it("deixa os `logic.ts` de rota de fora — eles são a F4", async () => {
+    // Fronteira da fatia, não descuido: os 11 `logic.ts` ainda têm `console.*`
+    // e são os arquivos que a #559 move. Ligar o escopo neles agora
+    // produziria um baseline, que é o que este plano decidiu não ter. Se
+    // alguém alargar `ESCOPO_SEM_CONSOLE` para `src/app/**` sem migrar, este
+    // teste fica vermelho antes do lint inteiro ficar.
+    for (const arquivo of [
+      "src/app/(auth)/cadastro/logic.ts",
+      "src/app/(app)/diario/[sessionId]/logic.ts",
+    ]) {
+      const cfg = await eslint.calculateConfigForFile(path.join(RAIZ, arquivo));
+      expect(cfg.rules[REGRA], arquivo).toBeUndefined();
+    }
+  }, 120_000);
+});
+
+/** Sítios acusados pela regra ao varrer `padrao`, como `arquivo:linha`. */
+async function varrer(padrao: string): Promise<{
+  problemas: string[];
+  arquivos: number;
+}> {
+  const eslint = new ESLint({
+    cwd: RAIZ,
+    overrideConfigFile: path.join(RAIZ, "eslint.config.mjs"),
+  });
+  const resultados = await eslint.lintFiles([padrao]);
+  return {
+    arquivos: resultados.length,
+    problemas: resultados.flatMap((r) =>
       r.messages
         .filter((m) => m.ruleId === REGRA)
         .map(
           (m) =>
             `${path.relative(RAIZ, r.filePath).replace(/\\/g, "/")}:${m.line}`,
         ),
-    );
+    ),
+  };
+}
+
+describe("#560 — piso zero medido", () => {
+  it("nenhum console cru em src/lib (F2)", async () => {
+    const { problemas, arquivos } = await varrer("src/lib/**/*.{ts,tsx}");
     // Sanidade: se a varredura não achasse arquivo nenhum, o `[]` acima seria
     // verde por vacuidade — o defeito [teste-verde-que-nao-testa-nada].
-    expect(resultados.length).toBeGreaterThan(50);
+    expect(arquivos).toBeGreaterThan(50);
+    expect(problemas).toEqual([]);
+  }, 180_000);
+
+  it("nenhum console cru em src/app/api (F3)", async () => {
+    const { problemas, arquivos } = await varrer("src/app/api/**/*.{ts,tsx}");
+    // Piso de sanidade menor que o de lib porque a superfície é menor: 11
+    // arquivos de produção hoje. O que ele guarda é o mesmo — um glob que
+    // pare de casar não pode passar por "zero achados".
+    expect(arquivos).toBeGreaterThan(5);
     expect(problemas).toEqual([]);
   }, 180_000);
 });
