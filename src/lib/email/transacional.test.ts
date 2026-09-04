@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { capturarLog } from "@/lib/observabilidade/captura-de-log";
 
 const enviar = vi.fn();
 vi.mock("resend", () => ({
@@ -48,23 +49,31 @@ describe("enviarEmailTransacional", () => {
   it("retorna enviado: false e emite warning quando apiKey está ausente", async () => {
     delete process.env.RESEND_API_KEY;
     delete process.env.EMAIL_PROVIDER_API_KEY;
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const log = capturarLog();
+    try {
+      const { enviarEmailTransacional } = await import("./transacional");
+      const r = await enviarEmailTransacional({
+        para: "pessoa@exemplo.com.br",
+        assunto: "Teste",
+        texto: "Texto",
+        html: "<p>Texto</p>",
+      });
 
-    const { enviarEmailTransacional } = await import("./transacional");
-    const r = await enviarEmailTransacional({
-      para: "pessoa@exemplo.com.br",
-      assunto: "Teste",
-      texto: "Texto",
-      html: "<p>Texto</p>",
-    });
-
-    expect(r.enviado).toBe(false);
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Chave de API ou remetente não configurados"),
-    );
-    expect(enviar).not.toHaveBeenCalled();
-
-    warnSpy.mockRestore();
+      expect(r.enviado).toBe(false);
+      // #560/F2: "qual das duas falta" virou par de booleanos. A frase antiga
+      // dizia as duas envs de uma vez e não distinguia o caso.
+      const registro = log.evento("email-transacional.credenciais-ausentes");
+      expect(registro).toBeDefined();
+      // `credencialConfigurada`, e não `temApiKey`: a redaction por chave casa
+      // `apikey` por substring e devolveria `[redigido]` no lugar do booleano.
+      // Medido — o teste ficou vermelho com o nome anterior.
+      expect(registro?.credencialConfigurada).toBe(false);
+      // O destinatário nunca entrou neste registro, e continua fora.
+      expect(log.bruto()).not.toContain("pessoa@exemplo.com.br");
+      expect(enviar).not.toHaveBeenCalled();
+    } finally {
+      log.restaurar();
+    }
   });
 
   it("usa remetente default quando RESEND_FROM_EMAIL e EMAIL_REMETENTE estão ausentes", async () => {

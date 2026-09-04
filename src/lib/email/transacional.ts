@@ -1,5 +1,6 @@
 import "server-only";
 import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+import { logger } from "@/lib/observabilidade/logger";
 
 export type EmailTransacionalInput = {
   para: string;
@@ -27,9 +28,19 @@ export async function enviarEmailTransacional(
     "notificacoes@irisclinica.ia.br";
 
   if (!apiKey || !remetente) {
-    console.warn(
-      "enviarEmailTransacional: Chave de API ou remetente não configurados (EMAIL_PROVIDER_API_KEY / RESEND_FROM_EMAIL).",
-    );
+    // Quais das duas faltam é o diagnóstico; o VALOR de nenhuma pode sair —
+    // `apiKey` é credencial (a redaction por chave também a barraria, mas o
+    // registro nem a carrega).
+    //
+    // A chave se chama `credencialConfigurada` e NÃO `temApiKey` porque
+    // `redacao.ts` casa a família de credencial por substring (`apikey`): o
+    // booleano sairia como `[redigido]` e o log diria nada — o efeito
+    // "campo comum some do log" que aquele arquivo documenta. A resposta é
+    // renomear a chave, não afrouxar a lista.
+    logger.warn("email-transacional.credenciais-ausentes", {
+      credencialConfigurada: Boolean(apiKey),
+      remetenteConfigurado: Boolean(remetente),
+    });
     return { enviado: false };
   }
 

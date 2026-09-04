@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AsaasProvider } from "./asaas";
 import { getBillingProvider } from "./index";
 import { BillingProviderError } from "./types";
+import { capturarLog } from "@/lib/observabilidade/captura-de-log";
 
 /**
  * Testes unitários puros do adapter Asaas — sem rede, sem banco.
@@ -342,42 +343,49 @@ describe("AsaasProvider", () => {
     });
 
     it("D46: instrução real sem purpose/retryAttempt válidos loga o envelope cru", () => {
-      const warn = vi.spyOn(console, "warn");
-      new AsaasProvider().normalizarEvento({
-        id: "evt_purpose_novo&2",
-        event: "PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_REFUSED",
-        paymentInstruction: {
-          id: "pi_novo_2",
-          status: "REFUSED",
-          paymentId: "pay_782",
-          purpose: "PROPOSITO_QUE_A_DOC_NAO_LISTA",
-          retryAttempt: 1,
-        },
-      });
-      expect(warn).toHaveBeenCalledWith(
-        "[billing-retentativa-envelope-inesperado] purpose/retryAttempt fora do contrato lido da doc (#322, D46)",
-        expect.objectContaining({
+      const log = capturarLog();
+      try {
+        new AsaasProvider().normalizarEvento({
+          id: "evt_purpose_novo&2",
+          event: "PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_REFUSED",
+          paymentInstruction: {
+            id: "pi_novo_2",
+            status: "REFUSED",
+            paymentId: "pay_782",
+            purpose: "PROPOSITO_QUE_A_DOC_NAO_LISTA",
+            retryAttempt: 1,
+          },
+        });
+        expect(
+          log.evento("billing-retentativa.envelope-inesperado"),
+        ).toMatchObject({
           providerInstructionId: "pi_novo_2",
           purposeBruto: "PROPOSITO_QUE_A_DOC_NAO_LISTA",
           retryAttemptBruto: 1,
-        }),
-      );
+        });
+      } finally {
+        log.restaurar();
+      }
     });
 
     it("D46: instrução real com purpose e retryAttempt válidos não loga nada", () => {
-      const warn = vi.spyOn(console, "warn");
-      new AsaasProvider().normalizarEvento({
-        id: "evt_retry_ok&1",
-        event: "PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_REFUSED",
-        paymentInstruction: {
-          id: "pi_ok",
-          status: "REFUSED",
-          paymentId: "pay_783",
-          purpose: "RETRY_AFTER_DUE_DATE",
-          retryAttempt: 2,
-        },
-      });
-      expect(warn).not.toHaveBeenCalled();
+      const log = capturarLog();
+      try {
+        new AsaasProvider().normalizarEvento({
+          id: "evt_retry_ok&1",
+          event: "PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_REFUSED",
+          paymentInstruction: {
+            id: "pi_ok",
+            status: "REFUSED",
+            paymentId: "pay_783",
+            purpose: "RETRY_AFTER_DUE_DATE",
+            retryAttempt: 2,
+          },
+        });
+        expect(log.registros).toEqual([]);
+      } finally {
+        log.restaurar();
+      }
     });
 
     it("SCHEDULE é a instrução original do ciclo, não uma retentativa", () => {
@@ -860,7 +868,7 @@ describe("AsaasProvider", () => {
       // causa do campo acessório, e o ciclo ficaria em `aguardando_pagamento`.
       // Mas o erro indica contrato quebrado, então NÃO é engolido em silêncio:
       // vai ao log com a tag `[billing-recusa]`.
-      const aviso = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const log = capturarLog();
       try {
         fetchMock
           .mockResolvedValueOnce(
@@ -875,12 +883,15 @@ describe("AsaasProvider", () => {
         expect(r.status).toBe("recusada");
         expect(r.valorCentavos).toBe(39000);
         expect(r.motivoRecusa).toBeNull();
-        expect(aviso).toHaveBeenCalledWith(
-          "[billing-recusa] falha ao ler a instrução de pagamento",
-          expect.objectContaining({ providerInstructionId: "pi_3" }),
+        const registro = log.evento(
+          "billing-recusa.falha-ao-ler-instrucao-de-pagamento",
         );
+        expect(registro).toMatchObject({ providerInstructionId: "pi_3" });
+        // #560/F2: o campo `err` (corpo cru do gateway) saiu; o status HTTP,
+        // que é o diagnóstico de fato, entrou no lugar.
+        expect(registro?.httpStatus).toBe(404);
       } finally {
-        aviso.mockRestore();
+        log.restaurar();
       }
     });
 

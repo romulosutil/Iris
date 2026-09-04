@@ -1,3 +1,5 @@
+import { logarAvisoSemPII } from "@/lib/observabilidade/logar-erro";
+
 /**
  * WebMCP TypeScript Definitions & Helpers
  * Exposes site tools to AI agents via browser navigator.modelContext
@@ -28,8 +30,13 @@ declare global {
 
 /**
  * Sem `console.log` de produção (S-08, #530): a lista de tools ia para o
- * console de todo visitante. Falha de registro continua em `console.warn`,
- * que é diagnóstico, não telemetria.
+ * console de todo visitante. Falha de registro continua sendo registrada, em
+ * nível `warn`, porque é diagnóstico e não telemetria.
+ *
+ * Este módulo roda no BROWSER, e `logarAvisoSemPII` foi feito para isso: não
+ * depende de nada de Node (#546). O `err` inteiro ia para o console antes —
+ * `message` e `stack` de uma extensão de terceiro no console do visitante.
+ * Agora sai a classe do erro, e só.
  */
 export function registerWebMCPTools(tools: WebMCPTool[]) {
   if (typeof window === "undefined") return;
@@ -38,10 +45,9 @@ export function registerWebMCPTools(tools: WebMCPTool[]) {
     try {
       window.navigator.modelContext.provideContext({ tools });
     } catch (err) {
-      console.warn(
-        "[WebMCP] Failed to register tools with navigator.modelContext:",
-        err,
-      );
+      logarAvisoSemPII("webmcp.registro-de-tools-falhou", err, {
+        quantidadeTools: tools.length,
+      });
     }
   } else {
     // Polyfill / fallback event broadcast for browser extensions supporting WebMCP

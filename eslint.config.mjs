@@ -13,6 +13,11 @@ import {
   pluginFronteira,
 } from "./scripts/lint/regra-fronteira-lib-app.mjs";
 import {
+  ESCOPO_SEM_CONSOLE,
+  FORA_DO_ESCOPO_SEM_CONSOLE,
+  pluginObservabilidade,
+} from "./scripts/lint/regra-sem-console-em-lib.mjs";
+import {
   ESCOPO_RSC,
   FORA_DO_ESCOPO_RSC,
   pluginRSC,
@@ -169,6 +174,33 @@ const config = [
     ignores: FORA_DO_ESCOPO_RSC,
     plugins: { rsc: pluginRSC },
     rules: { "rsc/use-client-obrigatorio": "error" },
+  },
+  {
+    // DA-04 (#560, fatia F2): nenhum `console.*` cru em `src/lib/**`. A F1
+    // entregou o logger estruturado (JSON, `requestId`, redaction por chave
+    // dentro de `registrar()`); esta fatia migrou os 31 sítios de `lib/` e
+    // esta regra é o que impede o 32º de nascer.
+    //
+    // O ponto que a regra guarda não é formatação: `redigirContexto` roda no
+    // NÚCLEO do logger, não no transporte. Um objeto solto no `console` passa
+    // ao lado dela — foi assim que `err: e.message` (SQL + params do
+    // `DrizzleQueryError`, corpo do gateway) saiu em 4 dos sítios medidos.
+    //
+    // Regra própria em plugin inline (como `ds/`, `fronteira/` e `rsc/`), e
+    // NÃO `no-restricted-syntax`: aquela regra já é usada pelo guard de PHI do
+    // `console.error` (#531) num bloco cujo `files` cobre `src/app/**` E
+    // `src/lib/**`, e em flat config as opções da MESMA regra não se somam
+    // entre blocos — um bloco novo apagaria aquele guard nos arquivos de lib,
+    // em silêncio, sem erro de config.
+    //
+    // Piso é ZERO, sem baseline: a varredura desta fatia fechou em zero.
+    // `scripts/lint/sem-console-em-lib.test.ts` (roda no `pnpm test`) mede
+    // ESTE arquivo pela API do ESLint e fica vermelho se a regra sair do
+    // config ou parar de acusar.
+    files: ESCOPO_SEM_CONSOLE,
+    ignores: FORA_DO_ESCOPO_SEM_CONSOLE,
+    plugins: { obs: pluginObservabilidade },
+    rules: { "obs/sem-console-cru": "error" },
   },
 ];
 

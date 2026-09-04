@@ -1,4 +1,5 @@
 import { Webhook, WebhookVerificationError } from "svix";
+import { logger } from "@/lib/observabilidade/logger";
 
 export type ResendWebhookInput = {
   corpoBruto: string;
@@ -93,21 +94,26 @@ export async function processarWebhookResend(
     const bounceObj = (data.bounce ?? {}) as Record<string, unknown>;
     const bounceType =
       typeof bounceObj.type === "string" ? bounceObj.type : undefined;
-    console.warn("[resend-webhook] email.bounced", {
-      type: "email.bounced",
+    // `bounceType` é categoria FECHADA do Resend (`hard_bounce`, …).
+    // `bounce.message` continua fora, e continua sendo o ponto: o diagnóstico
+    // SMTP do MTA de destino embute o endereço do destinatário
+    // ("550 5.1.1 <paciente@…>: Recipient address rejected"). Categoria sim,
+    // texto de terceiro nunca.
+    logger.warn("resend-webhook.email-bounced", {
+      tipoEvento: "email.bounced",
       emailId,
       createdAt,
       bounceType,
     });
   } else if (tipo === "email.complained") {
-    console.warn("[resend-webhook] email.complained", {
-      type: "email.complained",
+    logger.warn("resend-webhook.email-complained", {
+      tipoEvento: "email.complained",
       emailId,
       createdAt,
     });
   } else {
-    console.info("[resend-webhook] evento recebido", {
-      type: tipo,
+    logger.info("resend-webhook.evento-recebido", {
+      tipoEvento: tipo,
       emailId,
       createdAt,
     });

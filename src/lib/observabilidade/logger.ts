@@ -132,7 +132,10 @@ export function requestIdAtual(): string {
  * o processo *pelo log*. O sink é a última linha antes da saída: nada aqui
  * pode lançar.
  */
-function substituirNaoSerializavel(_chave: string, valor: unknown): unknown {
+export function substituirNaoSerializavel(
+  _chave: string,
+  valor: unknown,
+): unknown {
   return typeof valor === "bigint" ? valor.toString() : valor;
 }
 
