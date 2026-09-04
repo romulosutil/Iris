@@ -3,6 +3,7 @@ import { ESLint, Linter } from "eslint";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { comoGlobLiteral } from "./regra-ds-paleta-crua.mjs";
+import { pluginFronteira } from "./regra-fronteira-lib-app.mjs";
 
 const RAIZ = path.resolve(import.meta.dirname, "..", "..");
 const ARQUIVO_BASELINE = path.join(
@@ -39,10 +40,10 @@ async function opcoesDaRegraNoConfig() {
   const cfg = await novoESLint().calculateConfigForFile(
     path.join(RAIZ, ARQUIVO_EM_ESCOPO_LIB),
   );
-  const entrada = cfg.rules["no-restricted-imports"];
+  const entrada = cfg.rules["fronteira/sem-import-de-app"];
   expect(
     entrada,
-    `no-restricted-imports não está ativa em ${ARQUIVO_EM_ESCOPO_LIB} — o guard da fronteira lib↛app sumiu do eslint.config.mjs`,
+    `fronteira/sem-import-de-app não está ativa em ${ARQUIVO_EM_ESCOPO_LIB} — o guard da fronteira lib↛app sumiu do eslint.config.mjs`,
   ).toBeDefined();
   return entrada as [number, ...unknown[]];
 }
@@ -84,7 +85,7 @@ describe("A-02 — guard de fronteira lib ↛ app (a regra acusa de verdade)", (
         "lintText não devolveu resultado para " + alvo,
       ).toHaveLength(1);
       return resultados[0]!.messages.filter(
-        (m) => m.ruleId === "no-restricted-imports",
+        (m) => m.ruleId === "fronteira/sem-import-de-app",
       );
     };
 
@@ -108,6 +109,42 @@ export type T = M;`),
       await lint(`import { f } from "@/app/fonts";
 export const a = f;`),
     ).toHaveLength(1);
+    // Re-export amarra igual: o tipo continua vindo do arquivo de rota.
+    expect(
+      await lint(`export type { S } from "@/app/(app)/assinatura/queries";`),
+    ).toHaveLength(1);
+    expect(
+      await lint(`export * from "@/app/(app)/assinatura/queries";`),
+    ).toHaveLength(1);
+
+    // As TRÊS formas que furavam `no-restricted-imports` (NIT da revisão da
+    // #603). Não havia ocorrência delas no repo quando o guard nasceu — estes
+    // casos são o que impede a primeira aparecer sem ninguém notar.
+    expect(
+      await lint(`export async function f() {
+  return await import("@/app/(app)/assinatura/queries");
+}`),
+    ).toHaveLength(1);
+    expect(
+      await lint(`const m = require("@/app/(app)/assinatura/queries");
+export default m;`),
+    ).toHaveLength(1);
+    // Relativo: resolvido no filesystem, então qualquer grafia que ALCANCE
+    // `src/app` cai — inclusive a que passa por dentro de `lib` antes.
+    expect(
+      await lint(`import type { S } from "../app/(app)/assinatura/queries";
+export type T = S;`),
+    ).toHaveLength(1);
+    expect(
+      await lint(`import type { S } from "../lib/../app/(app)/assinatura/queries";
+export type T = S;`),
+    ).toHaveLength(1);
+    expect(
+      await lint(`export async function f() {
+  return await import("../app/(app)/pacientes/[id]/modalidade");
+}`),
+    ).toHaveLength(1);
+
     // O caminho legítimo — lib importa lib e db — passa.
     expect(
       await lint(`import { calcular } from "@/lib/billing/calculator";
@@ -117,20 +154,61 @@ export const a = calcular;`),
       await lint(`import { patient } from "@/db/schema";
 export const a = patient;`),
     ).toHaveLength(0);
+    // Relativo que NÃO sai de lib passa: a régua é o destino, não o `../`.
+    expect(
+      await lint(`import type { P } from "./patient/prontidao";
+export type T = P;`),
+    ).toHaveLength(0);
+    // A âncora do alias não pode casar um diretório que só COMEÇA com "app".
+    expect(
+      await lint(`import { x } from "@/apphelper/util";
+export const a = x;`),
+    ).toHaveLength(0);
   }, 60_000);
 
   it("a regra vale nos dois braços do escopo e NÃO vaza para src/app", async () => {
     const eslint = novoESLint();
     for (const arquivo of [ARQUIVO_EM_ESCOPO_LIB, ARQUIVO_EM_ESCOPO_UI]) {
       const cfg = await eslint.calculateConfigForFile(path.join(RAIZ, arquivo));
-      expect(cfg.rules["no-restricted-imports"]?.[0], arquivo).toBe(2);
+      expect(cfg.rules["fronteira/sem-import-de-app"]?.[0], arquivo).toBe(2);
     }
     // `src/app` é a camada de rota: ela PODE importar de lib e de outras
     // rotas (o passivo rota→rota é das fatias F2–F4, não deste guard).
     const cfgRota = await eslint.calculateConfigForFile(
       path.join(RAIZ, "src/app/(app)/assinatura/queries.ts"),
     );
-    expect(cfgRota.rules["no-restricted-imports"]).toBeUndefined();
+    expect(cfgRota.rules["fronteira/sem-import-de-app"]).toBeUndefined();
+  }, 60_000);
+
+  /**
+   * O guard novo não pode ter apagado o vizinho. `src/lib/**` já roda
+   * `no-restricted-syntax` (o bloco que barra embutir o erro no
+   * `console.error`, porque a message do `DrizzleQueryError` carrega SQL +
+   * params — PHI). Flat config NÃO soma opções da mesma regra entre blocos:
+   * um bloco novo com `no-restricted-syntax` teria desligado aquele guard e o
+   * `pnpm lint` continuaria verde. Por isso a fronteira virou regra própria —
+   * e este caso é o que segura a decisão no lugar.
+   */
+  it("não apagou o guard de PHI/PII do console.error em src/lib", async () => {
+    const eslint = novoESLint();
+    const alvo = path.join(RAIZ, "src/lib/__guard-fronteira-lib-app.ts");
+
+    const cfg = await eslint.calculateConfigForFile(alvo);
+    expect(
+      cfg.rules["no-restricted-syntax"]?.[0],
+      "no-restricted-syntax sumiu de src/lib — algum bloco novo sobrescreveu o guard de PHI/PII do console.error",
+    ).toBe(2);
+
+    // E acusa de verdade, não só está declarada.
+    const [resultado] = await eslint.lintText(
+      `export function f(err: unknown) {
+  console.error("falhou", { err });
+}`,
+      { filePath: alvo },
+    );
+    expect(
+      resultado!.messages.filter((m) => m.ruleId === "no-restricted-syntax"),
+    ).toHaveLength(1);
   }, 60_000);
 });
 
@@ -180,8 +258,12 @@ describe("A-02 — baseline (imports de app ainda presentes em lib)", () => {
     const eslint = novoESLint([
       {
         files: arquivos.map(comoGlobLiteral),
+        plugins: { fronteira: pluginFronteira },
         rules: {
-          "no-restricted-imports": ["error", ...opcoes] as Linter.RuleEntry,
+          "fronteira/sem-import-de-app": [
+            "error",
+            ...opcoes,
+          ] as Linter.RuleEntry,
         },
       },
     ]);
@@ -190,7 +272,7 @@ describe("A-02 — baseline (imports de app ainda presentes em lib)", () => {
     for (const r of resultados) {
       const rel = path.relative(RAIZ, r.filePath).replace(/\\/g, "/");
       medido[rel] = r.messages.filter(
-        (m) => m.ruleId === "no-restricted-imports",
+        (m) => m.ruleId === "fronteira/sem-import-de-app",
       ).length;
     }
     const problemas: string[] = [];
@@ -213,7 +295,7 @@ describe("A-02 — baseline (imports de app ainda presentes em lib)", () => {
     const eslint = novoESLint();
     for (const arquivo of Object.keys(baseline)) {
       const cfg = await eslint.calculateConfigForFile(path.join(RAIZ, arquivo));
-      expect(cfg.rules["no-restricted-imports"], arquivo).toBeUndefined();
+      expect(cfg.rules["fronteira/sem-import-de-app"], arquivo).toBeUndefined();
     }
     // Varredura do escopo inteiro com o config de produção: fora do baseline
     // o passivo tem de ser ZERO. Se um import novo entrar em lib, cai aqui.
@@ -223,7 +305,7 @@ describe("A-02 — baseline (imports de app ainda presentes em lib)", () => {
     ]);
     const remanescentes = resultados.flatMap((r) =>
       r.messages
-        .filter((m) => m.ruleId === "no-restricted-imports")
+        .filter((m) => m.ruleId === "fronteira/sem-import-de-app")
         .map(
           (m) =>
             `${path.relative(RAIZ, r.filePath).replace(/\\/g, "/")}:${m.line}`,

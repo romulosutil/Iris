@@ -9,6 +9,10 @@ import {
   pluginDS,
 } from "./scripts/lint/regra-ds-paleta-crua.mjs";
 import {
+  ESCOPO_FRONTEIRA,
+  pluginFronteira,
+} from "./scripts/lint/regra-fronteira-lib-app.mjs";
+import {
   ESCOPO_RSC,
   FORA_DO_ESCOPO_RSC,
   pluginRSC,
@@ -135,23 +139,19 @@ const config = [
     // Import de TIPO conta: `import type { X } from "@/app/..."` amarra o
     // módulo de lib ao arquivo de rota em tempo de compilação e é exatamente
     // o que impede mover o módulo depois.
-    files: ["src/lib/**/*.{ts,tsx}", "src/components/ui/**/*.{ts,tsx}"],
+    //
+    // Regra própria (plugin inline, como `ds/` e `rsc/`) em vez de
+    // `no-restricted-imports`: aquela regra só visita import/export ESTÁTICO e
+    // casa a string do especificador, então `await import("@/app/...")`,
+    // `require("@/app/...")` e o relativo `"../../app/..."` passavam livres —
+    // medido. E fechar com `no-restricted-syntax` num bloco novo apagaria o
+    // guard de PHI/PII do `console.error`, que já usa essa regra em
+    // `src/lib/**` (flat config não soma opções da mesma regra entre blocos).
+    files: ESCOPO_FRONTEIRA,
     // `(app)` e `[id]` dos caminhos de rota precisam de escape num glob.
     ignores: Object.keys(baselineFronteira).map(comoGlobLiteral),
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              group: ["@/app", "@/app/*", "@/app/**"],
-              message:
-                "Fronteira lib ↛ app (A-02, #559): src/lib e src/components/ui não podem importar de src/app — é o domínio dependendo da rota. Mova o que for compartilhado (tipo, query ou regra) para src/lib e importe de lá; a rota importa de lib, nunca o contrário.",
-            },
-          ],
-        },
-      ],
-    },
+    plugins: { fronteira: pluginFronteira },
+    rules: { "fronteira/sem-import-de-app": "error" },
   },
   {
     // #583: módulo que usa hook de cliente do React precisa declarar
