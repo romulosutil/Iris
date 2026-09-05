@@ -117,7 +117,7 @@ Regra pós-mortem D22 (#239, PR #240, memória `d22-sessao-gastou-token-em-loops
 
 **Rodar livremente:** lint, testes, build local, Storybook, criar branch, rodar/ler migrations locais (Drizzle/dbmate contra Postgres local), `pnpm install`.
 
-**Confirmar com o Rômulo antes:** `supabase db push` remoto; DDL em tabela com dados; mudanças em `docs/legal/`; deletar/reescrever migrations commitadas; chamadas API Anthropic/Google antes da Fase 3; renomear pasta/repositório (`xpect` → `iris`); criar projetos Supabase/Vercel; provisionar VPS + Easypanel.
+**Confirmar com o Rômulo antes:** `supabase db push` remoto; DDL em tabela com dados; mudanças em `docs/legal/`; deletar/reescrever migrations commitadas; chamadas API de LLM (Google) antes da Fase 3; renomear pasta/repositório (`xpect` → `iris`); criar projetos Supabase/Vercel; provisionar VPS + Easypanel.
 
 > ⚠️ **Pivô de infra em avaliação (09/07/2026):** migração potencial para VPS Hostinger + Easypanel + Postgres puro (`docs/arquitetura/plano-bootstrap-e-stack-vps.md`). Confirmar antes de agir.
 
