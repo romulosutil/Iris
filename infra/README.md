@@ -2879,15 +2879,23 @@ chamada (`app_alarme_job_heartbeats()`, EXECUTE só para `iris_alarme`).
 **Limite = cadência do agendador + margem** (`LIMITES_HEARTBEAT` em
 `scripts/alarme-jobs.mjs`; mudar aqui sem mudar lá cega o detector):
 
-| Job                 | Cadência (`INTERVALO_S`)       | Limite do `ultimo_ok` | Linha ausente |
+| Job                 | Cadência                       | Limite do `ultimo_ok` | Linha ausente |
 | ------------------- | ------------------------------ | --------------------- | ------------- |
 | `retencao`          | 86400s (1x/dia)                | 36h                   | `problema`    |
 | `arquivamento`      | 86400s (1x/dia)                | 36h                   | `problema`    |
 | `exportacao`        | 300s (5min)                    | 1h                    | `problema`    |
-| `asr`               | 20s (asr-transcrever)          | 30min                 | `problema`    |
+| `asr`               | 60s (cron `pg-boss`)           | 30min                 | `problema`    |
 | `asr-sweeper`       | 3600s (1h)                     | 3h                    | `problema`    |
 | `expurgo-audit-log` | 86400s (1x/dia)                | 36h                   | `problema`    |
 | `conciliacao`       | **sob demanda** (runbook #375) | —                     | `ok`          |
+
+> ⚠️ A coluna **Cadência** era `INTERVALO_S` para todos os jobs. Desde a D73
+> (PR #624) o `asr` é a exceção: ele deixou de ser laço de shell e virou
+> consumidor de fila, então a cadência dele é `CRON_TICK_ASR`
+> (`src/lib/queue/config.ts`), não uma env do container. Mudar aquele cron sem
+> revisar `limiteH` aqui e em `scripts/alarme-jobs.mjs` cega o detector — e
+> nesse caso ele cega para **mais perto** do falso positivo, porque o heartbeat
+> do `asr` é escrito pela rota uma vez por tick.
 
 Regras, iguais para todos:
 
