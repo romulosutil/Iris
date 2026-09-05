@@ -134,3 +134,7 @@ ds-bundle/
 
 # Config local de MCP (pode conter token de servidor) — nunca versionar
 .mcp.json
+
+# Bundle do consumidor de fila (gerado por `pnpm queue:build`; a imagem
+# constroi o dele no proprio Dockerfile).
+dist/

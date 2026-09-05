@@ -40,6 +40,7 @@
     "unlock:user": "tsx --conditions=react-server --env-file=.env scripts/unlock-user.ts",
     "backfill:evidence": "tsx --conditions=react-server --env-file=.env scripts/backfill-evidence.ts",
     "queue:work": "tsx --env-file-if-exists=.env scripts/queue-worker.ts",
+    "queue:build": "esbuild scripts/queue-worker.ts --bundle --platform=node --target=node22 --format=esm --external:pg-boss --outfile=dist/queue-worker.mjs",
     "prepare": "husky"
   },
   "dependencies": {
