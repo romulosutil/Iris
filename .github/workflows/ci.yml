@@ -317,3 +317,122 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: build de produção da aplicação (Next.js)
         run: pnpm build
+
+  # --- D69: as duas imagens do deploy do APP, construídas e BOOTADAS aqui ------
+  #
+  # `carga-imagens-infra.yml` cobre 8 imagens de JOB e nenhuma delas é a do app;
+  # `infra/Dockerfile` e `infra/Dockerfile.migrate` também não caem em nenhum dos
+  # `paths` dele. Resultado até aqui: mudar qualquer um dos dois disparava ZERO
+  # CI e a primeira execução era o deploy em produção — foi assim que o
+  # `@swc/helpers`/`module-sync` deixou o `docker build` verde e o
+  # `node server.js` morto no boot. O job `build` acima é vizinho, não
+  # substituto: ele prova só que a aplicação COMPILA SEM BANCO (ver o comentário
+  # lá), nunca que a IMAGEM sobe.
+  #
+  # A lógica toda mora em `scripts/ci/carga-imagem-app.sh`, que roda igual na
+  # máquina do dev — mesma regra do `carga-imagens-infra.sh`: teste que só existe
+  # no workflow é teste que ninguém roda antes de abrir o PR.
+  imagens-do-app-alteradas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      alterado: ${{ steps.decidir.outputs.alterado }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # O predicado é INVERTIDO de propósito, e é a forma que o D68 já tinha
+      # prescrito para este repo: não se pergunta "esta PR mexe na imagem?"
+      # (indecidível — o stage `build` faz `COPY . .`, então TUDO que não está
+      # no `.dockerignore` entra), e sim "esta PR é PROVADAMENTE zero-código?".
+      # Default = roda, allowlist mínima, fail-closed. Uma lista positiva de
+      # caminhos aqui seria o D64/D69 reencenado: o buraco daqueles dois foi
+      # exatamente um `paths` que esqueceu de listar algo que entra na imagem.
+      #
+      # `docs/legal/**` NÃO é ignorável: `/termos` e `/privacidade` são
+      # `force-static` e leem esse markdown do disco durante o `pnpm build` de
+      # dentro da imagem — é a cadeia de desexclusão do `.dockerignore`, e é
+      # justamente o que o probe de boot verifica.
+      - name: decidir se a carga das imagens do app roda
+        id: decidir
+        env:
+          EVENTO: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -Eeuo pipefail
+
+          if [[ "${EVENTO}" != "pull_request" ]]; then
+            echo "evento=${EVENTO} (não é PR) — roda sempre."
+            echo "alterado=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          arquivos="$(git diff --name-only "origin/${BASE_REF}...HEAD")"
+          echo "Arquivos no diff:"
+          printf '%s\n' "${arquivos}" | sed 's/^/  /'
+
+          relevante=false
+          while IFS= read -r f; do
+            [[ -z "${f}" ]] && continue
+            case "${f}" in
+              docs/legal/*) relevante=true; break ;;
+              .github/workflows/ci.yml) relevante=true; break ;;
+              docs/*|*.md|.github/*|.claude/*|graphify-out/*) continue ;;
+              *) relevante=true; break ;;
+            esac
+          done <<< "${arquivos}"
+
+          echo "alterado=${relevante}" >> "$GITHUB_OUTPUT"
+          echo "Decisão: alterado=${relevante}"
+
+  # Job SKIPPED reporta sucesso ao ruleset; workflow que não roda não reporta
+  # nada e trava o PR para sempre (D58/#423, D68). Por isso o gate é um `if:` de
+  # JOB e nunca um `paths:` no `on:` deste workflow.
+  carga-imagem-app:
+    needs: imagens-do-app-alteradas
+    if: needs.imagens-do-app-alteradas.outputs.alterado == 'true'
+    runs-on: ubuntu-latest
+    # Teto generoso de propósito: o alvo é ~3 min com o cache do Buildx quente,
+    # mas o caminho FRIO (cache evictado, bump de `pnpm-lock.yaml`, base nova)
+    # paga `pnpm install` + `pnpm build` + o download do Chromium do stage
+    # `runner`. Um timeout apertado transformaria cache frio em CI vermelho —
+    # que é exatamente o falso-negativo que este job existe para não produzir.
+    timeout-minutes: 30
+    services:
+      # Só o passo final do migrate usa este Postgres: rodar o migrator DE
+      # VERDADE de dentro da imagem é o que prova o gate de schema inteiro
+      # (conexão + guard de hash D17 + aplicação), e não só que o módulo
+      # carregou.
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: iris
+          POSTGRES_PASSWORD: iris
+          POSTGRES_DB: iris
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U iris -d iris"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      MIGRATION_DATABASE_URL_CARGA: postgres://iris:iris@host.docker.internal:5432/iris
+      # `--cache-to type=gha` exige o driver `docker-container` do buildx (o
+      # passo abaixo o provisiona). `mode=max` guarda também os stages
+      # intermediários — é o que faz `deps`/`build` reaproveitarem entre PRs;
+      # sem ele só a imagem final entra no cache e o `pnpm build` roda inteiro
+      # toda vez. O custo é cota de cache do Actions, e o pior caso de eviction
+      # é ESTE job ficar lento, nunca ficar errado.
+      ARGS_BUILD_EXTRA: >-
+        --cache-from type=gha,scope=imagem-app
+        --cache-to type=gha,mode=max,scope=imagem-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: carga das imagens do app (build + boot) — infra/Dockerfile{,.migrate}
+        run: bash scripts/ci/carga-imagem-app.sh
