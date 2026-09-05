@@ -429,9 +429,6 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA pgboss GRANT ALL ON FUNCTIONS TO app_role;
 
 SELECT pgboss.create_queue('dlq', '{"policy":"standard","retryLimit":1,"retryBackoff":false}'::jsonb);
 SELECT pgboss.create_queue('asr-transcrever', '{"policy":"standard","retryLimit":3,"retryBackoff":true,"deadLetter":"dlq"}'::jsonb);
-SELECT pgboss.create_queue('llm-extracao', '{"policy":"standard","retryLimit":3,"retryBackoff":true,"deadLetter":"dlq"}'::jsonb);
-SELECT pgboss.create_queue('billing-reconciliar', '{"policy":"standard","retryLimit":3,"retryBackoff":true,"deadLetter":"dlq"}'::jsonb);
-SELECT pgboss.create_queue('expurgo-audit-log', '{"policy":"standard","retryLimit":3,"retryBackoff":true,"deadLetter":"dlq"}'::jsonb);
 
 GRANT ALL ON ALL TABLES IN SCHEMA pgboss TO app_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA pgboss TO app_role;

@@ -27,7 +27,6 @@ import { deveReextrair } from "@/lib/extraction/reextraction-policy";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 import { mensagemDeConsentimento } from "./diario-comum";
-import { enqueueJob } from "@/lib/queue/client";
 
 /**
  * Consolidação da sessão: nota final, número sequencial, extração pelo agente
@@ -232,14 +231,6 @@ async function consolidarSessaoCore(
             clinicId: ctx.clinicId,
           })
         : null;
-
-      if (reextrair) {
-        await enqueueJob(
-          "llm-extracao",
-          { sessionId: sid, clinicId: ctx.clinicId },
-          { singletonKey: sid, tx },
-        );
-      }
 
       return {
         numero,

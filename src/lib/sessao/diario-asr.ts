@@ -275,9 +275,13 @@ async function enviarLoteAsrCore(
               ),
             );
 
+          // Emitido DENTRO da transação (`tx`): se o UPDATE que promove os
+          // clipes a `na_fila` sofrer rollback, o job nunca existe. O payload
+          // é só correlação de log — quem escolhe o trabalho é
+          // `app_asr_reservar`, do lado do banco.
           await enqueueJob(
             "asr-transcrever",
-            { loteId, sessionId, clinicId: ctx.clinicId },
+            { origem: "lote", loteId, sessionId, clinicId: ctx.clinicId },
             { singletonKey: loteId, tx },
           );
         });

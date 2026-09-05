@@ -1,16 +1,26 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { processDlqJob } from "./handlers/dlq";
-import { processAsrJob } from "./handlers/asr";
-import { processLlmJob } from "./handlers/llm";
+import { processAsrJob, lerConfigDisparoAsr } from "./handlers/asr";
 import { logger } from "@/lib/observabilidade/logger";
 
 vi.mock("@/lib/observabilidade/logger", () => ({
-  logger: {
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
+  logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
+
+const URL_JOB = "http://iris-app:3000/api/internal/jobs/asr-transcrever";
+const TOKEN = "segredo-do-disparo-nunca-logado";
+
+function jobAsr(over: Record<string, unknown> = {}) {
+  return {
+    id: "asr-job-1",
+    name: "asr-transcrever",
+    data: { origem: "lote", loteId: "lote-1", sessionId: "sess-1" },
+    expireInSeconds: 300,
+    heartbeatSeconds: 30,
+    signal: new AbortController().signal,
+    ...over,
+  } as never;
+}
 
 describe("DLQ Handler", () => {
   it("loga falha crítica de job de forma estruturada sem expor PII", async () => {
@@ -22,7 +32,7 @@ describe("DLQ Handler", () => {
         clinicId: "123e4567-e89b-12d3-a456-426614174001",
         textoSensivelClinico: "Paciente apresentou crise severa...",
       },
-      sourceName: "llm-extracao",
+      sourceName: "asr-transcrever",
       sourceId: "job-orig-456",
       sourceRetryCount: 3,
       expireInSeconds: 60,
@@ -30,19 +40,18 @@ describe("DLQ Handler", () => {
       signal: new AbortController().signal,
     };
 
-    await processDlqJob([mockJob as any]);
+    await processDlqJob([mockJob as never]);
 
     expect(logger.error).toHaveBeenCalledWith(
       "queue.dlq-job-falhou-definitivamente",
       expect.objectContaining({
         jobId: "job-dlq-1",
-        sourceQueue: "llm-extracao",
+        sourceQueue: "asr-transcrever",
         sourceJobId: "job-orig-456",
         retryCount: 3,
       }),
     );
 
-    // Garante que o texto da nota clínica não vazou no log
     const logCall = vi.mocked(logger.error).mock.calls[0];
     expect(logCall).toBeDefined();
     const logPayload = JSON.stringify(logCall?.[1]);
@@ -50,95 +59,122 @@ describe("DLQ Handler", () => {
   });
 });
 
-describe("ASR & LLM Job Handlers", () => {
-  it("processAsrJob respeita cancelamento do AbortSignal", async () => {
-    const controller = new AbortController();
-    controller.abort(); // Já abortado
-
-    const job = {
-      id: "asr-job-1",
-      name: "asr-transcrever",
-      data: { loteId: "lote-1", sessionId: "sess-1", clinicId: "clin-1" },
-      expireInSeconds: 300,
-      heartbeatSeconds: 30,
-      signal: controller.signal,
-    };
-
-    await expect(processAsrJob([job as any])).rejects.toThrow("aborted");
+describe("Handler de ASR — disparo da rota interna", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.ASR_JOB_URL = URL_JOB;
+    process.env.ASR_JOB_TOKEN = TOKEN;
   });
 
-  it("processAsrJob executa com sucesso quando não abortado", async () => {
-    const controller = new AbortController();
-
-    const job = {
-      id: "asr-job-2",
-      name: "asr-transcrever",
-      data: { loteId: "lote-2", sessionId: "sess-2", clinicId: "clin-2" },
-      expireInSeconds: 300,
-      heartbeatSeconds: 30,
-      signal: controller.signal,
-    };
-
-    await expect(processAsrJob([job as any])).resolves.toBeUndefined();
-    expect(logger.info).toHaveBeenCalledWith(
-      "queue.asr.iniciando",
-      expect.objectContaining({
-        loteId: "lote-2",
-        sessionId: "sess-2",
-        clinicId: "clin-2",
-        jobId: "asr-job-2",
-      }),
-    );
-    expect(logger.info).toHaveBeenCalledWith(
-      "queue.asr.concluido",
-      expect.objectContaining({
-        loteId: "lote-2",
-        sessionId: "sess-2",
-        jobId: "asr-job-2",
-      }),
-    );
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
-  it("processLlmJob aborta gracefully se sinal estiver cancelado", async () => {
+  it("recusa disparar sem env, nomeando a variável sem revelar valor", () => {
+    delete process.env.ASR_JOB_URL;
+    delete process.env.ASR_JOB_TOKEN;
+
+    expect(() => lerConfigDisparoAsr()).toThrow(/ASR_JOB_URL/);
+    expect(() => lerConfigDisparoAsr()).toThrow(/ASR_JOB_TOKEN/);
+  });
+
+  it("faz POST autenticado na rota interna — o handler NÃO transcreve sozinho", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, processados: 0 }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await processAsrJob([jobAsr()]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [
+      string,
+      RequestInit & { headers: Record<string, string> },
+    ];
+    expect(url).toBe(URL_JOB);
+    expect(init.method).toBe("POST");
+    expect(init.headers.authorization).toBe(`Bearer ${TOKEN}`);
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("propaga a recusa da rota como erro, para o pg-boss reagendar e depois mandar à DLQ", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("{}", { status: 500 })),
+    );
+
+    await expect(processAsrJob([jobAsr()])).rejects.toThrow(/HTTP 500/);
+  });
+
+  it("a mensagem de erro não afirma causa — só o status", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("{}", { status: 401 })),
+    );
+
+    // 401 (token), 500 (falha do tick) e 502 (rota fora) chegam aqui pelo mesmo
+    // caminho; um texto que escolhesse uma causa seria diagnóstico falso nas
+    // outras duas.
+    await expect(processAsrJob([jobAsr()])).rejects.toThrow(/HTTP 401/);
+    await expect(processAsrJob([jobAsr()])).rejects.not.toThrow(/token/i);
+  });
+
+  it("reduz a resposta a contagens: nem token, nem ids de clipe entram no log", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            processados: 2,
+            transcritos: 1,
+            falhas: 1,
+            revertidos: 0,
+            expirados: null,
+            // A rota devolve isto; nada daqui pode chegar ao log do painel.
+            resultados: [
+              { id: "clipe-uuid-sensivel", desfecho: "transcrito" },
+              { id: "outro-clipe", desfecho: "falhou", categoria: "saturacao" },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+
+    await processAsrJob([jobAsr()]);
+
+    const concluido = vi
+      .mocked(logger.info)
+      .mock.calls.find((c) => c[0] === "queue.asr.tick-concluido");
+    expect(concluido).toBeDefined();
+    expect(concluido?.[1]).toMatchObject({
+      processados: 2,
+      transcritos: 1,
+      falhas: 1,
+      revertidos: 0,
+      expirados: null,
+    });
+
+    const tudoQueFoiLogado = JSON.stringify(vi.mocked(logger.info).mock.calls);
+    expect(tudoQueFoiLogado).not.toContain("clipe-uuid-sensivel");
+    expect(tudoQueFoiLogado).not.toContain("resultados");
+    expect(tudoQueFoiLogado).not.toContain(TOKEN);
+  });
+
+  it("não gasta disparo quando o job já chega abortado", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
     const controller = new AbortController();
     controller.abort();
 
-    const job = {
-      id: "llm-job-1",
-      name: "llm-extracao",
-      data: { sessionId: "sess-1", clinicId: "clin-1" },
-      expireInSeconds: 120,
-      heartbeatSeconds: 20,
-      signal: controller.signal,
-    };
-
-    await expect(processLlmJob([job as any])).rejects.toThrow("aborted");
-  });
-
-  it("processLlmJob executa com sucesso quando não abortado", async () => {
-    const controller = new AbortController();
-
-    const job = {
-      id: "llm-job-2",
-      name: "llm-extracao",
-      data: { sessionId: "sess-2", clinicId: "clin-2" },
-      expireInSeconds: 120,
-      heartbeatSeconds: 20,
-      signal: controller.signal,
-    };
-
-    await expect(processLlmJob([job as any])).resolves.toBeUndefined();
-    expect(logger.info).toHaveBeenCalledWith(
-      "queue.llm.iniciando",
-      expect.objectContaining({
-        sessionId: "sess-2",
-        clinicId: "clin-2",
-        jobId: "llm-job-2",
-      }),
-    );
-    expect(logger.info).toHaveBeenCalledWith(
-      "queue.llm.concluido",
-      expect.objectContaining({ sessionId: "sess-2", jobId: "llm-job-2" }),
-    );
+    await expect(
+      processAsrJob([jobAsr({ signal: controller.signal })]),
+    ).rejects.toThrow(/abortado/);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
