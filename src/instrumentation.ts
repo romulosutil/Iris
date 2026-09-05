@@ -25,6 +25,13 @@ export async function register(): Promise<void> {
     const { instalarLoggerNode } =
       await import("@/lib/observabilidade/logger-node");
     instalarLoggerNode();
+
+    if (process.env.QUEUE_WORKER_ENABLED === "true") {
+      const { startQueueWorkers } = await import("@/lib/queue/worker");
+      startQueueWorkers().catch((err) => {
+        console.error("Falha ao inicializar queue workers no Next.js:", err);
+      });
+    }
   }
 
   const dsn = process.env.SENTRY_DSN;
