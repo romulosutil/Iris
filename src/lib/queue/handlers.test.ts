@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { processDlqJob } from "./handlers/dlq";
+import { processAsrJob } from "./handlers/asr";
+import { processLlmJob } from "./handlers/llm";
 import { logger } from "@/lib/observabilidade/logger";
 
 vi.mock("@/lib/observabilidade/logger", () => ({
@@ -45,5 +47,85 @@ describe("DLQ Handler", () => {
     expect(logCall).toBeDefined();
     const logPayload = JSON.stringify(logCall?.[1]);
     expect(logPayload).not.toContain("Paciente apresentou crise");
+  });
+});
+
+describe("ASR & LLM Job Handlers", () => {
+  it("processAsrJob respeita cancelamento do AbortSignal", async () => {
+    const controller = new AbortController();
+    controller.abort(); // Já abortado
+
+    const job = {
+      id: "asr-job-1",
+      name: "asr-transcrever",
+      data: { loteId: "lote-1", sessionId: "sess-1", clinicId: "clin-1" },
+      expireInSeconds: 300,
+      heartbeatSeconds: 30,
+      signal: controller.signal,
+    };
+
+    await expect(processAsrJob([job as any])).rejects.toThrow("aborted");
+  });
+
+  it("processAsrJob executa com sucesso quando não abortado", async () => {
+    const controller = new AbortController();
+
+    const job = {
+      id: "asr-job-2",
+      name: "asr-transcrever",
+      data: { loteId: "lote-2", sessionId: "sess-2", clinicId: "clin-2" },
+      expireInSeconds: 300,
+      heartbeatSeconds: 30,
+      signal: controller.signal,
+    };
+
+    await expect(processAsrJob([job as any])).resolves.toBeUndefined();
+    expect(logger.info).toHaveBeenCalledWith(
+      "queue.asr.iniciando",
+      expect.objectContaining({ loteId: "lote-2", sessionId: "sess-2", clinicId: "clin-2", jobId: "asr-job-2" }),
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      "queue.asr.concluido",
+      expect.objectContaining({ loteId: "lote-2", sessionId: "sess-2", jobId: "asr-job-2" }),
+    );
+  });
+
+  it("processLlmJob aborta gracefully se sinal estiver cancelado", async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const job = {
+      id: "llm-job-1",
+      name: "llm-extracao",
+      data: { sessionId: "sess-1", clinicId: "clin-1" },
+      expireInSeconds: 120,
+      heartbeatSeconds: 20,
+      signal: controller.signal,
+    };
+
+    await expect(processLlmJob([job as any])).rejects.toThrow("aborted");
+  });
+
+  it("processLlmJob executa com sucesso quando não abortado", async () => {
+    const controller = new AbortController();
+
+    const job = {
+      id: "llm-job-2",
+      name: "llm-extracao",
+      data: { sessionId: "sess-2", clinicId: "clin-2" },
+      expireInSeconds: 120,
+      heartbeatSeconds: 20,
+      signal: controller.signal,
+    };
+
+    await expect(processLlmJob([job as any])).resolves.toBeUndefined();
+    expect(logger.info).toHaveBeenCalledWith(
+      "queue.llm.iniciando",
+      expect.objectContaining({ sessionId: "sess-2", clinicId: "clin-2", jobId: "llm-job-2" }),
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      "queue.llm.concluido",
+      expect.objectContaining({ sessionId: "sess-2", jobId: "llm-job-2" }),
+    );
   });
 });
