@@ -76,6 +76,7 @@ type EstadoClipe = {
   asr_status: string;
   tentativas: number;
   objeto_ref: string | null;
+  falhou_em: Date | null;
   transcricao_texto: string | null;
 };
 
@@ -99,7 +100,7 @@ async function plantarClipe(opts: {
 async function lerClipe(id: string): Promise<EstadoClipe> {
   const linhas = await owner!<EstadoClipe[]>`
     SELECT id, asr_status::text AS asr_status, tentativas, objeto_ref,
-           transcricao_texto
+           falhou_em, transcricao_texto
       FROM audio_capture WHERE id = ${id}`;
   if (!linhas[0]) throw new Error(`clipe ${id} sumiu do banco`);
   return linhas[0];
@@ -351,10 +352,20 @@ describe.skipIf(!hasDb)(
       const clipe = await lerClipe(id);
       expect(clipe.asr_status).toBe("falhou");
       expect(clipe.tentativas).toBe(3);
-      expect(clipe.objeto_ref).toBeNull(); // desfecho definitivo zera a referência
 
-      // Desfecho definitivo: aí SIM o objeto some do bucket (R11).
-      expect(vi.mocked(storage.apagar)).toHaveBeenCalledWith("asr/72a7/e1");
+      // `0155` — ESTE É O TESTE PONTA A PONTA DO DEFEITO. Ele media o dano
+      // real: no desfecho definitivo a referência era zerada, o `finally`
+      // perguntava `app_asr_objetos_em_uso`, ouvia "ninguém reivindica" e
+      // chamava `apagar()`. Áudio clínico destruído no MinIO porque a IA
+      // falhou 3 vezes — e a UI então mandava a terapeuta digitar à mão.
+      //
+      // Agora a referência FICA (janela de resgate) e o objeto NÃO é apagado.
+      // As duas asserções andam juntas de propósito: preservar a referência
+      // sem impedir o `apagar()` deixaria a linha apontando para uma chave
+      // morta, que é pior que zerar — a UI ofereceria um resgate impossível.
+      expect(clipe.objeto_ref).toBe("asr/72a7/e1");
+      expect(clipe.falhou_em).not.toBeNull();
+      expect(vi.mocked(storage.apagar)).not.toHaveBeenCalled();
     });
 
     test("duas chamadas concorrentes à rota não processam o mesmo clipe duas vezes", async () => {

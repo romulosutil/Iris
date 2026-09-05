@@ -14,6 +14,7 @@ import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 import { logger } from "@/lib/observabilidade/logger";
 import { mensagemDeConsentimento } from "./diario-comum";
 import { enqueueJob } from "@/lib/queue/client";
+import { janelaDeResgateIntervalo } from "@/lib/asr/resgate";
 
 /**
  * Ditado de voz do diário de sessão (#72): envio do lote de clipes, leitura do
@@ -266,7 +267,20 @@ async function enviarLoteAsrCore(
         await withTenant(ctx, async (tx) => {
           await tx
             .update(audioCapture)
-            .set({ asrStatus: "na_fila", objetoRef: chave })
+            // `mimeType` gravado JUNTO da promoção a `na_fila`, no mesmo
+            // UPDATE que já carrega o `objetoRef` (D71): é o momento em que o
+            // objeto passa a existir, e mime sem objeto não descreve nada.
+            // `c.contentType` vem de `recorder.mimeType` (`use-gravador.ts`) —
+            // o formato que o navegador DE FATO gravou, não o que pedimos:
+            // Safari aceita a gravação e devolve `audio/mp4` mesmo quando o
+            // pedido foi `audio/webm;codecs=opus`. `?? null` porque um
+            // navegador pode não expor o mime, e nesse caso o worker cai no
+            // `ASR_MIME_PADRAO` em vez de mandar `undefined` no header.
+            .set({
+              asrStatus: "na_fila",
+              objetoRef: chave,
+              mimeType: c.contentType ?? null,
+            })
             .where(
               and(
                 eq(audioCapture.loteId, loteId),
@@ -425,6 +439,99 @@ async function obterLoteMaisRecenteCore(
 }
 
 export const obterLoteMaisRecente = obterLoteMaisRecenteCore;
+
+/**
+ * Remanda à fila os clipes `falhou` do lote cujo áudio o servidor AINDA guarda
+ * (janela de resgate, `0155`). É o caminho que dá sentido a preservar o
+ * objeto: sem ele, o áudio ficaria no bucket sem ninguém conseguindo pedir a
+ * transcrição de novo.
+ *
+ * COMPLEMENTA — não substitui — o reenvio a partir do blob local (R13,
+ * `ditado-voz.tsx`). O local é melhor quando existe: não depende de o objeto
+ * ter sobrevivido. Mas ele mora no IndexedDB com TTL de 24 h e some no
+ * sign-out, e era justamente aí que a terapeuta ouvia "digite o trecho à mão".
+ *
+ * `tentativas = 0` é o ponto todo da operação: `app_asr_reservar` só elege
+ * linha com `tentativas < 3`, e um clipe que chegou a `falhou` está exatamente
+ * em 3. Sem zerar, a linha voltaria a `na_fila` e NUNCA seria reservada —
+ * ficaria presa até o backstop de 6h, com a UI mostrando "na fila" para um
+ * clipe que ninguém vai processar.
+ *
+ * `falhou_em = NULL` porque o carimbo é a régua da janela: mantê-lo faria a
+ * linha continuar contando o prazo de um desfecho que deixou de valer, e
+ * `app_asr_expirar_resgate` poderia soltar o objeto no meio de uma nova
+ * tentativa.
+ *
+ * A janela é reconferida AQUI, no predicado do UPDATE, e não só na leitura que
+ * montou a tela: entre a renderização e o clique cabe o tick que expira o
+ * resgate, e nesse caso o objeto já não existe — remandar à fila só queimaria
+ * as três tentativas contra um objeto ausente.
+ */
+async function reenviarClipesFalhosDoServidorCore(
+  ctx: TenantContext,
+  loteId: string,
+  sessionId: string,
+): Promise<{
+  reenviados?: number;
+  error?: string;
+  bloqueioConta?: BloqueioConta;
+}> {
+  requireDiario(ctx);
+  if (!asrHabilitado()) {
+    return { error: "Ditado de voz está temporariamente indisponível." };
+  }
+  const parsed = z
+    .object({ loteId: z.string().uuid(), sessionId: z.string().uuid() })
+    .safeParse({ loteId, sessionId });
+  if (!parsed.success) return { error: "Lote inválido." };
+
+  try {
+    const reenviados = await withTenant(ctx, async (tx) => {
+      const r = await tx.execute(sql`
+        UPDATE audio_capture
+           SET asr_status = 'na_fila',
+               tentativas = 0,
+               falhou_em  = NULL
+         WHERE lote_id = ${parsed.data.loteId}
+           AND session_id = ${parsed.data.sessionId}
+           AND asr_status = 'falhou'
+           AND objeto_ref IS NOT NULL
+           AND falhou_em IS NOT NULL
+           AND falhou_em > now() - ${janelaDeResgateIntervalo()}::interval
+        RETURNING ordem
+      `);
+      const linhas = r as unknown as Array<{ ordem: number | null }>;
+
+      // Enfileira DENTRO da `tx`, como a promoção do envio original: se o
+      // UPDATE sofrer rollback, o job nunca existe. E só quando houve o que
+      // remandar — job sem trabalho é ruído que o alarme de fila conta.
+      if (linhas.length > 0) {
+        await enqueueJob(
+          "asr-transcrever",
+          {
+            origem: "resgate",
+            loteId: parsed.data.loteId,
+            sessionId: parsed.data.sessionId,
+            clinicId: ctx.clinicId,
+          },
+          { singletonKey: `resgate:${parsed.data.loteId}`, tx },
+        );
+      }
+      return linhas.length;
+    });
+
+    return { reenviados };
+  } catch (err) {
+    logarErroSemPII("diario-asr.resgate-falhou", err, {
+      loteId: parsed.data.loteId,
+    });
+    return { error: "Não foi possível reenviar o áudio para transcrição." };
+  }
+}
+
+export const reenviarClipesFalhosDoServidor = comEscrita(
+  reenviarClipesFalhosDoServidorCore,
+);
 
 // ─── #72 T25 — a transcrição é efêmera (R19, decisão C de 31/08/2026) ─────
 //

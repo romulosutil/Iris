@@ -1160,6 +1160,12 @@ export const audioCapture = pgTable(
       .default("rascunho_local"),
     // Referência ao objeto no storage — nulo enquanto o áudio vive só local (Fase 2).
     objetoRef: text("objeto_ref"),
+    // MIME/codec REAL do clipe, como o `MediaRecorder` do navegador o produziu
+    // (`recorder.mimeType`, `use-gravador.ts`) — D71. Sem esta coluna o worker
+    // fixava `audio/webm` ao reler do bucket, errado para clipe de iOS/Safari
+    // (`audio/mp4` AAC). Nulo nas linhas gravadas antes desta coluna existir:
+    // o worker cai no `ASR_MIME_PADRAO` nesse caso, nunca em `undefined`.
+    mimeType: text("mime_type"),
     duracaoSegundos: integer("duracao_segundos"),
     criadoEm: timestamp("criado_em", { withTimezone: true })
       .notNull()
@@ -1181,6 +1187,19 @@ export const audioCapture = pgTable(
     // o sweeper preserva o áudio indefinidamente, violando R11 sem limite
     // (#494/T19). Este contador é o teto que fecha o laço.
     reversoes: integer("reversoes").notNull().default(0),
+    // Carimbo do desfecho DEFINITIVO de transcrição — régua da janela de
+    // resgate. Antes, `app_asr_falhar` zerava `objeto_ref` no teto de
+    // tentativas e o `finally` do worker apagava o áudio do MinIO na hora:
+    // falha de IA destruía documento clínico. Agora o objeto é PRESERVADO e
+    // esta coluna diz desde quando — `app_asr_objetos_em_uso` reivindica a
+    // chave enquanto a janela não vence (o sweeper preserva), e
+    // `app_asr_expirar_resgate` solta a referência depois dela.
+    //
+    // Coluna própria, e não `criado_em`: a janela conta a partir da FALHA. Um
+    // clipe que passou horas na fila nasceria com o resgate quase vencido se a
+    // régua fosse a gravação. Escrita só pelos definers (que rodam como owner),
+    // por isso fora do GRANT de coluna de `app_role`.
+    falhouEm: timestamp("falhou_em", { withTimezone: true }),
   },
   (t) => [
     index("idx_audio_capture_session").on(t.sessionId),

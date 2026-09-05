@@ -38,10 +38,21 @@ vi.mock("@/db/client", () => ({
 
 // Storage e provider não devem sequer ser alcançados nestes testes; dublados
 // para que, se algum dia forem, a falha seja evidente e não uma ida à rede.
+const ler = vi.fn();
 vi.mock("@/lib/asr/storage", () => ({
-  ler: vi.fn(),
+  ler: (...args: unknown[]) => ler(...args),
   guardar: vi.fn(),
   apagar: vi.fn(),
+}));
+
+// Provider dublado com `importOriginal`: `AsrProviderError` PRECISA ser a
+// classe real, porque a rota decide `reverter` com `instanceof`. Dublar o
+// módulo inteiro trocaria a classe e o `instanceof` passaria a ser sempre
+// falso — um teste verde pelo caminho errado (memória `duble-arrow-nao-e-construtor`).
+const transcrever = vi.fn();
+vi.mock("@/lib/asr/provider", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/asr/provider")>()),
+  getAsrProvider: () => ({ transcrever }),
 }));
 
 const { POST } = await import("./route");
@@ -259,5 +270,65 @@ describe("POST /api/internal/jobs/asr-transcrever — log estruturado (#560/F3)"
     expect(registro?.erroNome).toBe("DrizzleQueryError");
     expect(registro?.codigo).toBe("40001");
     expect(log.bruto()).not.toContain("nota ditada");
+  });
+});
+
+describe("D71 — o Content-Type do POST de transcrição é o codec REAL do clipe", () => {
+  const envOriginal = process.env.ASR_JOB_TOKEN;
+
+  beforeEach(() => {
+    execute.mockReset();
+    transcrever.mockReset();
+    ler.mockReset();
+    process.env.ASR_JOB_TOKEN = TOKEN;
+  });
+
+  afterEach(() => {
+    if (envOriginal === undefined) delete process.env.ASR_JOB_TOKEN;
+    else process.env.ASR_JOB_TOKEN = envOriginal;
+  });
+
+  /**
+   * Encena um tick com UM clipe reservado e devolve o mime que a rota passou
+   * ao provider. A ordem dos `execute` é a do POST: backstop de presos,
+   * expurgo de resgate, reserva, conclusão e a consulta de objeto em uso.
+   */
+  async function mimeEnviado(mimeNaLinha: string | null): Promise<unknown> {
+    transcrever.mockResolvedValue({ texto: "trecho ditado" });
+    ler.mockResolvedValue(new Uint8Array([1, 2, 3]));
+    execute
+      .mockResolvedValueOnce([{ expirados: 0 }]) // app_asr_expirar_presos
+      .mockResolvedValueOnce([{ expirados: 0 }]) // app_asr_expirar_resgate
+      .mockResolvedValueOnce([
+        {
+          id: "11111111-1111-1111-1111-111111111111",
+          clinic_id: "22222222-2222-2222-2222-222222222222",
+          objeto_ref: "asr/lote:1",
+          lote_id: null,
+          ordem: 1,
+          mime_type: mimeNaLinha,
+        },
+      ])
+      .mockResolvedValue([]); // concluir, objetos_em_uso, heartbeat
+
+    const res = await POST(requisicao(`Bearer ${TOKEN}`));
+    expect(res.status).toBe(200);
+    expect(transcrever).toHaveBeenCalledTimes(1);
+    return transcrever.mock.calls[0]![1];
+  }
+
+  it("usa o mime persistido — clipe de iPhone não vai mais rotulado como webm", async () => {
+    // ESTE É O TESTE QUE MORDE D71. Antes da `0155` a rota mandava
+    // `audio/webm` para todo mundo, inclusive para o `audio/mp4` (AAC) que o
+    // Safari grava. Hoje inerte porque `servidor.py` detecta o formato por
+    // magic bytes; vira quebra silenciosa no dia em que o serviço escolher o
+    // demuxer pelo header ou pela extensão do arquivo temporário.
+    expect(await mimeEnviado("audio/mp4")).toBe("audio/mp4");
+  });
+
+  it("cai no fallback só quando a linha é anterior à 0155 (mime nulo)", async () => {
+    // Linha gravada antes da coluna existir. `audio/webm` é o mesmo palpite
+    // que o código fazia para TODO clipe — para essas linhas nada piora.
+    expect(await mimeEnviado(null)).toBe("audio/webm");
   });
 });

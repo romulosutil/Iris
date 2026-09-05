@@ -14,6 +14,10 @@ import {
 } from "@/lib/jobs/heartbeat";
 import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 import { logger } from "@/lib/observabilidade/logger";
+import {
+  janelaDeResgateDias,
+  janelaDeResgateIntervalo,
+} from "@/lib/asr/resgate";
 
 /**
  * Rota interna do worker de transcrição (#72, T07).
@@ -43,15 +47,22 @@ export const dynamic = "force-dynamic";
 // brief de T07 não pede que isso seja configurável por ambiente.
 const LOTE_PADRAO = 5;
 
-// MIME fixo enviado ao provider — GAP CONHECIDO, documentado no relatório
-// desta task. `audio_capture` não persiste o mime/codec do clipe: a chave do
-// storage efêmero é só `loteId:ordem` (T09/T14, `chaveClipe`), sem extensão
-// nem metadado de formato. R7 prevê codec dual (`webm;opus` / `mp4` AAC no
-// iOS), mas o worker não tem como saber qual dos dois foi de fato gravado.
-// `audio/webm` cobre o caminho majoritário (Android/desktop); um clipe
-// vindo de iOS chegaria ao serviço ASR com `Content-Type` incorreto até esse
-// dado ser persistido em uma task futura.
+// FALLBACK de mime, não mais o valor fixo (D71 fechado pela `0155`). O mime
+// real do clipe agora viaja de `recorder.mimeType` até `audio_capture.mime_type`
+// e volta no `RETURNING` de `app_asr_reservar` — R7 prevê codec dual
+// (`webm;opus` no Android/desktop, `mp4` AAC no iOS/Safari), e antes disto o
+// header ia fixo em `audio/webm` para os dois.
+//
+// O fallback continua existindo por uma razão só: linha gravada ANTES da
+// `0155` tem `mime_type` nulo. `audio/webm` é o caminho majoritário e é o
+// mesmo palpite que o código fazia para todo mundo — para essas linhas
+// antigas nada piora; para as novas, o header passa a ser o verdadeiro.
 const ASR_MIME_PADRAO = "audio/webm";
+
+// Janela de resgate (`0155`): enquanto ela não vence,
+// `app_asr_objetos_em_uso` reivindica a chave — o `finally` daqui não apaga e
+// o sweeper de órfãos preserva. Vencida, `app_asr_expirar_resgate` solta a
+// referência. Definição e motivo em `@/lib/asr/resgate`.
 
 // Idade a partir da qual uma linha presa em `na_fila`/`transcrevendo` é dada
 // como perdida (#494/T19). 6h é DELIBERADAMENTE a mesma régua do sweeper de
@@ -69,6 +80,8 @@ type LinhaReservada = {
   objeto_ref: string;
   lote_id: string | null;
   ordem: number | null;
+  // Nulo em linha gravada antes da `0155` — ver `ASR_MIME_PADRAO`.
+  mime_type: string | null;
 };
 
 type Desfecho = "transcrito" | "falhou" | "revertido";
@@ -166,22 +179,49 @@ async function expirarPresos(): Promise<number> {
  */
 async function objetoEmUso(ref: string): Promise<boolean> {
   const linhas = await asrWorkerDb.execute(
-    sql`SELECT ref FROM app_asr_objetos_em_uso(ARRAY[${ref}]::text[])`,
+    sql`SELECT ref FROM app_asr_objetos_em_uso(ARRAY[${ref}]::text[], ${janelaDeResgateIntervalo()}::interval)`,
   );
   return (linhas as unknown as unknown[]).length > 0;
 }
 
 /**
- * Processa um clipe reservado: baixa o objeto, transcreve, conclui ou falha,
- * e apaga o objeto efêmero no fim (R11) SÓ NO DESFECHO DEFINITIVO.
+ * Expurgo explícito do fim da janela de resgate (`0155`) — a metade que torna
+ * a janela uma janela, e não retenção eterna.
  *
- * Dos três desfechos, dois devolvem o clipe a `na_fila` PRESERVANDO
- * `objeto_ref` (503/saturação, que reverte a tentativa; e falha transitória
- * abaixo do teto de 3) — apagar o objeto neles condenava o clipe: a próxima
- * reserva o encontrava elegível, `ler()` falhava por objeto inexistente, e ele
- * queimava as tentativas restantes até `falhou` sem nunca ter sido
- * transcrito. Quem sabe em qual dos casos estamos é o BANCO, depois do
- * `concluir`/`falhar` — daí a consulta abaixo.
+ * Roda ao lado de `expirarPresos`, no mesmo ponto do tick e pelo mesmo motivo:
+ * quem já tem a fila em mãos a cada tick é esta rota, e soltar a referência
+ * ANTES da reserva faz o sweeper encontrar o objeto liberado no ciclo dele
+ * seguinte em vez de um tick depois.
+ */
+async function expirarResgate(): Promise<number> {
+  const linhas = await asrWorkerDb.execute(
+    sql`SELECT app_asr_expirar_resgate(${janelaDeResgateIntervalo()}::interval) AS expirados`,
+  );
+  const primeira = (linhas as unknown as { expirados: number }[])[0];
+  return primeira?.expirados ?? 0;
+}
+
+/**
+ * Processa um clipe reservado: baixa o objeto, transcreve, conclui ou falha,
+ * e apaga o objeto efêmero no fim (R11) SÓ QUANDO NINGUÉM MAIS O REIVINDICA.
+ *
+ * Depois da `0155`, o único desfecho que de fato libera o objeto para exclusão
+ * imediata é a TRANSCRIÇÃO BEM-SUCEDIDA (`app_asr_concluir` zera
+ * `objeto_ref` — o texto já está na linha, o áudio cumpriu seu papel). Todos
+ * os outros preservam a referência:
+ *
+ * - 503/saturação e falha transitória abaixo do teto voltam a `na_fila` — o
+ *   clipe ainda vai ser lido de novo. Apagar aqui o condenava: a próxima
+ *   reserva o encontrava elegível, `ler()` falhava por objeto inexistente, e
+ *   ele queimava as tentativas restantes até `falhou` sem nunca ter sido
+ *   transcrito.
+ * - falha DEFINITIVA (teto de 3) agora entra na JANELA DE RESGATE: o áudio é
+ *   documento clínico e não pode ser destruído por uma falha de IA. Antes da
+ *   `0155` este era o caso que apagava o áudio para sempre.
+ *
+ * Quem sabe em qual dos casos estamos é o BANCO, depois do `concluir`/`falhar`
+ * — daí a consulta abaixo. É deliberado que esta função NÃO recalcule isso:
+ * duas cópias da regra envelheceriam separado, e a cópia errada apaga áudio.
  */
 async function processarClipe(clipe: LinhaReservada): Promise<ResultadoClipe> {
   try {
@@ -189,7 +229,12 @@ async function processarClipe(clipe: LinhaReservada): Promise<ResultadoClipe> {
       const audio = await ler(clipe.objeto_ref);
       const { texto } = await getAsrProvider().transcrever(
         audio,
-        ASR_MIME_PADRAO,
+        // D71: o mime REAL do clipe, como o navegador o gravou. `??` e não
+        // `||`: string vazia persistida é dado ruim conhecido e deve cair no
+        // fallback, mas só `null`/`undefined` significam "linha anterior à
+        // 0155" — e é só esse caso que o `??` cobre. (String vazia não é
+        // gravável: `diario-asr.ts` só persiste `contentType` truthy.)
+        clipe.mime_type ?? ASR_MIME_PADRAO,
       );
       await concluirClipe(clipe.id, texto);
       return { id: clipe.id, desfecho: "transcrito" };
@@ -264,6 +309,23 @@ export async function POST(request: Request): Promise<Response> {
       logarErroSemPII("asr-transcrever.backstop-falhou", err);
     }
 
+    // Expurgo do fim da janela de resgate — mesmo tratamento do backstop: não
+    // aborta o tick, mas é logado. Um expurgo que falha em silêncio transforma
+    // a janela em retenção indefinida de áudio clínico num bucket sem wiring
+    // de expurgo LGPD, que é precisamente o que a `0155` existe para evitar.
+    let resgatesExpirados: number | null = null;
+    try {
+      resgatesExpirados = await expirarResgate();
+      if (resgatesExpirados > 0) {
+        logger.warn("asr-transcrever.resgate-expirado", {
+          expirados: resgatesExpirados,
+          janelaDias: janelaDeResgateDias(),
+        });
+      }
+    } catch (err) {
+      logarErroSemPII("asr-transcrever.expurgo-resgate-falhou", err);
+    }
+
     const reservados = await reservarLote(LOTE_PADRAO);
 
     // R12 — falha de UM clipe não aborta os demais do tick: cada clipe roda
@@ -292,6 +354,7 @@ export async function POST(request: Request): Promise<Response> {
       // `null` quando o backstop falhou — distinto de `0` ("rodou, nada a
       // expirar"). Um número só vira contagem depois que a chamada deu certo.
       expirados,
+      resgatesExpirados,
       processados: resultados.length,
       transcritos: resultados.filter((r) => r.desfecho === "transcrito").length,
       falhas: resultados.filter((r) => r.desfecho === "falhou").length,

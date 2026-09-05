@@ -74,6 +74,9 @@ const CLIPE_A_ESTOURADO = "72a50000-0000-0000-0000-0000000000c5";
 const CLIPE_A_TETO = "72a50000-0000-0000-0000-0000000000c6";
 const CLIPE_A_REVERSOES = "72a50000-0000-0000-0000-0000000000c7";
 const CLIPE_A_PRESO = "72a50000-0000-0000-0000-0000000000c8";
+const CLIPE_A_RESGATAVEL = "72a50000-0000-0000-0000-0000000000c9";
+const CLIPE_A_RESGATE_VENCIDO = "72a50000-0000-0000-0000-0000000000ca";
+const CLIPE_A_MIME = "72a50000-0000-0000-0000-0000000000cb";
 
 /** Todo clipe que qualquer teste deste arquivo possa ter plantado. */
 const TODOS_OS_CLIPES = [
@@ -85,6 +88,9 @@ const TODOS_OS_CLIPES = [
   CLIPE_A_TETO,
   CLIPE_A_REVERSOES,
   CLIPE_A_PRESO,
+  CLIPE_A_RESGATAVEL,
+  CLIPE_A_RESGATE_VENCIDO,
+  CLIPE_A_MIME,
 ];
 
 type LinhaReservada = {
@@ -101,6 +107,7 @@ type EstadoClipe = {
   tentativas: number;
   reversoes: number;
   objeto_ref: string | null;
+  falhou_em: Date | null;
   transcricao_texto: string | null;
   transcrito_em: Date | null;
 };
@@ -148,15 +155,17 @@ async function plantarClipe(opts: {
   ordem?: number;
   loteId?: string | null;
   reversoes?: number;
+  falhouEm?: Date | null;
 }) {
   await owner!`INSERT INTO audio_capture
       (id, session_id, clinic_id, status_upload, objeto_ref, criado_em,
-       lote_id, ordem, asr_status, tentativas, reversoes)
+       lote_id, ordem, asr_status, tentativas, reversoes, falhou_em)
     VALUES (
       ${opts.id}, ${opts.sessionId}, ${opts.clinicId}, 'confirmado',
       ${opts.objetoRef}, ${opts.criadoEm},
       ${opts.loteId ?? null}, ${opts.ordem ?? 0},
-      ${opts.asrStatus}::asr_status, ${opts.tentativas}, ${opts.reversoes ?? 0}
+      ${opts.asrStatus}::asr_status, ${opts.tentativas}, ${opts.reversoes ?? 0},
+      ${opts.falhouEm ?? null}
     )`;
 }
 
@@ -164,7 +173,7 @@ async function plantarClipe(opts: {
 async function lerClipe(id: string): Promise<EstadoClipe> {
   const linhas = await owner!<EstadoClipe[]>`
     SELECT id, asr_status::text AS asr_status, tentativas, reversoes, objeto_ref,
-           transcricao_texto, transcrito_em
+           falhou_em, transcricao_texto, transcrito_em
       FROM audio_capture WHERE id = ${id}`;
   if (!linhas[0]) throw new Error(`clipe ${id} sumiu do banco`);
   return linhas[0];
@@ -411,7 +420,7 @@ describe.skipIf(!hasDb)("#72 · fila de ASR (0136) — RLS e reserva", () => {
     expect(estourado.tentativas).toBe(3);
   });
 
-  test("(d) app_asr_falhar no teto marca `falhou` definitivo e zera objeto_ref", async () => {
+  test("(d) app_asr_falhar no teto marca `falhou` definitivo e PRESERVA objeto_ref (0155)", async () => {
     // `objeto_ref = NULL` não é cosmético: o objeto efêmero já foi apagado
     // pelo `finally` do worker (R11). Deixar a referência faria toda leitura
     // futura (exportação, expurgo, suporte) tratar como "áudio disponível".
@@ -437,8 +446,14 @@ describe.skipIf(!hasDb)("#72 · fila de ASR (0136) — RLS e reserva", () => {
 
     const clipe = await lerClipe(CLIPE_A_TETO);
     expect(clipe.asr_status).toBe("falhou");
-    expect(clipe.objeto_ref).toBeNull();
     expect(clipe.tentativas).toBe(3);
+    // `0155` — O ÁUDIO SOBREVIVE AO TETO. Esta linha era `toBeNull()`: o teto
+    // de tentativas zerava `objeto_ref`, `app_asr_objetos_em_uso` deixava de
+    // reivindicar a chave e o `finally` do worker apagava o áudio do MinIO no
+    // mesmo tick. Falha de IA destruía documento clínico. Agora a referência
+    // fica e o carimbo abre a janela de resgate.
+    expect(clipe.objeto_ref).toBe("asr/72asr/teto.webm");
+    expect(clipe.falhou_em).not.toBeNull();
   });
 
   test("(503) app_asr_falhar(id, true) no teto devolve à fila com tentativas = 2", async () => {
@@ -515,7 +530,7 @@ describe.skipIf(!hasDb)("#72 · fila de ASR (0136) — RLS e reserva", () => {
     const app = conexaoApp();
     try {
       const linhas =
-        await app`SELECT ref FROM app_asr_objetos_em_uso(ARRAY['asr/72asr/inexistente']::text[])`;
+        await app`SELECT ref FROM app_asr_objetos_em_uso(ARRAY['asr/72asr/inexistente']::text[], '30 days'::interval)`;
       expect(linhas).toHaveLength(0);
     } finally {
       await app.end();
@@ -584,9 +599,12 @@ describe.skipIf(!hasDb)("#72 · fila de ASR (0136) — RLS e reserva", () => {
     expect(clipe.asr_status).toBe("falhou");
     expect(clipe.tentativas).toBe(3);
     expect(clipe.reversoes).toBe(10); // não incrementa quando não reverte
-    // E — o ponto de R11 — o objeto é SOLTO: `app_asr_objetos_em_uso` deixa de
-    // reivindicá-lo e o sweeper passa a poder apagar o áudio.
-    expect(clipe.objeto_ref).toBeNull();
+    // `0155`: o objeto NÃO é mais solto aqui. Saturação sustentada continua
+    // tendo fim (o clipe termina em `falhou`, que é o ponto do teto), mas o
+    // áudio entra na janela de resgate em vez de ser apagado — é a infra que
+    // não deu conta, e o áudio segue sendo documento clínico.
+    expect(clipe.objeto_ref).toBe("asr/72asr/reversoes.webm");
+    expect(clipe.falhou_em).not.toBeNull();
   });
 
   test("(T19b) app_asr_expirar_presos solta o objeto de linha velha, e só dela", async () => {
@@ -625,7 +643,11 @@ describe.skipIf(!hasDb)("#72 · fila de ASR (0136) — RLS e reserva", () => {
 
     const preso = await lerClipe(CLIPE_A_PRESO);
     expect(preso.asr_status).toBe("falhou");
-    expect(preso.objeto_ref).toBeNull();
+    // `0155`: idem ao teto — a linha presa também entra na janela de resgate.
+    // Uma linha que ficou 9h em `na_fila` é o caso em que o clipe NUNCA foi
+    // transcrito; perder o áudio aí seria puni-lo por falha de infraestrutura.
+    expect(preso.objeto_ref).toBe("asr/72asr/preso.webm");
+    expect(preso.falhou_em).not.toBeNull();
 
     // A metade que prova que o predicado de idade EXISTE: sem `criado_em <=
     // now() - p_idade`, a função varreria a fila inteira e este clipe legítimo
@@ -633,5 +655,110 @@ describe.skipIf(!hasDb)("#72 · fila de ASR (0136) — RLS e reserva", () => {
     const novo = await lerClipe(CLIPE_A_NOVO);
     expect(novo.asr_status).toBe("na_fila");
     expect(novo.objeto_ref).toBe("asr/72asr/novo.webm");
+  });
+  // ─────────────────────────────────────────────────────────────────────────
+  // `0155` — janela de resgate do áudio clínico e mime real do clipe (D71).
+  // ─────────────────────────────────────────────────────────────────────────
+
+  test("(0155) clipe `falhou` DENTRO da janela ainda é 'em uso' — o áudio não é apagado", async () => {
+    // ESTE É O TESTE QUE MORDE A REGRESSÃO. Se `app_asr_falhar` voltar a zerar
+    // `objeto_ref`, ou se `app_asr_objetos_em_uso` perder o ramo de `falhou`,
+    // esta asserção vira vermelha — e é exatamente essa combinação que fazia o
+    // `finally` do worker (e o sweeper) apagarem áudio clínico do MinIO depois
+    // de 3 falhas de IA.
+    await plantarClipe({
+      id: CLIPE_A_RESGATAVEL,
+      clinicId: CLINICA_A,
+      sessionId: SESSAO_A,
+      asrStatus: "falhou",
+      tentativas: 3,
+      objetoRef: "asr/72asr/resgatavel.webm",
+      criadoEm: minutosAtras(60 * 24 * 5),
+      falhouEm: minutosAtras(60 * 24 * 5), // falhou há 5 dias, janela de 30
+    });
+
+    const app = conexaoApp();
+    try {
+      const linhas = await app`
+        SELECT ref FROM app_asr_objetos_em_uso(
+          ARRAY['asr/72asr/resgatavel.webm']::text[], '30 days'::interval)`;
+      expect(linhas).toHaveLength(1);
+    } finally {
+      await app.end();
+    }
+  });
+
+  test("(0155) passada a janela, o objeto é SOLTO — a janela tem fim", async () => {
+    // A outra metade, e a que impede a "correção" de virar retenção eterna: o
+    // bucket de ASR não tem expurgo LGPD, então preservar para sempre seria
+    // esconder áudio de paciente fora de todo wiring de retenção.
+    await plantarClipe({
+      id: CLIPE_A_RESGATE_VENCIDO,
+      clinicId: CLINICA_A,
+      sessionId: SESSAO_A,
+      asrStatus: "falhou",
+      tentativas: 3,
+      objetoRef: "asr/72asr/vencido.webm",
+      criadoEm: minutosAtras(60 * 24 * 40),
+      falhouEm: minutosAtras(60 * 24 * 40), // 40 dias > janela de 30
+    });
+    // Planta TAMBÉM o clipe ainda dentro da janela: o `beforeEach` limpa a
+    // tabela entre testes, então o contraponto tem que nascer aqui — depender
+    // da linha do teste anterior daria um verde que só existe pela ordem de
+    // execução.
+    await plantarClipe({
+      id: CLIPE_A_RESGATAVEL,
+      clinicId: CLINICA_A,
+      sessionId: SESSAO_A,
+      asrStatus: "falhou",
+      tentativas: 3,
+      objetoRef: "asr/72asr/resgatavel.webm",
+      criadoEm: minutosAtras(60 * 24 * 5),
+      falhouEm: minutosAtras(60 * 24 * 5),
+    });
+
+    const app = conexaoWorker();
+    try {
+      const [linha] = await app<
+        { app_asr_expirar_resgate: number }[]
+      >`SELECT app_asr_expirar_resgate('30 days'::interval) AS app_asr_expirar_resgate`;
+      expect(linha!.app_asr_expirar_resgate).toBeGreaterThanOrEqual(1);
+    } finally {
+      await app.end();
+    }
+
+    const vencido = await lerClipe(CLIPE_A_RESGATE_VENCIDO);
+    expect(vencido.objeto_ref).toBeNull();
+    // `asr_status` NÃO muda: `falhou` já é o desfecho correto. O que o expurgo
+    // altera é só a posse do objeto.
+    expect(vencido.asr_status).toBe("falhou");
+
+    // E o clipe AINDA dentro da janela não foi levado junto — sem o predicado
+    // `falhou_em <= now() - p_janela`, o expurgo varreria os dois.
+    const vivo = await lerClipe(CLIPE_A_RESGATAVEL);
+    expect(vivo.objeto_ref).toBe("asr/72asr/resgatavel.webm");
+  });
+
+  test("(D71) app_asr_reservar devolve o mime real gravado no clipe", async () => {
+    // Sem isto o worker manda `Content-Type: audio/webm` para um clipe de
+    // iPhone (`audio/mp4` AAC). Hoje inerte porque `servidor.py` detecta por
+    // magic bytes; quebra no dia em que ele olhar o header.
+    await owner!`INSERT INTO audio_capture
+        (id, session_id, clinic_id, status_upload, objeto_ref, criado_em,
+         lote_id, ordem, asr_status, tentativas, mime_type)
+      VALUES (${CLIPE_A_MIME}, ${SESSAO_A}, ${CLINICA_A}, 'confirmado',
+              'asr/72asr/mime.mp4', ${minutosAtras(1)}, NULL, 0,
+              'na_fila'::asr_status, 0, 'audio/mp4')`;
+
+    const app = conexaoWorker();
+    try {
+      const linhas = await app<
+        { id: string; mime_type: string | null }[]
+      >`SELECT id, mime_type FROM app_asr_reservar(50)`;
+      const meu = linhas.find((l) => l.id === CLIPE_A_MIME);
+      expect(meu?.mime_type).toBe("audio/mp4");
+    } finally {
+      await app.end();
+    }
   });
 });
