@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Imagem dos LAÇOS de agendamento do pipeline de ASR (Iris, #72, T08).
+# Imagem dos consumidores/laços do pipeline de ASR (Iris, #72, T08 / D73).
 #
 # NÃO é o serviço `iris-asr` (faster-whisper) — aquele é `infra/asr/Dockerfile`,
 # Python, e serve HTTP em `/transcrever`. Esta imagem é Node puro, molde
@@ -7,25 +7,64 @@
 # processa áudio nem carrega modelo.
 #
 # DUAS UNIDADES DE TRABALHO NA MESMA IMAGEM, DOIS SERVIÇOS EASYPANEL:
-#   - agendador.sh      → dispara o worker de transcrição (T08, gatilho magro
-#                          por HTTP, zero dependência além do fetch nativo)
+#   - agendador.sh      → consumidor da fila `pgboss` (D73). Sobe UM processo
+#                          Node que consome `asr-transcrever` com concorrência
+#                          1 e dispara a rota interna. Precisa de `pg-boss`.
 #   - sweeper-orfaos.sh  → backstop de objetos órfãos no bucket efêmero (T15,
 #                          precisa de `postgres` e `@aws-sdk/client-s3`)
 #
-# T15 (`infra/asr/sweeper-orfaos.sh`) foi implementado ANTES de T08 existir e
-# ficou sem imagem própria de propósito — o comentário no topo daquele script
-# convida T08 a decidir se compensa fundir os dois ticks. Decisão tomada aqui:
-# NÃO fundir os laços (tiques e falhas de um não devem derrubar o outro), mas
-# COMPARTILHAR a imagem — os dois são scripts `.mjs` magros do mesmo pipeline,
-# e cada Easypanel "Aplicativo" desta imagem escolhe seu laço só pelo campo
-# Comando (`/app/agendador.sh` ou `/app/sweeper-orfaos.sh`), como dois serviços
-# separados, cada um com seu próprio Comando/env/heartbeat/réplica no painel.
-# Proposta de arquitetura — validar com Rômulo (regra do CLAUDE.md: decisão
-# nova de arquitetura marca como pendente).
+# Os dois laços continuam SEPARADOS (tiques e falhas de um não devem derrubar o
+# outro) mas COMPARTILHAM a imagem — cada Easypanel "Aplicativo" escolhe o seu
+# só pelo campo Comando (`/app/agendador.sh` ou `/app/sweeper-orfaos.sh`).
 #
-# `npm install` À MÃO (sem herdar node_modules do app), pelo mesmo motivo do
-# #156 documentado em infra/billing/Dockerfile: só as duas dependências que o
-# sweeper (T15) genuinamente usa.
+# ─── POR QUE HÁ UM ESTÁGIO DE BUILD (D73) ───────────────────────────────────
+#
+# O consumidor da fila é TypeScript e vive em `src/lib/queue/**` +
+# `scripts/queue-worker.ts`. Rodá-lo com `node --import=tsx/esm` no container
+# não funciona: `tsx` é `devDependency` e não entra no artefato de produção, e
+# `src/` não é copiado para cá. Seria a classe de falha das memórias
+# `imagem-escalonamento-nao-herda-app` e `carga-nao-cobre-import-dinamico` —
+# imagem que sobe verde e morre no primeiro tick.
+#
+# A saída NÃO é herdar o `node_modules` do app (é justamente o que o #156
+# proíbe nesta família de imagens). É transpilar: o estágio `bundler` roda
+# esbuild e produz UM `.mjs` autocontido, com `pg-boss` marcado como externo.
+# O estágio final instala `pg-boss` e copia só esse arquivo. Medido: 11,7 KB,
+# e o único `import` que sobra no bundle é `pg-boss` — nenhum Drizzle, nenhum
+# Next (é para isso que `src/lib/queue/boss.ts` está separado de `client.ts`).
+
+# ─── Estágio 1: bundle do consumidor ────────────────────────────────────────
+FROM node:22-alpine AS bundler
+
+WORKDIR /build
+
+# esbuild pinado na MESMA versão do devDependency do repo. O binário do esbuild
+# é Go estático e roda em musl — não precisa de glibc nesta alpine.
+#
+# ⚠️ Depende de rede no build (memória `build-docker-depende-de-rede-externa`):
+# se este `npm install` falhar, o erro que aparece adiante é "Could not resolve"
+# do esbuild, que PARECE erro de código. Ler o log deste RUN antes de mexer nos
+# imports.
+RUN npm install --no-package-lock --no-audit --no-fund --no-save esbuild@0.28.2
+
+# Só o que o grafo do worker alcança. `src/` inteiro porque o bundle resolve
+# `@/lib/observabilidade/logger` via `paths` do tsconfig; o estágio é
+# descartado depois, então o peso não chega na imagem final.
+COPY tsconfig.json ./tsconfig.json
+COPY src ./src
+COPY scripts/queue-worker.ts ./scripts/queue-worker.ts
+
+# Mesmos flags de `pnpm queue:build` no package.json. Se divergirem, o guard em
+# `src/lib/queue/bundle.test.ts` falha o CI.
+RUN ./node_modules/.bin/esbuild scripts/queue-worker.ts \
+    --bundle \
+    --platform=node \
+    --target=node22 \
+    --format=esm \
+    --external:pg-boss \
+    --outfile=/build/dist/queue-worker.mjs
+
+# ─── Estágio 2: imagem final ────────────────────────────────────────────────
 FROM node:22-alpine
 
 # bash: os dois laços usam `set -Eeuo pipefail` e `[[ ]]`, que não são POSIX
@@ -35,16 +74,24 @@ RUN apk add --no-cache bash
 
 WORKDIR /app
 
-# Só as deps do sweeper (T15) — o agendador de T08 usa só `fetch` nativo do
-# Node 22 e não precisa de nada aqui. Versões EXATAS, pinadas nas mesmas do
-# pnpm-lock.yaml do repo (postgres 3.4.9, mesma escolha de
-# infra/retencao/Dockerfile; @aws-sdk/client-s3 3.1121.0). `npm install`, não
-# `pnpm install`: instalar a partir do lockfile do repo traria o grafo inteiro
-# (Next, React, Storybook...) numa imagem cuja única necessidade são dois
-# drivers — mesma razão de infra/retencao/Dockerfile.
+# `npm install` À MÃO (sem herdar node_modules do app), pelo mesmo motivo do
+# #156 documentado em infra/billing/Dockerfile: só o que estes processos
+# genuinamente usam. Versões EXATAS, pinadas nas mesmas do pnpm-lock.yaml
+# (postgres 3.4.9, @aws-sdk/client-s3 3.1121.0, pg-boss 12.30.0).
+#
+# `pg-boss` é do CONSUMIDOR da fila (agendador.sh); `postgres` e
+# `@aws-sdk/client-s3` são do sweeper (T15). `pg-boss` traz `pg`, `cron-parser`
+# e `serialize-error` como dependências próprias — por isso NÃO é marcado como
+# externo à toa: ele é a única coisa que o bundle não carrega.
 RUN npm install --no-package-lock --no-audit --no-fund \
-    postgres@3.4.9 @aws-sdk/client-s3@3.1121.0
+    postgres@3.4.9 @aws-sdk/client-s3@3.1121.0 pg-boss@12.30.0
 
+# Consumidor da fila, já transpilado. Sem `tsx`, sem `src/`, sem TypeScript.
+COPY --from=bundler /build/dist/queue-worker.mjs ./scripts/queue-worker.mjs
+
+# Disparo manual de UM tick (`--once`), sem passar pela fila. NÃO é o caminho
+# de produção — é a ferramenta de incidente do runbook (e o que o e2e usa para
+# drenar a fila sem esperar o cron). Só `fetch` nativo, zero dependência.
 COPY scripts/disparo-asr-transcrever.mjs ./scripts/disparo-asr-transcrever.mjs
 COPY scripts/asr-sweeper-orfaos.mjs ./scripts/asr-sweeper-orfaos.mjs
 # #536 — o sweeper importa o helper de heartbeat; sem este COPY a imagem sobe
@@ -53,7 +100,7 @@ COPY scripts/lib/heartbeat.mjs ./scripts/lib/heartbeat.mjs
 
 # #560/F3b — o log estruturado dos jobs. Módulo Node PURO (só `node:crypto`):
 # não é `pino`, não é `src/lib`, e por isso não muda a regra de dependência
-# desta imagem. Precisa do COPY porque é um import RELATIVO novo — a classe de
+# desta imagem. Precisa do COPY porque é um import RELATIVO — a classe de
 # falha da #156 é exatamente esta: o import entra no script, não entra no
 # Dockerfile, e o processo morre em ERR_MODULE_NOT_FOUND com CI verde.
 COPY scripts/lib/log-estruturado.mjs ./scripts/lib/log-estruturado.mjs
@@ -63,9 +110,9 @@ COPY infra/asr/sweeper-orfaos.sh ./sweeper-orfaos.sh
 RUN chmod +x agendador.sh sweeper-orfaos.sh
 
 # CMD, não ENTRYPOINT: com ENTRYPOINT em exec-form um
-# `docker compose run asr-agendador node scripts/disparo-asr-transcrever.mjs --once`
-# passaria tudo como ARGUMENTO do agendador, que ignoraria e entraria no laço
-# normal (mesma armadilha documentada em infra/billing/Dockerfile). Com CMD, o
-# argumento SUBSTITUI o comando — e é assim que o Easypanel troca entre os dois
-# laços só com o campo Comando, sem precisar de duas imagens.
+# `docker compose run asr-agendador node scripts/queue-worker.mjs`
+# passaria tudo como ARGUMENTO do agendador, que ignoraria e subiria o
+# consumidor normal (mesma armadilha documentada em infra/billing/Dockerfile).
+# Com CMD, o argumento SUBSTITUI o comando — e é assim que o Easypanel troca
+# entre os dois laços só com o campo Comando, sem precisar de duas imagens.
 CMD ["/app/agendador.sh"]

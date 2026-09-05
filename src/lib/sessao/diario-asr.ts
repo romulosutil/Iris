@@ -13,6 +13,7 @@ import { guardar } from "@/lib/asr/storage";
 import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
 import { logger } from "@/lib/observabilidade/logger";
 import { mensagemDeConsentimento } from "./diario-comum";
+import { enqueueJob } from "@/lib/queue/client";
 
 /**
  * Ditado de voz do diário de sessão (#72): envio do lote de clipes, leitura do
@@ -262,8 +263,8 @@ async function enviarLoteAsrCore(
       try {
         const chave = chaveClipe(loteId, c.ordem);
         await guardar(chave, c.dados, c.contentType);
-        await withTenant(ctx, (tx) =>
-          tx
+        await withTenant(ctx, async (tx) => {
+          await tx
             .update(audioCapture)
             .set({ asrStatus: "na_fila", objetoRef: chave })
             .where(
@@ -272,8 +273,18 @@ async function enviarLoteAsrCore(
                 eq(audioCapture.ordem, c.ordem),
                 eq(audioCapture.asrStatus, "nao_solicitado"),
               ),
-            ),
-        );
+            );
+
+          // Emitido DENTRO da transação (`tx`): se o UPDATE que promove os
+          // clipes a `na_fila` sofrer rollback, o job nunca existe. O payload
+          // é só correlação de log — quem escolhe o trabalho é
+          // `app_asr_reservar`, do lado do banco.
+          await enqueueJob(
+            "asr-transcrever",
+            { origem: "lote", loteId, sessionId, clinicId: ctx.clinicId },
+            { singletonKey: loteId, tx },
+          );
+        });
       } catch {
         ordensComFalha.push(c.ordem);
         // `falhou` (e não o `nao_solicitado` em que a linha já está): estado

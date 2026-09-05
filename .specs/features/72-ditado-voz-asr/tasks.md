@@ -161,8 +161,16 @@ T06 ─┘   │             T14
 ## T08 — Agendador + provisionamento no Easypanel
 
 **Onde:** `infra/asr/agendador.sh`, `infra/README.md`
-**Depende de:** T06, T07
-**Reusa:** `infra/retencao/agendador.sh`
+
+> ⚠️ **T08 foi SUPERADA pela D73 (PR #624, 05/09/2026).** O laço de `sleep`
+> descrito abaixo não existe mais: `agendador.sh` sobe um consumidor da fila
+> `pgboss` (`scripts/queue-worker.ts`, transpilado por esbuild na imagem), e a
+> cadência é `CRON_TICK_ASR` em vez de `INTERVALO_S`. O que sobreviveu intacto
+> é a decisão de fundo — **gatilho magro**: o consumidor só faz POST na rota
+> interna, e reserva/download/`iris-asr`/conclusão seguem no app. Ver
+> `design.md` §7.
+> **Depende de:** T06, T07
+> **Reusa:** `infra/retencao/agendador.sh`
 
 **Done when:**
 

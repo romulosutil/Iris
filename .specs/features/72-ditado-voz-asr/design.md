@@ -14,8 +14,13 @@ audio-local.tsx           enviarLoteAsr ────────────► 
  ├ IndexedDB              upload efêmero ──► MinIO                         HTTP interno
  └ polling ◄────────────  obterEstadoLote ◄────────── audio_capture
                                   ▲
-infra/asr/agendador.sh ──POST──► /api/internal/jobs/asr-transcrever
-   (tick, sem cron)                ├ reserva via SECURITY DEFINER
+  enviarLoteAsr ─enqueue(tx)─► pgboss.job ──► consumidor (asr-agendador)
+                                                        │
+  cron CRON_TICK_ASR (rede de segurança) ───────────────┤
+                                                        │
+                                                        ▼
+                                POST ──► /api/internal/jobs/asr-transcrever
+                                   ├ reserva via SECURITY DEFINER
                                    ├ baixa objeto do MinIO
                                    ├ chama AsrProvider ─────────────────► POST /transcrever
                                    └ finally: apaga objeto SEMPRE
@@ -107,31 +112,81 @@ e devolver o clipe para a fila a partir do código. Tabela canônica em
 boolean DEFAULT false)` — em `true`, `tentativas = greatest(tentativas - 1,
 0)` e status volta a `na_fila` ignorando o teto. **Proposta de arquitetura —
   validar com Rômulo antes de fechar T02.** O risco conhecido é laço infinito
-  se o serviço ficar saturado para sempre; ele é contido por config (teto do
-  serviço >= teto do agendador torna `503` anomalia, não caminho normal), não
-  por contador — se essa contenção não bastar, a alternativa é aceitar o gasto
-  da tentativa.
+  se o serviço ficar saturado para sempre.
+
+  ⚠️ **A contenção original desta proposta não se sustentou** e o texto ficou
+  aqui porque o raciocínio errado é parte do registro: dizia-se que "teto do
+  serviço >= teto do agendador torna `503` anomalia, não caminho normal". Não
+  tornava — o laço de `sleep 20` disparava contra ticks ainda vivos de ~215 s,
+  então `503` era o regime NORMAL (#494/T19). Quem de fato contém hoje são duas
+  coisas do lado do banco: o teto de reversões por clipe em
+  `app_asr_falhar(id, true)` + o backstop de idade `app_asr_expirar_presos`
+  (`0141`), e — desde a D73 — a concorrência 1 da fila `pgboss`, que impede um
+  segundo tick de sair de `created` enquanto o primeiro está `active`.
+
 - `400`/`413` (corpo vazio, truncado ou acima do teto) → falha **definitiva**
   do clipe. Reenviar o mesmo byte range dá o mesmo erro.
 - `408`/`500` → falha transitória, conta tentativa.
 
 **Tetos do serviço são backstop, não a única barreira.** `ASR_MAX_CONCORRENTES`
 (default 2) e `ASR_MAX_BYTES` (default 10 MiB, derivado de R1) vivem no serviço
-além do teto do agendador (T08): o chamador não é a única coisa entre a fila e
-uma VPS de 4 vCPU sem GPU. O teto do serviço tem que ser **>=** o do agendador,
-ou todo tick normal colhe `503`.
+além do teto do consumidor: o chamador não é a única coisa entre a fila e uma
+VPS de 4 vCPU sem GPU. O teto do serviço tem que ser **>=** o do consumidor, ou
+todo tick normal colhe `503`.
+
+⚠️ **O teto do consumidor é `localConcurrency`, ou seja, POR PROCESSO** (D73).
+`asr-transcrever` tem `concurrency: 1`, mas duas réplicas do serviço
+`asr-agendador` são dois tetos de 1 — a fila entrega um job a cada uma e a
+carga dobra sem nada acusar. Réplicas = 1 é requisito, não economia, e a guarda
+de instância única em `infra/asr/agendador.sh` cobre o caso do segundo processo
+dentro do MESMO container.
 
 **`ASR_SERVICE_TOKEN` ausente derruba o boot.** Fail-fast em vez de `/saude`
 verde com `/transcrever` respondendo `401` para sempre — o modo "verde e morto"
 não se diagnostica de fora.
 
-**Tamanho do modelo é resultado de medição, não escolha a priori.** T6 mede na VPS real (4 vCPU / 16 GB, sem GPU) o tempo de transcrição de um clipe de 2 min em `small` e em `medium`, em PT-BR clínico. O tick do agendador e o teto de concorrência saem desse número.
+**Tamanho do modelo é resultado de medição, não escolha a priori.** T6 mede na VPS real (4 vCPU / 16 GB, sem GPU) o tempo de transcrição de um clipe de 2 min em `small` e em `medium`, em PT-BR clínico. O teto de concorrência sai desse número.
 
-## 7. Gatilho (`infra/asr/agendador.sh`)
+## 7. Gatilho — fila `pg-boss` (D73, PR #624)
 
-Easypanel não tem cron. Script versionado no repo, painel só aponta o campo Comando — igual a `infra/retencao/agendador.sh`. Faz `POST /api/internal/jobs/asr-transcrever` com bearer `ASR_JOB_TOKEN` comparado em `timingSafeEqual`, mesmo idioma de `api/internal/billing/fechar-ciclos/route.ts`. Env ausente = recusa tudo, nunca "passa porque não há token configurado".
+> **Este item mudou.** O desenho original era um laço de shell
+> (`infra/asr/agendador.sh` com `sleep 20`), porque o Easypanel não tem cron.
+> Ele funcionava como agendador e **não** resolvia sobreposição de ticks: o
+> cliente abortava em 120 s, a rota seguia processando por ~215 s, o laço dormia
+> 20 s e disparava de novo contra um tick vivo (#494/T19). A D73 substituiu o
+> laço por fila transacional nativa no PostgreSQL (`pg-boss` v12).
 
-A lógica mora na rota do app, não num `.mjs` do job — a imagem do job não herda as deps do app, e um guard TS não alcançaria o código do agendador (memória `guard-em-processo-que-nao-importa-o-codigo`).
+Dois caminhos alimentam a mesma fila `asr-transcrever`:
+
+1. **Caminho quente (latência).** `enviarLoteAsr` chama `enqueueJob` com a
+   transação Drizzle em curso (`fromDrizzle(tx, sql)`), no mesmo COMMIT que
+   promove os clipes a `na_fila`. Rollback da transação = job nunca existe; não
+   há dual-write nem job fantasma apontando para estado não commitado. É o que
+   mantém o ditado respondendo em segundos (R1).
+2. **Rede de segurança.** `boss.schedule("asr-transcrever", CRON_TICK_ASR)`,
+   1 min. Existe por duas razões que o caminho quente não cobre:
+   `app_asr_falhar(id, true)` e `app_asr_expirar_presos` devolvem clipes a
+   `na_fila` DEPOIS que o job daquele lote concluiu com sucesso; e o heartbeat
+   `asr` (lido por `scripts/alarme-jobs.mjs`, limite de 30 min) é escrito pela
+   ROTA, uma vez por tick — clínica sem ditado nenhum alarmaria sem nada estar
+   quebrado.
+
+O que **não** mudou é o que importa: **a lógica continua morando na rota do
+app**. O consumidor (`src/lib/queue/handlers/asr.ts`) só faz
+`POST /api/internal/jobs/asr-transcrever` com bearer `ASR_JOB_TOKEN` comparado
+em `timingSafeEqual` — mesmo idioma de
+`api/internal/billing/fechar-ciclos/route.ts`. Env ausente = recusa tudo, nunca
+"passa porque não há token configurado", e o worker se recusa a subir antes de
+registrar qualquer consumidor.
+
+A imagem do job continua não herdando as deps do app (#156, memória
+`guard-em-processo-que-nao-importa-o-codigo`). Como o consumidor é TypeScript e
+vive em `src/lib/queue/**`, `infra/asr/Dockerfile.agendador` ganhou um estágio
+`bundler` com esbuild que produz um `.mjs` autocontido (11,7 KB; único import
+externo é `pg-boss`). `src/lib/queue/boss.ts` está separado de `client.ts`
+exatamente para o Drizzle ficar fora desse bundle. `src/lib/queue/bundle.test.ts`
+é o oráculo sobre esses artefatos — nenhum teste de unidade do worker alcança
+essa classe de defeito, porque todos importam o código direto do repo.
 
 ## 8. Fronteira cliente/servidor
 

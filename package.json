@@ -39,6 +39,8 @@
     "seed:custom": "tsx --conditions=react-server --env-file=.env scripts/seed-demo-account.ts",
     "unlock:user": "tsx --conditions=react-server --env-file=.env scripts/unlock-user.ts",
     "backfill:evidence": "tsx --conditions=react-server --env-file=.env scripts/backfill-evidence.ts",
+    "queue:work": "tsx --env-file-if-exists=.env scripts/queue-worker.ts",
+    "queue:build": "esbuild scripts/queue-worker.ts --bundle --platform=node --target=node22 --format=esm --external:pg-boss --outfile=dist/queue-worker.mjs",
     "prepare": "husky"
   },
   "dependencies": {
@@ -59,6 +61,7 @@
     "fflate": "^0.8.3",
     "next": "16.3.1",
     "pdfkit": "^0.19.1",
+    "pg-boss": "^12.30.0",
     "pino": "^10.3.1",
     "playwright": "^1.62.1",
     "postgres": "^3.4.7",

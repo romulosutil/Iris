@@ -135,7 +135,8 @@ SELECT asr_status, count(*), max(reversoes), min(criado_em)
 ```
 
 `max(reversoes)` colado em 10 = o serviço ASR está saturado de forma sustentada
-(subir `ASR_MAX_CONCORRENTES` ou aumentar `INTERVALO_S` do agendador), não um
+(subir `ASR_MAX_CONCORRENTES` ou afrouxar `CRON_TICK_ASR` em
+`src/lib/queue/config.ts`), não um
 defeito dos clipes.
 
 O laço `infra/asr/agendador.sh` também ganhou guarda de instância única
