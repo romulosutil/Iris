@@ -77,6 +77,7 @@ function cabecalhosDeSeguranca(): { key: string; value: string }[] {
 }
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["pg-boss"],
   // Imagem Docker enxuta para deploy no Easypanel (VPS). Desligado no build
   // local do Windows: o copy de symlinks do standalone falha com EPERM (o
   // Windows exige privilégio p/ symlink). CI (Linux) e o deploy mantêm o
