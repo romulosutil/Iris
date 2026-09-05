@@ -4,6 +4,7 @@ import { QUEUE_DEFINITIONS } from "./config";
 import type { EnqueueOptions, QueueJobMap, QueueName } from "./types";
 
 let bossInstance: PgBoss | null = null;
+let startPromise: Promise<PgBoss> | null = null;
 
 export function getBossInstance(): PgBoss {
   if (bossInstance) return bossInstance;
@@ -17,15 +18,30 @@ export function getBossInstance(): PgBoss {
     connectionString,
     schema: "pgboss",
     supervise: true,
-    migrate: false, // Migração gerenciada via DDL controlado pelo pipeline
+    migrate: false, // Schema e tabelas gerenciados pela migração 0154 do banco
     application_name: "iris_job_worker",
   });
 
   return bossInstance;
 }
 
+export async function ensureBossStarted(): Promise<PgBoss> {
+  const boss = getBossInstance();
+  if (!startPromise) {
+    startPromise = (async () => {
+      await boss.start();
+      return boss;
+    })().catch((err) => {
+      startPromise = null;
+      throw err;
+    });
+  }
+  return await startPromise;
+}
+
 export function resetBossInstance(): void {
   bossInstance = null;
+  startPromise = null;
 }
 
 /**
@@ -38,18 +54,37 @@ export async function enqueueJob<K extends QueueName>(
   options: EnqueueOptions = {},
 ): Promise<string | null> {
   const boss = getBossInstance();
+
+  // Em runtime real / integração, garante que o PgBoss foi iniciado e que as filas existem
+  if (!(boss.send as any)?.mock) {
+    await ensureBossStarted();
+  }
+
   const def = QUEUE_DEFINITIONS[queueName];
 
-  const sendOptions: Record<string, unknown> = {
-    retryLimit: options.retryLimit ?? def.retryLimit,
-    retryBackoff: options.retryBackoff ?? def.retryBackoff,
-    retryDelay: options.retryDelay ?? def.retryDelay,
-    expireInSeconds: options.expireInSeconds ?? def.expireInSeconds,
-    deadLetter: options.deadLetter ?? def.deadLetter,
-    singletonKey: options.singletonKey,
-    priority: options.priority,
-    startAfter: options.startAfter,
-  };
+  const sendOptions: Record<string, unknown> = {};
+
+  const retryLimit = options.retryLimit ?? def.retryLimit;
+  if (retryLimit !== undefined) sendOptions.retryLimit = retryLimit;
+
+  const retryBackoff = options.retryBackoff ?? def.retryBackoff;
+  if (retryBackoff !== undefined) sendOptions.retryBackoff = retryBackoff;
+
+  const retryDelay = options.retryDelay ?? def.retryDelay;
+  if (retryDelay !== undefined) sendOptions.retryDelay = retryDelay;
+
+  const expireInSeconds = options.expireInSeconds ?? def.expireInSeconds;
+  if (expireInSeconds !== undefined)
+    sendOptions.expireInSeconds = expireInSeconds;
+
+  const deadLetter = options.deadLetter ?? def.deadLetter;
+  if (deadLetter !== undefined) sendOptions.deadLetter = deadLetter;
+
+  if (options.singletonKey !== undefined)
+    sendOptions.singletonKey = options.singletonKey;
+  if (options.priority !== undefined) sendOptions.priority = options.priority;
+  if (options.startAfter !== undefined)
+    sendOptions.startAfter = options.startAfter;
 
   if (options.tx) {
     sendOptions.db = fromDrizzle(options.tx, sql);

@@ -61,7 +61,10 @@ describe("Queue Worker Supervisor", () => {
     await startQueueWorkers();
     await stopQueueWorkers();
 
-    expect(mockBoss.stop).toHaveBeenCalledWith({ graceful: true, timeout: 5000 });
+    expect(mockBoss.stop).toHaveBeenCalledWith({
+      graceful: true,
+      timeout: 5000,
+    });
     expect(logger.info).toHaveBeenCalledWith("queue.supervisor.parado");
   });
 

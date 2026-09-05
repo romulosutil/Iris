@@ -82,11 +82,20 @@ describe("ASR & LLM Job Handlers", () => {
     await expect(processAsrJob([job as any])).resolves.toBeUndefined();
     expect(logger.info).toHaveBeenCalledWith(
       "queue.asr.iniciando",
-      expect.objectContaining({ loteId: "lote-2", sessionId: "sess-2", clinicId: "clin-2", jobId: "asr-job-2" }),
+      expect.objectContaining({
+        loteId: "lote-2",
+        sessionId: "sess-2",
+        clinicId: "clin-2",
+        jobId: "asr-job-2",
+      }),
     );
     expect(logger.info).toHaveBeenCalledWith(
       "queue.asr.concluido",
-      expect.objectContaining({ loteId: "lote-2", sessionId: "sess-2", jobId: "asr-job-2" }),
+      expect.objectContaining({
+        loteId: "lote-2",
+        sessionId: "sess-2",
+        jobId: "asr-job-2",
+      }),
     );
   });
 
@@ -121,7 +130,11 @@ describe("ASR & LLM Job Handlers", () => {
     await expect(processLlmJob([job as any])).resolves.toBeUndefined();
     expect(logger.info).toHaveBeenCalledWith(
       "queue.llm.iniciando",
-      expect.objectContaining({ sessionId: "sess-2", clinicId: "clin-2", jobId: "llm-job-2" }),
+      expect.objectContaining({
+        sessionId: "sess-2",
+        clinicId: "clin-2",
+        jobId: "llm-job-2",
+      }),
     );
     expect(logger.info).toHaveBeenCalledWith(
       "queue.llm.concluido",

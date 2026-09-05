@@ -14,7 +14,12 @@ export async function processAsrJob(jobs: Job<AsrJobPayload>[]): Promise<void> {
     }
 
     const { loteId, sessionId, clinicId } = job.data;
-    logger.info("queue.asr.iniciando", { loteId, sessionId, clinicId, jobId: job.id });
+    logger.info("queue.asr.iniciando", {
+      loteId,
+      sessionId,
+      clinicId,
+      jobId: job.id,
+    });
 
     // Verificação periódica de abort durante o processamento
     if (job.signal.aborted) {
