@@ -36,7 +36,7 @@ Teste de integração da réplica off-site cifrada (sobe o ambiente, roda o
    branch `main`, autodeploy on push.
 6. **Env vars do App**: `DATABASE_URL`, `BETTER_AUTH_SECRET`
    (`openssl rand -base64 32`), `BETTER_AUTH_URL`, `NEXT_PUBLIC_APP_URL`.
-   `ANTHROPIC_API_KEY` só na Fase 3.
+   `GOOGLE_API_KEY` (Gemini) para o provedor de IA.
 7. **Segurança do SO** (responsabilidade nossa): SSH só por chave, firewall
    (80/443/SSH), `unattended-upgrades`. Backup + restore testado: ver
    [§Backup e restore (LGPD)](#backup-e-restore-lgpd) — **item LGPD, bloqueia
