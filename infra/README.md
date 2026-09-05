@@ -1870,15 +1870,27 @@ agendador em cima disso.
 3. **Env vars**:
 
    ```
+   DATABASE_URL=<a mesma do serviço App: papel app_role>
    ASR_JOB_URL=https://irisclinica.ia.br/api/internal/jobs/asr-transcrever
    ASR_JOB_TOKEN=<o mesmo valor do serviço App>
-   INTERVALO_S=20
    ASR_HEARTBEAT_DIR=/heartbeat
    ```
 
+   `DATABASE_URL` é NOVA (D73): o serviço deixou de ser um laço de `sleep` e
+   passou a ser CONSUMIDOR da fila `pgboss` no Postgres. Sem ela o container
+   recusa subir (fail-closed) em vez de ficar de pé sem consumir nada.
+
+   `INTERVALO_S` **não existe mais**. A cadência do tick periódico é o cron do
+   próprio pg-boss (`CRON_TICK_ASR`, 1 min, em `src/lib/queue/config.ts`), e o
+   caminho de baixa latência nem depende dele: o app enfileira o tick dentro da
+   transação que promove os clipes a `na_fila`.
+
 4. **Comando** (aba `Avançado`): `/app/agendador.sh`.
-5. **Réplicas = 1.** Duas réplicas não corrompem a fila (`app_asr_reservar`
-   usa `FOR UPDATE SKIP LOCKED`), mas dobram a carga de POST sem necessidade.
+5. **Réplicas = 1 — agora é requisito, não economia.** O teto de concorrência
+   de `asr-transcrever` é `localConcurrency`, ou seja, POR PROCESSO: duas
+   réplicas são dois consumidores e a fila entrega um job a cada um, dobrando a
+   carga sobre o `iris-asr`. A fila continua não corrompendo nada
+   (`app_asr_reservar` usa `FOR UPDATE SKIP LOCKED`), mas o teto some.
 
 **Sweeper de T15, na MESMA imagem** — repetir os passos 1-5 num segundo
 serviço (`asr-sweeper`), trocando só:
@@ -1893,11 +1905,19 @@ sweeper-orfaos.sh`) em vez das `ASR_JOB_*`.
 No log do serviço `asr-agendador`, logo após o primeiro deploy:
 
 ```
-[agendador-asr] 2026-MM-DDTHH:MM:SSZ ativo. intervalo=20s · heartbeat=/heartbeat/.ultimo-disparo-asr
+[queue-worker] 2026-MM-DDTHH:MM:SSZ iniciando consumidor da fila. lock=/heartbeat/.agendador-asr.lock
 ```
 
-E, a cada tick, uma linha JSON única do disparo (formato de
-`scripts/disparo-asr-transcrever.mjs`):
+seguido das linhas JSON do runner (`queue.supervisor.iniciado`,
+`queue.supervisor.cron-registrado`, `queue.runner.ativo`). Se em vez disso o
+container entrar em crash loop com `variável(is) de ambiente ausente(s): …`, é
+o fail-closed funcionando — completar a env e reimplantar.
+
+E, a cada tick, o par `queue.asr.tick-iniciando` / `queue.asr.tick-concluido`,
+este último com as contagens da rota (`processados`, `transcritos`, `falhas`,
+`revertidos`). O disparo manual de um tick avulso continua disponível para
+incidente (`node /app/scripts/disparo-asr-transcrever.mjs --once`), e é ele que
+emite a linha JSON abaixo:
 
 ```json
 {
@@ -1936,9 +1956,13 @@ no ar):
    prova que a rota responde — não que o pipeline inteiro (bucket → serviço
    `iris-asr` → banco → UI) funciona com áudio real.
 
-**E revisar `INTERVALO_S`** com o volume de clipes/dia observado depois do
-piloto — o valor atual (20s) é raciocínio, não medição de fila sob carga.
-Registrar a revisão (e o resultado dos dois itens acima) no `BACKLOG.md`.
+**E revisar `CRON_TICK_ASR`** (`src/lib/queue/config.ts`) com o volume de
+clipes/dia observado depois do piloto. O 1 min atual continua sendo raciocínio,
+não medição de fila sob carga — mas o risco mudou de natureza com a D73: o cron
+deixou de ser o caminho de latência (o app enfileira o tick na própria
+transação), então ele só precisa ficar MUITO abaixo dos 30 min do alarme de
+heartbeat. Registrar a revisão (e o resultado dos dois itens acima) no
+`BACKLOG.md`.
 
 ## Job de fechamento de ciclo de faturamento (#36, #288)
 

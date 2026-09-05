@@ -350,7 +350,7 @@ export const LIMITES_HEARTBEAT = Object.freeze({
   retencao: { limiteH: 36 }, // 1x/dia (86400s) + 12h
   arquivamento: { limiteH: 36 }, // 1x/dia (86400s) + 12h
   exportacao: { limiteH: 1 }, // 5min (300s): 1h = 12 ticks perdidos
-  asr: { limiteH: 0.5 }, // 20s: 30min = ~90 ticks perdidos
+  asr: { limiteH: 0.5 }, // cron pg-boss de 1min (D73): 30min = 30 ticks perdidos
   "asr-sweeper": { limiteH: 3 }, // 1h (3600s) + 2h
   "expurgo-audit-log": { limiteH: 36 }, // 1x/dia (documentado) + 12h
   conciliacao: { limiteH: null, sobDemanda: true }, // runbook manual (#375)
