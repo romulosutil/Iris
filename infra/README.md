@@ -286,6 +286,53 @@ tem dependência npm nenhuma por desenho.
 reescreve `/app/...` para caminho do Windows antes do docker ver o argumento, e
 o erro parece vir de dentro do container.
 
+## Teste de carga das imagens do APP (D69)
+
+As 8 imagens da seção acima são todas de **job**. As duas imagens do **deploy da
+aplicação** — `infra/Dockerfile` (serviço `iris-app`) e `infra/Dockerfile.migrate`
+(job `iris-migrate`) — ficaram de fora dessa varredura e também não caem em
+nenhum dos `paths` do `carga-imagens-infra.yml`: até o fechamento do D69, mudar
+qualquer um dos dois disparava **zero CI**, e a primeira execução de cada
+alteração era o deploy em produção.
+
+Já mordeu duas vezes, por caminhos diferentes: o `@swc/helpers` com condição
+`module-sync` (next 16.3.1) deixou o `docker build` verde e o `node server.js`
+morto no boot; e o `RUN pnpm build` de dentro da imagem depende de rede externa e
+de `patches/` estar no contexto. Nenhum dos dois é alcançável por `pnpm test`,
+`pnpm typecheck` ou `pnpm lint`, que rodam contra a árvore do repo.
+
+O fechamento é `scripts/ci/carga-imagem-app.sh` — mesma filosofia do script de
+infra: **constrói a imagem e sobe o processo**, em vez de inspecionar Dockerfile.
+
+```bash
+scripts/ci/carga-imagem-app.sh            # app + migrate
+scripts/ci/carga-imagem-app.sh app        # só infra/Dockerfile
+scripts/ci/carga-imagem-app.sh migrate    # só infra/Dockerfile.migrate
+```
+
+O que cada asserção prova, e por que `docker build` verde não bastaria:
+
+| Asserção                                          | O que quebraria sem ela                                              |
+| ------------------------------------------------- | -------------------------------------------------------------------- |
+| `esm/_interop_require_default.js` na imagem FINAL | reparo do `@swc/helpers` feito no stage `build` e perdido no `COPY`  |
+| `node --check` no bundle do seed                  | `esbuild` no musl gerando bundle truncado (build verde, seed morto)  |
+| boot + `GET /termos` = 200 em até 15s             | processo que não sobe — o modo de falha real dos dois incidentes     |
+| log do boot sem `ERR_MODULE_NOT_FOUND`            | 200 em rota estática escondendo `require` quebrado em outro ponto    |
+| migrate sem env falha na guarda (nunca exit 0)    | gate de schema virando no-op sem ninguém perceber                    |
+| `db/migrations` presente na imagem                | deploy aplicando **zero** migração sem reclamar                      |
+| migrate aplicado de verdade contra Postgres vazio | conexão + guard de hash (D17) + aplicação, provados de dentro da imagem |
+
+No CI o job é `carga-imagem-app` (`.github/workflows/ci.yml`), gateado por um
+`if:` de **job** — nunca por `paths:` no `on:`. A diferença não é estética: job
+`skipped` reporta sucesso ao ruleset, workflow que não roda não reporta nada e
+o PR fica `BLOCKED` para sempre (D58/#423). O predicado é invertido de propósito
+("esta PR é **provadamente** zero-código?", default = roda), porque o stage
+`build` faz `COPY . .` — uma lista positiva de caminhos aqui repetiria
+exatamente o esquecimento que criou o D64 e o D69.
+
+`MIGRATION_DATABASE_URL_CARGA` liga a execução real do migrator (o CI passa o
+serviço `postgres` do job). Sem ela, localmente, só a carga é exercitada.
+
 ## Backup e restore (LGPD)
 
 Iris guarda **dado clínico de menor de idade**. A LGPD (art. 46) exige medida de
