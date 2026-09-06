@@ -122,11 +122,21 @@ COPY --from=build --chown=nextjs:nodejs /app/scripts/seed-local.js ./scripts/see
 # resolve primeiro por estar mais perto na cadeia de node_modules.
 # --with-deps instala só as libs de sistema do Chromium (não baixa
 # firefox/webkit), mantendo a imagem enxuta.
+#
+# PONTO ÚNICO da versão. Como este RUN SUBSTITUI o playwright traçado, é ESTE
+# número — e não o do package.json — que renderiza PDF em produção, junto com
+# o Chromium que o `playwright install` baixa para ele. Escrito à mão, diverge
+# do lockfile em silêncio (CI verde, produção rodando outra biblioteca).
+# O guard `scripts/versao-playwright-dockerfile.test.mjs` roda no `pnpm test` e
+# falha se este ARG não for igual à versão que o pnpm-lock.yaml resolve para a
+# dependência de produção `playwright`. Ao atualizar o Playwright:
+# `package.json` + `pnpm-lock.yaml` + este ARG na mesma mudança.
+ARG PLAYWRIGHT_VERSION=1.62.1
 RUN --mount=type=cache,id=npm-store,target=/root/.npm \
     mkdir -p /opt/playwright \
     && cd /opt/playwright \
     && npm init -y >/dev/null \
-    && npm install --no-save playwright@1.61.1 \
+    && npm install --no-save "playwright@${PLAYWRIGHT_VERSION}" \
     && npx playwright install --with-deps chromium \
     && rm -rf /app/node_modules/playwright /app/node_modules/playwright-core \
     && cp -r /opt/playwright/node_modules/playwright /app/node_modules/playwright \
