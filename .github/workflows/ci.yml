@@ -209,8 +209,15 @@ jobs:
     # #424 — suíte `e2e/` nunca rodava em CI. `pnpm test:e2e` sobe o Next em
     # modo produção (`next start`, playwright.config.ts) e a suíte inteira
     # compartilha 1 banco (`workers: 1`) — `pnpm seed:e2e` semeia num único
-    # truncate os dois cenários que os 9 specs precisam (clínica E2E +
-    # clínica demo, scripts/seed-e2e.ts).
+    # truncate os dois cenários que os specs precisam (clínica E2E + clínica
+    # demo, scripts/seed-e2e.ts). O cenário do ditado de voz já vem nesse
+    # mesmo truncate (`Paciente Ditado E2E` às 11:00, scripts/lib/
+    # seed-demo-clinic.ts) — nenhum seed extra, e nenhum `seed:demo` avulso,
+    # que truncaria por cima.
+    #
+    # #501 — além do Postgres, este job sobe MinIO e exporta as envs de ASR:
+    # sem elas o `playwright.config.ts` nem declara o projeto `ditado-voz` e
+    # `e2e/ditado-voz.spec.ts` era coletado ZERO vez aqui, com o job verde.
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -235,6 +242,44 @@ jobs:
       # Segredo de teste, nunca usado fora de CI — mesmo padrão do
       # CPF_HASH_SALT global deste workflow.
       BETTER_AUTH_SECRET: "ci-test-better-auth-secret-nao-usar-em-producao"
+
+      # ---- Ditado de voz / ASR (#501) -------------------------------------
+      #
+      # Estas 5 primeiras são EXATAMENTE as que `playwright.config.ts` exige
+      # em `asrE2ePronto` para declarar o projeto `ditado-voz`. Errar um nome
+      # aqui não quebra nada: o projeto simplesmente não é criado e o spec
+      # volta a ser coletado zero vez, com o job verde — que é o defeito que
+      # a #501 fecha. Qualquer mexida nestes nomes tem que ser conferida
+      # contra o `asrE2ePronto` do config, não contra a memória.
+      FEATURE_FLAG_ASR_ENABLED: "true"
+      # MinIO sobe via `docker run` num step abaixo, com a porta 9000
+      # publicada no host — o job roda direto no runner (não dentro de um
+      # container), então `localhost` é o mesmo endereço que ele já usa para
+      # o Postgres do bloco `services:`.
+      ASR_S3_ENDPOINT: http://localhost:9000
+      ASR_S3_ACCESS_KEY: iris
+      ASR_S3_SECRET_KEY: iris123456
+      # Segredo de teste, nunca usado fora de CI (mesmo padrão do
+      # BETTER_AUTH_SECRET acima). O spec dispara o worker com ele.
+      ASR_JOB_TOKEN: "ci-test-asr-job-token-nao-usar-em-producao"
+      # Fora das 5 do gate, mas igualmente obrigatória: `resolveConfig()` de
+      # `src/lib/asr/storage.ts` cai no default `iris-asr-efemero` se ausente.
+      # Explícita porque é o mesmo nome que o step de criação do bucket usa —
+      # divergir faria o upload escrever num bucket inexistente.
+      ASR_S3_BUCKET: iris-asr-efemero
+      # `ASR_PROVIDER` fica AUSENTE de propósito (a #501 pedia `stub`, valor
+      # que não existe no domínio): `getAsrProvider()` só devolve o
+      # `SelfHostedAsrProvider` quando lê exatamente `self-hosted` — qualquer
+      # outro valor, inclusive nenhum, cai no `StubAsrProvider` (R22). Gravar
+      # um valor fictício sugeriria um enum que o código não tem.
+      #
+      # A rota do worker NÃO fala com o banco pelo pool da app: as funções
+      # `app_asr_*` são SECURITY DEFINER cross-tenant e o EXECUTE saiu de
+      # `app_role` na `0140`. Sem esta env o `asrWorkerDb` recusa abrir
+      # conexão (fail-closed, sem cair para DATABASE_URL) e o tick do spec
+      # volta 500. A role NOLOGIN `iris_asr_worker` nasce na migração; a
+      # LOGIN é provisionada no step de roles, como as outras duas.
+      ASR_WORKER_DATABASE_URL: postgres://iris_asr_worker_login:iris_asr_worker_login@localhost:5432/iris
     steps:
       - uses: actions/checkout@v4
 
@@ -259,14 +304,75 @@ jobs:
       - name: aplicar migrações (role dona, BYPASSRLS)
         run: pnpm db:migrate
 
-      # Mesmo padrão do job test-rls: só as duas roles LOGIN, nunca `iris`
+      # Mesmo padrão do job test-rls: só as roles LOGIN, nunca `iris`
       # (dona/BYPASSRLS) como DATABASE_URL de app.
-      - name: provisionar roles de aplicação (iris_app, iris_auth_login)
+      #
+      # `iris_asr_worker_login` (#501) é membro de `iris_asr_worker`, a role
+      # NOLOGIN criada pela migração `0140_asr_worker_role.sql` — ela existe a
+      # partir do `pnpm db:migrate` acima. É a credencial do
+      # `ASR_WORKER_DATABASE_URL`: o EXECUTE das funções `app_asr_*` saiu de
+      # `app_role` na `0140`, então o tick do worker com a credencial da app
+      # levaria `42501`.
+      - name: provisionar roles de aplicação (iris_app, iris_auth_login, iris_asr_worker_login)
         run: |
           psql "$MIGRATION_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           CREATE ROLE iris_app LOGIN PASSWORD 'iris_app' IN ROLE app_role;
           CREATE ROLE iris_auth_login LOGIN PASSWORD 'iris_auth_login' IN ROLE iris_auth;
+          CREATE ROLE iris_asr_worker_login LOGIN PASSWORD 'iris_asr_worker_login' IN ROLE iris_asr_worker;
           SQL
+
+      # MinIO para o spec do ditado de voz (#501). É o único da suíte que
+      # precisa de storage S3 — sem ele o projeto `ditado-voz` do
+      # `playwright.config.ts` nem chega a ser declarado.
+      #
+      # POR QUE `docker run` E NÃO O BLOCO `services:` (como o Postgres):
+      # `services:` não passa comando nem argumentos ao container (só `image`,
+      # `env`, `ports`, `volumes` e `options`, que vão para o `docker create`
+      # ANTES da imagem). O `minio/minio` tem `ENTRYPOINT
+      # ["/usr/bin/docker-entrypoint.sh"]` + `CMD ["minio"]`, e `minio` sem
+      # subcomando imprime o help e sai 0 — medido contra esta tag. O servidor
+      # exige `server /data`, que só dá para passar aqui.
+      #
+      # Tag DATADA, nunca `latest`: é a mesma de `infra/docker-compose.yml` e
+      # do dev local, porque o `S3Client` já quebrou por mudança de
+      # comportamento entre releases do MinIO (#504). Subir de versão é
+      # decisão explícita, nos dois arquivos ao mesmo tempo.
+      - name: subir MinIO (storage efêmero do ditado de voz)
+        run: |
+          docker run -d --name iris-minio-ci \
+            -p 9000:9000 \
+            -e MINIO_ROOT_USER="$ASR_S3_ACCESS_KEY" \
+            -e MINIO_ROOT_PASSWORD="$ASR_S3_SECRET_KEY" \
+            minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+          # Mesma sonda do healthcheck do docker-compose. O laço FALHA ao
+          # estourar: seguir em frente com o MinIO fora do ar deixaria o spec
+          # quebrar 5 minutos depois, num clique que não acha botão.
+          for tentativa in $(seq 1 60); do
+            if docker exec iris-minio-ci mc ready local; then
+              echo "MinIO pronto após ${tentativa}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "MinIO não ficou pronto em 60s — logs abaixo" >&2
+          docker logs iris-minio-ci >&2
+          exit 1
+
+      # O bloco `services:` não roda comando pós-boot, e o `docker run` acima
+      # também não cria bucket — daí este step próprio. O `mc` já vem dentro
+      # da imagem do servidor (é o que o healthcheck do compose usa), então
+      # não há binário para baixar.
+      #
+      # ⚠️ O alias `local` embutido na imagem é ANÔNIMO: `mc ready local`
+      # funciona com ele, mas `mc mb local/...` volta `Access Denied`
+      # (medido). Por isso o alias é registrado aqui com as credenciais.
+      # `--ignore-existing` deixa o step idempotente em re-run do job.
+      - name: criar bucket do ASR no MinIO
+        run: |
+          docker exec iris-minio-ci mc alias set irisci \
+            http://127.0.0.1:9000 "$ASR_S3_ACCESS_KEY" "$ASR_S3_SECRET_KEY"
+          docker exec iris-minio-ci mc mb --ignore-existing "irisci/$ASR_S3_BUCKET"
+          docker exec iris-minio-ci mc ls irisci
 
       # `webServer` do playwright.config.ts invoca o binário do Next direto
       # (`next start`) — precisa do build de produção pronto antes.
@@ -281,14 +387,42 @@ jobs:
         env:
           PLAYWRIGHT_JSON_OUTPUT_NAME: e2e-report.json
 
-      # Piso medido em 23/08/2026, suíte local do zero: 10 arquivos (9 specs +
-      # servidor.setup.ts), 17 testes, 0 falha, 0 pulado.
+      # Pisos medidos em 06/09/2026 com `pnpm exec playwright test --list`
+      # nesta branch: 21 arquivos, 64 testes (servidor=1, chromium=21,
+      # mobile-360=41, ditado-voz=1). SEM as envs de ASR o mesmo comando
+      # devolve 20 arquivos / 63 testes — a diferença é exatamente o spec do
+      # ditado, que é o que a #501 traz para dentro da coleta.
+      #
+      # POR QUE OS PISOS SÃO A CONTAGEM EXATA, E NÃO UM NÚMERO FOLGADO: os
+      # anteriores (17/10) foram medidos em 23/08/2026, antes dos specs
+      # `mobile-*` entrarem, e nunca subiram. Com 63 testes rodando contra um
+      # piso de 17, dava para apagar 46 testes e 10 arquivos sem o gate
+      # piscar — inclusive o de ditado que esta mesma issue acabou de ligar.
+      # Piso frouxo é gate desligado com aparência de ligado.
+      #
+      # Consequência assumida: quando um teste falha de verdade ele sai de
+      # `expected` (vira `unexpected`) e o gate imprime DUAS linhas — a da
+      # falha e um "cobertura caiu abaixo do esperado". A segunda é ruído da
+      # primeira, não um spec sumido. Teste flaky não dispara isso: o script
+      # soma `expected + flaky` de propósito (memória
+      # `playwright-flaky-sai-de-expected`).
       #
       # `--flaky-baseline` (#542, Q-06): teto por arquivo de flake conhecido
       # (só o projeto [mobile-360], ver comentário no .mjs) — qualquer flake
       # novo, ou acima do teto, reprova o job em vez de passar em silêncio.
       - name: gate anti-pulo-silencioso (e2e)
-        run: node scripts/ci/verificar-cobertura-e2e.mjs e2e-report.json --min-tests=17 --min-files=10 --flaky-baseline=scripts/ci/e2e-flaky.baseline.json
+        run: node scripts/ci/verificar-cobertura-e2e.mjs e2e-report.json --min-tests=64 --min-files=21 --flaky-baseline=scripts/ci/e2e-flaky.baseline.json
+
+      # `ubuntu-latest` é descartável e não precisaria disto — mas este repo
+      # já roda parte do CI em runner self-hosted, e lá um container com nome
+      # fixo sobrevivendo ao job faria a próxima execução morrer em
+      # "name is already in use", com a porta 9000 ainda presa. `if: always()`
+      # porque a limpeza vale principalmente quando a suíte falhou — e por
+      # isso o `|| true`: se o job morreu ANTES de subir o container, não há o
+      # que remover, e um step de limpeza vermelho só esconderia a falha real.
+      - name: derrubar MinIO
+        if: always()
+        run: docker rm --force iris-minio-ci || true
 
   # NÃO é duplicata do `pnpm build` que o `test-e2e` roda (linha ~274) — e não
   # deve ser apagado como se fosse. A diferença é o AMBIENTE, não o comando:

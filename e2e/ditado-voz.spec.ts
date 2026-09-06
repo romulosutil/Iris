@@ -47,9 +47,12 @@ import { entrarComMfa } from "./helpers/sessao";
  * `playwright.config.ts` só declara quando as 5 variáveis acima existem — e o
  * chromium padrão o ignora. NÃO existe `test.skip` aqui de propósito: o gate
  * `scripts/ci/verificar-cobertura-e2e.mjs` reprova com qualquer teste pulado.
- * Consequência assumida: enquanto o job `test-e2e` do CI não subir MinIO, este
- * spec não roda em CI — é o débito nomeado no comentário do config, não um
- * verde disfarçado.
+ *
+ * Desde a #501 o job `test-e2e` sobe MinIO, cria o bucket e exporta as 5
+ * variáveis, então este spec É coletado em CI — e os pisos do gate
+ * (`--min-tests`/`--min-files`) contam com ele: apagá-lo reprova o job. O
+ * débito que estava anotado aqui ("enquanto o CI não subir MinIO, não roda")
+ * foi pago; o opt-in permanece pela máquina de quem não tem MinIO local.
  */
 
 const jobToken = process.env.ASR_JOB_TOKEN ?? "";

@@ -74,10 +74,17 @@ const porta = new URL(baseURL).port || "3000";
  * existe mantém a contagem de CI inalterada e, quando o ambiente ESTÁ de pé,
  * roda o spec de verdade — sem terceira opção de "verde sem exercitar nada".
  *
- * Para tornar isto obrigatório (fechando de fato o ponto cego que deixou a #72
- * chegar ao fim com a feature inutilizável) falta: subir um service MinIO no
- * job `test-e2e`, criar o bucket `iris-asr-efemero`, exportar as 5 variáveis
- * abaixo e subir os pisos do gate (`--min-tests`/`--min-files`).
+ * Desde a #501 o job `test-e2e` FORNECE esse ambiente (MinIO com o bucket
+ * `iris-asr-efemero`, as 5 variáveis abaixo e a credencial do worker), e os
+ * pisos do gate subiram para a contagem COM o spec — ou seja, em CI o projeto
+ * existe sempre, e apagar o spec reprova o job. O opt-in continua sendo a
+ * forma certa aqui pelo motivo acima (skip reprovaria a suíte para todo
+ * mundo) e porque na máquina de quem não subiu MinIO a suíte segue rodando.
+ *
+ * ⚠️ Os 5 nomes abaixo são o contrato com `.github/workflows/ci.yml` (bloco
+ * `env:` do job `test-e2e`). Renomear um deles sem mexer lá não quebra nada
+ * visível: o projeto deixa de ser declarado, o spec some da coleta e o job
+ * fica verde — exatamente o estado que a #501 fechou.
  */
 const asrE2ePronto =
   process.env.FEATURE_FLAG_ASR_ENABLED === "true" &&
