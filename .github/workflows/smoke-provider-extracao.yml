@@ -103,11 +103,30 @@ jobs:
           PASSO_SEGREDO: ${{ steps.segredo.outcome }}
         with:
           script: |
-            const titulo = "Smoke do provider de extração falhou — extração de produção pode estar quebrada";
+            // O texto do alerta mora em `scripts/ci/alerta-smoke-extracao.mjs`
+            // (#524): "segredo ausente" e "Gemini quebrado" são diagnósticos
+            // diferentes e têm que sair com TÍTULOS diferentes, senão o dedup
+            // por título abaixo enterra uma quebra real do provider como mais
+            // um comentário numa issue cujo corpo afirma a causa errada.
+            // Módulo separado para ser testável de verdade em
+            // `scripts/ci/alerta-smoke-extracao.test.mjs` — dentro deste `script:`
+            // nada disso roda no `pnpm test`.
+            const { pathToFileURL } = require("node:url");
+            const { montarAlerta } = await import(
+              pathToFileURL(
+                `${process.env.GITHUB_WORKSPACE}/scripts/ci/alerta-smoke-extracao.mjs`,
+              ).href
+            );
+
             const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const { titulo, corpo, comentario } = montarAlerta({
+              passoSegredo: process.env.PASSO_SEGREDO,
+              url,
+              agora: new Date().toISOString(),
+            });
 
             // Não empilha uma issue por dia enquanto ninguém conserta: se já
-            // existe uma aberta deste alerta, só comenta nela.
+            // existe uma aberta DESTE diagnóstico, só comenta nela.
             const abertas = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -117,34 +136,12 @@ jobs:
             });
             const existente = abertas.data.find((i) => i.title === titulo);
 
-            const corpo = [
-              `O smoke agendado do provider real de extração falhou em ${new Date().toISOString()}.`,
-              "",
-              `**Passo que falhou:** ${process.env.PASSO_SEGREDO === "failure" ? "checagem do segredo GOOGLE_API_KEY — o smoke NÃO chegou a rodar, isto não diz nada sobre a saúde do provider" : "a chamada real ao Gemini"}.`,
-              "",
-              `**Run:** ${url}`,
-              "",
-              "## O que isso provavelmente significa",
-              "",
-              "O caminho de produção da extração (`resolveProvider` → `LlmExtractionProvider` → `createGeminiInvoker`) não conseguiu completar uma chamada real ao Gemini. As causas mais prováveis, em ordem:",
-              "",
-              "1. **Id de modelo aposentado pelo Google** (foi o que aconteceu em 31/08/2026, PR #508). O log do run mostra `404 NOT_FOUND ... is no longer available`. Correção: setar `GOOGLE_EXTRACTION_MODEL` no Easypanel com o id novo (sem deploy de código) e atualizar `MODELO_EXTRACAO_PADRAO` em `src/lib/extraction/provider.ts`.",
-              "2. **Chave sem cota ou revogada** — `429` ou erro de autenticação no log.",
-              "3. **Contrato da ferramenta recusado** — o schema derivado de `agentOutputObjectSchema` deixou de ser aceito pela API.",
-              "",
-              "## Urgência",
-              "",
-              "Se for (1) ou (2), **toda extração de produção está caindo em `pendente_reprocessamento` agora** — a nota do diário é salva, mas nenhuma extração é gerada. Não é visível para a terapeuta como erro.",
-              "",
-              "_Issue aberta automaticamente por `.github/workflows/smoke-provider-extracao.yml` (#510)._",
-            ].join("\n");
-
             if (existente) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: existente.number,
-                body: `Smoke falhou de novo. Run: ${url}`,
+                body: comentario,
               });
               core.notice(`Issue #${existente.number} já estava aberta — comentário adicionado.`);
             } else {
