@@ -124,6 +124,26 @@ o Postgres. Cota não é economia, é **isolamento de raio de falha**.
 Os números são **os mesmos** no `infra/docker-compose.yml` e no painel. Divergir
 faria o ensaio local provar uma coisa e a produção rodar outra.
 
+> ⚠️ **A coluna `cpu_shares` NÃO tem equivalente no painel do Easypanel.**
+> Medido em 06/09/2026 abrindo a aba `Recursos`: ela expõe **exatamente quatro
+> campos** — `Reserva de Memória (MB)`, `Limite de Memória (MB)`,
+> `Reserva de CPU (Cores)`, `Limite de CPU (Cores)` — e nada mais. Ou seja, o
+> peso relativo de 128 do `asr` **existe só no dev local**; em produção o Whisper
+> fica contido apenas pelo teto de 1 vCPU. Na prática isso cobre o critério (1 de
+> 4 vCPU = 25% do host), mas **sob contenção real o ASR disputa núcleo com o
+> Postgres em pé de igualdade**, que é justamente o que o `cpu_shares` evitaria.
+> Não invente: não há campo para isso na UI. Se um dia a disputa aparecer na
+> prática, o caminho é `docker service update --limit-cpu` por SSH ou baixar o
+> teto do `asr`, e a decisão precisa ser registrada aqui.
+
+> ⚠️ **`Reserva de CPU (Cores)` fica em `0` em TODOS os serviços — de propósito.**
+> O Easypanel roda Swarm, e ali a reserva de CPU é critério de **agendamento**:
+> reservas somando acima dos 4 vCPU do host deixam serviços sem conseguir subir,
+> com um erro que parece falha de deploy e não de aritmética. O que protege o
+> Postgres é a **reserva de memória** (2 GB) mais o teto dos vizinhos, não reserva
+> de CPU. (Note que isto é o oposto do dev local, onde `reservations.cpus` é
+> descartado em silêncio — ver §Fatos medidos.)
+
 > ⚠️ **Os tetos são deliberadamente maiores que a máquina — leia antes de
 > "corrigir".** Somados dão **5,0 vCPU num host de 4** e **14,5 GB de teto em
 > 16 GB**, sem contar os ~10 containers de job, o Easypanel/Traefik e o SO.
@@ -183,22 +203,59 @@ comportamento **muda** entre Compose e Swarm:
 ### Provisionamento no Easypanel (passo manual do Rômulo)
 
 **Não existe arquivo de template neste repo** — o Easypanel v2.31.0 é
-configurado pelo painel, serviço a serviço. Para cada um da tabela acima:
+configurado pelo painel, serviço a serviço.
 
-1. Abrir o serviço → aba **Avançado** → seção **Recursos** (_Resources_).
-2. Preencher **Limite de memória** e **Limite de CPU** com os valores da tabela.
-   O painel escreve CPU em unidades de vCPU (`1.5`) e memória em MB (`4096`).
-3. **Reservas** só onde a tabela indica. Reserva alta em todo mundo é como não
-   ter reserva nenhuma: o Swarm passa a não conseguir agendar.
-4. `iris-asr` também recebe **`Réplicas = 1`** — já era requisito por causa do
-   `localConcurrency` (ver §Worker de transcrição), e continua sendo: duas
-   réplicas são dois containers, cada um com seu teto de 3 GB.
-5. Clicar em **Implantar**. Salvar não aplica sozinho (memória
-   `easypanel-ambiente-expoe-segredos`).
+A tela é a aba própria **`Recursos`** de cada serviço (`.../resources`), **não**
+uma seção dentro de `Avançado`. Ela tem **exatamente quatro campos** e um botão
+`Salvar`, e o rodapé avisa: _"Defina valores como 0 para recursos ilimitados"_ —
+ou seja, **`0` em toda parte é o estado "sem cota"**, que era o estado do projeto
+inteiro até 06/09/2026.
 
-> ⚠️ Aplicar cota **reinicia o container** — o Docker não muda cgroup de
-> processo de pé para todos os campos. Fazer fora do horário de atendimento, e
-> o `postgres` por último.
+Valores por serviço, na ordem de aplicação (o `postgres` por último de
+propósito — salvar reinicia o container):
+
+| #   | Serviço                  | Caminho                                   | Limite Mem (MB) | Limite CPU | Reserva Mem (MB) | Reserva CPU |
+| --- | ------------------------ | ----------------------------------------- | --------------- | ---------- | ---------------- | ----------- |
+| 1   | `iris-alarme`            | `/app/iris-alarme/resources`              | 256             | 0.25       | 0                | 0           |
+| 2   | `iris-billing`           | `/app/iris-billing/resources`             | 256             | 0.25       | 0                | 0           |
+| 3   | `iris-escalonamento`     | `/app/iris-escalonamento/resources`       | 256             | 0.25       | 0                | 0           |
+| 4   | `iris-exportacao`        | `/app/iris-exportacao/resources`          | 256             | 0.25       | 0                | 0           |
+| 5   | `iris-arquivamento`      | `/app/iris-arquivamento/resources`        | 256             | 0.25       | 0                | 0           |
+| 6   | `iris-retencao`          | `/app/iris-retencao/resources`            | 256             | 0.25       | 0                | 0           |
+| 7   | `iris-expurgo-audit-log` | `/app/iris-expurgo-audit-log/resources`   | 256             | 0.25       | 0                | 0           |
+| 8   | `asr-agendador`          | `/app/asr-agendador/resources`            | 256             | 0.25       | 0                | 0           |
+| 9   | `asr-sweeper`            | `/app/asr-sweeper/resources`              | 256             | 0.25       | 0                | 0           |
+| 10  | `iris-backup`            | `/app/iris-backup/resources`              | 1024            | 0.5        | 0                | 0           |
+| 11  | `iris-minio`             | `/app/iris-minio/resources`               | 1536            | 0.5        | 512              | 0           |
+| 12  | `iris-asr`               | `/app/iris-asr/resources`                 | 3072            | 1          | 512              | 0           |
+| 13  | `iris-app`               | `/app/iris-app/resources`                 | 4096            | 1.5        | 1024             | 0           |
+| 14  | `iris-postgres`          | **`/postgres/`**`iris-postgres/resources` | 6144            | 2          | 2048             | 0           |
+
+Base: `http://31.97.170.105:3000/projects/espectro-mvp`.
+
+⚠️ O `iris-postgres` **não** fica sob `/app/` como os outros, e sim sob
+`/postgres/` — colar a URL no padrão dos demais dá 404.
+
+**Fora do escopo desta tabela, não receberam cota:** `iris-migrate` (job de
+migração one-shot — teto baixo demais aqui trocaria "migração lenta" por
+"migração morta", e é ele que destrava deploy), `iris-redis`,
+`iris-glitchtip`, `iris-glitchtip-worker`. E `api`, `clinic`, `patient`,
+`mysql` não são do Iris.
+
+`iris-asr` continua exigindo **`Réplicas = 1`** — já era requisito por causa do
+`localConcurrency` (ver §Worker de transcrição), e a cota reforça: duas réplicas
+são dois containers, cada um com seu próprio teto de 3 GB, dobrando o consumo em
+vez de dividi-lo.
+
+> ⚠️ **Aqui NÃO se clica em `Implantar`.** Em `Ambiente` a regra é a oposta
+> (salvar não aplica, exige `Implantar` — memória
+> `easypanel-ambiente-expoe-segredos`), e é fácil transportar o hábito errado
+> para esta tela. Na aba `Recursos`, `Salvar` já atualiza o serviço no Swarm, que
+> reinicia a task sozinho. `Implantar` faria outra coisa: **reconstrói o serviço
+> a partir do HEAD de `main`**, ou seja, um deploy de código que ninguém pediu.
+>
+> Aplicar cota **reinicia o container** de qualquer forma — fazer fora do horário
+> de atendimento, e o `postgres` por último.
 
 ### Como saber que deu certo
 
