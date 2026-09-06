@@ -65,11 +65,15 @@ trabalho com o Claude, depois rode os Prompts 1→4 em ordem, encadeando os outp
 O Prompt 2 já tem implementação de referência em `docs/agente/` — critique e
 refine, não recomece.
 
-> ⚠️ **Pivô de hospedagem em avaliação (09/07/2026):** a stack de deploy
-> (Vercel + Supabase gerenciado) migra para **VPS Hostinger + Easypanel +
-> Postgres puro** (não Supabase; auth in-app + MinIO) — ver
-> `docs/arquitetura/plano-bootstrap-e-stack-vps.md`.
-> Produto, modelo de dados, RLS e plano de fases não mudam.
+> ℹ️ **Hospedagem (decisão consolidada):** o desenho original em papel previa
+> Vercel + Supabase gerenciado, mas essa stack **nunca chegou a rodar** — foi
+> revista antes do primeiro deploy. A hospedagem real é **VPS Hostinger +
+> Easypanel + Postgres puro** (não Supabase; auth in-app + MinIO), documentada
+> em `docs/arquitetura/plano-bootstrap-e-stack-vps.md` e operacionalizada em
+> `infra/README.md`. Produto, modelo de dados, RLS e plano de fases não mudaram
+> com a revisão. As menções a Supabase/Vercel em
+> `docs/arquitetura/stack-e-plano-de-construcao.md` são registro histórico do
+> design original (Prompt 4).
 
 ## Estado atual (atualizado 06/09/2026)
 

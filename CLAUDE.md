@@ -12,7 +12,7 @@
 - **Banco de Dados**: Postgres, Drizzle ORM, drizzle-kit
 - **Fila transacional**: pg-boss (dentro do próprio Postgres, schema criado na migração `0154`)
 - **Autenticação**: Better Auth
-- **Storage de objetos**: MinIO — dois papéis distintos: bucket efêmero de clipes de ASR e réplica de backup off-site
+- **Storage de objetos**: MinIO, no mesmo VPS do Postgres, em dois papéis distintos: bucket efêmero de clipes de ASR e réplica **local** de backup. A cópia **off-site** é uma terceira, fora do VPS (object storage compatível com S3) e cifrada com `age` — é a única que sobrevive à perda do host
 - **IA**: Gemini (único provedor) — três usos com flags independentes: extração de evidências, relatório à família e relatório de convênio
 - **ASR (ditado de voz)**: self-hosted, faster-whisper em container na própria VPS (`infra/asr/`), sem transferência internacional de dados
 - **Billing & E-mail**: Asaas (faturamento), Resend (e-mail transacional, webhooks validados por Svix)
