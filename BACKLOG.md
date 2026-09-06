@@ -95,6 +95,33 @@
 **Cobertura de papéis:** os 3 papéis que `UserRole` tem (`coordenador`, `terapeuta`, `admin_recepcao`) × as 3 modalidades. A spec falava em "4 papéis" por herança da matriz do cartão de prontidão (que separa terapeuta na equipe / fora dela) — distinção que não muda nada aqui, porque o gate de ciclo de vida lê `ctx.role`, não pertencimento à equipe.
 
 **Próximo passo:** nenhum pendente para o D65.
+---
+
+## 🏁 Sessão 06/09/2026 (2ª) — #631: cotas de CPU/memória por container e alarme de exaustão do host (PR #627, Draft)
+
+**Escopo:** dar teto de CPU e memória a cada container da VPS (KVM 4, 4 vCPU / 16 GB) para que um Whisper guloso ou um relatório pesado não derrube o Postgres junto, e criar o alarme que avisa quando a **máquina** — não o container — está no limite.
+
+**Quatro premissas da issue que o repositório não confirmou.** Vale registrar porque cada uma mudou o diff: (1) `infra/docker-compose.yml` é **dev-local** e não tinha serviço de Whisper nem de Next.js — o app roda fora do compose e o Whisper só existia como imagem provisionada à mão no painel; (2) **não existem arquivos de template do Easypanel** no repo, o painel é configurado à mão; (3) **`scripts/lib/heartbeat.ts` não existe** — é `heartbeat.mjs`, e é o _escritor_ do sinal de vida copiado para ~8 imagens magras; (4) **Docker não tem campo `nice`**.
+
+**O que se fez com cada uma:** foi adicionado um serviço `asr` ao compose (profile `asr`, não sobe por default) com os mesmos números da produção — sem alvo local não há como rodar o teste de carga que o critério de aceite pede, e cota que ninguém mede é cota que ninguém confere. O "template" do Easypanel virou seção de runbook campo a campo. As checagens de host foram para `scripts/alarme-jobs.mjs` (o detector único, que já tem canal Resend e dedup diário) e **não** para o `heartbeat.mjs`: ali rodariam oito vezes, mediriam a mesma VPS oito vezes e não teriam como mandar e-mail. E o "nice" virou `cpu_shares: 128` — 1/8 da fatia do Postgres sob contenção, que é a semântica de `nice` e o mais perto que a plataforma chega.
+
+**Fatos de plataforma medidos, não lidos** (Docker 29.6.2 / Compose v5.3.1, Swarm inativo — o comportamento muda entre Compose e Swarm): `deploy.resources.limits.{cpus,memory}` e `reservations.memory` são honrados fora do Swarm, mas **`reservations.cpus` é aceito pelo parser e descartado em silêncio** (`CpuShares=0`) — quem dá peso é `cpu_shares`, que convive com o bloco `deploy`. E `/proc/meminfo` **não** é virtualizado pelo Docker: um container com `-m 64m` reporta o `MemTotal` do host enquanto seu cgroup marca `memory.max=67108864` — por isso a checagem mede a VPS, e pôr cota no próprio `iris-alarme` não a cega. `statfs` no volume `/heartbeat` cai no filesystem do host, então não é preciso bind-montar `/`.
+
+**Os dois critérios de aceite foram ensaiados de verdade, contra a imagem `infra-asr` construída do Dockerfile real** — não deduzidos da configuração. CPU: oito processos em laço infinito dentro do container ficaram presos em `97.37 / 99.01 / 96.59 / 98.98 / 103.32%`, ou seja 1 vCPU, que na VPS de 4 é **25% do host** (o critério pede < 80%). Memória: o raio de falha ficou dentro do `asr` nos dois caminhos, com `postgres` e `minio` seguindo `running`.
+
+**Achado que virou documentação — `OOMKilled=true` num container `running` não é leitura errada.** O cgroup mata _o processo mais guloso do container_, e quem é esse processo decide o desfecho: **PID 1** estourando dá `exit 137` + restart pela política; um **filho** estourando (um `docker exec`) morre sozinho e deixa o container `running`, `exit 0`, `RestartCount=0`, com o flag `OOMKilled` grudado. Quem distingue "o serviço caiu" de "uma transcrição gulosa foi ceifada" é o **`RestartCount`, não o `OOMKilled`** — um operador leria errado sem isso, e por isso entrou no runbook com os dois caminhos medidos lado a lado.
+
+**Decisão nova, pendente de validação com o Rômulo — limite inválido é `problema`, não `indeterminado`.** As variáveis novas (`ALARME_DISCO_PCT` 80, `ALARME_MEMORIA_PCT` 90, `ALARME_DISCO_PATH`) são opcionais e em branco usam o default. Mas um valor **presente e inválido** manda e-mail diário em vez de só logar: `indeterminado` não escala para e-mail nestas checagens (só `billing`/`escalonamento` escalam para "detector cego"), então um typo deixaria o alarme mudo **para sempre**, dentro de um container que ninguém abre. O limite de memória é 90% e não 80% porque, com as cotas somando 14,5 GB de teto em 16 GB, 80% é o estado normal de um host que está usando o que tem.
+
+**Risco residual assumido e explícito:** os tetos **oversubscrevem** a máquina de propósito — **5,0 vCPU em 4** e **14,5 GB em 16**. Teto é _ceiling_, não alocação, e as reservas somam só 4 GB. O risco real é os quatro grandes baterem no teto ao mesmo tempo: aí o host entra em OOM e o kernel escolhe a vítima, derrotando o critério "só o ASR reinicia". **A checagem `recursos-memoria` existe justamente como a rede que a aritmética das cotas não dá.** Se o Rômulo preferir tetos que somem dentro de 16 GB, é trocar números na tabela do `infra/README.md` e no painel — o mecanismo não muda.
+
+**Testes:** `pnpm typecheck` e `pnpm lint` limpos; `scripts/alarme-jobs.test.mjs` em **104/104** (+31 novos). Os testes novos foram conferidos por **mutação — 5 mutantes plantados no código de produção, 5 mortos** (dividir disco por `blocks`, trocar `<=` por `<` na fronteira, limite inválido caindo no default, ler `MemFree` no lugar de `MemAvailable`, caminho default virando `/`).
+
+**Vermelho pré-existente, catalogado e não corrigido aqui:** `pnpm test` completo dá **3247/3248** — `src/app/api/internal/billing/fechar-ciclos/route.test.ts` falha **em `origin/main` limpo** (`2ce7e022`), verificado com checkout detached. É outro assunto e merece issue própria; corrigi-lo dentro desta PR misturaria escopo.
+
+**Nada disto está em produção.** As cotas só existem quando cada serviço receber os valores em **Avançado → Recursos** e for **Implantado** — salvar não aplica (memória `easypanel-ambiente-expoe-segredos`), e código versionado não prova serviço de pé (`job-provisionado-nao-e-job-que-fecha-ciclo`). O comando que mede é `docker inspect`: **`mem=0 cpus=0` significa sem cota**. Aplicar cota **reinicia o container** — fora do horário de atendimento, e o `postgres` por último.
+
+**Próximo passo:** Rômulo decide sobre a oversubscription (aceitar como está ou apertar os tetos), aplica as cotas no painel serviço a serviço e confirma com o `docker inspect` da §Cotas de CPU e memória. Depois disso, marcar a PR #627 como _Ready for Review_.
 
 ---
 

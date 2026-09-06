@@ -20,7 +20,7 @@
  * nunca chegou.
  */
 import { execFile } from "node:child_process";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, statfs, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { hashCurto, log, logarErro } from "./lib/log-estruturado.mjs";
 import { promisify } from "node:util";
@@ -536,6 +536,209 @@ export async function verificarBackupOffsite(
   }
 }
 
+// ── Recursos do host: disco e memória (#631) ────────────────────────────────
+//
+// POR QUE ISTO VIVE AQUI E NÃO NO `scripts/lib/heartbeat.mjs`: aquele módulo é
+// o ESCRITOR do sinal de vida de cada job (`app_job_heartbeat_gravar`) e está
+// copiado para dentro de ~8 imagens magras de infra. Uma checagem de disco e
+// memória ali rodaria oito vezes, mediria a MESMA máquina as oito, e não teria
+// como avisar ninguém: o canal de saída (Resend) e o dedup diário moram neste
+// detector, num único container. Seriam oito e-mails idênticos por dia.
+//
+// O QUE ESTAS DUAS CHECAGENS MEDEM É O HOST, NÃO O CONTAINER — e isso foi
+// MEDIDO, não deduzido (régua de `verificar-fato-de-infra-com-medicao`):
+//
+//   • `/proc/meminfo` NÃO é virtualizado pelo Docker (não há lxcfs no VPS). Um
+//     container rodando com `-m 64m` reporta o MESMO `MemTotal` de um sem
+//     limite nenhum — 16300684 kB nos dois, enquanto o cgroup do limitado marca
+//     `memory.max=67108864`. Ou seja: o teto do container fica no cgroup e o
+//     `/proc/meminfo` continua sendo a RAM da VPS, que é o que o critério pede.
+//     Corolário importante: pôr uma cota de memória no próprio `iris-alarme`
+//     não cega esta checagem.
+//
+//   • `statfs` no volume persistente (`/heartbeat`) atravessa o overlay e cai no
+//     filesystem do HOST que guarda os volumes do Docker — o mesmo que enche
+//     quando um dump ou um WAL cresce. Não é preciso bind-montar `/` do host: o
+//     volume que o serviço já exige (sem ele o dedup não sobrevive a restart) é
+//     suficiente, e um mount novo seria mais um passo manual no painel para
+//     alguém esquecer.
+const LIMITE_DISCO_PCT_PADRAO = 80;
+const LIMITE_MEMORIA_PCT_PADRAO = 90;
+const CAMINHO_DISCO_PADRAO = "/heartbeat";
+
+/**
+ * Percentual de uso do filesystem, na convenção do `df`: os blocos reservados
+ * ao root entram como USADOS, não como capacidade livre.
+ *
+ * Não é preciosismo — `blocks` inclui a reserva (tipicamente 5% no ext4), então
+ * dividir por `blocks` daria um número sistematicamente MENOR que o do `df -h`
+ * que o operador roda no runbook. Duas fontes discordando sobre "o disco está
+ * cheio?" é como um alarme perde a confiança de quem o lê.
+ *
+ * Devolve `null` quando a leitura não permite calcular.
+ */
+export function pctUsoDisco(st) {
+  const usados = Number(st?.blocks) - Number(st?.bfree);
+  const capacidade = usados + Number(st?.bavail);
+  if (!Number.isFinite(usados) || usados < 0) return null;
+  if (!Number.isFinite(capacidade) || capacidade <= 0) return null;
+  return (usados / capacidade) * 100;
+}
+
+/**
+ * Percentual de uso de memória do host a partir do texto de `/proc/meminfo`.
+ *
+ * `MemAvailable`, não `MemFree`: `MemFree` desconta o page cache e acusaria 95%
+ * de uso num host perfeitamente saudável — alarme diário permanente, que é o
+ * mesmo que alarme nenhum. `MemAvailable` é a estimativa do próprio kernel do
+ * que dá para alocar sem entrar em swap.
+ *
+ * Devolve `null` se qualquer um dos dois campos faltar.
+ */
+export function pctUsoMemoria(meminfo) {
+  const ler = (chave) => {
+    const m = new RegExp(`^${chave}:\\s+(\\d+)\\s+kB`, "m").exec(
+      String(meminfo ?? ""),
+    );
+    return m ? Number(m[1]) : null;
+  };
+  const total = ler("MemTotal");
+  const disponivel = ler("MemAvailable");
+  if (!total || total <= 0 || disponivel === null) return null;
+  return ((total - disponivel) / total) * 100;
+}
+
+/**
+ * Lê um limite percentual do ambiente.
+ *
+ * Ausente = usa o padrão (caso normal, não é erro). PRESENTE E INVÁLIDO é outra
+ * coisa: alguém tentou configurar e errou. Isso NÃO pode virar `indeterminado`,
+ * porque `indeterminado` só é logado — só as checagens de
+ * `CHECAGENS_COM_ESCALONAMENTO_DE_CEGUEIRA` escalam para e-mail, e estas duas
+ * não estão lá (nem devem: não dependem do banco). Um typo em
+ * `ALARME_DISCO_PCT` deixaria o alarme de disco mudo para sempre, com o log
+ * dentro de um container que ninguém abre. Por isso: `problema`, e-mail, uma
+ * vez por dia, até arrumarem no painel.
+ */
+export function limitePctDoAmbiente(env, nome, padrao) {
+  const bruto = env?.[nome];
+  if (bruto === undefined || bruto === null || String(bruto).trim() === "") {
+    return { pct: padrao, erro: null };
+  }
+  const n = Number(bruto);
+  if (!Number.isFinite(n) || n <= 0 || n > 100) {
+    return {
+      pct: null,
+      erro: `${nome} precisa ser um número entre 1 e 100 — a checagem está DESLIGADA até isso ser corrigido no painel do Easypanel.`,
+    };
+  }
+  return { pct: n, erro: null };
+}
+
+/**
+ * Pura: transforma "percentual medido + limite" no shape das demais checagens.
+ * `pct === null` é `indeterminado` ("não consegui medir"), nunca `ok` — mesma
+ * regra do `avaliarHeartbeat`.
+ */
+export function avaliarRecurso(motivo, rotulo, pct, limite) {
+  if (pct === null) {
+    return {
+      estado: "indeterminado",
+      motivo,
+      detalhe: `não foi possível medir ${rotulo}.`,
+    };
+  }
+  const medido = Number(pct.toFixed(1));
+  if (medido <= limite) return { estado: "ok", motivo, detalhe: "" };
+  return {
+    estado: "problema",
+    motivo,
+    detalhe: `${rotulo} em ${medido}% do host — acima do limite de ${limite}%. Ver infra/README.md, §Cotas de CPU e memória.`,
+  };
+}
+
+/**
+ * As duas checagens de recurso do host. Devolve SEMPRE dois resultados, com
+ * `motivo` distinto (`recursos-disco` e `recursos-memoria`) para que o dedup
+ * diário de um não silencie o outro.
+ *
+ * `leitores` existe para o teste: sem injeção, medir disco e memória de dentro
+ * do Vitest mediria a máquina de quem roda a suíte, e o mesmo teste passaria ou
+ * falharia conforme o CI estivesse cheio — teste que não decide nada.
+ *
+ * SEM PII por construção: os `detalhe` daqui só carregam números e texto fixo.
+ * Nenhum caminho de arquivo entra — `ALARME_DISCO_PATH` é operacional e não tem
+ * por que circular por e-mail.
+ */
+export async function verificarRecursosHost(env = process.env, leitores = {}) {
+  const statfsFn = leitores.statfs ?? statfs;
+  const lerMeminfo =
+    leitores.lerMeminfo ?? (() => readFile("/proc/meminfo", "utf8"));
+  const caminho = env?.ALARME_DISCO_PATH || CAMINHO_DISCO_PADRAO;
+
+  const limDisco = limitePctDoAmbiente(
+    env,
+    "ALARME_DISCO_PCT",
+    LIMITE_DISCO_PCT_PADRAO,
+  );
+  let disco = null;
+  if (limDisco.erro) {
+    disco = {
+      estado: "problema",
+      motivo: "recursos-disco",
+      detalhe: limDisco.erro,
+    };
+  } else {
+    try {
+      disco = avaliarRecurso(
+        "recursos-disco",
+        "uso de disco",
+        pctUsoDisco(await statfsFn(caminho)),
+        limDisco.pct,
+      );
+    } catch (err) {
+      // `detalheDoErro`: `name`+`code`, nunca `message` — um ENOENT traz o
+      // caminho na message, e caminho de volume não circula por e-mail.
+      disco = {
+        estado: "indeterminado",
+        motivo: "recursos-disco",
+        detalhe: `não foi possível medir o uso de disco: ${detalheDoErro(err)}.`,
+      };
+    }
+  }
+
+  const limMem = limitePctDoAmbiente(
+    env,
+    "ALARME_MEMORIA_PCT",
+    LIMITE_MEMORIA_PCT_PADRAO,
+  );
+  let memoria = null;
+  if (limMem.erro) {
+    memoria = {
+      estado: "problema",
+      motivo: "recursos-memoria",
+      detalhe: limMem.erro,
+    };
+  } else {
+    try {
+      memoria = avaliarRecurso(
+        "recursos-memoria",
+        "uso de memória",
+        pctUsoMemoria(await lerMeminfo()),
+        limMem.pct,
+      );
+    } catch (err) {
+      memoria = {
+        estado: "indeterminado",
+        motivo: "recursos-memoria",
+        detalhe: `não foi possível medir o uso de memória: ${detalheDoErro(err)}.`,
+      };
+    }
+  }
+
+  return [disco, memoria];
+}
+
 /**
  * Separa o que MERECE e-mail do que só merece log. Pura, para o desfecho ser
  * testável sem tocar em rede nem em disco (mesmo motivo do `decidirDesfecho`
@@ -588,6 +791,11 @@ export async function main() {
     await sql.end({ timeout: 5 });
   }
   resultados.push(await verificarBackupOffsite(process.env));
+  // Fora do try/finally do `sql`, de propósito: estas duas não tocam o banco
+  // (leem `/proc/meminfo` e `statfs`), então seguem medindo mesmo com o
+  // Postgres fora do ar — que é justamente quando "a memória do host acabou" é
+  // a explicação mais provável para todo o resto estar quebrado.
+  resultados.push(...(await verificarRecursosHost(process.env)));
 
   const alertasDeCegueira = [];
   for (const r of resultados) {

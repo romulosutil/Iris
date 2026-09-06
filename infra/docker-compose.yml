@@ -25,6 +25,20 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    # Cota máxima do serviço de PRIORIDADE MÁXIMA (#631). Ver a tabela de
+    # orçamento e o porquê de cada número em infra/README.md, seção
+    # "Cotas de CPU e memória".
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 6G
+        reservations:
+          # Só `memory` tem efeito: MEDIDO em Docker 29.6.2 / Compose v5.3.1
+          # fora do Swarm, `reservations.cpus` é aceito pelo parser e descartado
+          # em silêncio (`docker inspect` devolve `CpuShares=0`). Quem dá peso
+          # relativo de CPU aqui é o campo `cpu_shares`, usado no serviço `asr`.
+          memory: 2G
 
   minio:
     # Tag datada, não `latest` (auditoria 360, DX-04): o `S3Client` já quebrou
@@ -47,6 +61,69 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1536M # 1.5 GB
+        reservations:
+          memory: 512M
+
+  # Serviço ASR self-hosted (faster-whisper, #72 / cotas #631). Não sobe por
+  # default (profile "asr") — o build baixa o modelo Whisper e leva minutos.
+  #   docker compose -f infra/docker-compose.yml --profile asr up -d asr
+  #
+  # POR QUE ESTE SERVIÇO PASSOU A EXISTIR AQUI: até a #631 o Whisper só existia
+  # como imagem provisionada à mão no Easypanel, e não havia NADA no repo contra
+  # o que rodar o teste de carga que fecha o critério "o container do Whisper
+  # nunca eleva a carga do host acima de 80% de CPU". Cota sem alvo local é cota
+  # que ninguém mede — a mesma régua de `verificar-fato-de-infra-com-medicao`.
+  # Os números aqui são os MESMOS do painel (infra/README.md): divergir faria o
+  # ensaio local provar uma coisa e a produção rodar outra.
+  asr:
+    profiles: ["asr"]
+    build:
+      # Contexto na RAIZ do repo — mesma razão dos demais serviços.
+      context: ..
+      dockerfile: infra/asr/Dockerfile
+      args:
+        # Precisa casar com o `ASR_MODEL_SIZE` do `environment` abaixo: o ARG
+        # decide qual modelo entra no cache da imagem, a env decide qual o
+        # servidor.py instancia. Divergiram, o boot tenta baixar em runtime e a
+        # garantia de `--network=none` do Dockerfile morre.
+        ASR_MODEL_SIZE: "${ASR_MODEL_SIZE:-small}"
+    environment:
+      ASR_MODEL_SIZE: "${ASR_MODEL_SIZE:-small}"
+      ASR_LANGUAGE: "${ASR_LANGUAGE:-pt}"
+      # Fail-closed no servidor.py: sem token o processo sai 1. Valor de dev
+      # explícito, nunca reaproveitado em produção (lá é `openssl rand -hex 32`).
+      ASR_SERVICE_TOKEN: "${ASR_SERVICE_TOKEN:-token-de-dev-local}"
+      # Teto de transcrições simultâneas DENTRO do processo. Com `cpus: "1.0"`
+      # abaixo, 2 concorrentes dividem 1 vCPU: cada uma fica ~2x mais lenta, e
+      # nenhuma das duas estoura a cota. Mantido em 2 (o default do servidor.py)
+      # de propósito — baixar para 1 é decisão de throughput a tomar com medição
+      # de fila real, não de contenção de recurso, que a cota já resolve.
+      ASR_MAX_CONCORRENTES: "${ASR_MAX_CONCORRENTES:-2}"
+    ports:
+      - "8081:8080" # host 8081: 8080 costuma estar ocupado em dev
+    # `on-failure`, não `unless-stopped`: é isto que faz o critério de aceite
+    # "só o ASR sofre restart" ser observável. Sem política de restart o
+    # container OOM-killed fica parado em `exited (137)` e o operador lê
+    # "o serviço sumiu" em vez de "o serviço bateu no teto e voltou".
+    restart: on-failure
+    # O "nice priority baixa" do brief. NÃO existe campo `nice` em Compose nem
+    # em Swarm; o que existe é peso relativo de CPU sob CONTENÇÃO: default 1024,
+    # aqui 128 = 1/8 da fatia do Postgres quando os dois disputam o mesmo núcleo.
+    # Fora de contenção não limita nada (quem limita é `cpus` abaixo) — é
+    # exatamente a semântica de `nice`.
+    cpu_shares: 128
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0" # 1 de 4 vCPU do KVM 4 = teto de 25% do host
+          memory: 3G
+        reservations:
+          memory: 512M
 
   # Serviço de backup (infra/backup/) — não sobe por default (profile
   # "backup"). Rodar com:
@@ -106,6 +183,15 @@ services:
       OFFSITE_MIN_CARIMBO: "${OFFSITE_MIN_CARIMBO:-}"
     volumes:
       - backupdata:/backups
+    # Mais folgado que os demais jobs: `pg_dump | gzip` e a cifra `age` do
+    # off-site são os únicos passos de infra que fazem trabalho de CPU/memória
+    # de verdade. Apertar aqui trocaria "backup lento" por "backup morto", e
+    # backup que não completa é o pior modo de falha desta lista.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1G
 
   # Motor de escalonamento de alerta de risco (#122/H1, infra/escalonamento/).
   # Não sobe por default (profile "escalonamento"). Rodar com:
@@ -139,6 +225,14 @@ services:
       # container para que "heartbeat parado" signifique "motor parado" e não
       # "container reiniciou agora".
       - escalonamentodata:/heartbeat
+    # Job magro (laço + POST/consulta). 256M é folga larga para um Node que
+    # não carrega o app; o teto existe para que um vazamento aqui não dispute
+    # memória com o Postgres, não porque este processo precise de muito.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
 
   # Job de fechamento de ciclo de faturamento (#36, infra/billing/).
   # Não sobe por default (profile "billing"). Rodar com:
@@ -169,6 +263,14 @@ services:
       # container para que "heartbeat parado" signifique "job parado" e não
       # "container reiniciou agora".
       - billingdata:/heartbeat
+    # Job magro (laço + POST/consulta). 256M é folga larga para um Node que
+    # não carrega o app; o teto existe para que um vazamento aqui não dispute
+    # memória com o Postgres, não porque este processo precise de muito.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
 
   # Job de exportação integral do acervo (#374 ∪ #353, D62, infra/exportacao/).
   # Não sobe por default (profile "exportacao"). Rodar com:
@@ -199,6 +301,14 @@ services:
       # container para que "heartbeat parado" signifique "job parado" e não
       # "container reiniciou agora".
       - exportacaodata:/heartbeat
+    # Job magro (laço + POST/consulta). 256M é folga larga para um Node que
+    # não carrega o app; o teto existe para que um vazamento aqui não dispute
+    # memória com o Postgres, não porque este processo precise de muito.
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
 
 volumes:
   pgdata:
