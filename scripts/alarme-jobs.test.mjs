@@ -7,18 +7,23 @@ import {
   atualizarContadorIndeterminado,
   avaliarExtracao,
   avaliarHeartbeat,
+  avaliarRecurso,
   decidirEnvios,
   deveAlertar,
   gravarContadorIndeterminado,
   idadeMaisRecenteH,
   lerContadorIndeterminado,
+  limitePctDoAmbiente,
   marcarAlertado,
   montarAlertaDetectorCego,
+  pctUsoDisco,
+  pctUsoMemoria,
   verificarBackupOffsite,
   verificarBilling,
   verificarEscalonamento,
   verificarExtracao,
   verificarHeartbeats,
+  verificarRecursosHost,
 } from "./alarme-jobs.mjs";
 
 function sqlDubleQueRetorna(linhas) {
@@ -973,5 +978,353 @@ describe("alarme-jobs.mjs — verificarExtracao / limiar (#560 F5)", () => {
       });
       expect(resultado.cegou).toBe(false);
     }
+  });
+});
+
+describe("alarme-jobs.mjs — recursos do host: disco e memória (#631)", () => {
+  // `statfs` do Node devolve blocos; estes dublês montam um filesystem de
+  // tamanho conhecido para que o percentual esperado seja aritmética, não
+  // aproximação.
+  function fsCom({ blocks, bfree, bavail }) {
+    return { bsize: 4096, blocks, bfree, bavail };
+  }
+
+  function meminfoCom({ totalKb, disponivelKb, livreKb = 0 }) {
+    return [
+      `MemTotal:       ${totalKb} kB`,
+      `MemFree:        ${livreKb} kB`,
+      `MemAvailable:   ${disponivelKb} kB`,
+      "Buffers:          123456 kB",
+    ].join("\n");
+  }
+
+  describe("pctUsoDisco — convenção do `df`", () => {
+    test("blocos reservados ao root contam como USADOS, não como livres", () => {
+      // 1000 blocos, 200 livres, mas só 150 disponíveis para não-root: 50
+      // blocos são reserva do root. Usados = 1000-200 = 800; a capacidade que o
+      // `df` considera é 800+150 = 950, então 800/950 = 84,2% — e NÃO os
+      // 800/1000 = 80% que sairiam de dividir por `blocks`. Se esta conta virar
+      // `usados / blocks`, o alarme passa a discordar do `df -h` que o operador
+      // roda no runbook, e some justamente a faixa entre 80% e 84% em que o
+      // limite de 80% deveria ter disparado.
+      const pct = pctUsoDisco(fsCom({ blocks: 1000, bfree: 200, bavail: 150 }));
+      expect(pct).toBeCloseTo(84.21, 1);
+      expect(pct).not.toBeCloseTo(80, 1);
+    });
+
+    test("filesystem vazio → 0%", () => {
+      expect(
+        pctUsoDisco(fsCom({ blocks: 1000, bfree: 1000, bavail: 1000 })),
+      ).toBe(0);
+    });
+
+    test("filesystem cheio → 100%", () => {
+      expect(pctUsoDisco(fsCom({ blocks: 1000, bfree: 0, bavail: 0 }))).toBe(
+        100,
+      );
+    });
+
+    test("leitura sem blocos → null (indeterminado), nunca 0%", () => {
+      // 0% seria "disco vazio, tudo bem" — a falha mais perigosa possível aqui.
+      expect(pctUsoDisco(fsCom({ blocks: 0, bfree: 0, bavail: 0 }))).toBeNull();
+      expect(pctUsoDisco(undefined)).toBeNull();
+    });
+  });
+
+  describe("pctUsoMemoria — MemAvailable, não MemFree", () => {
+    test("usa MemAvailable e ignora MemFree", () => {
+      // Host saudável: quase nada "free" (o kernel usa tudo de page cache) mas
+      // 60% disponível. Ler MemFree daria 95% de uso e alarme diário eterno.
+      const pct = pctUsoMemoria(
+        meminfoCom({ totalKb: 1000, disponivelKb: 600, livreKb: 50 }),
+      );
+      expect(pct).toBeCloseTo(40, 5);
+      expect(pct).not.toBeCloseTo(95, 5);
+    });
+
+    test("MemAvailable ausente → null, nunca 0%", () => {
+      expect(pctUsoMemoria("MemTotal:       1000 kB")).toBeNull();
+    });
+
+    test("texto vazio ou lixo → null", () => {
+      expect(pctUsoMemoria("")).toBeNull();
+      expect(pctUsoMemoria(undefined)).toBeNull();
+    });
+  });
+
+  describe("limitePctDoAmbiente", () => {
+    test("variável ausente → usa o padrão, sem erro", () => {
+      expect(limitePctDoAmbiente({}, "ALARME_DISCO_PCT", 80)).toEqual({
+        pct: 80,
+        erro: null,
+      });
+    });
+
+    test("string vazia é o mesmo que ausente (Easypanel salva campo vazio)", () => {
+      expect(
+        limitePctDoAmbiente({ ALARME_DISCO_PCT: "  " }, "ALARME_DISCO_PCT", 80),
+      ).toEqual({ pct: 80, erro: null });
+    });
+
+    test("valor válido sobrescreve o padrão", () => {
+      expect(
+        limitePctDoAmbiente({ ALARME_DISCO_PCT: "70" }, "ALARME_DISCO_PCT", 80)
+          .pct,
+      ).toBe(70);
+    });
+
+    test.each([["abc"], ["0"], ["-5"], ["101"], ["NaN"]])(
+      "valor inválido %s → erro que NOMEIA a variável",
+      (bruto) => {
+        const r = limitePctDoAmbiente(
+          { ALARME_DISCO_PCT: bruto },
+          "ALARME_DISCO_PCT",
+          80,
+        );
+        expect(r.pct).toBeNull();
+        expect(r.erro).toContain("ALARME_DISCO_PCT");
+      },
+    );
+  });
+
+  describe("avaliarRecurso — fronteira do limite", () => {
+    test("exatamente no limite ainda é ok (o critério é > 80%, não >= 80%)", () => {
+      expect(
+        avaliarRecurso("recursos-disco", "uso de disco", 80, 80).estado,
+      ).toBe("ok");
+    });
+
+    test("um décimo acima do limite já é problema", () => {
+      const r = avaliarRecurso("recursos-disco", "uso de disco", 80.1, 80);
+      expect(r.estado).toBe("problema");
+      expect(r.detalhe).toContain("80.1%");
+      expect(r.detalhe).toContain("80%");
+    });
+
+    test("percentual nulo → indeterminado, nunca ok", () => {
+      const r = avaliarRecurso("recursos-disco", "uso de disco", null, 80);
+      expect(r.estado).toBe("indeterminado");
+      expect(r.estado).not.toBe("ok");
+    });
+
+    test("detalhe de ok é vazio (mesmo shape das demais checagens)", () => {
+      expect(avaliarRecurso("recursos-disco", "uso de disco", 10, 80)).toEqual({
+        estado: "ok",
+        motivo: "recursos-disco",
+        detalhe: "",
+      });
+    });
+  });
+
+  describe("verificarRecursosHost", () => {
+    const discoOk = () => fsCom({ blocks: 1000, bfree: 900, bavail: 900 });
+    const discoCheio = () => fsCom({ blocks: 1000, bfree: 50, bavail: 50 });
+    const memOk = () => meminfoCom({ totalKb: 1000, disponivelKb: 800 });
+    const memCheia = () => meminfoCom({ totalKb: 1000, disponivelKb: 20 });
+
+    function leitores({ disco = discoOk, mem = memOk } = {}) {
+      return {
+        statfs: async () => disco(),
+        lerMeminfo: async () => mem(),
+      };
+    }
+
+    test("host saudável → dois resultados ok, com motivos DISTINTOS", async () => {
+      const [disco, memoria] = await verificarRecursosHost({}, leitores());
+      expect(disco.estado).toBe("ok");
+      expect(memoria.estado).toBe("ok");
+      // Motivos distintos importam: o dedup diário é POR MOTIVO, e um motivo
+      // compartilhado faria o alarme de disco silenciar o de memória no
+      // mesmo dia.
+      expect(disco.motivo).toBe("recursos-disco");
+      expect(memoria.motivo).toBe("recursos-memoria");
+      expect(disco.motivo).not.toBe(memoria.motivo);
+    });
+
+    test("disco a 95% → problema no disco, memória segue ok", async () => {
+      const [disco, memoria] = await verificarRecursosHost(
+        {},
+        leitores({ disco: discoCheio }),
+      );
+      expect(disco.estado).toBe("problema");
+      expect(disco.detalhe).toContain("95%");
+      expect(memoria.estado).toBe("ok");
+    });
+
+    test("padrão de disco é 80% — 85% de uso dispara sem env nenhuma", async () => {
+      const [disco] = await verificarRecursosHost(
+        {},
+        leitores({
+          disco: () => fsCom({ blocks: 1000, bfree: 150, bavail: 150 }),
+        }),
+      );
+      expect(disco.estado).toBe("problema");
+      expect(disco.detalhe).toContain("80%");
+    });
+
+    test("padrão de memória é 90%, não 80% — 85% de uso NÃO dispara", async () => {
+      const [, memoria] = await verificarRecursosHost(
+        {},
+        leitores({
+          mem: () => meminfoCom({ totalKb: 1000, disponivelKb: 150 }),
+        }),
+      );
+      expect(memoria.estado).toBe("ok");
+    });
+
+    test("memória a 98% → problema", async () => {
+      const [, memoria] = await verificarRecursosHost(
+        {},
+        leitores({ mem: memCheia }),
+      );
+      expect(memoria.estado).toBe("problema");
+      expect(memoria.detalhe).toContain("uso de memória");
+    });
+
+    test("ALARME_DISCO_PCT baixa o limite e faz um host de 50% disparar", async () => {
+      const [disco] = await verificarRecursosHost(
+        { ALARME_DISCO_PCT: "40" },
+        leitores({
+          disco: () => fsCom({ blocks: 1000, bfree: 500, bavail: 500 }),
+        }),
+      );
+      expect(disco.estado).toBe("problema");
+      expect(disco.detalhe).toContain("40%");
+    });
+
+    test("limite inválido → PROBLEMA (e-mail), não indeterminado (só log)", async () => {
+      // A decisão de desenho que este teste tranca: `indeterminado` não escala
+      // para e-mail nestas checagens, então um typo no painel deixaria o
+      // alarme mudo para sempre. Tem que gritar.
+      const [disco] = await verificarRecursosHost(
+        { ALARME_DISCO_PCT: "oitenta" },
+        leitores(),
+      );
+      expect(disco.estado).toBe("problema");
+      expect(disco.estado).not.toBe("indeterminado");
+      expect(disco.detalhe).toContain("ALARME_DISCO_PCT");
+    });
+
+    test("limite de memória inválido não contamina a checagem de disco", async () => {
+      const [disco, memoria] = await verificarRecursosHost(
+        { ALARME_MEMORIA_PCT: "-1" },
+        leitores(),
+      );
+      expect(disco.estado).toBe("ok");
+      expect(memoria.estado).toBe("problema");
+      expect(memoria.detalhe).toContain("ALARME_MEMORIA_PCT");
+    });
+
+    test("statfs falhando → indeterminado, e o detalhe NÃO vaza o caminho", async () => {
+      const err = new Error(
+        "ENOENT: no such file or directory, statfs /heartbeat",
+      );
+      err.code = "ENOENT";
+      const [disco] = await verificarRecursosHost(
+        {},
+        {
+          statfs: async () => Promise.reject(err),
+          lerMeminfo: async () => memOk(),
+        },
+      );
+      expect(disco.estado).toBe("indeterminado");
+      expect(disco.detalhe).toContain("ENOENT");
+      // `detalheDoErro` entrega name+code; a message (que carrega o caminho)
+      // fica de fora — mesma regra de PII das demais checagens.
+      expect(disco.detalhe).not.toContain("/heartbeat");
+      expect(disco.detalhe).not.toContain("no such file");
+    });
+
+    test("leitura de meminfo falhando → indeterminado só na memória", async () => {
+      const [disco, memoria] = await verificarRecursosHost(
+        {},
+        {
+          statfs: async () => discoOk(),
+          lerMeminfo: async () => Promise.reject(new Error("boom")),
+        },
+      );
+      expect(disco.estado).toBe("ok");
+      expect(memoria.estado).toBe("indeterminado");
+    });
+
+    test("ALARME_DISCO_PATH é o caminho medido", async () => {
+      let medido = null;
+      await verificarRecursosHost(
+        { ALARME_DISCO_PATH: "/outro" },
+        {
+          statfs: async (p) => {
+            medido = p;
+            return discoOk();
+          },
+          lerMeminfo: async () => memOk(),
+        },
+      );
+      expect(medido).toBe("/outro");
+    });
+
+    test("sem ALARME_DISCO_PATH mede /heartbeat (o volume que o serviço já exige)", async () => {
+      let medido = null;
+      await verificarRecursosHost(
+        {},
+        {
+          statfs: async (p) => {
+            medido = p;
+            return discoOk();
+          },
+          lerMeminfo: async () => memOk(),
+        },
+      );
+      expect(medido).toBe("/heartbeat");
+    });
+
+    test("os detalhes só carregam números e texto fixo (sem PII)", async () => {
+      const [disco, memoria] = await verificarRecursosHost(
+        {},
+        leitores({ disco: discoCheio, mem: memCheia }),
+      );
+      for (const r of [disco, memoria]) {
+        expect(r.detalhe).not.toMatch(/@/); // e-mail
+        expect(r.detalhe).not.toMatch(
+          /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+        ); // uuid
+      }
+    });
+  });
+
+  describe("integração com o dedup e o desfecho do detector", () => {
+    test("as duas checagens deduplicam de forma independente no mesmo dia", async () => {
+      expect(
+        await deveAlertar(heartbeatDir, "recursos-disco", "2026-09-06"),
+      ).toBe(true);
+      await marcarAlertado(heartbeatDir, "recursos-disco", "2026-09-06");
+      expect(
+        await deveAlertar(heartbeatDir, "recursos-disco", "2026-09-06"),
+      ).toBe(false);
+      // Memória continua livre para alertar no mesmo dia.
+      expect(
+        await deveAlertar(heartbeatDir, "recursos-memoria", "2026-09-06"),
+      ).toBe(true);
+    });
+
+    test("problema de recurso entra em `aEnviar`; indeterminado só em `aLogar`", () => {
+      const { aEnviar, aLogar } = decidirEnvios([
+        { estado: "problema", motivo: "recursos-disco", detalhe: "d" },
+        { estado: "indeterminado", motivo: "recursos-memoria", detalhe: "m" },
+      ]);
+      expect(aEnviar.map((r) => r.motivo)).toEqual(["recursos-disco"]);
+      expect(aLogar.map((r) => r.motivo)).toEqual(["recursos-memoria"]);
+    });
+
+    test("recursos NÃO entram no escalonamento de detector cego", async () => {
+      // Elas não dependem do banco: um `indeterminado` aqui é problema de
+      // leitura local, não de "o detector perdeu o banco de vista".
+      for (let i = 0; i < 10; i++) {
+        const r = await atualizarContadorIndeterminado(heartbeatDir, {
+          motivo: "recursos-disco",
+          estado: "indeterminado",
+        });
+        expect(r.cegou).toBe(false);
+      }
+    });
   });
 });

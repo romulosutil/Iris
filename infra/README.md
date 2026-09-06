@@ -103,6 +103,146 @@ uma troca de token sem quebrar a automação, dispare o relay manualmente
 (`POST /api/hooks/glitchtip?token=<GLITCHTIP_WEBHOOK_SECRET>` com o payload do
 GlitchTip), confirme que a issue abriu, e só então revogue o token velho.
 
+## Cotas de CPU e memória
+
+Toda a stack vive numa **única** VPS Hostinger KVM 4 — **4 vCPU, 16 GB**. Sem
+teto por container, uma transcrição do Whisper ou um relatório pesado come todos
+os núcleos ou estoura a RAM, e o OOM killer do kernel escolhe a vítima: pode ser
+o Postgres. Cota não é economia, é **isolamento de raio de falha**.
+
+### O orçamento
+
+| Serviço              | Teto de CPU | Teto de RAM | Reserva de RAM | Peso (`cpu_shares`) |
+| -------------------- | ----------- | ----------- | -------------- | ------------------- |
+| `postgres`           | 2.0         | 6 GB        | 2 GB           | default (1024)      |
+| `app` (Next.js)      | 1.5         | 4 GB        | 1 GB           | default (1024)      |
+| `minio`              | 0.5         | 1,5 GB      | 512 MB         | default (1024)      |
+| `asr` (Whisper)      | 1.0         | 3 GB        | 512 MB         | **128**             |
+| `backup`             | 0.5         | 1 GB        | —              | default             |
+| demais jobs de infra | 0.25        | 256 MB      | —              | default             |
+
+Os números são **os mesmos** no `infra/docker-compose.yml` e no painel. Divergir
+faria o ensaio local provar uma coisa e a produção rodar outra.
+
+> ⚠️ **Os tetos são deliberadamente maiores que a máquina — leia antes de
+> "corrigir".** Somados dão **5,0 vCPU num host de 4** e **14,5 GB de teto em
+> 16 GB**, sem contar os ~10 containers de job, o Easypanel/Traefik e o SO.
+> Isso é _oversubscription_ intencional: teto é **ceiling**, não alocação. Cada
+> serviço pode usar até o seu limite quando os outros estão ociosos — que é o
+> caso quase sempre. Quem garante que ninguém morre de fome são as **reservas**,
+> e essas somam só 4 GB. O risco residual real: se os quatro grandes baterem no
+> teto ao mesmo tempo, o host entra em OOM e o kernel escolhe quem morre — o que
+> derrotaria o critério "só o ASR reinicia". É por isso que a checagem
+> `recursos-memoria` (§Alarme automático) existe e alarma em 90%: ela é a rede
+> que a aritmética das cotas não dá.
+
+### Como o "nice" do Whisper realmente funciona
+
+O brief pedia "nice priority baixa" para o ASR. **Não existe campo `nice` em
+Docker Compose nem em Swarm.** O que existe é peso relativo de CPU **sob
+contenção**: `cpu_shares`, default 1024. O `asr` fica em **128** — 1/8 da fatia
+do Postgres quando os dois disputam o mesmo núcleo. Sem contenção, não limita
+nada (quem limita é `cpus: "1.0"`). É exatamente a semântica de `nice`, e é o
+mais perto que a plataforma chega.
+
+### Fatos medidos (Docker 29.6.2 / Compose v5.3.1, Swarm inativo)
+
+Não deduza nenhum destes — foram medidos com `docker inspect`, e o
+comportamento **muda** entre Compose e Swarm:
+
+- `deploy.resources.limits.cpus` e `.memory` **são honrados fora do Swarm**
+  (viram `NanoCpus` e `Memory`; dentro do container, `cpu.max` e `memory.max`).
+- `deploy.resources.reservations.memory` é honrado (`MemoryReservation`, limite
+  suave).
+- **`deploy.resources.reservations.cpus` é aceito pelo parser e descartado em
+  silêncio** — `docker inspect` devolve `CpuShares=0`. Não confie nele para dar
+  prioridade a nada. Quem dá peso de CPU é o campo `cpu_shares`, que convive com
+  o bloco `deploy` sem conflito (medido: `CpuShares=128` **e**
+  `NanoCpus=500000000` no mesmo container).
+- Container que estoura o teto de memória é morto pelo cgroup: `OOMKilled=true`,
+  `ExitCode=137`, e a política de `restart` o traz de volta — **enquanto os
+  vizinhos seguem `running`**. É este o mecanismo por trás do critério "só o ASR
+  reinicia"; sem `restart:` declarado ele fica parado em `exited (137)`.
+
+### Provisionamento no Easypanel (passo manual do Rômulo)
+
+**Não existe arquivo de template neste repo** — o Easypanel v2.31.0 é
+configurado pelo painel, serviço a serviço. Para cada um da tabela acima:
+
+1. Abrir o serviço → aba **Avançado** → seção **Recursos** (_Resources_).
+2. Preencher **Limite de memória** e **Limite de CPU** com os valores da tabela.
+   O painel escreve CPU em unidades de vCPU (`1.5`) e memória em MB (`4096`).
+3. **Reservas** só onde a tabela indica. Reserva alta em todo mundo é como não
+   ter reserva nenhuma: o Swarm passa a não conseguir agendar.
+4. `iris-asr` também recebe **`Réplicas = 1`** — já era requisito por causa do
+   `localConcurrency` (ver §Worker de transcrição), e continua sendo: duas
+   réplicas são dois containers, cada um com seu teto de 3 GB.
+5. Clicar em **Implantar**. Salvar não aplica sozinho (memória
+   `easypanel-ambiente-expoe-segredos`).
+
+> ⚠️ Aplicar cota **reinicia o container** — o Docker não muda cgroup de
+> processo de pé para todos os campos. Fazer fora do horário de atendimento, e
+> o `postgres` por último.
+
+### Como saber que deu certo
+
+Não basta o painel mostrar o número. Por SSH no VPS:
+
+```bash
+# 1) A cota chegou ao daemon? (o painel pode ter salvo e não implantado)
+docker ps --format '{{.Names}}' | while read -r n; do
+  printf '%-34s %s\n' "$n" \
+    "$(docker inspect "$n" --format 'mem={{.HostConfig.Memory}} cpus={{.HostConfig.NanoCpus}} shares={{.HostConfig.CpuShares}}')"
+done
+```
+
+`mem=0 cpus=0` significa **sem cota** — o serviço não foi implantado depois da
+mudança. Esperado para `iris-asr`: `mem=3221225472 cpus=1000000000 shares=128`.
+
+```bash
+# 2) O que está sendo usado agora, ao vivo:
+docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}'
+```
+
+A coluna `MEM %` é do **teto do container**, não do host — 90% ali com o host
+tranquilo é normal e não é o que o alarme mede.
+
+### Runbook — teste de carga do Whisper (é isto que fecha o critério)
+
+O critério é "o container do Whisper nunca eleva a carga do host acima de 80% de
+CPU". Com `cpus: "1.0"` num host de 4 vCPU, o teto aritmético é **25%** — mas
+aritmética não é medição. Para provar, localmente:
+
+```bash
+# Sobe o Whisper com as MESMAS cotas da produção (perfil dedicado; o build
+# baixa o modelo e demora na primeira vez).
+docker compose -f infra/docker-compose.yml --profile asr up -d asr
+
+# Queima CPU DENTRO do container, com mais threads que a cota permite:
+docker compose -f infra/docker-compose.yml --profile asr exec asr \
+  python -c "
+import multiprocessing as mp
+def q():
+    while True: pass
+[mp.Process(target=q, daemon=True).start() for _ in range(8)]
+import time; time.sleep(60)
+" &
+
+# Observar por ~30s: CPUPerc do asr não pode passar de ~100% (= 1 vCPU).
+docker stats --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemPerc}}'
+```
+
+Leitura correta do número: o `CPUPerc` do `docker stats` é **relativo a um
+núcleo** — `100%` é 1 vCPU inteiro, que num host de 4 vCPU é 25% da máquina.
+Oito processos girando em laço infinito devem ficar presos em ~100%, não em
+~800%. Se passar de 100%, a cota **não** foi aplicada — confira o passo 1 acima
+antes de qualquer outra hipótese.
+
+Para o teto de memória e o critério "só o ASR reinicia", o ensaio é o mesmo com
+alocação em vez de laço: encher 4 GB num container de teto 3 GB deve produzir
+`OOMKilled=true` / `ExitCode=137` **no `asr` apenas**, com `postgres` e `minio`
+seguindo `running` em `docker ps`.
+
 ## Banco — role de runtime (CRÍTICO para o RLS)
 
 O RLS **só se aplica a roles não-superuser e não-donos da tabela**. Um superuser
@@ -312,14 +452,14 @@ scripts/ci/carga-imagem-app.sh migrate    # só infra/Dockerfile.migrate
 
 O que cada asserção prova, e por que `docker build` verde não bastaria:
 
-| Asserção                                          | O que quebraria sem ela                                              |
-| ------------------------------------------------- | -------------------------------------------------------------------- |
-| `esm/_interop_require_default.js` na imagem FINAL | reparo do `@swc/helpers` feito no stage `build` e perdido no `COPY`  |
-| `node --check` no bundle do seed                  | `esbuild` no musl gerando bundle truncado (build verde, seed morto)  |
-| boot + `GET /termos` = 200 em até 15s             | processo que não sobe — o modo de falha real dos dois incidentes     |
-| log do boot sem `ERR_MODULE_NOT_FOUND`            | 200 em rota estática escondendo `require` quebrado em outro ponto    |
-| migrate sem env falha na guarda (nunca exit 0)    | gate de schema virando no-op sem ninguém perceber                    |
-| `db/migrations` presente na imagem                | deploy aplicando **zero** migração sem reclamar                      |
+| Asserção                                          | O que quebraria sem ela                                                 |
+| ------------------------------------------------- | ----------------------------------------------------------------------- |
+| `esm/_interop_require_default.js` na imagem FINAL | reparo do `@swc/helpers` feito no stage `build` e perdido no `COPY`     |
+| `node --check` no bundle do seed                  | `esbuild` no musl gerando bundle truncado (build verde, seed morto)     |
+| boot + `GET /termos` = 200 em até 15s             | processo que não sobe — o modo de falha real dos dois incidentes        |
+| log do boot sem `ERR_MODULE_NOT_FOUND`            | 200 em rota estática escondendo `require` quebrado em outro ponto       |
+| migrate sem env falha na guarda (nunca exit 0)    | gate de schema virando no-op sem ninguém perceber                       |
+| `db/migrations` presente na imagem                | deploy aplicando **zero** migração sem reclamar                         |
 | migrate aplicado de verdade contra Postgres vazio | conexão + guard de hash (D17) + aplicação, provados de dentro da imagem |
 
 No CI o job é `carga-imagem-app` (`.github/workflows/ci.yml`), gateado por um
@@ -2902,14 +3042,64 @@ de mais dado no alerta, **muda a função**, não o grant.
 
 As três primeiras medem o **efeito** do job parado (a prova mais forte — não
 mudam); a quarta, `extracao`, não é sobre job parado e sim sobre o provider de
-IA degradado — tem subseção própria abaixo:
+IA degradado — tem subseção própria abaixo. As duas últimas (#631) não são
+sobre job nenhum: medem a **máquina** debaixo de todos eles.
 
-| Checagem         | O que olha                                                                      | Limite |
-| ---------------- | ------------------------------------------------------------------------------- | ------ |
-| `billing`        | `billing_cycle` com `status = 'aberto'` e `fim` vencido                         | 2h     |
-| `escalonamento`  | `alerta_risco_clinico` com `status = 'aberto'` e `prazo_reconhecimento` vencido | 10min  |
-| `backup-offsite` | `lastModified` do objeto mais recente no bucket off-site (`mc ls --json`)       | 36h    |
-| `extracao`       | taxa de falha e p95 de latência da extração (ver abaixo)                        | 1h     |
+| Checagem           | O que olha                                                                      | Limite    |
+| ------------------ | ------------------------------------------------------------------------------- | --------- |
+| `billing`          | `billing_cycle` com `status = 'aberto'` e `fim` vencido                         | 2h        |
+| `escalonamento`    | `alerta_risco_clinico` com `status = 'aberto'` e `prazo_reconhecimento` vencido | 10min     |
+| `backup-offsite`   | `lastModified` do objeto mais recente no bucket off-site (`mc ls --json`)       | 36h       |
+| `extracao`         | taxa de falha e p95 de latência da extração (ver abaixo)                        | 1h        |
+| `recursos-disco`   | `statfs` no volume `/heartbeat` — uso do filesystem do **host**                 | 80% (env) |
+| `recursos-memoria` | `MemAvailable` de `/proc/meminfo` — uso de RAM do **host**                      | 90% (env) |
+
+#### Disco e memória do host (#631) — o alarme que acompanha as cotas
+
+As cotas de CPU/memória (§[Cotas de CPU e memória](#cotas-de-cpu-e-memória))
+impedem que um container derrube os outros, mas não avisam quando a **máquina**
+está no limite. Estas duas checagens são esse aviso, e vivem no mesmo detector
+pelo motivo de sempre: o canal de e-mail e o dedup diário estão aqui. Pô-las no
+`scripts/lib/heartbeat.mjs` — como um brief anterior sugeria — significaria
+rodá-las dentro de cada uma das ~8 imagens de infra, medindo a mesma VPS oito
+vezes e sem poder enviar nada.
+
+**As duas medem o HOST, não o container — isto foi medido, não deduzido:**
+
+- `/proc/meminfo` **não** é virtualizado pelo Docker (sem lxcfs). Um container
+  rodando com `-m 64m` reporta `MemTotal: 16300684 kB`, idêntico a um sem limite
+  algum, enquanto o cgroup dele marca `memory.max=67108864`. O teto do container
+  fica no cgroup; o `/proc/meminfo` continua sendo a RAM da VPS. **Corolário:**
+  pôr cota de memória no próprio `iris-alarme` não cega esta checagem.
+- `statfs` no volume persistente `/heartbeat` atravessa o overlay e cai no
+  filesystem do host que guarda os volumes do Docker — o mesmo que enche quando
+  um dump ou o WAL cresce. **Não** é preciso bind-montar `/` do host: o volume
+  que o serviço já exige basta, e um mount novo seria mais um passo manual no
+  painel para alguém esquecer.
+
+O percentual de disco segue a convenção do `df`: os blocos reservados ao root
+contam como **usados**. Dividir por `blocks` daria um número sistematicamente
+menor que o do `df -h` do runbook, e duas fontes discordando sobre "o disco está
+cheio?" é como um alarme perde a confiança de quem o lê.
+
+Variáveis, todas opcionais (ver `.env.example`):
+
+| Variável             | Default      | Efeito                           |
+| -------------------- | ------------ | -------------------------------- |
+| `ALARME_DISCO_PCT`   | `80`         | acima disso, `problema` + e-mail |
+| `ALARME_MEMORIA_PCT` | `90`         | acima disso, `problema` + e-mail |
+| `ALARME_DISCO_PATH`  | `/heartbeat` | caminho medido pelo `statfs`     |
+
+> ⚠️ **Valor inválido nessas variáveis é `problema`, não `indeterminado`.**
+> Parece severo e é deliberado: `indeterminado` só é logado, e apenas
+> `billing`/`escalonamento` escalam para "detector cego". Um typo em
+> `ALARME_DISCO_PCT` deixaria o alarme de disco mudo **para sempre**, com o log
+> dentro de um container que ninguém abre. Deixar em branco usa o default e é o
+> caminho normal — quem não quer configurar, não configura.
+
+O limite de memória é 90% e não 80% de propósito: com as cotas somando 14,5 GB
+de teto em 16 GB, 80% de uso é o estado **normal** de um host que está usando o
+que tem. 90% é onde já não há folga para um pico do Postgres.
 
 #### Heartbeat no banco (#536, DA-03) — os jobs sem efeito visível
 
