@@ -128,15 +128,20 @@ COPY --from=build --chown=nextjs:nodejs /app/scripts/seed-local.js ./scripts/see
 # o Chromium que o `playwright install` baixa para ele. Escrito à mão, diverge
 # do lockfile em silêncio (CI verde, produção rodando outra biblioteca).
 # O guard `scripts/versao-playwright-dockerfile.test.mjs` roda no `pnpm test` e
-# falha se este ARG não for igual à versão que o pnpm-lock.yaml resolve para a
+# falha se este número não for igual ao que o pnpm-lock.yaml resolve para a
 # dependência de produção `playwright`. Ao atualizar o Playwright:
-# `package.json` + `pnpm-lock.yaml` + este ARG na mesma mudança.
-ARG PLAYWRIGHT_VERSION=1.62.1
+# `package.json` + `pnpm-lock.yaml` + esta linha na mesma mudança.
+#
+# POR QUE LITERAL E NÃO `ARG PLAYWRIGHT_VERSION=…`: o Easypanel repassa **toda**
+# env var do serviço como `--build-arg` (infra/README.md §"o log de build
+# contém TODOS os segredos"). Uma env var de painel com o nome do ARG
+# sobrescreveria o pino sem deixar rastro no repositório — e o guard, que lê
+# este arquivo, continuaria verde. O literal não tem essa superfície.
 RUN --mount=type=cache,id=npm-store,target=/root/.npm \
     mkdir -p /opt/playwright \
     && cd /opt/playwright \
     && npm init -y >/dev/null \
-    && npm install --no-save "playwright@${PLAYWRIGHT_VERSION}" \
+    && npm install --no-save playwright@1.62.1 \
     && npx playwright install --with-deps chromium \
     && rm -rf /app/node_modules/playwright /app/node_modules/playwright-core \
     && cp -r /opt/playwright/node_modules/playwright /app/node_modules/playwright \

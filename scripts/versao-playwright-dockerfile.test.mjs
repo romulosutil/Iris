@@ -120,9 +120,9 @@ describe("versão do Playwright: Dockerfile x pnpm-lock.yaml", () => {
         `Produção renderiza PDF com a versão do Dockerfile (o estágio \`runner\` ` +
         `substitui /app/node_modules/playwright), então esta divergência troca a ` +
         `biblioteca E o Chromium sem que nada no CI reclame.\n` +
-        `Correção: alinhar o \`ARG PLAYWRIGHT_VERSION\` do infra/Dockerfile com ` +
-        `${resolvida}, ou atualizar package.json + pnpm-lock.yaml se a intenção era ` +
-        `mudar a versão do projeto.`,
+        `Correção: alinhar o pino do infra/Dockerfile com ${resolvida}, ou ` +
+        `atualizar package.json + pnpm-lock.yaml se a intenção era mudar a ` +
+        `versão do projeto.`,
     ).toEqual([]);
   });
 
