@@ -298,17 +298,51 @@ efetiva. **Os dois passam por fazer o `Salvar` primeiro** — é ele que faz a c
 sobreviver ao próximo deploy; sem ele, um deploy futuro devolve o serviço para
 "ilimitado".
 
-1. **`infra/aplicar-cotas.sh` por SSH — o caminho escolhido (06/09/2026).**
-   `docker service update` ajusta o recurso da task in-place: sem build, sem
-   tocar em código, segundos em vez de minutos. É o que a §Runbook abaixo usa.
-2. **Clicar `Implantar`** — funciona, mas **reconstrói a imagem a partir do HEAD
-   de `main`**: um deploy de código para aplicar um número de memória. Só vale a
-   pena se você já ia implantar aquele serviço de qualquer jeito. Se for por
-   aqui, confira antes que o `main` não tem commit que você não queira subir.
+1. **Clicar `Implantar` nos 13 do tipo `APP` — foi o caminho usado em
+   06/09/2026** (ver §Registro abaixo). Reconstrói a imagem a partir do HEAD de
+   `main`, então **antes de usá-lo confira que o `main` não tem commit que você
+   não queira subir**. Na prática o custo foi baixo porque todo serviço já
+   rodava aquele mesmo commit e o cache do Docker tornou cada build um no-op.
+2. **`infra/aplicar-cotas.sh` por SSH.** `docker service update` ajusta o
+   recurso da task in-place: sem build, sem tocar em código. É o caminho
+   tecnicamente mais limpo e o **único** para o `iris-postgres`, que não tem
+   `Implantar`. Continua sendo o recomendado quando houver acesso SSH — e é o
+   que restaura a cota se um deploy futuro a perder.
 
 > ⚠️ Aplicar cota **reinicia a task** nos dois caminhos — é assim que o cgroup
 > novo passa a valer. Fazer fora do horário de atendimento, e o `postgres` por
 > último (o script já respeita essa ordem).
+
+> 🔎 **A lista `Implantações` da página do serviço mostra dado velho — use
+> `/actions`.** Custou três cliques de confusão em 06/09: depois de acionar
+> `Implantar`, o histórico do serviço continuava exibindo o deploy de 3 horas
+> antes, sugerindo que o clique não tinha funcionado. Tinha: o `POST
+/api/rpc/services/app/deployService` devolvia `200`, e a página **`/actions`**
+> (menu lateral → `Ações`) mostrava a implantação concluída em 1 segundo. O sinal
+> que decide é `/actions` mais o cgroup do container, nunca o histórico da
+> página do serviço.
+
+### Registro — cotas ativadas em produção (06/09/2026)
+
+Os 14 serviços receberam a cota no painel (`Salvar`) e os 13 do tipo `APP` foram
+implantados em seguida. **Todos os 13 saíram verdes em `/actions`**, cada build
+entre 1 e 17 segundos — o Docker reaproveitou as camadas porque a imagem já era
+a do commit em execução. O site seguiu no ar durante todo o procedimento
+(`HTTP 200` em três amostras; a rota interna em `401`, como se espera).
+
+Amostragem de conferência, lida no cgroup **dentro de cada container**:
+
+| Serviço         | `memory.max` | =      | `cpu.max`       | =        |
+| --------------- | ------------ | ------ | --------------- | -------- |
+| `iris-postgres` | `6442450944` | 6 GB   | `200000 100000` | 2,0 CPU  |
+| `iris-app`      | `4294967296` | 4 GB   | `150000 100000` | 1,5 CPU  |
+| `iris-asr`      | `3221225472` | 3 GB   | `100000 100000` | 1,0 CPU  |
+| `iris-alarme`   | `268435456`  | 256 MB | `25000 100000`  | 0,25 CPU |
+
+Os quatro batem com a tabela do orçamento. Os demais jobs compartilham a linha do
+`iris-alarme` (256 MB / 0,25) e saíram do mesmo deploy verde, mas **não** tiveram
+o cgroup lido um a um — quem quiser fechar isso roda
+`./infra/aplicar-cotas.sh --conferir`, que lê os 14 do Swarm de uma vez.
 
 ### Runbook — aplicar as cotas de fato (`infra/aplicar-cotas.sh`)
 
