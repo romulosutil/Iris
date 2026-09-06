@@ -164,6 +164,22 @@ comportamento **muda** entre Compose e Swarm:
   vizinhos seguem `running`**. É este o mecanismo por trás do critério "só o ASR
   reinicia"; sem `restart:` declarado ele fica parado em `exited (137)`.
 
+> ⚠️ **`OOMKilled=true` num container `running` não é leitura errada — leia
+> antes de abrir incidente.** O cgroup mata **o processo mais guloso do
+> container**, e quem é esse processo muda o desfecho. Medido nos dois caminhos,
+> com a imagem real do `iris-asr`:
+>
+> | Quem estoura             | `OOMKilled` | `ExitCode` | `RestartCount`    | Status    |
+> | ------------------------ | ----------- | ---------- | ----------------- | --------- |
+> | **PID 1** (o servidor)   | `true`      | `137`      | sobe a cada volta | reinicia  |
+> | um **filho** (um `exec`) | `true`      | `0`        | `0`               | `running` |
+>
+> No segundo caso só o filho morreu: o `servidor.py` continua de pé e o flag
+> `OOMKilled` fica grudado no container até o próximo start. Nos **dois** casos o
+> raio de falha ficou dentro do `asr` — `postgres` e `minio` seguiram `running`,
+> que é o que o critério de aceite pede. O que distingue "o serviço caiu" de "uma
+> transcrição gulosa foi ceifada" é o `RestartCount`, não o `OOMKilled`.
+
 ### Provisionamento no Easypanel (passo manual do Rômulo)
 
 **Não existe arquivo de template neste repo** — o Easypanel v2.31.0 é
@@ -238,10 +254,30 @@ Oito processos girando em laço infinito devem ficar presos em ~100%, não em
 ~800%. Se passar de 100%, a cota **não** foi aplicada — confira o passo 1 acima
 antes de qualquer outra hipótese.
 
+**Resultado medido deste ensaio** (06/09/2026, imagem `infra-asr` construída do
+`infra/asr/Dockerfile`), cinco amostras consecutivas com os oito processos
+girando: `97.37%`, `99.01%`, `96.59%`, `98.98%`, `103.32%`. Preso em 1 vCPU, como
+a cota manda — na VPS de 4 vCPU isso é 25% do host, bem abaixo dos 80% do
+critério. As cotas no daemon nesse momento:
+`mem=3221225472 cpus=1000000000 shares=128 restart=on-failure`.
+
 Para o teto de memória e o critério "só o ASR reinicia", o ensaio é o mesmo com
-alocação em vez de laço: encher 4 GB num container de teto 3 GB deve produzir
-`OOMKilled=true` / `ExitCode=137` **no `asr` apenas**, com `postgres` e `minio`
-seguindo `running` em `docker ps`.
+alocação em vez de laço — **mas mire em PID 1**, ou o resultado engana:
+
+```bash
+# Caminho REAL (o servidor estoura): container sai 137 e a política reinicia.
+docker run --rm -m 256m infra-asr python -c "
+b=[]
+while True: b.append(bytearray(16*1024*1024))
+"
+docker inspect <container> --format 'oom={{.State.OOMKilled}} exit={{.State.ExitCode}}'
+# medido: oom=true exit=137
+```
+
+Encher memória por `docker exec` mata só o processo do `exec` — o container fica
+`running` com `OOMKilled=true` e `RestartCount=0` (também medido). Os dois
+caminhos confinam a falha ao `asr`: `postgres` e `minio` seguiram `running` em
+`docker ps` nos dois ensaios. Ver o quadro na §Fatos medidos.
 
 ## Banco — role de runtime (CRÍTICO para o RLS)
 
