@@ -247,15 +247,61 @@ migração one-shot — teto baixo demais aqui trocaria "migração lenta" por
 são dois containers, cada um com seu próprio teto de 3 GB, dobrando o consumo em
 vez de dividi-lo.
 
-> ⚠️ **Aqui NÃO se clica em `Implantar`.** Em `Ambiente` a regra é a oposta
-> (salvar não aplica, exige `Implantar` — memória
-> `easypanel-ambiente-expoe-segredos`), e é fácil transportar o hábito errado
-> para esta tela. Na aba `Recursos`, `Salvar` já atualiza o serviço no Swarm, que
-> reinicia a task sozinho. `Implantar` faria outra coisa: **reconstrói o serviço
-> a partir do HEAD de `main`**, ou seja, um deploy de código que ninguém pediu.
+> 🚨 **`Salvar` nesta aba NÃO aplica a cota no container que está rodando.** É a
+> MESMA regra da aba `Ambiente` (memória `easypanel-ambiente-expoe-segredos`), e
+> não a exceção que uma versão anterior deste arquivo afirmava. O próprio painel
+> avisa, num toast fácil de ignorar: _"Configurações de recursos atualizadas.
+> Certifique-se de clicar no botão 'Implantar' assim que estiver pronto para
+> enviar as alterações."_
 >
-> Aplicar cota **reinicia o container** de qualquer forma — fazer fora do horário
-> de atendimento, e o `postgres` por último.
+> **Medido em 06/09/2026, e é por isso que a afirmação anterior caiu:** depois de
+> salvar `iris-alarme` no painel e recarregar a página (os quatro campos
+> persistiram corretamente), o **Console do container** — botão `>_` na barra do
+> serviço, que abre um shell dentro da task — respondeu:
+>
+> ```
+> # echo MEM=$(cat /sys/fs/cgroup/memory.max) CPU=$(cat /sys/fs/cgroup/cpu.max)
+> MEM=max CPU=max 100000
+> ```
+>
+> `max` nos dois = **cota nenhuma**. Painel mostrando `256` e cgroup em `max` é
+> exatamente o estado que "verificar medindo" existe para pegar: a configuração
+> ficou gravada no banco do Easypanel e o Swarm nunca soube dela.
+>
+> Esse Console é, aliás, a forma de conferir cota **sem SSH** — o `docker inspect`
+> da subseção seguinte precisa do host, mas o cgroup se lê de dentro.
+
+Então `Salvar` sozinho não basta, e existem dois caminhos para tornar a cota
+efetiva. **Os dois passam por fazer o `Salvar` primeiro** — é ele que faz a cota
+sobreviver ao próximo deploy; sem ele, um deploy futuro devolve o serviço para
+"ilimitado".
+
+1. **`infra/aplicar-cotas.sh` por SSH — o caminho escolhido (06/09/2026).**
+   `docker service update` ajusta o recurso da task in-place: sem build, sem
+   tocar em código, segundos em vez de minutos. É o que a §Runbook abaixo usa.
+2. **Clicar `Implantar`** — funciona, mas **reconstrói a imagem a partir do HEAD
+   de `main`**: um deploy de código para aplicar um número de memória. Só vale a
+   pena se você já ia implantar aquele serviço de qualquer jeito. Se for por
+   aqui, confira antes que o `main` não tem commit que você não queira subir.
+
+> ⚠️ Aplicar cota **reinicia a task** nos dois caminhos — é assim que o cgroup
+> novo passa a valer. Fazer fora do horário de atendimento, e o `postgres` por
+> último (o script já respeita essa ordem).
+
+### Runbook — aplicar as cotas de fato (`infra/aplicar-cotas.sh`)
+
+Depois de salvar os 14 no painel, por SSH no VPS:
+
+```bash
+./infra/aplicar-cotas.sh --conferir   # só lê: mostra o estado real no Swarm
+./infra/aplicar-cotas.sh              # aplica na ordem da tabela e reconfere
+./infra/aplicar-cotas.sh --reverter   # volta tudo para ilimitado, se precisar
+```
+
+O script lê a mesma tabela desta seção, pula serviço que não existe (avisando
+qual), e **nunca** define reserva de CPU, pelo motivo da nota acima. Uma linha
+com `SEM COTA` ou `mem=0 nanocpu=0` no `--conferir` final é um serviço que não
+recebeu a cota — não confie na ausência de erro, leia a conferência.
 
 ### Como saber que deu certo
 
