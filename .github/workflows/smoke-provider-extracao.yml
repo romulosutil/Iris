@@ -79,7 +79,14 @@ jobs:
           # Vazia aqui = usa MODELO_EXTRACAO_PADRAO (provider.ts), que é
           # exatamente o que produção faz sem a variável setada.
           GOOGLE_EXTRACTION_MODEL: ${{ vars.GOOGLE_EXTRACTION_MODEL }}
-        run: pnpm test:smoke
+        # `tee` para o passo de alerta poder LER o que aconteceu em vez de
+        # deduzir: "o smoke falhou" não distingue "o Gemini recusou" de "a
+        # suíte não carregou" — e foi essa segunda que aconteceu no run
+        # 34066802330. `pipefail` porque sem ele o exit code seria o do `tee`
+        # (sempre 0) e um smoke reprovado passaria como verde.
+        run: |
+          set -o pipefail
+          pnpm test:smoke 2>&1 | tee "${RUNNER_TEMP}/smoke.log"
 
       # Workflow vermelho só notifica quem olha o Actions. Uma issue aberta
       # entra na mesma fila que o resto do trabalho e não some no e-mail.
@@ -118,9 +125,23 @@ jobs:
               ).href
             );
 
+            // Saída do smoke, quando ele chegou a rodar. Ausente é estado
+            // legítimo (falha antes do passo), e `montarAlerta` trata.
+            const fs = require("node:fs");
+            let saidaDoSmoke = null;
+            try {
+              saidaDoSmoke = fs.readFileSync(
+                `${process.env.RUNNER_TEMP}/smoke.log`,
+                "utf8",
+              );
+            } catch {
+              // sem log: o smoke não produziu saída neste run.
+            }
+
             const url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const { titulo, corpo, comentario } = montarAlerta({
               passoSegredo: process.env.PASSO_SEGREDO,
+              saidaDoSmoke,
               url,
               agora: new Date().toISOString(),
             });
