@@ -3,6 +3,15 @@
 > Escopo: serviço `iris-asr` (faster-whisper), container Python interno ao
 > Swarm do Easypanel. Sem GPU, VPS Hostinger (4 vCPU / 16 GB).
 
+> **Cotas de CPU e memória deste serviço** (#631): teto de **1 vCPU / 3 GB**,
+> com `cpu_shares=128` para nunca disputar núcleo com o Postgres. Os números, o
+> passo a passo no painel e o teste de carga que prova a cota estão em
+> [`infra/README.md`, §Cotas de CPU e memória](../README.md#cotas-de-cpu-e-memória).
+> Um `asr` que ficou lento **depois** de uma mudança de cota é o primeiro
+> suspeito antes de mexer em `ASR_MODEL_SIZE` ou `ASR_MAX_CONCORRENTES`: com
+> 1 vCPU e `ASR_MAX_CONCORRENTES=2`, duas transcrições simultâneas ficam cada
+> uma ~2x mais lentas — é o desenho, não um defeito.
+
 ## 0. Rotas
 
 | Rota           | Método | Autenticação                  | Corpo                           |
