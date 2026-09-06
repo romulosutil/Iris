@@ -10,8 +10,14 @@
 - **Runtime & UI**: Node.js >= 22, React 19, React DOM 19, TypeScript
 - **Estilização**: Tailwind CSS v4, PostCSS
 - **Banco de Dados**: Postgres, Drizzle ORM, drizzle-kit
+- **Fila transacional**: pg-boss (dentro do próprio Postgres, schema criado na migração `0154`)
 - **Autenticação**: Better Auth
-- **Qualidade & Testes**: ESLint, Prettier, Vitest, Playwright (E2E), Storybook
+- **Storage de objetos**: MinIO — dois papéis distintos: bucket efêmero de clipes de ASR e réplica de backup off-site
+- **IA**: Gemini (único provedor) — três usos com flags independentes: extração de evidências, relatório à família e relatório de convênio
+- **ASR (ditado de voz)**: self-hosted, faster-whisper em container na própria VPS (`infra/asr/`), sem transferência internacional de dados
+- **Billing & E-mail**: Asaas (faturamento), Resend (e-mail transacional, webhooks validados por Svix)
+- **Observabilidade de erros**: GlitchTip via `@sentry/nextjs`
+- **Qualidade & Testes**: ESLint, Prettier, Vitest, Playwright (E2E), Storybook — **atenção**: Playwright também é dependência de **produção** (renderiza os PDFs de relatório em `src/lib/report/playwright-renderer.ts`), não só ferramenta de teste
 
 ### Comandos de Desenvolvimento e Build
 
@@ -25,7 +31,7 @@
 - ESLint: `pnpm lint`
 - Typecheck: `pnpm typecheck`
 - Testes unitários/integração: `pnpm test`
-- Testes RLS: `pnpm test:rls`
+- Suíte de integração completa (RLS é uma parte dela, não o todo): `pnpm test:rls`
 - Testes E2E (Playwright): `pnpm test:e2e`
 
 ### Comandos de Banco de Dados
@@ -117,9 +123,9 @@ Regra pós-mortem D22 (#239, PR #240, memória `d22-sessao-gastou-token-em-loops
 
 **Rodar livremente:** lint, testes, build local, Storybook, criar branch, rodar/ler migrations locais (Drizzle/dbmate contra Postgres local), `pnpm install`.
 
-**Confirmar com o Rômulo antes:** `supabase db push` remoto; DDL em tabela com dados; mudanças em `docs/legal/`; deletar/reescrever migrations commitadas; chamadas API de LLM (Google) antes da Fase 3; renomear pasta/repositório (`xpect` → `iris`); criar projetos Supabase/Vercel; provisionar VPS + Easypanel.
+**Confirmar com o Rômulo antes:** DDL em tabela com dados; mudanças em `docs/legal/`; deletar/reescrever migrations commitadas; chamadas API de LLM (Google/Gemini); aplicar cotas ou reiniciar serviço no Easypanel de produção; mexer em segredo montado em `/run/secrets/env`; rodar seed contra banco remoto.
 
-> ⚠️ **Pivô de infra em avaliação (09/07/2026):** migração potencial para VPS Hostinger + Easypanel + Postgres puro (`docs/arquitetura/plano-bootstrap-e-stack-vps.md`). Confirmar antes de agir.
+> ⚠️ **Infra em produção (consolidado):** a stack roda em VPS Hostinger São Paulo + Easypanel (Docker Swarm), domínio `irisclinica.ia.br` — ver `infra/README.md` e `docs/arquitetura/plano-bootstrap-e-stack-vps.md`. O pivô de Supabase/Vercel para VPS já foi concluído; não é mais avaliação pendente.
 
 ## Onde procurar o quê (atalho — mapa completo está em README.md)
 
@@ -127,10 +133,10 @@ Regra pós-mortem D22 (#239, PR #240, memória `d22-sessao-gastou-token-em-loops
 | ---------------------------------------------------------- | ---------------------------------------------------------------------- |
 | Escopo exato da fase atual / roadmap viva                  | `BACKLOG.md` (GitHub Issues/Milestones)                                |
 | Histórico do Handoff da Fase 1                             | `docs/archive/handoff-fase1.md`                                        |
-| DDL / modelo de dados (25 entidades)                       | `docs/dados/modelo-de-dados.md`                                        |
+| DDL / modelo de dados (52 tabelas em `src/db/schema.ts`)   | `docs/dados/modelo-de-dados.md`                                        |
 | Telas e wireframes da fase                                 | `docs/ux/fluxos-e-wireframes.md`                                       |
 | Tokens e os 3 componentes do design system                 | `docs/ux/design-system-espectro-brutal.md`                             |
-| Regras do agente de extração (R1-R19)                      | `docs/agente/system-instructions.md`, `docs/agente/output-schema.json` |
+| Regras do agente de extração (R1-R20)                      | `docs/agente/system-instructions.md`, `docs/agente/output-schema.json` |
 | Regras do agente de relatório à família (F1-F9)            | `docs/agente/agente-2-relatorio-familia.md`                            |
 | Regras de validação/reclassificação do coordenador (V1-V5) | `docs/governanca/validacao-coordenador.md`                             |
 | O que ainda falta / decisões abertas                       | `BACKLOG.md`                                                           |
