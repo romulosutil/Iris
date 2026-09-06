@@ -19,6 +19,15 @@
 # ele é o que faz a cota sobreviver ao próximo deploy. Este script é o que a
 # torna efetiva AGORA. Fazer os dois é o estado consistente.
 #
+# ⚠️ A regra do `Salvar` NÃO é a mesma para todo serviço — medido em 06/09/2026:
+#   • tipo APP (13 dos 14, construídos do git): `Salvar` só grava. Precisam deste
+#     script (ou de `Implantar`). Medido em `iris-asr`: `memory.max=max`.
+#   • tipo POSTGRES (`iris-postgres`): não tem etapa de build, e o `Salvar` JÁ
+#     aplica — o banco reiniciou sozinho ao ser salvo. Medido: 6442450944 bytes e
+#     `cpu.max=200000 100000`, sem este script ter rodado.
+# Por isso o laço abaixo PULA quem já está na cota certa: sem isso, rodar o
+# script derrubaria o banco por alguns segundos para reaplicar o que já vale.
+#
 # ⚠️ `docker service update` REINICIA a task do serviço. É esperado (é assim que
 # o cgroup novo passa a valer). O `iris-postgres` vem por último de propósito.
 #
@@ -55,6 +64,20 @@ readonly COTAS=(
 
 log() { printf '[cotas] %s\n' "$*"; }
 
+# "256M"/"1G" -> bytes. Só para comparar com o que o Swarm já tem: sem isso o
+# script reaplicaria cota idêntica e REINICIARIA o serviço à toa — e um deles é
+# o Postgres.
+em_bytes() {
+	case "$1" in
+	*M) echo $((${1%M} * 1024 * 1024)) ;;
+	*G) echo $((${1%G} * 1024 * 1024 * 1024)) ;;
+	*) echo "$1" ;;
+	esac
+}
+
+# "0.25" -> 250000000. `awk` porque bash não faz aritmética de ponto flutuante.
+em_nanocpu() { awk -v c="$1" 'BEGIN{printf "%d", c*1000000000}'; }
+
 # Estado REAL da task no Swarm — é isto que decide, não o que o painel mostra.
 conferir() {
 	log "estado atual (Limits do serviço no Swarm):"
@@ -72,7 +95,7 @@ conferir() {
 }
 
 aplicar() {
-	local linha servico mem cpu resmem svc
+	local linha servico mem cpu resmem svc atual
 	local -a args
 	for linha in "${COTAS[@]}"; do
 		IFS='|' read -r servico mem cpu resmem <<<"$linha"
@@ -80,6 +103,19 @@ aplicar() {
 
 		if ! docker service inspect "$svc" >/dev/null 2>&1; then
 			log "PULADO — serviço não existe no Swarm: ${svc}"
+			continue
+		fi
+
+		# IDEMPOTÊNCIA — não é luxo. Serviço do tipo POSTGRES no Easypanel não tem
+		# etapa de build, e nele o `Salvar` do painel JÁ aplica a cota (medido em
+		# 06/09/2026: `iris-postgres` estava com `memory.max=6442450944` e
+		# `cpu.max=200000 100000` sem ninguém ter rodado este script). Reaplicar
+		# valor idêntico faria `docker service update` recriar a task e derrubar o
+		# banco por alguns segundos — sem mudar nada.
+		atual="$(docker service inspect "$svc" \
+			--format '{{with .Spec.TaskTemplate.Resources.Limits}}{{.MemoryBytes}} {{.NanoCPUs}}{{else}}0 0{{end}}')"
+		if [[ "$atual" == "$(em_bytes "$mem") $(em_nanocpu "$cpu")" ]]; then
+			log "JÁ NA COTA, pulando (não reinicia): ${servico}"
 			continue
 		fi
 

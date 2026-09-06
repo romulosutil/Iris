@@ -271,6 +271,28 @@ vez de dividi-lo.
 > Esse Console é, aliás, a forma de conferir cota **sem SSH** — o `docker inspect`
 > da subseção seguinte precisa do host, mas o cgroup se lê de dentro.
 
+> ⚠️ **…mas a regra não vale para o `iris-postgres`, e a exceção é do tipo do
+> serviço, não do acaso.** Medido no mesmo dia, container por container:
+>
+> | Serviço         | Tipo no painel | cgroup depois do `Salvar`          | Cota ativa? |
+> | --------------- | -------------- | ---------------------------------- | ----------- |
+> | `iris-asr`      | `APP`          | `MEM=max CPU=max 100000`           | **não**     |
+> | `iris-postgres` | `POSTGRES`     | `MEM=6442450944 CPU=200000 100000` | **sim**     |
+>
+> `6442450944` = 6 GB exatos; `200000/100000` = 2,0 vCPU. Um serviço `POSTGRES`
+> **não tem etapa de build** (não vem do git — repare que a barra dele nem tem
+> botão `Implantar`, e o menu lateral troca `Fonte`/`Implantações`/`Ambiente` por
+> `Credenciais`/`Cópias de segurança`). Sem build para agendar, o Easypanel
+> atualiza o serviço no Swarm na hora — e o log do Postgres registra o reinício
+> (`database system was shut down`) no minuto do `Salvar`.
+>
+> Consequências práticas: **o banco já está protegido** desde que foi salvo; e
+> para ele o `Implantar` não é sequer uma opção — se algum dia a cota do Postgres
+> precisar mudar, é pelo painel ou por `docker service update`, nunca por deploy.
+> `infra/aplicar-cotas.sh` **pula** serviço que já está na cota certa exatamente
+> por isso: reaplicar valor idêntico derrubaria o banco por alguns segundos sem
+> mudar nada.
+
 Então `Salvar` sozinho não basta, e existem dois caminhos para tornar a cota
 efetiva. **Os dois passam por fazer o `Salvar` primeiro** — é ele que faz a cota
 sobreviver ao próximo deploy; sem ele, um deploy futuro devolve o serviço para
