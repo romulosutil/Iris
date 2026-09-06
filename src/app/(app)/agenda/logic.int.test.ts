@@ -16,7 +16,8 @@ import { hasDb } from "@tests/integration-env";
 vi.mock("server-only", () => ({}));
 const { checkInSessao, marcarEstado, listarSessoesDoDia } =
   await import("./logic");
-const { criarAvulsa, criarRegra, ConflitoError } = await import("./queries");
+const { criarAvulsa, criarRegra, listarPacientes, ConflitoError } =
+  await import("./queries");
 const { sql: appSql } = await import("@/db/client");
 
 const CLINIC = "00000000-0000-0000-0000-0000000249aa";
@@ -25,6 +26,8 @@ const U_TER = "00000000-0000-0000-0000-0000000249e1";
 const U_TER2 = "00000000-0000-0000-0000-0000000249e2";
 const P1 = "00000000-0000-0000-0000-0000000249f1";
 const P2 = "00000000-0000-0000-0000-0000000249f2";
+/** D65 — paciente com alta clínica registrada. */
+const P_ALTA = "00000000-0000-0000-0000-0000000249f3";
 const S_CHECKIN = "00000000-0000-0000-0000-0000000249d1";
 const S_REALIZADA = "00000000-0000-0000-0000-0000000249d2";
 const S_AGENDADA = "00000000-0000-0000-0000-0000000249d3";
@@ -80,6 +83,13 @@ describe.skipIf(!hasDb)("agenda logic (#249)", () => {
     await owner`INSERT INTO patient (id, clinic_id, nome) VALUES
       (${P1}, ${CLINIC}, 'Paciente Um 249'),
       (${P2}, ${CLINIC}, 'Paciente Dois 249')`;
+    // D65 — alta JÁ registrada. Vai por `INSERT` com `alta_em` preenchido, e não
+    // por `registrarAlta`, porque o que este arquivo exercita é a agenda: o
+    // caminho de escrita da alta tem cobertura própria em
+    // `pacientes/[id]/alta.int.test.ts`. O trigger `patient_alta_arquiva_trg`
+    // (`0065`) arquiva junto — é a mesma linha que produção teria.
+    await owner`INSERT INTO patient (id, clinic_id, nome, alta_em) VALUES
+      (${P_ALTA}, ${CLINIC}, 'Paciente Com Alta 249', DATE '2026-06-30')`;
     await owner`INSERT INTO session
       (id, clinic_id, patient_id, terapeuta_id, agendada_para, estado, disciplina, duracao_min)
       VALUES
@@ -332,5 +342,92 @@ describe.skipIf(!hasDb)("agenda logic (#249)", () => {
       expect(l.clinic_id).toBe(CLINIC);
       expect(l.ator_id).toBe(U_COORD);
     }
+  });
+
+  /**
+   * D65 — alta clínica encerra o acompanhamento, então não cabe agendamento
+   * novo depois dela.
+   *
+   * Os três casos são distintos de propósito. Sumir da BUSCA é conveniência: o
+   * prefill de reposição chega por `?patientId=` sem passar por `listarPacientes`,
+   * e uma alta registrada entre a busca e o submit não seria vista por filtro de
+   * leitura nenhum. Quem recusa de fato é a barreira dentro da transação — e ela
+   * precisa valer para os DOIS caminhos de escrita, regra e avulsa: cobrir só um
+   * deixa o outro aberto, que é exatamente a forma do débito que originou o D65.
+   */
+  test("paciente com alta some da busca de agendamento", async () => {
+    const achados = await listarPacientes(ctx, "249");
+    const ids = achados.map((p) => p.id);
+    expect(ids).toContain(P1);
+    expect(ids).toContain(P2);
+    expect(ids).not.toContain(P_ALTA);
+  });
+
+  test("criarAvulsa recusa paciente com alta registrada", async () => {
+    const erro = await criarAvulsa(ctx, {
+      patientId: P_ALTA,
+      terapeutaId: U_TER,
+      disciplina: "ABA",
+      tipo: "terapia",
+      dataISO: "2026-09-15",
+      horaInicio: "08:00",
+      duracaoMin: 60,
+      modalidade: "presencial",
+    }).then(
+      () => null,
+      (e: unknown) => e,
+    );
+
+    expect(erro).toBeInstanceOf(ConflitoError);
+    expect((erro as InstanceType<typeof ConflitoError>).dimensao).toBe(
+      "paciente",
+    );
+    expect((erro as Error).message).toMatch(/alta clínica/i);
+
+    // Oráculo no owner: recusar sem gravar. Asserir só a exceção deixaria passar
+    // uma barreira colocada DEPOIS do `INSERT`.
+    const [linha] = await owner<{ n: string }[]>`
+      SELECT count(*)::text AS n FROM session WHERE patient_id = ${P_ALTA}`;
+    expect(Number(linha!.n)).toBe(0);
+  });
+
+  test("criarRegra recusa paciente com alta registrada", async () => {
+    const erro = await criarRegra(ctx, {
+      patientId: P_ALTA,
+      terapeutaId: U_TER,
+      disciplina: "ABA",
+      diaSemana: 3,
+      horaInicio: "08:00",
+      duracaoMin: 60,
+      semanaVisivelISO: "2026-09-14",
+      hojeISO: "2026-09-14",
+    }).then(
+      () => null,
+      (e: unknown) => e,
+    );
+
+    expect(erro).toBeInstanceOf(ConflitoError);
+    expect((erro as Error).message).toMatch(/alta clínica/i);
+
+    const [linha] = await owner<{ n: string }[]>`
+      SELECT count(*)::text AS n
+        FROM agendamento_recorrente WHERE patient_id = ${P_ALTA}`;
+    expect(Number(linha!.n)).toBe(0);
+  });
+
+  test("paciente SEM alta continua agendável (contraprova)", async () => {
+    // Sem esta, uma barreira que recusasse TODO paciente passaria verde nas
+    // duas acima.
+    const r = await criarAvulsa(ctx, {
+      patientId: P2,
+      terapeutaId: U_TER2,
+      disciplina: "ABA",
+      tipo: "terapia",
+      dataISO: "2026-09-15",
+      horaInicio: "08:00",
+      duracaoMin: 60,
+      modalidade: "presencial",
+    });
+    expect(r.id).toBeTruthy();
   });
 });

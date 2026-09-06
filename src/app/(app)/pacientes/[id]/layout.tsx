@@ -16,6 +16,7 @@ import { montarProntidao } from "@/lib/patient/prontidao";
 import { logarAvisoSemPII } from "@/lib/observabilidade/logar-erro";
 import { obterFatosProntidao } from "@/lib/patient/prontidao-queries";
 import { CartaoProntidao } from "@/components/app/cartao-prontidao";
+import { CicloDeVidaPaciente } from "./ciclo-de-vida";
 
 /**
  * Casca comum de TODAS as telas de um paciente.
@@ -55,7 +56,14 @@ export default async function PacienteLayout({
     obterSituacaoConta(ctx),
     withTenant(ctx, async (tx) => {
       const [p] = await tx
-        .select({ clinicalModality: patient.clinicalModality })
+        .select({
+          clinicalModality: patient.clinicalModality,
+          // D65 — o estado de ciclo de vida sobe para o layout junto com a
+          // modalidade porque é aqui que a barra de ações mora agora. Não custa
+          // uma consulta a mais: são colunas da MESMA linha que já era lida.
+          arquivadoEm: patient.arquivadoEm,
+          altaEm: patient.altaEm,
+        })
         .from(patient)
         .where(eq(patient.id, id));
       return p;
@@ -146,7 +154,21 @@ export default async function PacienteLayout({
     <Stack gap="md">
       <div className="flex flex-col gap-2">
         <TabsNav itens={abas} ariaLabel="Seções do prontuário do paciente" />
-        <div className="-mt-2 flex justify-end">
+        <div className="-mt-2 flex flex-wrap items-center justify-between gap-2">
+          {/* D65 — ações de ciclo de vida do prontuário. Ficavam nos dois
+              `PageHeader` de `page.tsx`, que a modalidade `conventional` nunca
+              renderiza (ela redireciona para `/temas`). Ver `ciclo-de-vida.tsx`. */}
+          {/* O `<div>` existe mesmo quando a barra não renderiza nada: sem ele,
+              `justify-between` com um filho só empurraria o selo de RLS para a
+              ESQUERDA no caso do terapeuta sem alta/arquivamento. */}
+          <div>
+            <CicloDeVidaPaciente
+              patientId={id}
+              arquivadoEm={dadosPaciente?.arquivadoEm ?? null}
+              altaEm={dadosPaciente?.altaEm ?? null}
+              papel={ctx.role}
+            />
+          </div>
           {/*
             O selo é focalizável (`tabIndex`) porque é o gatilho do tooltip:
             sem isso a explicação só existiria no hover e sumiria para teclado.

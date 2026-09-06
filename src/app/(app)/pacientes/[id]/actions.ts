@@ -101,8 +101,17 @@ function lerCampo(formData: FormData, campo: string): string {
  * Arquivar muda a aba em que o paciente aparece (Ativos/Arquivados), então a
  * listagem invalida junto com o prontuário — senão a lista mostra o paciente
  * no lugar antigo até o próximo hard reload.
+ *
+ * **`"layout"`, não a página (D65).** Os botões que chamam estas actions moram
+ * agora no `layout.tsx` do segmento `[id]/`, e são acionáveis de QUALQUER aba do
+ * prontuário — `/temas` em terapia convencional, `/horas`, `/briefing`. Um
+ * `revalidatePath` sem tipo invalida só a rota exata `/pacientes/<id>`: o
+ * coordenador que registrasse alta a partir de `/temas` veria o selo "Alta
+ * Concluída" só depois de um reload duro, e o botão continuaria dizendo
+ * "Registrar alta" sobre um prontuário que já tem alta. O tipo `"layout"`
+ * invalida o layout e tudo abaixo dele.
  */
 function revalidarPaciente(patientId: string): void {
-  revalidatePath(`/pacientes/${patientId}`);
+  revalidatePath(`/pacientes/${patientId}`, "layout");
   revalidatePath("/pacientes");
 }

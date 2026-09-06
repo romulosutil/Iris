@@ -54,6 +54,7 @@ const MOTIVO_VOLTA = "Data digitada errada no registro anterior.";
 
 let owner: ReturnType<typeof postgres>;
 let A: typeof import("./logic");
+let Retencao: typeof import("../../clinica/retencao/queries");
 let appSql: typeof import("@/db/client").sql;
 
 async function estadoDoPaciente(): Promise<{
@@ -89,6 +90,7 @@ async function trilha(): Promise<
 describe.skipIf(!hasDb)("#352 · registrar e desfazer alta clínica", () => {
   beforeAll(async () => {
     A = await import("./logic");
+    Retencao = await import("../../clinica/retencao/queries");
     ({ sql: appSql } = await import("@/db/client"));
     owner = postgres(process.env.MIGRATION_DATABASE_URL!, { max: 1 });
     await owner`TRUNCATE clinic, app_user, user_role, patient, audit_log
@@ -261,5 +263,52 @@ describe.skipIf(!hasDb)("#352 · registrar e desfazer alta clínica", () => {
     } finally {
       await owner`UPDATE clinic SET isento_trial = true WHERE id = ${CLINIC_A}`;
     }
+  });
+
+  /**
+   * D65 — o elo que o débito quebrava, medido de ponta a ponta.
+   *
+   * O buraco não era a coluna: era a AUSÊNCIA de botão para a modalidade
+   * `conventional`, cuja rota base redireciona para `/temas` (sem `PageHeader`).
+   * Sem alta, `app_paciente_expurgavel` devolve `false` por construção e o
+   * prontuário nunca aparece em `/clinica/retencao` — a clínica retém dado de
+   * saúde indefinidamente e nada sinaliza.
+   *
+   * O teste vai pela FILA (`lerPaginaExpurgaveis`), e não pelo predicado solto:
+   * é essa a leitura que a tela faz, e é ela que precisa mudar de vazia para
+   * povoada quando a alta é registrada. Modalidade `conventional` explícita
+   * porque é a que não tinha caminho de escrita nenhum.
+   *
+   * As datas vêm de `nascimento` e `alta_em` reais: maioridade há muito vencida
+   * e alta há mais de 10 anos, os dois braços do `GREATEST` em
+   * `app_retencao_vence_em`. Uma alta recente devolveria fila vazia — e um teste
+   * que só afirmasse "a fila não estourou" passaria verde sobre o defeito.
+   */
+  test("alta em paciente `conventional` faz o prontuário entrar na fila de /clinica/retencao", async () => {
+    await owner`UPDATE patient
+      SET nascimento = DATE '1980-05-04',
+          clinical_modality = 'conventional'
+      WHERE id = ${PAC}`;
+
+    const antes = await Retencao.lerPaginaExpurgaveis(ctxCoord, 1);
+    expect(antes.linhas.map((l) => l.id)).not.toContain(PAC);
+
+    const r = await A.registrarAlta(ctxCoord, PAC, "2012-04-30", MOTIVO);
+    expect(r.error).toBeUndefined();
+    expect((await estadoDoPaciente()).alta_em).toBe("2012-04-30");
+
+    const depois = await Retencao.lerPaginaExpurgaveis(ctxCoord, 1);
+    const linha = depois.linhas.find((l) => l.id === PAC);
+    expect(linha).toBeDefined();
+    expect(linha!.altaEm).toBe("30/04/2012");
+    // Vencimento = `GREATEST(nascimento + 18a, alta + 10a)` — aqui manda a alta.
+    expect(linha!.venceEm).toBe("30/04/2022");
+
+    // E o elo fecha nos dois sentidos: desfazer a alta tira o prontuário da
+    // fila. Sem esta metade, um `registrarAlta` que gravasse a data em qualquer
+    // paciente (ignorando o argumento) passaria igual.
+    await A.desfazerAlta(ctxCoord, PAC, MOTIVO_VOLTA);
+    const revertido = await Retencao.lerPaginaExpurgaveis(ctxCoord, 1);
+    expect(revertido.linhas.map((l) => l.id)).not.toContain(PAC);
   });
 });

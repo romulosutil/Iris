@@ -34,6 +34,17 @@ vi.mock("@/lib/patient/prontidao-queries", () => ({
   })),
 }));
 
+// D65 — a barra de ciclo de vida renderiza `AltaDialog`/`ArquivamentoDialog`,
+// que importam `./actions` (`"use server"`, puxa cookies e banco). Só os
+// gatilhos interessam aqui; o contrato diálogo↔action tem teste próprio
+// (`alta-dialog.test.tsx`) e a gravação, `alta.int.test.ts`.
+vi.mock("./actions", () => ({
+  registrarAltaAction: vi.fn(),
+  desfazerAltaAction: vi.fn(),
+  arquivarPacienteAction: vi.fn(),
+  desarquivarPacienteAction: vi.fn(),
+}));
+
 vi.mock("../../queries", () => ({
   obterSituacaoConta: vi.fn().mockResolvedValue({
     podeEscrever: true,
@@ -50,12 +61,36 @@ vi.mock("@/db/schema", () => ({
   patient: {
     id: "id",
     clinicalModality: "clinicalModality",
+    arquivadoEm: "arquivadoEm",
+    altaEm: "altaEm",
   },
 }));
 
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn(),
 }));
+
+/** D65 — linha do paciente com estado de ciclo de vida explícito. */
+function mockPaciente(linha: {
+  clinicalModality: string;
+  altaEm?: string | null;
+  arquivadoEm?: Date | null;
+}) {
+  mockWithTenant.mockImplementation(async (_ctx, fn) => {
+    const mockTx = {
+      select: vi.fn().mockReturnThis(),
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockResolvedValue([
+        {
+          clinicalModality: linha.clinicalModality,
+          altaEm: linha.altaEm ?? null,
+          arquivadoEm: linha.arquivadoEm ?? null,
+        },
+      ]),
+    };
+    return fn(mockTx);
+  });
+}
 
 function mockModalidade(clinicalModality: string) {
   mockWithTenant.mockImplementation(async (_ctx, fn) => {
@@ -293,5 +328,139 @@ describe("PacienteLayout - Abas do Prontuário", () => {
     // presente. A sonda é a descrição do DEGRAU, que só a escada renderiza.
     expect(screen.queryByText(/Diagnóstico, medicações/i)).toBeNull();
     expect(screen.queryByText(/Aguardando/)).toBeNull();
+  });
+});
+
+/**
+ * D65 — as ações de ciclo de vida vivem NESTA casca, e não no `PageHeader` de
+ * `page.tsx`.
+ *
+ * O defeito que estes casos discriminam: em `conventional` a rota base
+ * redireciona para `/temas` antes de renderizar header nenhum, então o botão de
+ * alta simplesmente não existia para essa modalidade — e sem `alta_em` o
+ * prontuário nunca fica elegível a expurgo (`app_paciente_expurgavel`, `0128`).
+ * Um teste que só renderizasse `page.tsx` passaria verde sobre o buraco: a
+ * modalidade afetada nunca chega lá.
+ *
+ * Mutação que tem de derrubar: mover o `<CicloDeVidaPaciente>` de volta para
+ * `page.tsx` derruba o caso de `conventional`.
+ */
+describe("PacienteLayout - ciclo de vida do prontuário (D65)", () => {
+  const PAPEIS = ["protocol_driven", "cognitive_behavioral", "conventional"];
+
+  async function renderizar(id: string) {
+    const LayoutComponent = await PacienteLayout({
+      children: <div data-testid="child-content">Conteúdo</div>,
+      params: Promise.resolve({ id }),
+    });
+    render(LayoutComponent);
+  }
+
+  it.each(PAPEIS)(
+    "coordenador vê Registrar alta e Arquivar em %s",
+    async (modalidade) => {
+      mockPaciente({ clinicalModality: modalidade });
+      vi.mocked(getTenantContext).mockResolvedValueOnce({
+        clinicId: "clinic_1",
+        userId: "user_1",
+        role: "coordenador",
+      });
+
+      await renderizar("pac_1");
+
+      expect(
+        screen.getByRole("button", { name: "Registrar alta clínica" }),
+      ).not.toBeNull();
+      expect(
+        screen.getByRole("button", { name: "Arquivar paciente" }),
+      ).not.toBeNull();
+    },
+  );
+
+  it("terapeuta não vê nenhum gatilho de alta nem de arquivamento", async () => {
+    // `requireRole` recusa os dois cores para `terapeuta`; um botão aqui viraria
+    // erro no submit em vez de recusa legível.
+    mockPaciente({ clinicalModality: "conventional" });
+    vi.mocked(getTenantContext).mockResolvedValueOnce({
+      clinicId: "clinic_1",
+      userId: "user_1",
+      role: "terapeuta",
+    });
+
+    await renderizar("pac_1");
+
+    expect(screen.queryByRole("button", { name: /alta clínica/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /rquivar/ })).toBeNull();
+  });
+
+  it("admin_recepcao arquiva mas NÃO dá alta", async () => {
+    // A assimetria é do core: arquivar é ato administrativo (sai da contagem de
+    // ativos da fatura); alta é ato clínico que abre o prazo legal de guarda.
+    mockPaciente({ clinicalModality: "conventional" });
+    vi.mocked(getTenantContext).mockResolvedValueOnce({
+      clinicId: "clinic_1",
+      userId: "user_1",
+      role: "admin_recepcao",
+    });
+
+    await renderizar("pac_1");
+
+    expect(screen.queryByRole("button", { name: /alta clínica/i })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Arquivar paciente" }),
+    ).not.toBeNull();
+  });
+
+  it("paciente com alta exibe o selo Alta Concluída e o gatilho vira Desfazer", async () => {
+    mockPaciente({ clinicalModality: "conventional", altaEm: "2026-03-10" });
+    vi.mocked(getTenantContext).mockResolvedValueOnce({
+      clinicId: "clinic_1",
+      userId: "user_1",
+      role: "coordenador",
+    });
+
+    await renderizar("pac_1");
+
+    expect(screen.getByText("Alta Concluída")).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Desfazer alta clínica" }),
+    ).not.toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Registrar alta clínica" }),
+    ).toBeNull();
+  });
+
+  it("sem alta não há selo Alta Concluída", async () => {
+    mockPaciente({ clinicalModality: "conventional", altaEm: null });
+    vi.mocked(getTenantContext).mockResolvedValueOnce({
+      clinicId: "clinic_1",
+      userId: "user_1",
+      role: "coordenador",
+    });
+
+    await renderizar("pac_1");
+
+    expect(screen.queryByText("Alta Concluída")).toBeNull();
+  });
+
+  it("terapeuta em paciente com alta ainda LÊ o selo, mesmo sem gatilho", async () => {
+    // Selo é informação clínica, não permissão: o terapeuta precisa saber que o
+    // acompanhamento foi encerrado antes de registrar evolução nova.
+    mockPaciente({
+      clinicalModality: "conventional",
+      altaEm: "2026-03-10",
+      arquivadoEm: new Date("2026-03-10T12:00:00Z"),
+    });
+    vi.mocked(getTenantContext).mockResolvedValueOnce({
+      clinicId: "clinic_1",
+      userId: "user_1",
+      role: "terapeuta",
+    });
+
+    await renderizar("pac_1");
+
+    expect(screen.getByText("Alta Concluída")).not.toBeNull();
+    expect(screen.getByText("Arquivado")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: /alta clínica/i })).toBeNull();
   });
 });

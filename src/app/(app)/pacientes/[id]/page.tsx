@@ -6,12 +6,9 @@ import { withTenant } from "@/db/rls";
 import { patient } from "@/db/schema";
 import { carregarTimeline, carregarRotinas } from "./timeline/queries";
 import { TimelineClient } from "./timeline/timeline-client";
-import { Stack, Cluster } from "@/components/ui/layout";
+import { Stack } from "@/components/ui/layout";
 import { PageHeader } from "@/components/ui/page-header";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
-import { StatusBadge } from "@/components/ui/patterns/status-badge";
-import { ArquivamentoDialog } from "./arquivamento-dialog";
-import { AltaDialog } from "./alta-dialog";
 import { AvisosArquivamento } from "./avisos-arquivamento";
 import { carregarAvisosArquivamento } from "./arquivamento-queries";
 import { capacidadesDaModalidade } from "./modalidade";
@@ -44,14 +41,10 @@ export default async function PacientePage({
       .select({
         id: patient.id,
         nome: patient.nome,
-        // #174: o estado de arquivamento comercial precisa ser visível aqui —
-        // sem ele a única pista de que o paciente saiu da contagem de ativos
-        // seria a fatura no fechamento do ciclo.
-        arquivadoEm: patient.arquivadoEm,
-        // #352: a alta clínica é o que abre o relógio de retenção do
-        // prontuário. Sem ela na tela, o coordenador não sabe se o prazo de
-        // guarda já está correndo — e não tinha como iniciá-lo.
-        altaEm: patient.altaEm,
+        // D65: `arquivadoEm`/`altaEm` NÃO são lidos aqui. O estado de ciclo de
+        // vida e as ações que o mudam vivem em `layout.tsx` desde o D65 — a
+        // única casca comum às três modalidades. Reler as colunas nesta página
+        // seria uma segunda fonte para o mesmo fato, livre para divergir.
         // A modalidade decide se esta aba existe e o que ela lê. Sem ela, a
         // rota base servia um hexágono de eixos VB-MAPP para os três modos.
         clinicalModality: patient.clinicalModality,
@@ -67,13 +60,6 @@ export default async function PacientePage({
   }
 
   const capacidades = capacidadesDaModalidade(paciente.clinicalModality);
-
-  // #352 — alta é `coordenador`-only, e o predicado é mais estrito que o do
-  // arquivamento (que a recepção também faz): alta abre o prazo legal de guarda
-  // e, no fim dele, a eliminação definitiva do prontuário. Mostrar o botão a
-  // quem `requireRole` recusa produziria um erro no submit, não uma recusa
-  // legível.
-  const podeRegistrarAlta = ctx.role === "coordenador";
 
   // Sai ANTES de `carregarTimeline`: em `conventional` a timeline não seria
   // usada, e a consulta custa uma varredura de snapshots por entrada no
@@ -143,20 +129,7 @@ export default async function PacientePage({
               />
             }
             title={paciente.nome}
-            badge={
-              paciente.arquivadoEm ? (
-                <StatusBadge variante="neutral">Arquivado</StatusBadge>
-              ) : undefined
-            }
             description="Evolução clínica em Terapia Cognitivo-Comportamental"
-            actions={
-              podeRegistrarAlta ? (
-                <AltaDialog
-                  patientId={paciente.id}
-                  comAlta={!!paciente.altaEm}
-                />
-              ) : undefined
-            }
           />
           <AvisosArquivamento {...avisos} />
           <EvolucaoTcc
@@ -191,12 +164,6 @@ export default async function PacientePage({
       })
     : [];
 
-  // Mesmo predicado do `requireRole` do core (`logic.ts`): mostrar o botão a
-  // quem a policy `patient_update` não deixa escrever produziria um "arquivado"
-  // na tela em cima de 0 linhas afetadas — RLS filtra em silêncio.
-  const podeArquivar =
-    ctx.role === "coordenador" || ctx.role === "admin_recepcao";
-
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <Stack gap="lg">
@@ -211,28 +178,7 @@ export default async function PacientePage({
             />
           }
           title={paciente.nome}
-          badge={
-            paciente.arquivadoEm ? (
-              <StatusBadge variante="neutral">Arquivado</StatusBadge>
-            ) : undefined
-          }
           description="Prontuário e linha do tempo de evolução clínica"
-          actions={
-            <Cluster gap="sm">
-              {podeRegistrarAlta ? (
-                <AltaDialog
-                  patientId={paciente.id}
-                  comAlta={!!paciente.altaEm}
-                />
-              ) : null}
-              {podeArquivar ? (
-                <ArquivamentoDialog
-                  patientId={paciente.id}
-                  arquivado={!!paciente.arquivadoEm}
-                />
-              ) : null}
-            </Cluster>
-          }
         />
 
         {/* A faixa de abas vive em `layout.tsx` desde a Fatia C. Estava aqui,
