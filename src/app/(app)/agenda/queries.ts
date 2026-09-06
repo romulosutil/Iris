@@ -47,6 +47,24 @@ import {
   type BloqueioPeriodo,
 } from "@/lib/agenda/materializar";
 
+/**
+ * D65 — paciente com alta clínica registrada NÃO aparece na busca de
+ * agendamento. Alta é o encerramento do acompanhamento: a partir dela corre o
+ * prazo legal de guarda do prontuário, e agendar uma sessão nova para quem
+ * recebeu alta é contradizer o ato que abriu esse relógio.
+ *
+ * Isto é conveniência de UX, não a barreira: quem recusa de fato é
+ * `validarPacienteAgendavel`, dentro da transação de `criarRegra`/`criarAvulsa`.
+ * O prefill de reposição (`pacientePorId`) chega por query string sem passar
+ * por esta busca, e uma alta registrada entre a busca e o submit não seria
+ * vista por nenhum filtro de leitura.
+ *
+ * Filtra por `alta_em`, e não por `arquivado_em`: arquivar é ato administrativo
+ * (sai da contagem de ativos da fatura) e o auto-arquivamento por inatividade
+ * (`0080`) pega paciente que só ficou 90 dias sem sessão — bloquear agendamento
+ * aí impediria justamente a sessão que o traz de volta (o desarquivamento por
+ * atendimento, `0067`, existe para esse caminho).
+ */
 export async function listarPacientes(
   ctx: TenantContext,
   termo: string,
@@ -59,6 +77,7 @@ export async function listarPacientes(
       .where(
         and(
           eq(schema.patient.clinicId, ctx.clinicId),
+          isNull(schema.patient.altaEm),
           ilike(schema.patient.nome, `%${termo}%`),
         ),
       )
@@ -195,10 +214,7 @@ export async function carregarSemana(
         .map((a) => a.recorrenteId as string),
     );
     const avulsas: AvulsaProjecao[] = avulsasRaw.map((a) => {
-      const { diaSemana, inicioMin } = paraMinutosLocais(
-        a.agendadaPara,
-        fuso,
-      );
+      const { diaSemana, inicioMin } = paraMinutosLocais(a.agendadaPara, fuso);
       return {
         id: a.id,
         diaSemana,
@@ -322,6 +338,51 @@ async function validarTerapeutaDaClinica(
   }
 }
 
+/**
+ * D65 — barreira de escrita: paciente com alta clínica não recebe agendamento
+ * novo, nem regra recorrente nem avulsa.
+ *
+ * Roda DENTRO da transação, depois de `travarEixosAgenda`, pelo mesmo motivo do
+ * pré-check de conflito: entre a busca que montou o formulário e o submit, o
+ * coordenador pode ter registrado a alta em outra aba. Filtrar só a lista de
+ * `listarPacientes` deixaria o caminho de escrita aberto — e o de reposição
+ * (`?patientId=` na query string) nunca passa por aquela lista.
+ *
+ * Lê a linha sob a RLS do chamador: `admin_recepcao` enxerga `patient` (é ela
+ * quem agenda), então a leitura não é privilégio de coordenação. Linha ausente
+ * (outro tenant, ou id inventado) cai no mesmo `ConflitoError` — recusar é a
+ * saída correta para os dois casos, e distingui-los na mensagem confirmaria a
+ * existência de um paciente de outra clínica.
+ */
+async function validarPacienteAgendavel(
+  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  clinicId: string,
+  patientId: string,
+): Promise<void> {
+  const [row] = await tx
+    .select({ altaEm: schema.patient.altaEm })
+    .from(schema.patient)
+    .where(
+      and(
+        eq(schema.patient.id, patientId),
+        eq(schema.patient.clinicId, clinicId),
+      ),
+    )
+    .limit(1);
+  if (!row) {
+    throw new ConflitoError(
+      "paciente",
+      "Paciente não encontrado nesta clínica.",
+    );
+  }
+  if (row.altaEm !== null) {
+    throw new ConflitoError(
+      "paciente",
+      "Paciente com alta clínica registrada não recebe novos agendamentos. Desfaça a alta no prontuário para voltar a agendar.",
+    );
+  }
+}
+
 /** C1: cria só a regra recorrente (nenhuma linha `session`). C2/C5: pré-check
  * de conflito nas 2 dimensões (terapeuta e paciente) antes de gravar. */
 export async function criarRegra(
@@ -355,6 +416,7 @@ export async function criarRegra(
     // uma criação avulsa concorrente e as ocorrências viram `puladas` em silêncio.
     await travarEixosAgenda(tx, [dados.terapeutaId, dados.patientId]);
     await validarTerapeutaDaClinica(tx, ctx.clinicId, dados.terapeutaId);
+    await validarPacienteAgendavel(tx, ctx.clinicId, dados.patientId);
     const ativas = await tx
       .select({
         terapeutaId: schema.agendamentoRecorrente.terapeutaId,
@@ -585,6 +647,7 @@ export async function criarAvulsa(
       // Anti-corrida (T4 #249): serializa criações concorrentes nos mesmos
       // eixos antes do pré-check app-level regra×avulsa.
       await travarEixosAgenda(tx, [dados.terapeutaId, dados.patientId]);
+      await validarPacienteAgendavel(tx, ctx.clinicId, dados.patientId);
       const regrasAtivas = await tx
         .select({
           terapeutaId: schema.agendamentoRecorrente.terapeutaId,
