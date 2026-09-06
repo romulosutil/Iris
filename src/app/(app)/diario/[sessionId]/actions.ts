@@ -14,6 +14,7 @@ import {
 import {
   aceitarTranscricaoLote,
   enviarLoteAsr,
+  reenviarClipesFalhosDoServidor,
   obterEstadoLote,
   obterLoteMaisRecente,
   type EstadoClipeAsr,
@@ -251,6 +252,33 @@ export async function aceitarTranscricaoLoteAction(
       return { error: "Só o terapeuta da sessão usa a transcrição no diário." };
     logarErroSemPII("aceitarTranscricaoLoteAction:", err);
     return { error: "Não foi possível usar a transcrição no diário." };
+  }
+}
+
+// Resgate do áudio guardado no servidor (janela de resgate, `0155`). Segunda
+// porta do reenvio: a UI tenta primeiro o blob local (R13) e só cai aqui
+// quando ele não existe mais — IndexedDB tem TTL de 24 h e é purgado no
+// sign-out. Antes da `0155` não havia segunda porta, porque o áudio já tinha
+// sido apagado do bucket no mesmo tick da terceira falha.
+//
+// Mesma regra dos wrappers acima: o core é ctx-accepting e NUNCA é exportado
+// deste módulo `"use server"` — exportá-lo deixaria um cliente forjar o `ctx`
+// e escapar da RLS (memória `ctx-forjavel-use-server`).
+export type ResgateAsrState = { error?: string; reenviados?: number };
+export async function reenviarClipesFalhosDoServidorAction(
+  loteId: string,
+  sessionId: string,
+): Promise<ResgateAsrState> {
+  const ctx = await getTenantContext();
+  try {
+    const r = await reenviarClipesFalhosDoServidor(ctx, loteId, sessionId);
+    if (r.error) return { error: r.error };
+    return { reenviados: r.reenviados ?? 0 };
+  } catch (err) {
+    if (err instanceof RoleError)
+      return { error: "Só o terapeuta da sessão reenvia o áudio." };
+    logarErroSemPII("reenviarClipesFalhosDoServidorAction:", err);
+    return { error: "Não foi possível reenviar o áudio para transcrição." };
   }
 }
 

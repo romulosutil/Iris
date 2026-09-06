@@ -90,6 +90,30 @@ export function objetoExpirado(lastModified, agora, limiteHoras) {
 }
 
 /**
+ * Janela de resgate (`0155`) como literal de `interval`, lida do ambiente.
+ *
+ * DUPLICA `src/lib/asr/resgate.ts` DE PROPÓSITO, e a duplicação é forçada pela
+ * fronteira de processo: este script roda no serviço do sweeper, cuja imagem
+ * não copia `src/` (memória `guard-em-processo-que-nao-importa-o-codigo`).
+ * Importar o módulo TS aqui daria `ERR_MODULE_NOT_FOUND` em produção com o CI
+ * verde. O default TEM que acompanhar o de lá — 30 dias.
+ *
+ * Lido dentro da função, nunca no topo do módulo: `const X = process.env…` no
+ * escopo do import congela o valor antes de o teste conseguir ajustá-lo, e é
+ * assim que um default passa local e vaza no CI (memória
+ * `env-lida-no-import-passa-local-cai-no-ci`).
+ *
+ * Valor inválido/ausente/zero cai no padrão em vez de virar `0 days`: zero
+ * significaria "o resgate já venceu para todo mundo", e quem age sobre essa
+ * resposta é o código que APAGA.
+ */
+export function janelaDeResgate() {
+  const bruto = process.env.ASR_RESGATE_DIAS;
+  const dias = bruto ? Number(bruto) : NaN;
+  return `${Number.isFinite(dias) && dias > 0 ? dias : 30} days`;
+}
+
+/**
  * Fábrica da consulta "quais destas chaves ainda estão em uso" — a checagem de
  * ESTADO que separa órfão de trabalho em andamento (revisão final de
  * integração #72). Devolve uma função injetável em `varrer`, para o teste
@@ -110,8 +134,15 @@ export function criarConsultaEmUso(sql) {
     // Postgres local, essa combinação estoura `22P02 malformed array literal`
     // (o cast explícito faz o driver mandar o array já achatado em texto). O
     // array JS puro o postgres.js serializa como `text[]` de verdade.
+    //
+    // O SEGUNDO argumento (janela de resgate, `0155`) não é opcional: a
+    // sobrecarga de 1 argumento foi DERRUBADA junto com a migração,
+    // deliberadamente. Ela respondia "não está em uso" para um clipe em
+    // resgate — e é este script, o que APAGA, que a chamaria. Assinatura
+    // ausente transforma esse erro em falha imediata e alta, em vez de áudio
+    // clínico apagado em silêncio.
     const linhas = await sql`
-      SELECT ref FROM app_asr_objetos_em_uso(${chaves})`;
+      SELECT ref FROM app_asr_objetos_em_uso(${chaves}, ${janelaDeResgate()}::interval)`;
     return new Set(linhas.map((l) => l.ref));
   };
 }

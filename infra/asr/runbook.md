@@ -108,7 +108,11 @@ Conferir **medindo**, não lendo:
 ```sql
 SELECT has_function_privilege('app_role','app_asr_reservar(integer)','EXECUTE');        -- esperado: f
 SELECT has_function_privilege('iris_asr_worker','app_asr_reservar(integer)','EXECUTE'); -- esperado: t
-SELECT has_function_privilege('app_role','app_asr_objetos_em_uso(text[])','EXECUTE');   -- esperado: t (o sweeper depende)
+SELECT has_function_privilege('app_role','app_asr_objetos_em_uso(text[],interval)','EXECUTE'); -- esperado: t (o sweeper depende)
+-- A sobrecarga de 1 argumento foi DERRUBADA na 0155. Se esta consulta der erro
+-- de "function does not exist", a 0155 nao rodou; se ela responder `t`, alguem
+-- a recriou — e a versao de 1 argumento apaga audio em resgate.
+SELECT to_regprocedure('app_asr_objetos_em_uso(text[])') IS NULL;                -- esperado: t
 ```
 
 ### 1.3 Fila que não drena e áudio retido (#494/T19)
@@ -124,8 +128,55 @@ cheio pode levar ~215s (§2), então o laço dispara de novo contra um tick vivo
   Passadas 10 reversões, o clipe passa a gastar tentativa e termina em `falhou`.
 - **Backstop de idade da linha** (`app_asr_expirar_presos`, `0141`), chamado no
   início de cada tick com 6h — a mesma régua do sweeper de objetos. Linha presa
-  em `na_fila`/`transcrevendo` além disso vira `falhou` e **solta o
-  `objeto_ref`**, que é o que devolve o objeto ao alcance do sweeper.
+  em `na_fila`/`transcrevendo` além disso vira `falhou`. **Desde a `0155` ela
+  NÃO solta mais o `objeto_ref`**: a linha passa a `falhou` com `falhou_em`
+  carimbado e entra na janela de resgate (§1.4) — quem solta a referência, no
+  fim da janela, é `app_asr_expirar_resgate`.
+
+### 1.4 Janela de resgate do áudio (`0155`)
+
+**O defeito que ela conserta.** Até a `0155`, `app_asr_falhar` zerava
+`objeto_ref` no teto de 3 tentativas. Sem a referência,
+`app_asr_objetos_em_uso` deixava de reivindicar a chave e o `finally` do worker
+chamava `apagar()`: o áudio saía do MinIO **no mesmo tick da terceira falha**.
+A UI só sabe reenviar a partir do blob local (IndexedDB, TTL 24h, purgado no
+sign-out), então passada essa janela a única saída oferecida à terapeuta era
+"digite o trecho à mão no diário". Falha de IA destruía documento clínico.
+
+**Como funciona.** O desfecho definitivo preserva `objeto_ref` e carimba
+`falhou_em`. Enquanto `now() - falhou_em < ASR_RESGATE_DIAS` (default 30):
+
+- `app_asr_objetos_em_uso` reivindica a chave — o `finally` do worker não apaga
+  e o **sweeper de órfãos preserva** o objeto;
+- a UI oferece o reenvio pelo servidor (`reenviarClipesFalhosDoServidor`), que
+  devolve a linha a `na_fila` com `tentativas = 0` reusando o MESMO áudio.
+
+Vencida a janela, `app_asr_expirar_resgate` (chamada no início de cada tick,
+ao lado do backstop) zera `objeto_ref` e o sweeper recolhe o objeto no ciclo
+seguinte. **É essa metade que impede a janela de virar retenção indefinida** —
+o bucket efêmero não tem expurgo LGPD, então áudio preservado para sempre seria
+dado de paciente fora de todo wiring de retenção.
+
+`ASR_RESGATE_DIAS` é lida pelo **app E pelo serviço do sweeper**; configure nos
+dois (memória `env-compartilhada-so-no-servico-alvo`).
+
+Quantos clipes estão em resgate agora, e quanto falta para cada um vencer:
+
+```sql
+SELECT clinic_id,
+       count(*)                                   AS em_resgate,
+       min(falhou_em) AS mais_antigo,
+       min(falhou_em) + interval '30 days' - now() AS vence_em
+  FROM audio_capture
+ WHERE asr_status = 'falhou' AND objeto_ref IS NOT NULL
+ GROUP BY clinic_id;
+```
+
+Se `em_resgate` só cresce, a terapeuta não está encontrando o botão de reenvio
+— é problema de UI, não de fila. Se ele fica em zero mesmo com `falhou`
+acumulando, confira que a `0155` rodou: `falhou_em IS NULL` em linha `falhou` é
+o carimbo de uma falha ANTERIOR à migração, e essas linhas não entram no
+resgate de propósito (o objeto delas já foi apagado pelo comportamento antigo).
 
 Diagnóstico rápido de fila represada:
 

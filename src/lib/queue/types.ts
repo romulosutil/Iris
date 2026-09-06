@@ -14,7 +14,11 @@ import type { DrizzleTransactionLike } from "pg-boss";
  * paciente atravessa a fila. O que trafega é um "acorda e drena a fila".
  */
 export type AsrJobPayload = {
-  origem: "lote" | "periodico";
+  // `resgate`: a terapeuta remandou à fila um clipe `falhou` cujo áudio o
+  // servidor ainda guarda (janela de resgate, `0155`). Como os demais, não
+  // muda comportamento nenhum do worker — só nomeia a origem no log, que é o
+  // que separa "a IA falhou e alguém pediu de novo" de um tick de rotina.
+  origem: "lote" | "periodico" | "resgate";
   loteId?: string;
   sessionId?: string;
   clinicId?: string;

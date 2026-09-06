@@ -80,7 +80,7 @@ vi.mock("@aws-sdk/client-s3", () => {
   return { S3Client, ListObjectsV2Command, DeleteObjectCommand };
 });
 
-const { criarConsultaEmUso, main, objetoExpirado, varrer } =
+const { criarConsultaEmUso, janelaDeResgate, main, objetoExpirado, varrer } =
   await import("./asr-sweeper-orfaos.mjs");
 
 const HORA_MS = 60 * 60 * 1000;
@@ -467,7 +467,40 @@ describe("criarConsultaEmUso — a pergunta que separa órfão de trabalho vivo"
     // serializado como `text[]` de verdade.
     const sql = fakeSql([]);
     await criarConsultaEmUso(sql)(["a", "b"]);
-    expect(sql.chamadas[0].valores).toEqual([["a", "b"]]);
+    // O SEGUNDO parâmetro é a janela de resgate (`0155`). Ele está na
+    // asserção de propósito: a sobrecarga de 1 argumento de
+    // `app_asr_objetos_em_uso` foi derrubada porque respondia "não está em
+    // uso" para clipe em resgate — e quem age sobre essa resposta é ESTE
+    // script, o que APAGA. Perder o argumento aqui volta a apagar áudio
+    // clínico que a terapeuta ainda podia resgatar.
+    expect(sql.chamadas[0].valores).toEqual([["a", "b"], "30 days"]);
+  });
+
+  test("(0155) a janela de resgate sai de ASR_RESGATE_DIAS, e cai em 30 dias", async () => {
+    // `janelaDeResgate` lê o env DENTRO da função, nunca no topo do módulo:
+    // `const X = process.env…` no escopo do import congela o valor e o default
+    // passa local mas vaza no CI (memória `env-lida-no-import-passa-local-cai-no-ci`).
+    // Este teste só consegue existir por causa disso.
+    const anterior = process.env.ASR_RESGATE_DIAS;
+    try {
+      process.env.ASR_RESGATE_DIAS = "7";
+      expect(janelaDeResgate()).toBe("7 days");
+
+      // Zero NÃO vira `0 days`: significaria "o resgate já venceu para todo
+      // mundo", e um env vazio no painel do Easypanel reintroduziria em
+      // silêncio o defeito que a 0155 conserta.
+      process.env.ASR_RESGATE_DIAS = "0";
+      expect(janelaDeResgate()).toBe("30 days");
+
+      process.env.ASR_RESGATE_DIAS = "nao-numero";
+      expect(janelaDeResgate()).toBe("30 days");
+
+      delete process.env.ASR_RESGATE_DIAS;
+      expect(janelaDeResgate()).toBe("30 days");
+    } finally {
+      if (anterior === undefined) delete process.env.ASR_RESGATE_DIAS;
+      else process.env.ASR_RESGATE_DIAS = anterior;
+    }
   });
 });
 
@@ -560,7 +593,7 @@ describe("main — a fiação da checagem de estado chega até varrer", () => {
     expect(consultasDeEstado).toHaveLength(1);
     expect(consultasDeEstado[0].texto).toContain("app_asr_objetos_em_uso");
     // Só o vencido vai à consulta — o mtime continua sendo o primeiro filtro.
-    expect(consultasDeEstado[0].valores).toEqual([["lote:orfao"]]);
+    expect(consultasDeEstado[0].valores).toEqual([["lote:orfao"], "30 days"]);
     expect(espiao.apagados).toEqual(["lote:orfao"]);
   });
 

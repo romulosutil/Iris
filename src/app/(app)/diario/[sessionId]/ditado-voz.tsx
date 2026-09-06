@@ -23,6 +23,7 @@ import {
   enviarLoteAsrAction,
   obterEstadoLoteAction,
   obterLoteMaisRecenteAction,
+  reenviarClipesFalhosDoServidorAction,
 } from "./actions";
 
 type Clipe = {
@@ -287,10 +288,33 @@ export function DitadoVoz({
         (await lerAudioLocal(chaveClipe(loteId, f.ordem)));
       if (blob) payload.push({ ordem: i + 1, blob });
     }
+    // Blob local sumiu (IndexedDB tem TTL de 24 h e é purgado no sign-out).
+    // ANTES da janela de resgate (`0155`) isto era o fim da linha: a terapeuta
+    // era mandada digitar o trecho à mão, porque o áudio no servidor já tinha
+    // sido apagado no mesmo tick da terceira falha. Agora o servidor guarda o
+    // objeto por um prazo, então há uma segunda porta a tentar antes de
+    // desistir — e é o MESMO áudio, não uma regravação.
     if (payload.length === 0) {
-      setErro(
-        "O áudio destes clipes não está mais neste dispositivo. Digite o trecho à mão no diário.",
+      setFase("enviando");
+      setErro(null);
+      const resgate = await reenviarClipesFalhosDoServidorAction(
+        loteId,
+        sessionId,
       );
+      if (resgate.reenviados && resgate.reenviados > 0) {
+        // Sem `setLoteId`/`setEstados([])`: o resgate remanda as linhas DO
+        // MESMO lote à fila (o envio local, ao contrário, cria um lote novo).
+        // Trocar o id aqui faria o polling perseguir um lote que não existe.
+        setEstados([]);
+        inicioPollingRef.current = 0;
+        setFase("acompanhando");
+        return;
+      }
+      setErro(
+        resgate.error ??
+          "O áudio destes clipes não está mais neste dispositivo nem no servidor. Digite o trecho à mão no diário.",
+      );
+      setFase("concluido");
       return;
     }
     setFase("enviando");
