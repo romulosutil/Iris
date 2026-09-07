@@ -418,5 +418,54 @@ describe.skipIf(!hasDb)(
         expect(clipe.asr_status).toBe("transcrito");
       }
     });
+
+    test("backstop expira linha presa em na_fila há mais de 6h ANTES da reserva (#494/T19, medido em #604)", async () => {
+      // Condição MEDIDA em produção (#604), não plausível: o clipe
+      // `2cddb384-289b-414d-a765-671530c771cb` ficou em `na_fila`, tentativas=0,
+      // reversoes=0, do `criado_em` até o `asr-agendador` sair do crash loop do
+      // #588 — mais de 6h depois. Este teste planta a MESMA forma de linha
+      // (`na_fila`, tentativas 0) com `criado_em` além do backstop
+      // (`ASR_BACKSTOP_HORAS = 6`, `route.ts`) e cobra que `expirarPresos()`
+      // (chamada ANTES de `reservarLote`) a leve a `falhou` — sem que ela
+      // chegue a ser reservada/processada neste tick.
+      //
+      // `objeto_ref` PERMANECE não nulo aqui (`0155`, janela de resgate): a
+      // versão atual de `app_asr_expirar_presos` só marca `falhou`/`falhou_em`
+      // — quem solta a referência é `app_asr_expirar_resgate`, depois que a
+      // janela de resgate vence. É `app_asr_objetos_em_uso` (não `objeto_ref
+      // IS NULL`) quem decide se o sweeper ainda preserva o objeto.
+      const id = "72a70000-0000-0000-0000-000000000071";
+      idsPlantados.add(id);
+      await plantarClipe({
+        id,
+        asrStatus: "na_fila",
+        tentativas: 0,
+        objetoRef: "asr/72a7/g1",
+        criadoEm: minutosAtras(7 * 60), // 7h — além do backstop de 6h
+      });
+
+      vi.mocked(provider.getAsrProvider).mockReturnValue({
+        transcrever: vi.fn(),
+      });
+
+      const res = await POST(requisicao());
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.expirados).toBeGreaterThanOrEqual(1);
+
+      const clipe = await lerClipe(id);
+      expect(clipe.asr_status).toBe("falhou");
+      expect(clipe.falhou_em).not.toBeNull();
+      expect(clipe.tentativas).toBe(0); // backstop não mexe em tentativas
+
+      // Nunca foi reservada: o backstop já a tirou de `na_fila` antes da
+      // reserva do mesmo tick, então não aparece nos resultados nem baixa
+      // objeto nenhum.
+      expect(
+        body.resultados.find((r: { id: string }) => r.id === id),
+      ).toBeUndefined();
+      expect(vi.mocked(storage.ler)).not.toHaveBeenCalledWith("asr/72a7/g1");
+      expect(vi.mocked(storage.apagar)).not.toHaveBeenCalledWith("asr/72a7/g1");
+    });
   },
 );
