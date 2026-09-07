@@ -319,13 +319,42 @@ O provisionamento da #500 (role do worker, `asr-agendador`, `asr-sweeper`,
 Auditado contra `main` antes de escrever o procedimento — três itens do corpo
 da issue descrevem um repositório que não existe mais:
 
-| Item da #500                              | Situação medida em 07/09/2026                                                                                                                                                                                                                                                                                                      |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "revisar `INTERVALO_S` (hoje 20s)"        | **A env não existe mais.** O laço `while :; do … sleep 20` morreu na D73 (commit `115bc8ce`); quem agenda o tick é o cron do pg-boss, `CRON_TICK_ASR = "* * * * *"` em `src/lib/queue/config.ts`. O `INTERVALO_S` que sobra em `infra/asr/` é o do **sweeper de órfãos** (default 3600 s) — outro botão, outra pergunta. Ver §6.6. |
-| "Fora de escopo: **D71** continua aberto" | **D71 fechado em 05/09/2026** — `audio_capture.mime_type` (migração `0155`) carrega o mime real até o POST de transcrição. iOS/Safari deixou de ser pré-requisito separado.                                                                                                                                                        |
-| "heartbeat **avançando**"                 | Desde a #536 o sinal de vida **não é mais arquivo em `/heartbeat`** — é a linha `job_heartbeat` no banco, escrita pela ROTA. No container só mora o lockfile. A query está no passo 3 do §6.1.                                                                                                                                     |
+| Item da #500                                                   | Situação medida em 07/09/2026                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "revisar `INTERVALO_S` (hoje 20s)"                             | **A env não existe mais.** O laço `while :; do … sleep 20` morreu na D73 (commit `115bc8ce`); quem agenda o tick é o cron do pg-boss, `CRON_TICK_ASR = "* * * * *"` em `src/lib/queue/config.ts`. O `INTERVALO_S` que sobra em `infra/asr/` é o do **sweeper de órfãos** (default 3600 s) — outro botão, outra pergunta. Ver §6.6. |
+| "Fora de escopo: **D71** continua aberto"                      | **D71 fechado em 05/09/2026** — `audio_capture.mime_type` (migração `0155`) carrega o mime real até o POST de transcrição. iOS/Safari deixou de ser pré-requisito separado.                                                                                                                                                        |
+| "heartbeat **avançando**"                                      | Desde a #536 o sinal de vida **não é mais arquivo em `/heartbeat`** — é a linha `job_heartbeat` no banco, escrita pela ROTA. No container só mora o lockfile. A query está no passo 3 do §6.1.                                                                                                                                     |
+| "`FEATURE_FLAG_ASR_ENABLED` continua `false`" (corpo da issue) | **Está `true` em produção**, medido em 07/09/2026. O ditado já está oferecido às clínicas ativas — o que nunca aconteceu é um clipe ser transcrito (§6.1).                                                                                                                                                                         |
 
 ### 6.1 Pré-voo — cinco medições ANTES de tocar a flag
+
+> **[x] PRÉ-VOO EXECUTADO — medido no painel de produção em 07/09/2026, ~21:10 BRT.**
+> Os cinco itens abaixo passaram. **O que falta da #500 é só a gravação** — todo
+> o resto do pré-voo está verde e não precisa ser refeito, a menos que algo
+> tenha sido reimplantado depois desta data.
+>
+> | #   | O que foi medido                         | Resultado                                                                                                                                                                      |
+> | --- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+> | 1   | `ASR_PROVIDER` na env do `App`           | `self-hosted` ✅ — e **`FEATURE_FLAG_ASR_ENABLED` já está `true`** (ver §6.2, passo 1: o passo virou conferência, não ação)                                                    |
+> | 2   | Grants (as quatro consultas do §1.2)     | `f` / `t` / `t` / `t` ✅ — `0140` e `0155` aplicadas                                                                                                                           |
+> | 3   | `job_heartbeat` de `asr` e `asr-sweeper` | `asr` com **21 s** de idade, `asr-sweeper` com 2 min 45 s, `ultimo_erro` nulo nos dois ✅ — ticks saindo                                                                       |
+> | 4   | Domínio público temporário do `iris-asr` | aba `Domínios` **vazia** ✅ — a pendência do §5 está fechada; e o serviço está de pé (323 MB, log `Serviço ASR de pé na porta 8080 (modelo=small, idioma=pt, concorrentes=2)`) |
+> | 5   | Alcance da flag global                   | **8 clínicas, 2 ativas nos últimos 7 dias, 28 sessões, 32 usuários** — com a flag já ligada, o ditado já está oferecido a essas clínicas                                       |
+>
+> **O que a mesma passada revelou sobre a fila**, e que muda o enunciado da
+> #500: `audio_capture` tinha **uma única linha em toda a produção** — a do
+> incidente #604 (criada 31/08 23:24, `falhou`, `tentativas=0`, `reversoes=0`,
+> assinatura do backstop de idade). **Zero clipes `transcrito`, nunca.** E o
+> áudio dela **não é resgatável**: `objeto_ref` e `falhou_em` estão nulos
+> porque a linha é ANTERIOR à `0155` — o comportamento antigo já tinha apagado
+> o objeto. Não dá para provar o pipeline reenviando essa linha; tem que ser
+> clipe novo.
+>
+> **A pergunta que isso abre** (não é item de infra, é de produto): a flag está
+> ligada desde ~31/08, e nesses 7 dias houve **28 sessões e nenhum clipe
+> gravado**. Ou as terapeutas não estão encontrando o gravador, ou algo na UI
+> não o oferece nas condições reais. Vale medir antes de concluir que "o ditado
+> está no ar".
 
 Todas rodam com a flag ainda em `false`. Nenhuma altera dado.
 
@@ -392,9 +421,11 @@ que 0, escolha uma janela fora do horário de atendimento e trate o §6.5
 
 ### 6.2 Execução
 
-1. **Ligar a flag.** `App` → `Ambiente` → `FEATURE_FLAG_ASR_ENABLED=true` →
-   **`Implantar`**. Salvar env não aplica; só o Implantar reconstrói o serviço.
-   Anote o horário — ele é o marco `T0` das consultas abaixo.
+1. **A flag.** Em 07/09/2026 ela **já está `true`** em produção (§6.1), então
+   este passo é conferência, não ação: abra `App` → `Ambiente` e confirme.
+   Se em algum momento ela voltar a `false`, ligar exige `Implantar` — salvar
+   env não aplica sozinho. Anote o horário de início: ele é o marco `T0` das
+   consultas abaixo.
 
 2. **Gravar o clipe.** Entrar na UI com um usuário de perfil terapeuta da
    clínica escolhida, abrir uma sessão, ir ao passo de documentar e gravar

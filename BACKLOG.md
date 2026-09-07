@@ -96,7 +96,16 @@
 
 **Higiene:** `### 1.4` estava duplicado no runbook (janela de resgate e host com hífen) — o segundo virou `### 1.5`, com as duas referências cruzadas corrigidas.
 
-**Continua aberto (só o Rômulo fecha):** executar o §6. A #500 não fecha por esta PR.
+**Adendo da mesma sessão — o pré-voo foi EXECUTADO no painel (Rômulo liberou o acesso no meio da sessão).** Medido em 07/09/2026 ~21:10 BRT, e o resultado reescreve a issue mais do que a auditoria de código tinha reescrito:
+
+- **A flag já está ligada.** `FEATURE_FLAG_ASR_ENABLED=true` e `ASR_PROVIDER=self-hosted` na env do `App`. O corpo da #500 ("continua `false`") e o comentário de 31/08 ("ainda não fiz isso, é decisão de produto") estão os dois desatualizados. O ditado **já está oferecido em produção**.
+- **Pré-voo 5/5 verde:** grants `f/t/t/t` (a `0140` e a `0155` aplicadas); `job_heartbeat` do `asr` com **21 s** de idade e do `asr-sweeper` com 2 min 45 s, `ultimo_erro` nulo nos dois; aba `Domínios` do `iris-asr` **vazia** — a pendência do §5 do runbook (R11, exposição à internet) está fechada por medição; `iris-asr` de pé com 323 MB e `Serviço ASR de pé na porta 8080 (modelo=small, idioma=pt, concorrentes=2)`; hosts com hífen nas duas envs (`ASR_SERVICE_URL`, `ASR_S3_ENDPOINT`).
+- **`audio_capture` tem UMA linha em toda a produção.** É a do incidente #604 (31/08 23:24, `falhou`, `tentativas=0`, `reversoes=0` — assinatura do backstop de idade). **Zero `transcrito`, nunca.** E ela **não é resgatável**: `objeto_ref` e `falhou_em` nulos porque a linha é anterior à `0155`, e o comportamento antigo já apagou o objeto. Não dá para provar o pipeline reenviando — tem que ser clipe novo.
+- **Alcance da flag:** 8 clínicas, **2 ativas nos últimos 7 dias, 28 sessões**, 32 usuários.
+
+**A pergunta de produto que isso abre, e que não é de infra:** a flag está ligada há ~7 dias, houve 28 sessões e **nenhum clipe foi gravado**. Ou as terapeutas não estão encontrando o gravador, ou a UI não o oferece nas condições reais. Antes de dizer "o ditado está no ar", vale medir isso — é gap de adoção/descoberta, e não aparece em nenhum alarme.
+
+**O que sobra da #500, agora que o pré-voo caiu:** gravar um clipe. Nada mais. Zero itens de infra pendentes.
 
 ---
 
