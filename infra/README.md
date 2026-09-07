@@ -35,8 +35,11 @@ Teste de integração da réplica off-site cifrada (sobe o ambiente, roda o
    **Dockerfile** com path `infra/Dockerfile` e build context na raiz →
    branch `main`, autodeploy on push.
 6. **Env vars do App**: `DATABASE_URL`, `BETTER_AUTH_SECRET`
-   (`openssl rand -base64 32`), `BETTER_AUTH_URL`, `NEXT_PUBLIC_APP_URL`.
-   `GOOGLE_API_KEY` (Gemini) para o provedor de IA.
+   (`openssl rand -base64 32`), `BETTER_AUTH_URL`, `NEXT_PUBLIC_APP_URL`,
+   `CPF_HASH_SALT`, `GOOGLE_API_KEY` (Gemini) para o provedor de IA.
+   ⚠️ As **sensíveis** dessa lista não vão na aba `Ambiente`: vão no arquivo
+   `/etc/iris/production.env` montado em `/run/secrets/env` — ver
+   [§Segredos de runtime](#segredos-de-runtime--arquivo-montado-em-runsecretsenv).
 7. **Segurança do SO** (responsabilidade nossa): SSH só por chave, firewall
    (80/443/SSH), `unattended-upgrades`. Backup + restore testado: ver
    [§Backup e restore (LGPD)](#backup-e-restore-lgpd) — **item LGPD, bloqueia
@@ -57,6 +60,13 @@ que vaza. Se precisar compartilhar, recorte só a linha do erro.
 Mitigação que já existe: nenhum Dockerfile declara `ARG` para essas variáveis,
 então elas **não viram camada da imagem** nem aparecem em `docker history`. O
 vazamento é só no log.
+
+> **Fechamento parcial (06/09/2026, item 5 da #93).** O que vem abaixo é o
+> registro histórico da decisão e **continua valendo para tudo que ainda mora na
+> aba `Ambiente`** — inclusive as 8 imagens de job. O que mudou: os segredos de
+> runtime do `iris-app` e do `iris-migrate` saíram do painel e passaram a entrar
+> por arquivo montado. Ver
+> [§Segredos de runtime](#segredos-de-runtime--arquivo-montado-em-runsecretsenv).
 
 **Decisão (25/07/2026, #93) — risco aceito.** O Easypanel v2.31 **não** oferece
 como evitar isso: a tela `Ambiente` do serviço é um único campo de texto livre
@@ -102,6 +112,194 @@ leitura e escrita em **todos** os repositórios da conta; não use. Para validar
 uma troca de token sem quebrar a automação, dispare o relay manualmente
 (`POST /api/hooks/glitchtip?token=<GLITCHTIP_WEBHOOK_SECRET>` com o payload do
 GlitchTip), confirme que a issue abriu, e só então revogue o token velho.
+
+## Segredos de runtime — arquivo montado em `/run/secrets/env`
+
+**Fecha o item 5 da #93.** É a metade do risco acima que dava para fechar sem
+trocar de plataforma: os segredos que o **runtime** precisa saem da aba
+`Ambiente` do Easypanel — que os repassa como `--build-arg` e os imprime em
+texto plano no log de build — e passam a entrar por um **arquivo do host**,
+montado no container e lido pelo Node.
+
+O que NÃO muda: variáveis que continuam na aba `Ambiente` continuam indo para o
+log de build. Por isso a regra é o que fica lá dentro (tabela abaixo), e a
+proibição de colar log de deploy em lugar nenhum **continua valendo**.
+
+### Contrato
+
+| Onde                 | Valor                                                     |
+| -------------------- | --------------------------------------------------------- |
+| Arquivo no host      | `/etc/iris/production.env`                                |
+| Caminho no container | `/run/secrets/env` (somente leitura)                      |
+| Dono / permissão     | `root:root`, **`chmod 644`**                              |
+| Como o Node lê       | `node --env-file-if-exists=/run/secrets/env <entrypoint>` |
+
+A flag está nos três CMD que sobem processo Node em produção:
+
+- `infra/Dockerfile`, stage `runner` → serviço `iris-app`;
+- `infra/Dockerfile`, stage `migrate`;
+- `infra/Dockerfile.migrate` → serviço `iris-migrate` (gate de schema).
+
+**`chmod 644` não é frouxidão, é requisito.** O stage `runner` roda como o
+usuário `nextjs` (`USER nextjs` no Dockerfile). Um `600 root:root` é ilegível
+para ele. Quem protege o arquivo é a permissão do **diretório** e o acesso SSH
+ao host, não o modo do arquivo — quem já está dentro da VPS como root lê o env
+de qualquer container com `docker inspect` de qualquer jeito.
+
+### O que vai para o arquivo e o que fica no painel
+
+A regra é de **classe**, não de lista: credencial, chave, token ou senha vai
+para o arquivo; endereço, flag e ajuste de tuning ficam no painel. Levantado de
+`process.env.*` no código (`src/**` + `scripts/migrate.mjs`):
+
+No arquivo `/etc/iris/production.env` — **nunca** no painel:
+
+```
+DATABASE_URL, AUTH_DATABASE_URL, MIGRATION_DATABASE_URL, ASR_WORKER_DATABASE_URL
+BETTER_AUTH_SECRET, CPF_HASH_SALT
+GOOGLE_API_KEY
+BILLING_PROVIDER_API_KEY, ASAAS_WEBHOOK_TOKEN
+RESEND_API_KEY, RESEND_WEBHOOK_SECRET, EMAIL_PROVIDER_API_KEY
+GLITCHTIP_WEBHOOK_SECRET, GITHUB_TOKEN
+ASR_JOB_TOKEN, ASR_SERVICE_TOKEN, ASR_S3_ACCESS_KEY, ASR_S3_SECRET_KEY
+BILLING_JOB_TOKEN, EXPORT_JOB_TOKEN
+```
+
+Na aba `Ambiente` do Easypanel ficam só as **públicas, de build e de tuning** —
+as que já vazariam pelo bundle do cliente ou que não são segredo nenhum:
+
+```
+NODE_ENV, PORT, NEXT_TELEMETRY_DISABLED, NEXT_PUBLIC_*
+BETTER_AUTH_URL, TRUSTED_ORIGINS, SENTRY_DSN, LOG_LEVEL
+FEATURE_FLAG_ASR_ENABLED, EXTRACTION_LLM_ENABLED, FAMILY_REPORT_LLM_ENABLED,
+CONVENIO_REPORT_LLM_ENABLED, GOOGLE_EXTRACTION_MODEL
+BILLING_PROVIDER, ASAAS_BASE_URL
+ASR_PROVIDER, ASR_SERVICE_URL, ASR_JOB_URL, ASR_SERVICE_TIMEOUT_MS,
+ASR_RESGATE_DIAS, ASR_S3_ENDPOINT, ASR_S3_BUCKET, ASR_S3_REGION
+EMAIL_REMETENTE, RESEND_FROM_EMAIL, GITHUB_REPO
+RENDER_MAX_CONCURRENCY, RENDER_LOCK_TIMEOUT_MS
+TWA_ANDROID_PACKAGE_NAME, TWA_SHA256_FINGERPRINTS, WEB_PUSH_VAPID_PUBLIC_KEY
+```
+
+> `NEXT_PUBLIC_*` **precisa** ficar no painel: é lida em build time e assada no
+> bundle. Movê-la para o arquivo de runtime não a esconde de ninguém — só a
+> apaga do bundle e quebra a página.
+
+### Formato do arquivo — aspar TODO valor
+
+`CHAVE="valor"`, uma por linha. **Sempre com aspas duplas**, mesmo quando parece
+desnecessário:
+
+```
+DATABASE_URL="postgres://iris_app:s3nh4@espectro-mvp_iris-postgres:5432/iris"
+BETTER_AUTH_SECRET="..."
+```
+
+Sem aspas, o parser do Node corta o valor no primeiro `#` — ele inicia
+comentário. Medido, e coberto por `scripts/segredo-por-arquivo.test.mjs`:
+
+| Linha no arquivo                 | `process.env.URL` resultante  |
+| -------------------------------- | ----------------------------- |
+| `URL=postgres://u:se#nha@h/db`   | `postgres://u:se` ❌          |
+| `URL="postgres://u:se#nha@h/db"` | `postgres://u:se#nha@h/db` ✅ |
+
+É a classe de falha mais cara possível: uma senha de role com `#` entra
+truncada, o app conecta com credencial errada, e o erro que aparece é
+`password authentication failed` — nada aponta para o parser do arquivo.
+
+### Precedência: variável do ambiente VENCE a do arquivo
+
+Comportamento nativo de `--env-file`: se a chave já existe em `process.env`, o
+arquivo é ignorado para ela. Duas consequências:
+
+1. **a virada é reversível e sem downtime** — enquanto o segredo ainda estiver
+   na aba `Ambiente`, é ele que vale. Criar o arquivo não muda nada até a
+   variável sair do painel;
+2. **um segredo esquecido no painel silenciosamente vence o do arquivo.** Se
+   você trocou o valor no arquivo e nada mudou, é isso. Confira o painel.
+
+E se o arquivo **não existir**, o Node segue com `process.env` e sem erro (é o
+`-if-exists`). É o que mantém CI, `infra/docker-compose.yml` e a máquina do dev
+funcionando sem arquivo nenhum.
+
+### Passo a passo na VPS
+
+1. **Criar o arquivo** (via SSH, como root):
+
+   ```bash
+   mkdir -p /etc/iris
+   install -m 0644 -o root -g root /dev/null /etc/iris/production.env
+   nano /etc/iris/production.env     # colar as CHAVE="valor", uma por linha
+   ```
+
+   _Como saber que deu certo:_ `ls -l /etc/iris/production.env` mostra
+   `-rw-r--r-- 1 root root`.
+
+2. **Montar no serviço** `iris-app`, aba `Armazenamento` (a mesma que já é usada
+   para os volumes `/backups` e `/heartbeat`): montagem do tipo **bind**, host
+   `/etc/iris/production.env` → container `/run/secrets/env`, somente leitura.
+   Repetir no serviço `iris-migrate`.
+
+   > ⚠️ **Passo NÃO verificado no painel.** O rótulo exato do tipo de montagem
+   > (bind de ARQUIVO, não de diretório) e a existência do toggle "somente
+   > leitura" no Easypanel v2.31 ainda não foram conferidos com os olhos. Se o
+   > painel só aceitar diretório, o contorno é montar `/etc/iris` em
+   > `/run/secrets` e manter o arquivo com o nome `env`. Atualizar esta seção
+   > com o que o painel realmente oferece.
+
+3. **Implantar.** Salvar a montagem **não** aplica sozinho — mesma pegadinha da
+   aba `Ambiente` (memória `easypanel-ambiente-expoe-segredos`): é preciso
+   clicar em `Implantar`.
+
+   _Como saber que deu certo:_
+
+   ```bash
+   docker exec <container-do-iris-app> ls -l /run/secrets/env
+   docker exec <container-do-iris-app> node -e 'console.log(process.env.DATABASE_URL ? "leu" : "NAO leu")'
+   ```
+
+   O segundo comando roda **sem** a flag, então só imprime `leu` se a variável
+   ainda estiver no painel. Para medir o arquivo:
+
+   ```bash
+   docker exec <container> node --env-file-if-exists=/run/secrets/env \
+     -e 'console.log(process.env.DATABASE_URL ? "arquivo OK" : "arquivo NAO lido")'
+   ```
+
+4. **Só então esvaziar a aba `Ambiente`** das chaves da lista acima, e
+   `Implantar` de novo. Enquanto elas estiverem lá, a precedência as mantém
+   valendo e o arquivo não está sendo exercitado de verdade.
+
+   _Como saber que deu certo:_ o app continua respondendo depois do deploy e o
+   login funciona (é o `BETTER_AUTH_SECRET`, que veio do arquivo). Se o app
+   subir mas o login quebrar, o segredo do arquivo **não é o mesmo** que estava
+   no painel — todas as sessões caem.
+
+5. **Rotacionar** o que já passou pelo log de build, pela tabela da seção
+   anterior. Tirar do painel não apaga os logs de build históricos.
+
+### O que este item NÃO fecha
+
+- **As 8 imagens de job** (`infra/backup`, `infra/billing`, `infra/retencao`,
+  `infra/alarme`, `infra/escalonamento`, `infra/exportacao`,
+  `infra/arquivamento`, `infra/expurgo-audit-log`) continuam lendo tudo da aba
+  `Ambiente`. O entrypoint delas é **bash**, não Node: `--env-file-if-exists`
+  não se aplica, e o equivalente (`set -a; . /run/secrets/env; set +a`) é outra
+  mudança, em outro lugar. **Aberto.**
+- **O log de build histórico** já guardado no painel. Só rotação resolve.
+- **`docker inspect`** para quem já tem root na VPS. Nunca foi o modelo de
+  ameaça aqui.
+
+### Cobertura automatizada
+
+| Onde                                   | O que prova                                                                                                                                                     |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/segredo-por-arquivo.test.mjs` | contrato da flag (carrega, tolera ausência, precedência, truncamento no `#`) + os três CMD                                                                      |
+| `scripts/ci/carga-imagem-app.sh`       | dentro da IMAGEM: CMD construído, leitura por não-root no `node:22-slim`, boot com o arquivo presente, e o migrate lendo `MIGRATION_DATABASE_URL` só do arquivo |
+
+O teste de carga roda no CI quando `infra/Dockerfile*` mudam
+(`imagens-do-app-alteradas` no `ci.yml`) e localmente com
+`bash scripts/ci/carga-imagem-app.sh`.
 
 ## Cotas de CPU e memória
 

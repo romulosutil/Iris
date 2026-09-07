@@ -73,6 +73,33 @@
 
 ---
 
+## 🏁 Sessão 06/09/2026 (4ª) — #93 item 5: os segredos de runtime saíram da aba `Ambiente` e viraram arquivo montado
+
+**O risco:** o Easypanel repassa **toda** env var do serviço como `--build-arg` do `docker build`, e o log de build guardado no painel guarda isso em texto plano — `DATABASE_URL`, senha das roles, `BETTER_AUTH_SECRET`. Em 25/07/2026 a #93 aceitou o risco com um modelo de ameaça de mantenedor único. Para o primeiro cliente com dado de saúde sob a LGPD esse modelo não serve mais.
+
+**O que mudou (3 linhas de CMD):** os três processos Node de produção passam a subir com `node --env-file-if-exists=/run/secrets/env …` — `infra/Dockerfile` (stage `runner` e stage `migrate`) e `infra/Dockerfile.migrate`. Os segredos moram em `/etc/iris/production.env` no host, montado somente-leitura. A aba `Ambiente` fica só com `NODE_ENV`, `PORT`, `NEXT_TELEMETRY_DISABLED`, `NEXT_PUBLIC_*` e flags/tuning.
+
+**Duas propriedades da flag medidas, não presumidas:**
+
+1. **arquivo ausente não quebra nada.** `-if-exists` segue com `process.env` e exit 0 — é o que mantém CI, `infra/docker-compose.yml` e a máquina do dev funcionando sem arquivo nenhum. O boot da imagem normal no `carga-imagem-app.sh` é exatamente esse caso;
+2. **variável do ambiente VENCE a do arquivo.** Torna a virada reversível e sem downtime (enquanto o segredo estiver no painel, é ele que vale) — e é a explicação de "troquei no arquivo e nada mudou".
+
+**A armadilha que quase passou:** o parser corta valor **não-aspado** no primeiro `#`. `URL=postgres://u:se#nha@h/db` chega como `postgres://u:se`. Uma senha de role com `#` entraria truncada, o app conectaria com credencial errada e o erro visível seria `password authentication failed` — nada apontando para o parser. Regra escrita no `infra/README.md` e travada em teste: **aspar todo valor**.
+
+**Cobertura em dois níveis, porque um só mentiria:**
+
+- `scripts/segredo-por-arquivo.test.mjs` (roda no `pnpm test`, sem Docker): contrato da flag + os três CMD. Mutação executada — tirar a flag do CMD do `runner` deixa a suíte vermelha;
+- `scripts/ci/carga-imagem-app.sh`: dentro da imagem construída. O probe de boot foi extraído para `boot_e_probe` e agora roda **duas** vezes — sem o arquivo (prova a tolerância) e com ele. A prova end-to-end forte é a do migrate: `MIGRATION_DATABASE_URL` só existe dentro de `/run/secrets/env`, e o que se exige é o **desaparecimento** da mensagem da guarda de env. Se o CMD perder a flag, ela volta.
+
+**Dois defeitos que só apareceram RODANDO o teste de carga** (a primeira execução saiu **verde com exit 0** e o segundo boot nunca aconteceu): (a) `carga_app` instala um `trap … RETURN` cujo corpo termina em `|| true`, e **trap RETURN bem-sucedido sobrescreve o `$?`** da saída que o `set -e` acabou de abortar — `docker run` morrendo não contava falha; agora o rc é capturado e conta `FALHAS++` explícito. (b) o segundo probe usava `PORTA_CARGA_APP + 1` = 4000, faixa reservada pelo Hyper-V no Windows (`failed programming external connectivity`); trocado por derrubar o primeiro container e reusar a MESMA porta configurável.
+
+**O que este item NÃO fecha (segue aberto):** as 8 imagens de job (`infra/backup`, `billing`, `retencao`, `alarme`, `escalonamento`, `exportacao`, `arquivamento`, `expurgo-audit-log`) continuam lendo tudo da aba `Ambiente` — o entrypoint delas é **bash**, `--env-file-if-exists` não se aplica e o equivalente (`set -a; . /run/secrets/env; set +a`) é outra mudança. E o log de build **histórico** já guardado no painel: só rotação resolve.
+
+**Passo do painel NÃO verificado.** O rótulo exato do bind mount de ARQUIVO (não de diretório) e o toggle de somente-leitura no Easypanel v2.31 não foram conferidos com os olhos. Documentado como tal no `infra/README.md`, com o contorno (montar `/etc/iris` em `/run/secrets` e manter o nome `env`) caso o painel só aceite diretório.
+
+**Próximo passo:** provisionar `/etc/iris/production.env` na VPS, montar nos dois serviços, `Implantar`, e **só então** esvaziar a aba `Ambiente` — a precedência mantém o painel valendo até isso ser feito, então a virada não é atômica e não pode ser dada como concluída no merge.
+---
+
 ## 🏁 Sessão 06/09/2026 (3ª) — #524: a issue que o próprio robô abriu afirmando uma causa que ninguém mediu
 
 **O que a #524 dizia, e o que era verdade.** O corpo da issue afirma: "O caminho de produção da extração (`resolveProvider` → `LlmExtractionProvider` → `createGeminiInvoker`) não conseguiu completar uma chamada real ao Gemini" e "**toda extração de produção está caindo em `pendente_reprocessamento` agora**". Medido no log do run: o job morreu no passo `Verifica que GOOGLE_API_KEY está configurada`, com `GOOGLE_API_KEY:` vazio — **o smoke não chegou a falar com o Google**. A issue estava afirmando uma queda de produção sem nenhuma medição por trás.

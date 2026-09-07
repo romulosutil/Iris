@@ -50,4 +50,14 @@ COPY package.json tsconfig.json ./
 COPY scripts ./scripts
 COPY db/migrations ./db/migrations
 COPY src ./src
-CMD ["node", "scripts/migrate.mjs"]
+# `--env-file-if-exists`: os segredos de RUNTIME entram por ARQUIVO montado em
+# /run/secrets/env — nunca pela aba `Ambiente` do Easypanel, que repassa toda
+# env var como `--build-arg` do `docker build` e a imprime em TEXTO PLANO no
+# log de build guardado no painel (#93; infra/README.md §"CRÍTICO — o log de
+# build do Easypanel contém TODOS os segredos em texto plano").
+#
+# Flag nativa do Node (>= 20.6/22): se o caminho NÃO existir — CI, docker
+# compose local, `docker run` sem `-v` — o Node segue com `process.env` e sem
+# aviso. E variável já presente no ambiente VENCE a do arquivo, então quem
+# ainda estiver com o segredo na aba `Ambiente` não quebra na virada.
+CMD ["node", "--env-file-if-exists=/run/secrets/env", "scripts/migrate.mjs"]

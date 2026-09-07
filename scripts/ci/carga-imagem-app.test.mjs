@@ -64,7 +64,12 @@ describe("carga das imagens do app (D69) — fiação do CI", () => {
 
   it("o probe de boot tem teto de 15s e mata o container ao final", () => {
     expect(script).toContain('TIMEOUT_BOOT_S="${TIMEOUT_BOOT_S:-15}"');
-    expect(script).toContain("trap derrubar_container_app RETURN");
+    // EXIT, não RETURN: o trap tem de rodar também quando o `set -e` aborta o
+    // script no meio de `carga_app`. Um trap RETURN não roda nesse caminho (e,
+    // quando roda, o `$?` da saída abortada atravessa o corpo do trap, que
+    // termina em `|| true`).
+    expect(script).toContain("trap derrubar_container_app EXIT");
+    expect(script).not.toContain("trap derrubar_container_app RETURN");
   });
 
   it("o script reprova a imagem por módulo ausente, e não só por exit code", () => {
