@@ -55,6 +55,23 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
+      // MESMO alias de vitest.config.ts, e pelo MESMO motivo (#126): Next
+      // resolve `server-only` para `empty.js` no bundle de servidor (condição
+      // "react-server"); vitest não aplica essa condição, então sem o alias
+      // todo módulo com `import "server-only"` lança ao ser importado.
+      //
+      // Faltar aqui não era teórico: o smoke da #510 NUNCA coletou. O run
+      // `34066802330` (06/09/2026, o primeiro com `GOOGLE_API_KEY` no repo)
+      // morreu em 525 ms com `Tests: no tests` e "This module cannot be
+      // imported from a Client Component module" apontando para
+      // `server-only/index.js:1:7` — a cadeia `provider.ts` → `llm-provider.ts`
+      // atravessa um módulo com essa diretiva. Enquanto o segredo esteve
+      // ausente, o smoke morria ANTES deste ponto e o defeito ficou coberto
+      // por outro defeito (#524).
+      "server-only": path.resolve(
+        import.meta.dirname,
+        "node_modules/server-only/empty.js",
+      ),
     },
   },
   test: {
