@@ -285,11 +285,11 @@ boot_e_probe() {
 	log_info "subindo ${nome} (${tag}) na porta ${porta} (teto de ${TIMEOUT_BOOT_S}s)..."
 	docker rm -f "${nome}" >/dev/null 2>&1 || true
 
-	# NÃO confiar no `set -e` aqui. `carga_app` instala um `trap ... RETURN` cujo
-	# corpo termina em `|| true`, e um trap RETURN bem-sucedido SOBRESCREVE o $?
-	# da saída abortada: o script inteiro sai 0 com o boot nunca tendo
-	# acontecido. Medido — um `docker run` que morreu ao alocar a porta do host
-	# não contou falha nenhuma e a carga passou "verde".
+	# NÃO usar o `set -e` como oráculo de asserção aqui. Um `docker run` que morre
+	# ao alocar a porta do host tem de virar FALHA CONTABILIZADA em ${FALHAS} —
+	# não um abort de shell cujo status ainda depende do trap de limpeza que
+	# estiver instalado. Medido: a carga já saiu "verde" com o boot nunca tendo
+	# acontecido. Por isso o rc é capturado explicitamente logo abaixo.
 	local saida_run rc_run
 	set +e
 	saida_run="$(docker run -d --name "${nome}" -p "127.0.0.1:${porta}:3000" "$@" "${tag}" 2>&1)"
@@ -398,7 +398,13 @@ carga_app() {
 	# `-if-exists` da flag — arquivo AUSENTE não pode derrubar o boot, que é a
 	# situação do CI, do `infra/docker-compose.yml` e da máquina do dev.
 	derrubar_container_app
-	trap derrubar_container_app RETURN
+	# EXIT, e não RETURN: se o `set -e` abortar o script no meio de `carga_app`, o
+	# trap RETURN não é garantia de limpeza nenhuma (nas versões medidas ele nem
+	# chega a disparar) e, quando dispara, o `$?` da saída abortada ainda passa
+	# pelo corpo do trap, que termina em `|| true`. O EXIT roda em TODA saída —
+	# abortada ou não — e não sobrescreve o status do script. A limpeza é
+	# idempotente, então rodar mais de uma vez é inofensivo.
+	trap derrubar_container_app EXIT
 
 	boot_e_probe "app" "${TAG_APP}" "${NOME_CONTAINER_APP}" "${PORTA_CARGA_APP}" -- \
 		-e NODE_ENV=production \
@@ -448,6 +454,12 @@ carga_app() {
 
 	boot_e_probe "app (segredo montado)" "${TAG_APP_SEGREDO}" "${NOME_CONTAINER_APP_SEGREDO}" "${PORTA_CARGA_APP}" -- \
 		-e NODE_ENV=production
+
+	# Limpeza do caminho FELIZ. O trap EXIT só roda no fim do script: no alvo
+	# `todos` isso deixaria os containers do app de pé durante toda a
+	# `carga_migrate`, gastando memória do runner à toa. O trap segue sendo a
+	# rede de segurança do caminho ABORTADO.
+	derrubar_container_app
 }
 
 # --- migrate (infra/Dockerfile.migrate) --------------------------------------
