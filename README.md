@@ -65,13 +65,17 @@ trabalho com o Claude, depois rode os Prompts 1→4 em ordem, encadeando os outp
 O Prompt 2 já tem implementação de referência em `docs/agente/` — critique e
 refine, não recomece.
 
-> ⚠️ **Pivô de hospedagem em avaliação (09/07/2026):** a stack de deploy
-> (Vercel + Supabase gerenciado) migra para **VPS Hostinger + Easypanel +
-> Postgres puro** (não Supabase; auth in-app + MinIO) — ver
-> `docs/arquitetura/plano-bootstrap-e-stack-vps.md`.
-> Produto, modelo de dados, RLS e plano de fases não mudam.
+> ℹ️ **Hospedagem (decisão consolidada):** o desenho original em papel previa
+> Vercel + Supabase gerenciado, mas essa stack **nunca chegou a rodar** — foi
+> revista antes do primeiro deploy. A hospedagem real é **VPS Hostinger +
+> Easypanel + Postgres puro** (não Supabase; auth in-app + MinIO), documentada
+> em `docs/arquitetura/plano-bootstrap-e-stack-vps.md` e operacionalizada em
+> `infra/README.md`. Produto, modelo de dados, RLS e plano de fases não mudaram
+> com a revisão. As menções a Supabase/Vercel em
+> `docs/arquitetura/stack-e-plano-de-construcao.md` são registro histórico do
+> design original (Prompt 4).
 
-## Estado atual (atualizado 21/08/2026)
+## Estado atual (atualizado 06/09/2026)
 
 O desenvolvimento do MVP do Iris está concluído (Fases 0.5 a 6.6) e a Fase 7 (Faturamento & Growth) está ativa com deploy em produção:
 
@@ -81,5 +85,10 @@ O desenvolvimento do MVP do Iris está concluído (Fases 0.5 a 6.6) e a Fase 7 (
 - **Navegação & Configurações da Clínica (#411)**: Sub-navegação via abas em `/clinica` (`/clinica/dados`, `/clinica/feriados`, `/clinica/emergencia`) e atalhos diretos para dashboards de protocolos e PEI.
 - **Guardrail Ambiental no Seed (D52 / #412)**: Bloqueio fail-closed para proteção contra execução de scripts de seed em ambientes de staging/produção sem consentimento explícito.
 - **E-mail Transacional**: Integração com Resend para envio de convites e notificações ativada (#126).
+- **Iris Audio Companion / ASR self-hosted (#72 / #494)**: Pipeline de ditado de voz efetivamente construído — worker faster-whisper (`infra/asr/`), storage efêmero em MinIO, sweeper de órfãos e migrações até a `0155`.
+- **Fila transacional pg-boss (D73 / #624)**: Substitui os scripts de agendamento do ASR por fila nativa dentro do próprio Postgres (schema da migração `0154`).
+- **Cotas de recursos e alarme de exaustão (#631 / #627)**: Cotas de CPU/memória por container em produção e alarme quando o host se aproxima da exaustão.
+- **Alta clínica e arquivamento na modalidade convencional (D65 / #628)**.
+- **Build e boot das imagens do app validados no CI (D69 / #625)**.
 
-**Próximos passos:** Fase 6b (Iris Audio Companion / ASR - fast-follow gated por DPA) e Customização White-Label nos PDFs (#120).
+**Próximos passos:** Customização White-Label nos PDFs (#120).
