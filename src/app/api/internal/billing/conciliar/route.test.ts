@@ -18,6 +18,22 @@ vi.mock("@/lib/billing/erro-aplicacao", () => ({
     dubles.listarCobrancasDeCicloNaoConciliadas,
 }));
 
+/**
+ * #636 (mesmo defeito da #609) — `registrarHeartbeat` roda
+ * `sql\`SELECT app_job_heartbeat_gravar(…)\`` contra o Postgres de verdade
+ * (`@/db/client`). Sem este dublê, o teste abre conexão TCP com o banco local
+ * e o veredito passa a depender da latência dele.
+ *
+ * O dublê é do MÓDULO, não da conexão: `detalheSemPii` segue real (é pura e
+ * não toca banco) porque é o texto que ela produz que este arquivo afirma no
+ * `detalhe` do heartbeat.
+ */
+const heartbeat = vi.hoisted(() => ({ registrarHeartbeat: vi.fn() }));
+vi.mock("@/lib/jobs/heartbeat", async (original) => ({
+  ...(await original<typeof import("@/lib/jobs/heartbeat")>()),
+  registrarHeartbeat: heartbeat.registrarHeartbeat,
+}));
+
 const { POST } = await import("./route");
 
 const TOKEN = "token-de-teste-375";
@@ -53,6 +69,10 @@ describe("POST /api/internal/billing/conciliar", () => {
     dubles.conciliarCiclos.mockResolvedValue(vazio());
     dubles.conciliarVinculos.mockResolvedValue(vazio());
     dubles.listarCobrancasDeCicloNaoConciliadas.mockResolvedValue([]);
+    // O contrato real: `registrarHeartbeat` NUNCA lança (o próprio módulo
+    // engole a falha e devolve `false`). O dublê resolve para manter esse
+    // contrato.
+    heartbeat.registrarHeartbeat.mockResolvedValue(true);
   });
   afterEach(() => {
     delete process.env.BILLING_JOB_TOKEN;
@@ -189,6 +209,56 @@ describe("POST /api/internal/billing/conciliar", () => {
     expect(dubles.conciliarCiclos).toHaveBeenCalledWith({
       limite: 100,
       offset: 0,
+    });
+  });
+
+  /**
+   * #636 — o heartbeat era EXECUTADO por todos os testes deste arquivo
+   * (contra o banco de verdade) e AFIRMADO por nenhum. A chamada podia sumir
+   * da rota sem um teste ficar vermelho, e o que ela deixaria de existir é o
+   * sinal de vida que `scripts/alarme-jobs.mjs` lê para saber se a
+   * conciliação rodou.
+   */
+  describe("heartbeat (#636)", () => {
+    it("grava ok:true com as contagens quando a passada correu limpa", async () => {
+      dubles.conciliarCiclos.mockResolvedValue({
+        conferidos: 2,
+        divergencias: [{ cicloId: "c1", classe: "pagamento_nao_conciliado" }],
+        falhas: [],
+        truncado: false,
+      });
+      dubles.listarCobrancasDeCicloNaoConciliadas.mockResolvedValue([
+        { asaasEventId: "evt-1" },
+      ]);
+
+      await POST(req({ authorization: `Bearer ${TOKEN}` }));
+
+      expect(heartbeat.registrarHeartbeat).toHaveBeenCalledTimes(1);
+      expect(heartbeat.registrarHeartbeat).toHaveBeenCalledWith(
+        "conciliacao",
+        true,
+        // `detalheSemPii` é o real: só contagem e booleano chegam ao banco,
+        // nunca id de cobrança ou clínica.
+        "totalDivergencias=2 abortou=false",
+      );
+    });
+
+    it("grava ok:false quando uma varredura aborta, sem derrubar a gravação", async () => {
+      dubles.conciliarVinculos.mockRejectedValue(new Error("gateway fora"));
+
+      await POST(req({ authorization: `Bearer ${TOKEN}` }));
+
+      expect(heartbeat.registrarHeartbeat).toHaveBeenCalledWith(
+        "conciliacao",
+        false,
+        "totalDivergencias=0 abortou=true",
+      );
+    });
+
+    it("uma passada recusada na autorização não carimba sinal de vida", async () => {
+      await POST(req());
+
+      expect(heartbeat.registrarHeartbeat).not.toHaveBeenCalled();
     });
   });
 });
