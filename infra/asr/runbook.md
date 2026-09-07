@@ -71,7 +71,7 @@ Easypanel, não no do `iris-asr`:
 
 | Variável                 | Papel                                                                                                                                                    | Obrigatória                            |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| `ASR_SERVICE_URL`        | URL completa da rota `/transcrever` no host **interno** do Swarm — HÍFEN, não underscore (ex. `http://espectro-mvp-iris-asr:8080/transcrever`; ver §1.4) | **sim** com `ASR_PROVIDER=self-hosted` |
+| `ASR_SERVICE_URL`        | URL completa da rota `/transcrever` no host **interno** do Swarm — HÍFEN, não underscore (ex. `http://espectro-mvp-iris-asr:8080/transcrever`; ver §1.5) | **sim** com `ASR_PROVIDER=self-hosted` |
 | `ASR_SERVICE_TOKEN`      | Bearer enviado; tem que ser idêntico ao do serviço                                                                                                       | sim                                    |
 | `ASR_SERVICE_TIMEOUT_MS` | Timeout do POST, default `120000`                                                                                                                        | não                                    |
 
@@ -205,7 +205,7 @@ apenas um segundo agendador **dentro do mesmo container**; a sobreposição via
 timeout de cliente é fechada pelas duas travas de banco acima, não por ela. Lock
 órfão de container morto é recuperado sozinho (o PID é conferido com `kill -0`).
 
-### 1.4 Host interno: hífen, nunca underscore (#500)
+### 1.5 Host interno: hífen, nunca underscore (#500)
 
 > **[x] CONFIRMADO — medido em produção ao provisionar #500, 31/08/2026.**
 > MinIO devolve `400 InvalidRequest` ("not a valid hostname") quando o `Host`
@@ -300,3 +300,254 @@ docker run --rm --network=none iris-asr:prova   python -c "import os; from faste
       a internet). O áudio do benchmark era sintético — nenhum dado de paciente
       passou por ali —, mas a exposição tem que acabar antes de T07. Verificar
       medindo (`curl` do domínio de fora), não pelo painel.
+      **Vira pré-requisito bloqueante do smoke da #500** (§6.1, item 4): o
+      benchmark levou áudio sintético por ali, o smoke leva áudio real.
+
+## 6. Smoke de produção do ditado de voz (#500)
+
+> **Estado:** procedimento escrito e revisado contra `main` em **07/09/2026**;
+> **NÃO executado**. Nenhum `[x] CONFIRMADO` aqui — quem executar carimba o
+> resultado no `BACKLOG.md` (§6.6), como manda `verificar-fato-de-infra-com-medicao`.
+
+O provisionamento da #500 (role do worker, `asr-agendador`, `asr-sweeper`,
+`iris-asr`) foi fechado em 31/08/2026. O que sobrou é o único item que
+`"ok":true` no heartbeat não prova: **áudio real atravessando bucket →
+`iris-asr` → banco → UI**. Este é o passo a passo dele.
+
+### 6.0 O que envelheceu no enunciado da #500
+
+Auditado contra `main` antes de escrever o procedimento — três itens do corpo
+da issue descrevem um repositório que não existe mais:
+
+| Item da #500                                                   | Situação medida em 07/09/2026                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "revisar `INTERVALO_S` (hoje 20s)"                             | **A env não existe mais.** O laço `while :; do … sleep 20` morreu na D73 (commit `115bc8ce`); quem agenda o tick é o cron do pg-boss, `CRON_TICK_ASR = "* * * * *"` em `src/lib/queue/config.ts`. O `INTERVALO_S` que sobra em `infra/asr/` é o do **sweeper de órfãos** (default 3600 s) — outro botão, outra pergunta. Ver §6.6. |
+| "Fora de escopo: **D71** continua aberto"                      | **D71 fechado em 05/09/2026** — `audio_capture.mime_type` (migração `0155`) carrega o mime real até o POST de transcrição. iOS/Safari deixou de ser pré-requisito separado.                                                                                                                                                        |
+| "heartbeat **avançando**"                                      | Desde a #536 o sinal de vida **não é mais arquivo em `/heartbeat`** — é a linha `job_heartbeat` no banco, escrita pela ROTA. No container só mora o lockfile. A query está no passo 3 do §6.1.                                                                                                                                     |
+| "`FEATURE_FLAG_ASR_ENABLED` continua `false`" (corpo da issue) | **Está `true` em produção**, medido em 07/09/2026. O ditado já está oferecido às clínicas ativas — o que nunca aconteceu é um clipe ser transcrito (§6.1).                                                                                                                                                                         |
+
+### 6.1 Pré-voo — cinco medições ANTES de tocar a flag
+
+> **[x] PRÉ-VOO EXECUTADO — medido no painel de produção em 07/09/2026, ~21:10 BRT.**
+> Os cinco itens abaixo passaram. **O que falta da #500 é só a gravação** — todo
+> o resto do pré-voo está verde e não precisa ser refeito, a menos que algo
+> tenha sido reimplantado depois desta data.
+>
+> | #   | O que foi medido                         | Resultado                                                                                                                                                                      |
+> | --- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+> | 1   | `ASR_PROVIDER` na env do `App`           | `self-hosted` ✅ — e **`FEATURE_FLAG_ASR_ENABLED` já está `true`** (ver §6.2, passo 1: o passo virou conferência, não ação)                                                    |
+> | 2   | Grants (as quatro consultas do §1.2)     | `f` / `t` / `t` / `t` ✅ — `0140` e `0155` aplicadas                                                                                                                           |
+> | 3   | `job_heartbeat` de `asr` e `asr-sweeper` | `asr` com **21 s** de idade, `asr-sweeper` com 2 min 45 s, `ultimo_erro` nulo nos dois ✅ — ticks saindo                                                                       |
+> | 4   | Domínio público temporário do `iris-asr` | aba `Domínios` **vazia** ✅ — a pendência do §5 está fechada; e o serviço está de pé (323 MB, log `Serviço ASR de pé na porta 8080 (modelo=small, idioma=pt, concorrentes=2)`) |
+> | 5   | Alcance da flag global                   | **8 clínicas, 2 ativas nos últimos 7 dias, 28 sessões, 32 usuários** — com a flag já ligada, o ditado já está oferecido a essas clínicas                                       |
+>
+> **O que a mesma passada revelou sobre a fila**, e que muda o enunciado da
+> #500: `audio_capture` tinha **uma única linha em toda a produção** — a do
+> incidente #604 (criada 31/08 23:24, `falhou`, `tentativas=0`, `reversoes=0`,
+> assinatura do backstop de idade). **Zero clipes `transcrito`, nunca.** E o
+> áudio dela **não é resgatável**: `objeto_ref` e `falhou_em` estão nulos
+> porque a linha é ANTERIOR à `0155` — o comportamento antigo já tinha apagado
+> o objeto. Não dá para provar o pipeline reenviando essa linha; tem que ser
+> clipe novo.
+>
+> **A pergunta que isso abre** (não é item de infra, é de produto): a flag está
+> ligada desde ~31/08, e nesses 7 dias houve **28 sessões e nenhum clipe
+> gravado**. Ou as terapeutas não estão encontrando o gravador, ou algo na UI
+> não o oferece nas condições reais. Vale medir antes de concluir que "o ditado
+> está no ar".
+
+Todas rodam com a flag ainda em `false`. Nenhuma altera dado.
+
+O SQL sai do console do Easypanel: serviço **`iris-postgres` → aba `Bash`**,
+depois `psql -U iris -d iris`. A aba **`Postgres Client` não serve** — ela
+tenta a role `postgres`, que não existe neste banco; o dono é `iris`
+(que, sendo dono, **bypassa RLS** — é por isso que as consultas abaixo
+enxergam todas as clínicas).
+
+**1. `ASR_PROVIDER=self-hosted` está na env do serviço `App`?**
+
+Esta é a checagem que impede um smoke **verde e vazio**. `getAsrProvider()`
+(`src/lib/asr/provider.ts`) cai no `StubAsrProvider` para qualquer valor
+diferente da string exata `self-hosted` — inclusive ausente. O stub não faz
+rede, não fala com `iris-asr` e devolve texto determinístico. O clipe
+percorreria `na_fila → transcrevendo → transcrito` inteirinho, a UI mostraria
+texto, e **nada do pipeline real teria sido exercitado**.
+
+- Onde olhar: `App` → aba `Ambiente`. (Não tire screenshot: o painel mostra
+  todo segredo em texto claro sobre HTTP — memória `easypanel-ambiente-expoe-segredos`.)
+- Oráculo de fim de linha, no §6.3: transcrição que começa com
+  `[transcrição stub —` **é o stub**. Smoke inválido; corrija a env e recomece.
+
+**2. Os grants da role do worker.** As quatro consultas do §1.2 deste runbook,
+com os quatro resultados esperados. Elas provam a `0140` e a `0155`.
+
+**3. Os dois agendadores de pé, com heartbeat AVANÇANDO.**
+
+```sql
+SELECT job, ultimo_ok, now() - ultimo_ok AS idade, ultimo_erro, detalhe
+  FROM job_heartbeat
+ WHERE job IN ('asr', 'asr-sweeper');
+```
+
+Esperado: `idade` do `asr` **abaixo de 1 min** (o cron é de 1 min; o alarme só
+dispara em 30 min — `scripts/alarme-jobs.mjs:353`), e do `asr-sweeper` abaixo
+de 1 h. **Rode duas vezes com um minuto de intervalo**: um `ultimo_ok` recente
+prova que houve um tick, dois valores DIFERENTES provam que os ticks continuam
+saindo. Deploy verde não é serviço no ar
+(`job-provisionado-nao-e-job-que-fecha-ciclo`).
+
+**4. O domínio público temporário do `iris-asr` já foi removido?** É a
+pendência do §5 e é pré-requisito **desta** etapa, não da anterior: o benchmark
+do §2 rodou por ali com áudio sintético, mas o smoke roda com áudio de
+verdade, e enquanto o domínio existir R11 está sendo violado. Medir de fora,
+com `curl` do domínio, **não pelo painel**.
+
+**5. A flag é GLOBAL — não existe "clínica de teste" no gate.**
+`asrHabilitado()` lê `process.env.FEATURE_FLAG_ASR_ENABLED` e mais nada; não há
+coluna por clínica, nem allowlist. Ligá-la libera o ditado para **toda clínica
+do ambiente**, no mesmo instante. Antes de decidir a janela do smoke, meça
+quantas são e quantas estão vivas:
+
+```sql
+SELECT count(*) AS clinicas FROM clinic;
+
+SELECT count(DISTINCT clinic_id) AS clinicas_com_sessao_nos_7_dias
+  FROM session WHERE criado_em > now() - interval '7 days';
+```
+
+Se o segundo número for **0**, o smoke é seguro a qualquer hora. Se for maior
+que 0, escolha uma janela fora do horário de atendimento e trate o §6.5
+(rollback) como parte do plano, não como plano B.
+
+### 6.2 Execução
+
+1. **A flag.** Em 07/09/2026 ela **já está `true`** em produção (§6.1), então
+   este passo é conferência, não ação: abra `App` → `Ambiente` e confirme.
+   Se em algum momento ela voltar a `false`, ligar exige `Implantar` — salvar
+   env não aplica sozinho. Anote o horário de início: ele é o marco `T0` das
+   consultas abaixo.
+
+2. **Gravar o clipe.** Entrar na UI com um usuário de perfil terapeuta da
+   clínica escolhida, abrir uma sessão, ir ao passo de documentar e gravar
+   **~30 s falando de verdade** (frase corrida, em português). Não use silêncio
+   nem ruído: o oráculo do §6.3 é reconhecer as palavras faladas.
+
+3. **Ver a linha nascer e ser promovida.** Rode logo após soltar o botão:
+
+```sql
+SELECT id, ordem, asr_status, mime_type, objeto_ref IS NOT NULL AS tem_objeto,
+       tentativas, reversoes, criado_em
+  FROM audio_capture
+ WHERE criado_em > now() - interval '10 minutes'
+ ORDER BY criado_em DESC;
+```
+
+Esperado: `asr_status = 'na_fila'`, `tem_objeto = t` e `mime_type` preenchido
+(`audio/webm;codecs=opus` no Chrome, `audio/mp4` no Safari). `mime_type` nulo
+numa linha recém-criada é regressão da `0155` — pare e investigue.
+`asr_status` parado em `nao_solicitado` é upload que não confirmou: o blob não
+chegou ao MinIO, e o clipe nunca será reservado.
+
+4. **Ver o tick pegar.** O app enfileira o job dentro da mesma transação que
+   promove a linha, então **não espere o cron**: em segundos o log do
+   `asr-agendador` deve mostrar `queue.asr.tick-iniciando` e, ao fim,
+   `queue.asr.tick-concluido` com `processados: 1`. Repetindo a consulta do
+   passo 3, o `asr_status` passa por `transcrevendo` e chega a `transcrito`.
+
+   Com o modelo `small` medido no §2 (0,32x tempo real), 30 s de áudio ficam
+   em ~10 s de inferência; some fila e rede e espere **até ~1 min**.
+
+5. **Conferir o texto ANTES de aceitar.** Esta ordem importa:
+
+```sql
+SELECT asr_status, transcrito_em, left(transcricao_texto, 120) AS trecho
+  FROM audio_capture
+ WHERE id = 'ID-DO-PASSO-3';
+```
+
+`aceitarTranscricaoLote` **apaga `transcricao_texto` no mesmo statement em
+que devolve o texto** (T25, R19, decisão C de 31/08/2026 — a transcrição é
+efêmera e quem sobrevive é a `session_note`). Se você aceitar primeiro,
+esta consulta volta vazia e não dá para distinguir "funcionou e foi
+consumido" de "transcreveu vazio".
+
+6. **Aceitar na UI** e confirmar que os parágrafos entram no rascunho da nota
+   de sessão. Rodando a consulta do passo 5 de novo, `transcricao_texto` deve
+   estar **nulo** — é assim que se prova que o expurgo do aceite funcionou.
+
+### 6.3 Oráculo de aceite
+
+O smoke fecha quando **todos** valem:
+
+- [ ] `mime_type` gravado na linha (não nulo);
+- [ ] a linha percorreu `na_fila → transcrevendo → transcrito`, com
+      `tentativas = 1` e `reversoes = 0` (mais que isso significa que houve
+      recusa do serviço no caminho — anote, não ignore);
+- [ ] `transcricao_texto` **contém as palavras que você falou** e **não**
+      começa com `[transcrição stub —`;
+- [ ] o texto aparece no rascunho da nota na UI;
+- [ ] depois do aceite, `transcricao_texto IS NULL`;
+- [ ] o objeto sumiu do bucket efêmero — o log do `asr-sweeper` no ciclo
+      seguinte não deve reclamar da chave, e não há linha nova em resgate:
+
+```sql
+SELECT count(*) FROM audio_capture
+ WHERE asr_status = 'falhou' AND objeto_ref IS NOT NULL;
+```
+
+### 6.4 Se travar
+
+A tabela de incidentes do §4 cobre o serviço `iris-asr`. O que é específico
+deste smoke:
+
+| Sintoma                                                            | Onde olhar                                                                                                                                             |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Texto começa com `[transcrição stub —`                             | `ASR_PROVIDER` não é `self-hosted` no `App` (§6.1, passo 1). Nada do pipeline real rodou.                                                              |
+| Linha fica em `nao_solicitado`                                     | Upload ao MinIO não confirmou. `ASR_S3_*` no `App` — e confira o **hífen** no Host (§1.5).                                                             |
+| Linha fica em `na_fila`, `tick-concluido` com `processados: 0`     | A reserva não devolveu a linha: ou falta `objeto_ref`, ou o `EXECUTE` da role (§1.2), ou `ASR_WORKER_DATABASE_URL` não foi aplicada com **Implantar**. |
+| `reversoes` subindo, `tentativas` parado                           | Recusa de INFRAESTRUTURA classificada como `saturacao` (§0): token divergente, URL errada ou proxy. Não é culpa do clipe — leia o log do `iris-asr`.   |
+| `tentativas` chega a 3 e vira `falhou` com `objeto_ref` preservado | Falha de aplicação (408/500). O áudio está na janela de resgate (§1.4) e a UI oferece reenviar — use isso em vez de regravar.                          |
+| Nada acontece e o heartbeat `asr` parou de avançar                 | O `asr-agendador` caiu. Log do serviço; depois `job_heartbeat.ultimo_erro`/`detalhe`.                                                                  |
+
+### 6.5 Rollback
+
+`FEATURE_FLAG_ASR_ENABLED=false` + **`Implantar`**. A flag é lida por função a
+cada chamada (`src/lib/flags.ts`), então nenhum valor fica congelado no bundle.
+
+O que o rollback **não** desfaz: clipe já em `na_fila` continua sendo
+processado pelo worker (a rota do job não consulta a flag — quem consulta é a
+ação da UI). Isso é desejado: desligar a flag no meio de um lote não deve
+deixar áudio de paciente órfão no bucket. Se precisar drenar antes de
+desligar, espere a consulta do passo 3 mostrar `transcrito`/`falhou` para
+todas as linhas recentes.
+
+### 6.6 Registrar o resultado — e a pergunta que substitui o `INTERVALO_S`
+
+Escreva no `BACKLOG.md` (seção `🏁 Sessão …`): o que foi medido, com números, e
+o horário. Inclusive se falhou — principalmente se falhou.
+
+A revisão de cadência que a #500 pediu como "`INTERVALO_S` (hoje 20s)" precisa
+ser **reformulada** antes de ser respondida, porque o botão mudou de natureza
+com a D73: o cron **deixou de ser o caminho de latência** (o app enfileira o
+tick na própria transação que promove os clipes). O `CRON_TICK_ASR` de 1 min
+hoje é rede de segurança, e a única régua real que ele precisa respeitar é
+ficar **muito abaixo dos 30 min** do alarme de heartbeat. A pergunta a medir
+depois do piloto é outra:
+
+- clipes/dia e clipes por lote observados;
+- tempo entre `criado_em` e `transcrito_em` (latência ponta a ponta real);
+- quantos ticks fecharam com `processados: 0` (cron girando à toa).
+
+```sql
+SELECT date_trunc('day', criado_em) AS dia,
+       count(*) AS clipes,
+       percentile_cont(0.5) WITHIN GROUP (ORDER BY transcrito_em - criado_em) AS mediana,
+       max(transcrito_em - criado_em) AS pior
+  FROM audio_capture
+ WHERE asr_status = 'transcrito' AND transcrito_em IS NOT NULL
+ GROUP BY 1 ORDER BY 1 DESC;
+```
+
+Se a mediana ficar bem abaixo de 1 min, o cron está fazendo o que devia (nada,
+quase sempre) e não há o que ajustar. Quem precisa de revisão sob volume é o
+teto de concorrência do serviço (`ASR_MAX_CONCORRENTES`, §1.3), não a cadência.
