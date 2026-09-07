@@ -70,6 +70,17 @@ readonly TAG_APP="iris-app-ci:local"
 readonly TAG_MIGRATE="iris-migrate-ci:local"
 readonly NOME_CONTAINER_APP="iris-app-carga-ci"
 
+# Imagens DERIVADAS, com um /run/secrets/env de mentira assado dentro. Existem
+# para exercitar o item 5 da #93 — segredo de runtime por ARQUIVO em vez da aba
+# `Ambiente` do Easypanel — sem depender de bind mount: `-v <host>:<container>`
+# não se comporta igual no runner Linux e no Docker Desktop do Windows (o mesmo
+# motivo que levou o teste do migrate a usar `--add-host ...:host-gateway` em
+# vez de `--network host`). Assar num layer descartável roda igual nos dois.
+readonly TAG_APP_SEGREDO="iris-app-segredo-ci:local"
+readonly TAG_MIGRATE_SEGREDO="iris-migrate-segredo-ci:local"
+readonly NOME_CONTAINER_APP_SEGREDO="iris-app-carga-segredo-ci"
+readonly CAMINHO_SEGREDO="/run/secrets/env"
+
 PORTA_CARGA_APP="${PORTA_CARGA_APP:-3999}"
 TIMEOUT_BOOT_S="${TIMEOUT_BOOT_S:-15}"
 
@@ -150,8 +161,88 @@ esperar_falha_com() {
 	log_ok "${rotulo} (exit ${rc}, guarda esperada)"
 }
 
+# esperar_falha_sem <rótulo> <trecho-que-NÃO-pode-aparecer> -- <comando...>
+#
+# Espelho do `esperar_falha_com`: usado quando o que se prova é o
+# DESAPARECIMENTO de um erro (a guarda de env do migrator, uma vez que a env
+# passou a vir do arquivo montado). Continua exigindo falha — o comando roda
+# contra um Postgres inexistente de propósito — mas por OUTRO motivo, e nunca
+# por módulo ausente.
+esperar_falha_sem() {
+	local rotulo="$1"
+	local proibido="$2"
+	shift 2
+	[[ "${1:-}" == "--" ]] && shift
+
+	local saida rc
+	set +e
+	saida="$("$@" 2>&1)"
+	rc=$?
+	set -e
+
+	if [[ ${rc} -eq 0 ]]; then
+		log_error "${rotulo}: saiu 0. Sem banco alcançável, o migrator TEM de falhar — exit 0 aqui significa que ele não chegou a tentar conectar."
+		printf '%s\n' "${saida}" | sed 's/^/    | /'
+		FALHAS=$((FALHAS + 1))
+		return
+	fi
+
+	local padrao
+	for padrao in "${PADROES_PROIBIDOS[@]}"; do
+		if [[ "${saida}" == *"${padrao}"* ]]; then
+			log_error "${rotulo}: saída contém \"${padrao}\" — arquivo ou dependência NÃO chegou na imagem."
+			printf '%s\n' "${saida}" | sed 's/^/    | /'
+			FALHAS=$((FALHAS + 1))
+			return
+		fi
+	done
+
+	if [[ "${saida}" == *"${proibido}"* ]]; then
+		log_error "${rotulo}: a saída AINDA contém \"${proibido}\" — o CMD não está lendo ${CAMINHO_SEGREDO}. Conferir a flag --env-file-if-exists no Dockerfile."
+		printf '%s\n' "${saida}" | sed 's/^/    | /'
+		FALHAS=$((FALHAS + 1))
+		return
+	fi
+
+	log_ok "${rotulo} (exit ${rc}, guarda de env já satisfeita pelo arquivo)"
+}
+
+# derivar_com_segredo <tag-base> <tag-derivada> <conteúdo> [usuário-final]
+#
+# Assa um CAMINHO_SEGREDO de mentira num layer descartável em cima da imagem
+# recém-construída. <conteúdo> separa linhas com `\n` LITERAL (barra + n), não
+# com quebra de verdade: o Dockerfile é montado como string e uma quebra viraria
+# instrução nova. Quem expande é o `printf %b` de dentro do RUN.
+#
+# `chmod 644`: o stage `runner` roda como `nextjs` (não-root) e é essa a
+# permissão que o infra/README.md manda usar no arquivo do host. Assar 600 aqui
+# esconderia justamente o modo de falha que a documentação previne.
+derivar_com_segredo() {
+	local base="$1"
+	local derivada="$2"
+	local conteudo="$3"
+	local usuario="${4:-}"
+
+	# Resolvido AQUI, não dentro do heredoc: o delimitador é sem aspas, então
+	# um `$(...)` lá dentro seria expandido pelo shell do HOST — funciona por
+	# acidente e quebra no dia em que o caminho mudar.
+	local dir_segredo
+	dir_segredo="$(dirname "${CAMINHO_SEGREDO}")"
+
+	local linha_usuario=""
+	[[ -n "${usuario}" ]] && linha_usuario="USER ${usuario}"
+
+	log_info "derivando ${derivada} a partir de ${base} (com ${CAMINHO_SEGREDO})..."
+	docker build -q -t "${derivada}" - >/dev/null <<-DOCKERFILE
+		FROM ${base}
+		USER root
+		RUN mkdir -p ${dir_segredo} && printf %b '${conteudo}' > ${CAMINHO_SEGREDO} && chmod 644 ${CAMINHO_SEGREDO}
+		${linha_usuario}
+	DOCKERFILE
+}
+
 derrubar_container_app() {
-	docker rm -f "${NOME_CONTAINER_APP}" >/dev/null 2>&1 || true
+	docker rm -f "${NOME_CONTAINER_APP}" "${NOME_CONTAINER_APP_SEGREDO}" >/dev/null 2>&1 || true
 }
 
 # buildar <caminho-do-dockerfile> <tag>
@@ -172,6 +263,94 @@ buildar() {
 	# Split intencional: ARGS_BUILD_EXTRA é uma LISTA de flags, não um argumento.
 	# shellcheck disable=SC2086
 	docker buildx build --load ${ARGS_BUILD_EXTRA:-} -f "${arquivo}" -t "${tag}" .
+}
+
+# boot_e_probe <rótulo> <tag> <nome-container> <porta-do-host> -- <args do docker run>
+#
+# Extraído de `carga_app` para rodar contra DUAS imagens: a normal e a
+# derivada com ${CAMINHO_SEGREDO} assado dentro (#93 item 5). Sem a extração, o
+# segundo boot seria uma cópia do primeiro — e cópia é onde a asserção envelhece
+# só de um lado.
+boot_e_probe() {
+	local rotulo="$1"
+	local tag="$2"
+	local nome="$3"
+	local porta="$4"
+	shift 4
+	[[ "${1:-}" == "--" ]] && shift
+
+	log_info "subindo ${nome} (${tag}) na porta ${porta} (teto de ${TIMEOUT_BOOT_S}s)..."
+	docker rm -f "${nome}" >/dev/null 2>&1 || true
+
+	# NÃO usar o `set -e` como oráculo de asserção aqui. Um `docker run` que morre
+	# ao alocar a porta do host tem de virar FALHA CONTABILIZADA em ${FALHAS} —
+	# não um abort de shell cujo status ainda depende do trap de limpeza que
+	# estiver instalado. Medido: a carga já saiu "verde" com o boot nunca tendo
+	# acontecido. Por isso o rc é capturado explicitamente logo abaixo.
+	local saida_run rc_run
+	set +e
+	saida_run="$(docker run -d --name "${nome}" -p "127.0.0.1:${porta}:3000" "$@" "${tag}" 2>&1)"
+	rc_run=$?
+	set -e
+	if [[ ${rc_run} -ne 0 ]]; then
+		log_error "${rotulo}: docker run falhou (exit ${rc_run}) — o container nem chegou a subir."
+		printf '%s\n' "${saida_run}" | sed 's/^/    | /'
+		FALHAS=$((FALHAS + 1))
+		return
+	fi
+
+	# `/termos` é `force-static`: foi prerenderizado no `pnpm build` DA IMAGEM e
+	# é servido do cache, sem tocar no Postgres. Um 200 aqui isola o que se quer
+	# medir — servidor de pé + assets do standalone no lugar — de qualquer
+	# indisponibilidade de banco. É também a rota que depende da cadeia de
+	# desexclusão de `docs/legal/` no `.dockerignore`.
+	local status=""
+	local inicio agora
+	inicio=$(date +%s)
+	while :; do
+		status="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${porta}/termos" || true)"
+		if [[ -n "${status}" && "${status}" != "000" ]]; then
+			break
+		fi
+
+		if ! docker inspect -f '{{.State.Running}}' "${nome}" 2>/dev/null | grep -q true; then
+			log_error "${rotulo}: o container MORREU antes de responder — é o boot quebrado (o modo de falha do @swc/helpers). Log:"
+			docker logs "${nome}" 2>&1 | sed 's/^/    | /'
+			FALHAS=$((FALHAS + 1))
+			return
+		fi
+
+		agora=$(date +%s)
+		if ((agora - inicio >= TIMEOUT_BOOT_S)); then
+			log_error "${rotulo}: sem resposta HTTP em ${TIMEOUT_BOOT_S}s. Log do container:"
+			docker logs "${nome}" 2>&1 | sed 's/^/    | /'
+			FALHAS=$((FALHAS + 1))
+			return
+		fi
+		sleep 1
+	done
+
+	if [[ "${status}" != "200" ]]; then
+		log_error "${rotulo}: /termos respondeu ${status} (esperado 200). É rota force-static, prerenderizada no build — status != 200 aponta para asset do standalone ausente ou para a cadeia de desexclusão de docs/legal/ no .dockerignore."
+		docker logs "${nome}" 2>&1 | sed 's/^/    | /'
+		FALHAS=$((FALHAS + 1))
+	else
+		log_ok "${rotulo}: boot + GET /termos = 200 em menos de ${TIMEOUT_BOOT_S}s"
+	fi
+
+	# O log do boot é lido À PARTE do status: o Next responde 200 em rota
+	# estática mesmo com um require quebrado em outro ponto do processo, e é
+	# justamente esse "verde por fora" que este bloco recusa.
+	local log_boot padrao
+	log_boot="$(docker logs "${nome}" 2>&1 || true)"
+	for padrao in "${PADROES_PROIBIDOS[@]}"; do
+		if [[ "${log_boot}" == *"${padrao}"* ]]; then
+			log_error "${rotulo}: log do boot contém \"${padrao}\" — módulo faltando na imagem, mesmo com o servidor respondendo."
+			printf '%s\n' "${log_boot}" | sed 's/^/    | /'
+			FALHAS=$((FALHAS + 1))
+			break
+		fi
+	done
 }
 
 # --- app (infra/Dockerfile) ---------------------------------------------------
@@ -207,71 +386,77 @@ carga_app() {
 	# conexão com o banco, mas uma guarda lida no import (CPF_HASH_SALT não tem
 	# fallback por design, ver src/lib/security/cpf-hash.ts) derrubaria o
 	# processo por um motivo que não é o que estamos medindo.
-	log_info "subindo ${NOME_CONTAINER_APP} na porta ${PORTA_CARGA_APP} (teto de ${TIMEOUT_BOOT_S}s)..."
+	# --- probe de BOOT --------------------------------------------------------
+	#
+	# É esta a asserção que os dois incidentes exigiam: subir o processo. As env
+	# abaixo são valores de teste, nunca usados fora de CI/dev.
+	#
+	# Este container NÃO tem ${CAMINHO_SEGREDO}: é o que prova a metade
+	# `-if-exists` da flag — arquivo AUSENTE não pode derrubar o boot, que é a
+	# situação do CI, do `infra/docker-compose.yml` e da máquina do dev.
 	derrubar_container_app
-	trap derrubar_container_app RETURN
+	# EXIT, e não RETURN: se o `set -e` abortar o script no meio de `carga_app`, o
+	# trap RETURN não é garantia de limpeza nenhuma (nas versões medidas ele nem
+	# chega a disparar) e, quando dispara, o `$?` da saída abortada ainda passa
+	# pelo corpo do trap, que termina em `|| true`. O EXIT roda em TODA saída —
+	# abortada ou não — e não sobrescreve o status do script. A limpeza é
+	# idempotente, então rodar mais de uma vez é inofensivo.
+	trap derrubar_container_app EXIT
 
-	docker run -d --name "${NOME_CONTAINER_APP}" \
-		-p "127.0.0.1:${PORTA_CARGA_APP}:3000" \
+	boot_e_probe "app" "${TAG_APP}" "${NOME_CONTAINER_APP}" "${PORTA_CARGA_APP}" -- \
 		-e NODE_ENV=production \
 		-e DATABASE_URL="postgres://carga:carga@127.0.0.1:5432/carga" \
 		-e AUTH_DATABASE_URL="postgres://carga:carga@127.0.0.1:5432/carga" \
 		-e BETTER_AUTH_SECRET="ci-carga-better-auth-secret-nao-usar-em-producao" \
-		-e CPF_HASH_SALT="ci-carga-salt-nao-usar-em-producao" \
-		"${TAG_APP}" >/dev/null
+		-e CPF_HASH_SALT="ci-carga-salt-nao-usar-em-producao"
 
-	# `/termos` é `force-static`: foi prerenderizado no `pnpm build` DA IMAGEM e
-	# é servido do cache, sem tocar no Postgres. Um 200 aqui isola o que se quer
-	# medir — servidor de pé + assets do standalone no lugar — de qualquer
-	# indisponibilidade de banco. É também a rota que depende da cadeia de
-	# desexclusão de `docs/legal/` no `.dockerignore`.
-	local status=""
-	local inicio agora
-	inicio=$(date +%s)
-	while :; do
-		status="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORTA_CARGA_APP}/termos" || true)"
-		if [[ -n "${status}" && "${status}" != "000" ]]; then
-			break
-		fi
+	# --- segredo de runtime por ARQUIVO (#93, item 5) -------------------------
+	#
+	# Na VPS os segredos sensíveis não moram mais na aba `Ambiente` do Easypanel
+	# (que os repassa como `--build-arg` e os imprime em texto plano no log de
+	# build): moram em /etc/iris/production.env no host, montado em
+	# ${CAMINHO_SEGREDO}. Três asserções, porque três coisas independentes podem
+	# quebrar.
 
-		if ! docker inspect -f '{{.State.Running}}' "${NOME_CONTAINER_APP}" 2>/dev/null | grep -q true; then
-			log_error "app: o container MORREU antes de responder — é o boot quebrado (o modo de falha do @swc/helpers). Log:"
-			docker logs "${NOME_CONTAINER_APP}" 2>&1 | sed 's/^/    | /'
-			FALHAS=$((FALHAS + 1))
-			return
-		fi
+	# (1) a flag na imagem CONSTRUÍDA, não no Dockerfile do repo. O teste
+	# estático de `scripts/segredo-por-arquivo.test.mjs` lê o arquivo do repo;
+	# este lê o `Config.Cmd` da imagem que o deploy vai rodar.
+	esperar_sucesso \
+		"app: CMD da imagem CONSTRUÍDA carrega --env-file-if-exists=${CAMINHO_SEGREDO}" \
+		-- bash -c "docker inspect -f '{{json .Config.Cmd}}' '${TAG_APP}' | grep -q -- '--env-file-if-exists=${CAMINHO_SEGREDO}'"
 
-		agora=$(date +%s)
-		if ((agora - inicio >= TIMEOUT_BOOT_S)); then
-			log_error "app: sem resposta HTTP em ${TIMEOUT_BOOT_S}s. Log do container:"
-			docker logs "${NOME_CONTAINER_APP}" 2>&1 | sed 's/^/    | /'
-			FALHAS=$((FALHAS + 1))
-			return
-		fi
-		sleep 1
-	done
+	derivar_com_segredo "${TAG_APP}" "${TAG_APP_SEGREDO}" \
+		'SEGREDO_MONTADO_CARGA="valor-vindo-do-arquivo"\nCPF_HASH_SALT="ci-carga-salt-nao-usar-em-producao"\nDATABASE_URL="postgres://carga:carga@127.0.0.1:5432/carga"\nAUTH_DATABASE_URL="postgres://carga:carga@127.0.0.1:5432/carga"\nBETTER_AUTH_SECRET="ci-carga-better-auth-secret-nao-usar-em-producao"\n' nextjs
 
-	if [[ "${status}" != "200" ]]; then
-		log_error "app: /termos respondeu ${status} (esperado 200). É rota force-static, prerenderizada no build — status != 200 aponta para asset do standalone ausente ou para a cadeia de desexclusão de docs/legal/ no .dockerignore."
-		docker logs "${NOME_CONTAINER_APP}" 2>&1 | sed 's/^/    | /'
-		FALHAS=$((FALHAS + 1))
-	else
-		log_ok "app: boot + GET /termos = 200 em menos de ${TIMEOUT_BOOT_S}s"
-	fi
+	# (2) o Node do runner é `node:22-slim` (glibc) — base DIFERENTE da do
+	# migrate (`node:22-alpine`). Ler o arquivo aqui, já como `nextjs`, prova a
+	# flag NESTA base e prova que um não-root enxerga o arquivo `chmod 644` que
+	# o infra/README.md manda criar no host. Medido, não suposto.
+	esperar_sucesso \
+		"app: node:22-slim lê ${CAMINHO_SEGREDO} como usuário não-root" \
+		-- docker run --rm --entrypoint node "${TAG_APP_SEGREDO}" \
+		"--env-file-if-exists=${CAMINHO_SEGREDO}" -e \
+		'if (process.env.SEGREDO_MONTADO_CARGA !== "valor-vindo-do-arquivo") { console.error("nao leu o arquivo montado:", process.env.SEGREDO_MONTADO_CARGA); process.exit(1) }'
 
-	# O log do boot é lido À PARTE do status: o Next responde 200 em rota
-	# estática mesmo com um require quebrado em outro ponto do processo, e é
-	# justamente esse "verde por fora" que este bloco recusa.
-	local log_boot padrao
-	log_boot="$(docker logs "${NOME_CONTAINER_APP}" 2>&1 || true)"
-	for padrao in "${PADROES_PROIBIDOS[@]}"; do
-		if [[ "${log_boot}" == *"${padrao}"* ]]; then
-			log_error "app: log do boot contém \"${padrao}\" — módulo faltando na imagem, mesmo com o servidor respondendo."
-			printf '%s\n' "${log_boot}" | sed 's/^/    | /'
-			FALHAS=$((FALHAS + 1))
-			break
-		fi
-	done
+	# (3) e o boot REAL, pelo CMD de verdade, com o arquivo presente: NENHUMA
+	# env pelo `-e` além de NODE_ENV. Um parse que abortasse, ou um EACCES do
+	# não-root, mata o processo aqui — que é exatamente como isso apareceria em
+	# produção, onde o arquivo existe.
+	# Derruba o primeiro container ANTES de subir o segundo, para reusar a MESMA
+	# porta. A alternativa (`PORTA_CARGA_APP + 1`) inventa uma porta que ninguém
+	# configurou: no Windows ela caiu numa faixa reservada pelo Hyper-V e o
+	# `docker run` morreu em "failed programming external connectivity" — medido.
+	# Porta configurável é contrato; porta+1 é chute.
+	docker rm -f "${NOME_CONTAINER_APP}" >/dev/null 2>&1 || true
+
+	boot_e_probe "app (segredo montado)" "${TAG_APP_SEGREDO}" "${NOME_CONTAINER_APP_SEGREDO}" "${PORTA_CARGA_APP}" -- \
+		-e NODE_ENV=production
+
+	# Limpeza do caminho FELIZ. O trap EXIT só roda no fim do script: no alvo
+	# `todos` isso deixaria os containers do app de pé durante toda a
+	# `carga_migrate`, gastando memória do runner à toa. O trap segue sendo a
+	# rede de segurança do caminho ABORTADO.
+	derrubar_container_app
 }
 
 # --- migrate (infra/Dockerfile.migrate) --------------------------------------
@@ -314,6 +499,24 @@ carga_migrate() {
 	else
 		log_info "MIGRATION_DATABASE_URL_CARGA não definida — pulando a execução real do migrator (só a carga foi exercitada)."
 	fi
+
+	# --- segredo de runtime por ARQUIVO (#93, item 5) -------------------------
+	#
+	# Aqui a prova é END-TO-END e não depende de inspecionar nada:
+	# `MIGRATION_DATABASE_URL` NÃO é passada por `-e`, só existe dentro de
+	# ${CAMINHO_SEGREDO}. Se o CMD perder a flag, o programa volta a morrer na
+	# guarda de env — e é a AUSÊNCIA dessa mensagem que se exige aqui.
+	#
+	# A porta 1 é inalcançável de propósito: o migrator TEM de falhar, só que na
+	# CONEXÃO, não na guarda. Não se casa o texto do erro de conexão (varia com a
+	# versão do driver); casa-se o que a saída não pode mais conter.
+	derivar_com_segredo "${TAG_MIGRATE}" "${TAG_MIGRATE_SEGREDO}" \
+		'MIGRATION_DATABASE_URL="postgres://carga:carga@127.0.0.1:1/carga"\n'
+
+	esperar_falha_sem \
+		"migrate: CMD lê MIGRATION_DATABASE_URL de ${CAMINHO_SEGREDO} (a guarda de env não dispara mais)" \
+		"MIGRATION_DATABASE_URL (ou DATABASE_URL em dev) não definida" \
+		-- docker run --rm "${TAG_MIGRATE_SEGREDO}"
 }
 
 # --- main --------------------------------------------------------------------

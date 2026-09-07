@@ -86,7 +86,17 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./
 COPY scripts/migrate.mjs ./scripts/migrate.mjs
 COPY db/migrations ./db/migrations
-CMD ["node", "scripts/migrate.mjs"]
+# `--env-file-if-exists`: os segredos de RUNTIME entram por ARQUIVO montado em
+# /run/secrets/env — nunca pela aba `Ambiente` do Easypanel, que repassa toda
+# env var como `--build-arg` do `docker build` e a imprime em TEXTO PLANO no
+# log de build guardado no painel (#93; infra/README.md §"CRÍTICO — o log de
+# build do Easypanel contém TODOS os segredos em texto plano").
+#
+# Flag nativa do Node (>= 20.6/22): se o caminho NÃO existir — CI, docker
+# compose local, `docker run` sem `-v` — o Node segue com `process.env` e sem
+# aviso. E variável já presente no ambiente VENCE a do arquivo, então quem
+# ainda estiver com o segredo na aba `Ambiente` não quebra na virada.
+CMD ["node", "--env-file-if-exists=/run/secrets/env", "scripts/migrate.mjs"]
 
 # --- runner: imagem final ------------------------------------------------------
 # Base trocada de node:22-alpine (musl) p/ node:22-slim (glibc/Debian): o
@@ -136,4 +146,18 @@ RUN --mount=type=cache,id=npm-store,target=/root/.npm \
 
 USER nextjs
 EXPOSE 3000
-CMD ["node", "server.js"]
+# `--env-file-if-exists`: os segredos de RUNTIME entram por ARQUIVO montado em
+# /run/secrets/env — nunca pela aba `Ambiente` do Easypanel, que repassa toda
+# env var como `--build-arg` do `docker build` e a imprime em TEXTO PLANO no
+# log de build guardado no painel (#93; infra/README.md §"CRÍTICO — o log de
+# build do Easypanel contém TODOS os segredos em texto plano").
+#
+# Flag nativa do Node (>= 20.6/22): se o caminho NÃO existir — CI, docker
+# compose local, `docker run` sem `-v` — o Node segue com `process.env` e sem
+# aviso. E variável já presente no ambiente VENCE a do arquivo, então quem
+# ainda estiver com o segredo na aba `Ambiente` não quebra na virada.
+#
+# Este stage roda como `nextjs` (não-root): o arquivo no HOST precisa estar
+# `chmod 644`. A tolerância da flag é a arquivo AUSENTE; arquivo presente e
+# ilegível é outro caso — ver infra/README.md §"Segredos de runtime".
+CMD ["node", "--env-file-if-exists=/run/secrets/env", "server.js"]
