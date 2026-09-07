@@ -20,6 +20,11 @@ import type {
  * Rodar isto contra Postgres real trocaria o dublê — que é justamente o
  * instrumento que mede a ORDEM — por dados, e a ordem sumiria da medição.
  *
+ * Com UMA exceção, e foi ela que produziu a #609: a rota grava o heartbeat do
+ * job, e isso é escrita no banco feita pela própria rota. Enquanto essa linha
+ * rodou de verdade aqui, este arquivo era unitário só no nome — o veredito
+ * dependia da latência do Postgres local. Ela é dublada logo abaixo.
+ *
  * ## A ordem é a asserção central (D-1 da #319)
  *
  * `cancelarAssinaturasComCarenciaVencida` roda DEPOIS de `fecharCiclosVencendo`
@@ -59,8 +64,27 @@ const dubles = vi.hoisted(() => ({
   comandarRetentativasPendentes: vi.fn(),
 }));
 
+/**
+ * #609 — `registrarHeartbeat` roda `sql\`SELECT app_job_heartbeat_gravar(…)\``
+ * contra o Postgres de verdade (`@/db/client`). Sem este dublê, 26 dos 32
+ * testes deste arquivo abriam conexão TCP com o banco local, e o veredito
+ * passava a depender da latência dele: com o banco inalcançável a passada mede
+ * 26 falhas por `Test timed out in 5000ms`, e sob carga o mesmo estouro aparece
+ * em testes que variam de execução para execução — o pisca relatado na #609.
+ *
+ * O dublê é do MÓDULO, não da conexão: `detalheSemPii` e `detalheDoErro` seguem
+ * reais (são puros e não tocam banco) porque é o texto que eles produzem que
+ * este arquivo afirma no `detalhe` do heartbeat. Trocá-los por dublê mediria o
+ * dublê.
+ */
+const heartbeat = vi.hoisted(() => ({ registrarHeartbeat: vi.fn() }));
+
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/billing/subscription", () => dubles);
+vi.mock("@/lib/jobs/heartbeat", async (original) => ({
+  ...(await original<typeof import("@/lib/jobs/heartbeat")>()),
+  registrarHeartbeat: heartbeat.registrarHeartbeat,
+}));
 
 const { POST } = await import("./route");
 
@@ -163,6 +187,9 @@ beforeEach(() => {
   dubles.cancelarAssinaturasComCarenciaVencida.mockResolvedValue([]);
   dubles.aplicarBackstopDePrazo.mockResolvedValue([]);
   dubles.comandarRetentativasPendentes.mockResolvedValue([]);
+  // O contrato real: `registrarHeartbeat` NUNCA lança (o próprio módulo engole
+  // a falha e devolve `false`). O dublê resolve para manter esse contrato.
+  heartbeat.registrarHeartbeat.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -608,6 +635,81 @@ describe("POST /api/internal/billing/fechar-ciclos — corpo da resposta", () =>
     const corpo = await (await POST(requisicao())).json();
 
     expect(corpo.carenciaTruncado).toBe(true);
+  });
+});
+
+/**
+ * #609 — o heartbeat era EXECUTADO por todos os testes deste arquivo (contra o
+ * banco de verdade) e AFIRMADO por nenhum. Executar não é medir: a chamada
+ * podia sumir da rota inteira sem um teste ficar vermelho, e o que ela deixaria
+ * de existir é o sinal de vida que o `scripts/alarme-jobs.mjs` lê para saber se
+ * o faturamento do dia rodou — cuja ausência é, por desenho, o próprio alarme.
+ * Com o dublê no lugar, o contrato vira asserção.
+ */
+describe("POST /api/internal/billing/fechar-ciclos — heartbeat (#536)", () => {
+  it("grava `ok: true` com as contagens quando a passada inteira correu", async () => {
+    dubles.fecharCiclosVencendo.mockResolvedValue([fechamento(), fechamento()]);
+
+    await POST(requisicao());
+
+    expect(heartbeat.registrarHeartbeat).toHaveBeenCalledTimes(1);
+    expect(heartbeat.registrarHeartbeat).toHaveBeenCalledWith(
+      "billing",
+      true,
+      // `detalheSemPii` é o real: só número e booleano chegam ao banco, nunca
+      // `clinicId` nem `valorCentavos`.
+      "ciclosFechados=2 comErro=0 etapaAbortou=false",
+    );
+  });
+
+  it("grava `ok: false` quando uma etapa abortou, sem derrubar a gravação", async () => {
+    // O sinal precisa distinguir "faturou limpo" de "faturou e uma varredura
+    // caiu": são reações opostas do operador, e o alarme só enxerga este bit.
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    dubles.fecharCiclosVencendo.mockResolvedValue([fechamento()]);
+    dubles.cancelarAssinaturasComCarenciaVencida.mockRejectedValue(
+      new Error("timeout ao revogar vínculo"),
+    );
+
+    await POST(requisicao());
+
+    expect(heartbeat.registrarHeartbeat).toHaveBeenCalledWith(
+      "billing",
+      false,
+      "ciclosFechados=1 comErro=0 etapaAbortou=true",
+    );
+  });
+
+  it("grava `ok: false` também quando a passada aborta inteira (500)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    dubles.fecharCiclosVencendo.mockRejectedValue(
+      new Error("connection terminated unexpectedly"),
+    );
+
+    const resposta = await POST(requisicao());
+
+    expect(resposta.status).toBe(500);
+    // `detalheDoErro` real: classe do erro e SQLSTATE, nunca a `message` (que
+    // num `DrizzleQueryError` é o SQL com os params).
+    expect(heartbeat.registrarHeartbeat).toHaveBeenCalledWith(
+      "billing",
+      false,
+      "erro=Error",
+    );
+  });
+
+  it("NÃO grava heartbeat em dry-run", async () => {
+    // Um ensaio que carimbasse sinal de vida faria um job PARADO parecer vivo
+    // para o detector — exatamente o alarme que ele existe para disparar.
+    await POST(requisicao({ corpo: JSON.stringify({ dryRun: true }) }));
+
+    expect(heartbeat.registrarHeartbeat).not.toHaveBeenCalled();
+  });
+
+  it("uma passada recusada na autorização não carimba sinal de vida", async () => {
+    await POST(requisicao({ authorization: null }));
+
+    expect(heartbeat.registrarHeartbeat).not.toHaveBeenCalled();
   });
 });
 
