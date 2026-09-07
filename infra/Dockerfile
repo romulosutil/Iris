@@ -132,11 +132,26 @@ COPY --from=build --chown=nextjs:nodejs /app/scripts/seed-local.js ./scripts/see
 # resolve primeiro por estar mais perto na cadeia de node_modules.
 # --with-deps instala só as libs de sistema do Chromium (não baixa
 # firefox/webkit), mantendo a imagem enxuta.
+#
+# PONTO ÚNICO da versão. Como este RUN SUBSTITUI o playwright traçado, é ESTE
+# número — e não o do package.json — que renderiza PDF em produção, junto com
+# o Chromium que o `playwright install` baixa para ele. Escrito à mão, diverge
+# do lockfile em silêncio (CI verde, produção rodando outra biblioteca).
+# O guard `scripts/versao-playwright-dockerfile.test.mjs` roda no `pnpm test` e
+# falha se este número não for igual ao que o pnpm-lock.yaml resolve para a
+# dependência de produção `playwright`. Ao atualizar o Playwright:
+# `package.json` + `pnpm-lock.yaml` + esta linha na mesma mudança.
+#
+# POR QUE LITERAL E NÃO `ARG PLAYWRIGHT_VERSION=…`: o Easypanel repassa **toda**
+# env var do serviço como `--build-arg` (infra/README.md §"o log de build
+# contém TODOS os segredos"). Uma env var de painel com o nome do ARG
+# sobrescreveria o pino sem deixar rastro no repositório — e o guard, que lê
+# este arquivo, continuaria verde. O literal não tem essa superfície.
 RUN --mount=type=cache,id=npm-store,target=/root/.npm \
     mkdir -p /opt/playwright \
     && cd /opt/playwright \
     && npm init -y >/dev/null \
-    && npm install --no-save playwright@1.61.1 \
+    && npm install --no-save playwright@1.62.1 \
     && npx playwright install --with-deps chromium \
     && rm -rf /app/node_modules/playwright /app/node_modules/playwright-core \
     && cp -r /opt/playwright/node_modules/playwright /app/node_modules/playwright \
