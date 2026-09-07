@@ -6,7 +6,7 @@
 # listada à mão abaixo. Se faltar algo aqui, o boot morre em produção com CI
 # verde — igual ao #156 do motor de escalonamento.
 #
-FROM python:3.12-slim
+FROM python:3.12-slim AS deps
 
 # ffmpeg: faster-whisper decodifica o áudio via ffmpeg no PATH, não embutido
 # no wheel. build-essential: alguns wheels de ctranslate2/faster-whisper não
@@ -28,6 +28,25 @@ RUN pip install --no-cache-dir -r requirements.txt \
 	# trixie e `objcopy` não tem flag equivalente — script Python zera o
 	# bit direto no ELF (clear_execstack.py).
 	&& find /usr/local/lib/python3.12/site-packages -name '*.so*' -exec python3 clear_execstack.py {} +
+
+# ─── Estágio `carga`: folha, existe SÓ para o teste de CI ───────────────────
+#
+# NÃO entra na imagem de produção. É um ramo LATERAL de `deps`: `runtime`
+# abaixo parte de `deps`, não daqui, então um `docker build` sem `--target`
+# nem constrói este estágio (BuildKit só resolve o alvo pedido) e o cache das
+# camadas de produção não muda.
+#
+# Por que existe: `scripts/ci/carga-imagens-infra.sh` precisa do `servidor.py`
+# DENTRO de uma imagem que NÃO tem o modelo baixado, para checar o grafo de
+# imports do arquivo sem pagar os ~500 MB do HuggingFace no runner. Copiar o
+# `servidor.py` aqui em vez de antes do download do modelo é de propósito: se
+# ele fosse copiado antes, toda edição no arquivo invalidaria a camada do
+# download e o build de produção rebaixaria o modelo inteiro.
+FROM deps AS carga
+COPY infra/asr/servidor.py ./servidor.py
+
+# ─── Estágio `runtime`: a imagem que vai para produção ──────────────────────
+FROM deps AS runtime
 
 # ARG, não ENV: entra só no build, decide qual modelo baixar agora. Em
 # runtime o container lê ASR_MODEL_SIZE (env real, setado no Easypanel) para

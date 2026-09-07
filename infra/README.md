@@ -763,12 +763,34 @@ carrega o código lá dentro** em vez de inspecionar o Dockerfile. Roda no CI
 (`.github/workflows/carga-imagens-infra.yml`) e igual na sua máquina:
 
 ```bash
-scripts/ci/carga-imagens-infra.sh                 # os cinco serviços
+scripts/ci/carga-imagens-infra.sh                 # todos os serviços
 scripts/ci/carga-imagens-infra.sh escalonamento   # só um
 scripts/ci/carga-imagens-infra.sh billing         # só a imagem do job de faturamento
 scripts/ci/carga-imagens-infra.sh retencao        # só a imagem do aviso prévio de expurgo
 scripts/ci/carga-imagens-infra.sh alarme          # só a imagem do detector de alarme
+scripts/ci/carga-imagens-infra.sh asr             # as DUAS imagens do ditado de voz
 ```
+
+O alvo `asr` é o único que constrói **duas** imagens e o único que não é
+Node: `infra/asr/Dockerfile` (Python/faster-whisper, o serviço que transcreve)
+e `infra/asr/Dockerfile.agendador` (Node, consumidor da fila + sweeper de
+órfãos). O ponto cego da primeira não é `COPY`, é o **grafo do pip** — `requests`
+está pinado em `infra/asr/requirements.txt` por causa de uma quebra de build
+REAL (`ModuleNotFoundError: No module named 'requests'`, medida no log do
+Easypanel em 31/08/2026, quando `huggingface_hub` parou de puxar `requests`), e
+nenhum comando do repo olha uma linha de Python.
+
+⚠️ **O build do `asr` é `--target carga`, e para ANTES do download do modelo.**
+`infra/asr/Dockerfile` tem um estágio-folha `carga` (ramo lateral de `deps`;
+`runtime` parte de `deps`, não dele — um `docker build` sem `--target` nem o
+constrói). Ele **prova** que o `pip install` resolve um ambiente em que
+`from faster_whisper import WhisperModel` executa, que `ffmpeg` está no PATH e
+que todo import de `servidor.py` carrega dentro da imagem. Ele **não prova** o
+`RUN` que baixa o modelo do HuggingFace na build, nem a garantia de boot offline
+do `RUN --network=none` logo abaixo dele, nem que o ARG `ASR_MODEL_SIZE` casa
+com a env do Easypanel — pagar ~500 MB de download por PR não provaria mais nada
+sobre o grafo de dependências. Essas três continuam verificadas só no build real
+do Easypanel e no runbook do T06.
 
 `infra/retencao/Dockerfile` (#352) entra pelo motivo **original** — `COPY` à mão
 mais `npm install postgres` à mão, sem enxergar o `node_modules` do repo. O que

@@ -45,6 +45,7 @@
 #   scripts/ci/carga-imagens-infra.sh exportacao
 #   scripts/ci/carga-imagens-infra.sh arquivamento
 #   scripts/ci/carga-imagens-infra.sh expurgo-audit-log
+#   scripts/ci/carga-imagens-infra.sh asr
 #
 # Roda igual no CI e na máquina do dev — de propósito. Um teste que só existe
 # no workflow é um teste que ninguém roda antes de abrir o PR.
@@ -71,6 +72,8 @@ readonly TAG_ALARME="iris-alarme-ci:local"
 readonly TAG_EXPORTACAO="iris-exportacao-ci:local"
 readonly TAG_ARQUIVAMENTO="iris-arquivamento-ci:local"
 readonly TAG_EXPURGO_AUDIT_LOG="iris-expurgo-audit-log-ci:local"
+readonly TAG_ASR_CARGA="iris-asr-carga-ci:local"
+readonly TAG_ASR_AGENDADOR="iris-asr-agendador-ci:local"
 
 log_info() { printf '[carga-imagens] %s\n' "$*"; }
 log_ok() { printf '[carga-imagens] OK: %s\n' "$*"; }
@@ -814,6 +817,185 @@ carga_expurgo_audit_log() {
 		-- docker run --rm "${TAG_EXPURGO_AUDIT_LOG}" /app/agendador.sh
 }
 
+# --- asr ----------------------------------------------------------------------
+# Ditado de voz self-hosted (#72). SÃO DUAS IMAGENS, com pontos cegos
+# diferentes, e nenhuma das duas era construída por CI nenhum até aqui —
+# `infra/asr/**` nunca entrou no `paths` do workflow (mesmo buraco que o D64
+# fechou para `arquivamento` e que o comentário do workflow já registrava para
+# `alarme`).
+#
+# 1) infra/asr/Dockerfile — Python, faster-whisper. O ponto cego aqui NÃO é
+#    COPY de arquivo: é o GRAFO DO PIP. `requests` está pinado em
+#    infra/asr/requirements.txt por causa de uma quebra REAL de build, medida
+#    no log do Easypanel em 31/08/2026: uma resolução mais nova trouxe um
+#    `huggingface_hub` que parou de puxar `requests`, `faster_whisper.utils`
+#    importa `requests` direto, e o build morreu com
+#    `ModuleNotFoundError: No module named 'requests'`. Nenhum comando do repo
+#    (`pnpm test`, `typecheck`, `lint`) olha uma linha de Python — o PR do
+#    dependabot que mexesse nesse pin ficava 100% verde sem a imagem ser
+#    construída uma única vez.
+#
+# 2) infra/asr/Dockerfile.agendador — Node, molde infra/billing/. Ponto cego
+#    clássico da #126/#156: COPY arquivo a arquivo + `npm install` à mão, numa
+#    imagem que NÃO enxerga o node_modules do repo, mais um estágio esbuild que
+#    transpila `scripts/queue-worker.ts`. Se o consumidor da fila subir
+#    quebrado, o clipe fica `na_fila` para sempre: a UI mostra "processando" e
+#    o profissional perde o ditado sem nada ficar vermelho.
+#
+# ⚠️ O QUE A CARGA DO (1) PROVA E O QUE ELA **NÃO** PROVA
+#
+# O build é `--target carga`, um estágio LATERAL de `deps` (ver
+# infra/asr/Dockerfile). Ele para ANTES do `RUN python -c "... WhisperModel"`
+# que baixa o modelo do HuggingFace na build, de propósito: o modelo `small`
+# são ~500 MB de download por execução, e pagá-los em todo PR que toca
+# `scripts/**` estouraria tempo e banda do runner sem provar mais nada sobre o
+# grafo de dependências.
+#
+#   PROVA: que o `pip install -r requirements.txt` resolve um ambiente em que
+#   `from faster_whisper import WhisperModel` EXECUTA (é exatamente onde o
+#   `requests` ausente aparece), que `ffmpeg` está no PATH, e que todo módulo
+#   importado por `servidor.py` carrega dentro da imagem.
+#
+#   NÃO PROVA: que o download do modelo na build funciona
+#   (`infra/asr/Dockerfile`, `RUN python -c "... WhisperModel(...)"`), nem a
+#   garantia de boot sem rede do `RUN --network=none` logo abaixo dele, nem que
+#   o ARG `ASR_MODEL_SIZE` do build casa com a env do Easypanel. Essas três
+#   continuam sendo verificadas só no build real do Easypanel e no runbook do
+#   T06 — se um dia quebrarem, não é aqui que vai aparecer.
+carga_asr() {
+	log_info "buildando ${TAG_ASR_CARGA} (--target carga: sem o download do modelo)..."
+	docker build -f infra/asr/Dockerfile --target carga -t "${TAG_ASR_CARGA}" .
+
+	# A ASSERÇÃO CENTRAL desta imagem. `from faster_whisper import ...` não é
+	# `find_spec`: executa o `__init__.py` do pacote, que é onde uma
+	# dependência transitiva ausente estoura. Remover `requests` de
+	# requirements.txt tem que deixar ESTA linha vermelha — foi o teste de
+	# mutação que validou esta carga.
+	#
+	# `--network=none`: sem rede o Python não tem como mascarar um pacote
+	# faltando, e o import não pode "funcionar" por acidente de rede.
+	esperar_sucesso \
+		"asr: faster_whisper CARREGA na imagem (grafo do pip completo, sem rede)" \
+		-- docker run --rm --network=none "${TAG_ASR_CARGA}" \
+		python -c "from faster_whisper import WhisperModel"
+
+	# faster-whisper decodifica áudio chamando o binário `ffmpeg` do PATH, não
+	# um decoder embutido no wheel. Sem ele o serviço sobe, responde /saude e
+	# falha em TODA transcrição — o modo de falha mudo que este arquivo existe
+	# para pegar.
+	esperar_sucesso \
+		"asr: ffmpeg no PATH (decodificação do clipe)" \
+		-- docker run --rm --network=none "${TAG_ASR_CARGA}" ffmpeg -version
+
+	# Sintaxe do servidor DENTRO da imagem: o `CMD ["python", "servidor.py"]`
+	# só descobriria um erro de sintaxe no boot, em produção.
+	esperar_sucesso \
+		"asr: servidor.py compila na imagem (sintaxe do CMD)" \
+		-- docker run --rm --network=none "${TAG_ASR_CARGA}" \
+		python -m py_compile /app/servidor.py
+
+	# Contrapartida da primeira: aquela prova o grafo do pip, esta prova o
+	# outro lado — um `import` NOVO em servidor.py que ninguém acrescentou a
+	# requirements.txt. O verificador entra por stdin de propósito: não vira
+	# arquivo dentro de uma imagem de produção (mesmo desenho do
+	# verificar-deps-imagem.mjs dos serviços Node).
+	esperar_sucesso \
+		"asr: todo import de servidor.py resolve na imagem" \
+		-- bash -c "docker run --rm -i --network=none -e ALVO=/app/servidor.py '${TAG_ASR_CARGA}' python - < scripts/ci/verificar-imports-imagem.py"
+
+	log_info "buildando ${TAG_ASR_AGENDADOR}..."
+	docker build -f infra/asr/Dockerfile.agendador -t "${TAG_ASR_AGENDADOR}" .
+
+	# O bundle do esbuild é a única forma do consumidor da fila chegar aqui
+	# (`tsx` é devDependency e `src/` não é copiado). Se o estágio `bundler`
+	# quebrar ou o `pg-boss` externo faltar, é nesta linha que aparece.
+	# `/app/scripts/queue-worker.mjs` por caminho ABSOLUTO é o que o
+	# agendador.sh:132 executa — a forma de produção, não uma equivalente.
+	esperar_falha_com \
+		"asr-agendador: carga do bundle do consumidor da fila (ABSOLUTO)" \
+		'"evento":"queue.runner.falha-fatal"' \
+		-- docker run --rm "${TAG_ASR_AGENDADOR}" \
+		node /app/scripts/queue-worker.mjs
+
+	esperar_falha_com \
+		"asr-agendador: carga do disparo manual (ABSOLUTO)" \
+		'"faltando":["ASR_JOB_URL","ASR_JOB_TOKEN"]' \
+		-- docker run --rm "${TAG_ASR_AGENDADOR}" \
+		node /app/scripts/disparo-asr-transcrever.mjs
+
+	# Caminho RELATIVO é um caso separado, não redundante: é a forma que o
+	# operador digita no console do painel durante um incidente (o disparo
+	# manual é ferramenta de runbook), e foi a que a #153 quebrou no
+	# escalonamento — argv[1] relativo não bate com import.meta.url sem
+	# pathToFileURL, e o processo saía 0 sem fazer nada.
+	esperar_falha_com \
+		"asr-agendador: carga do disparo manual (RELATIVO)" \
+		'"faltando":["ASR_JOB_URL","ASR_JOB_TOKEN"]' \
+		-- docker run --rm -w /app "${TAG_ASR_AGENDADOR}" \
+		node scripts/disparo-asr-transcrever.mjs
+
+	# O sweeper redige a mensagem do erro (`hashMensagem`, não a frase): casar
+	# pelo EVENTO é o que sobra, e é suficiente — chegar em
+	# `asr-sweeper.varredura-falhou` prova que o módulo carregou inteiro,
+	# `postgres` e `@aws-sdk/client-s3` inclusive, e morreu na guarda de env.
+	esperar_falha_com \
+		"asr-agendador: carga do sweeper de órfãos (ABSOLUTO)" \
+		'"evento":"asr-sweeper.varredura-falhou"' \
+		-- docker run --rm "${TAG_ASR_AGENDADOR}" \
+		node /app/scripts/asr-sweeper-orfaos.mjs
+
+	esperar_falha_com \
+		"asr-agendador: carga do sweeper de órfãos (RELATIVO)" \
+		'"evento":"asr-sweeper.varredura-falhou"' \
+		-- docker run --rm -w /app "${TAG_ASR_AGENDADOR}" \
+		node scripts/asr-sweeper-orfaos.mjs
+
+	# Resolve TODO specifier dos arquivos copiados, dinâmico incluído — um
+	# `await import()` em try/catch degrada em silêncio e passaria verde nas
+	# asserções acima.
+	esperar_sucesso \
+		"asr-agendador: todo import resolve na imagem (inclusive os dinâmicos)" \
+		-- bash -c "docker run --rm -i -w /app -e ALVO=/app/scripts '${TAG_ASR_AGENDADOR}' node --input-type=module < scripts/ci/verificar-deps-imagem.mjs"
+
+	# Os dois laços usam `set -Eeuo pipefail` e `[[ ]]`: sem o `apk add bash`
+	# do Dockerfile a imagem sobe e o laço morre na primeira linha.
+	esperar_sucesso \
+		"asr-agendador: sintaxe do agendador.sh (bash presente)" \
+		-- docker run --rm "${TAG_ASR_AGENDADOR}" bash -n /app/agendador.sh
+
+	esperar_sucesso \
+		"asr-agendador: sintaxe do sweeper-orfaos.sh (bash presente)" \
+		-- docker run --rm "${TAG_ASR_AGENDADOR}" bash -n /app/sweeper-orfaos.sh
+
+	# Uma imagem, DOIS serviços Easypanel, escolhidos só pelo campo Comando —
+	# os dois caminhos são fixos e absolutos, e um COPY que mude de lugar só
+	# falharia em produção.
+	esperar_sucesso \
+		"asr-agendador: /app/agendador.sh executável (caminho fixo do CMD)" \
+		-- docker run --rm "${TAG_ASR_AGENDADOR}" test -x /app/agendador.sh
+
+	esperar_sucesso \
+		"asr-agendador: /app/sweeper-orfaos.sh executável (2º serviço da mesma imagem)" \
+		-- docker run --rm "${TAG_ASR_AGENDADOR}" test -x /app/sweeper-orfaos.sh
+
+	# Os dois laços validam env ANTES de entrar no laço e saem 1. Rodá-los sem
+	# env prova as duas coisas: que a guarda NOMEIA as variáveis, e que este
+	# teste não trava — um laço que entrasse no `sleep` aqui penduraria o CI.
+	esperar_falha_com \
+		"asr-agendador: agendador.sh para na guarda de env (não entra em laço)" \
+		"variável(is) de ambiente ausente(s): DATABASE_URL, ASR_JOB_URL, ASR_JOB_TOKEN" \
+		-- docker run --rm "${TAG_ASR_AGENDADOR}" /app/agendador.sh
+
+	# `${faltando[*]}` junta com o primeiro caractere do IFS, que naquele
+	# script é `\n` — a lista sai em várias linhas. Casar só a primeira
+	# variável é de propósito: o que se exige é que a guarda NOMEIE o que
+	# falta.
+	esperar_falha_com \
+		"asr-agendador: sweeper-orfaos.sh para na guarda de env (não entra em laço)" \
+		"variável(is) de ambiente ausente(s): ASR_S3_ENDPOINT" \
+		-- docker run --rm "${TAG_ASR_AGENDADOR}" /app/sweeper-orfaos.sh
+}
+
 # --- main --------------------------------------------------------------------
 alvo="${1:-todos}"
 case "${alvo}" in
@@ -825,6 +1007,7 @@ alarme) carga_alarme ;;
 exportacao) carga_exportacao ;;
 arquivamento) carga_arquivamento ;;
 expurgo-audit-log) carga_expurgo_audit_log ;;
+asr) carga_asr ;;
 todos)
 	carga_escalonamento
 	carga_backup
@@ -834,9 +1017,10 @@ todos)
 	carga_exportacao
 	carga_arquivamento
 	carga_expurgo_audit_log
+	carga_asr
 	;;
 *)
-	log_error "alvo desconhecido: ${alvo} — use 'escalonamento', 'backup', 'billing', 'retencao', 'alarme', 'exportacao', 'arquivamento', 'expurgo-audit-log' ou nenhum (todos)."
+	log_error "alvo desconhecido: ${alvo} — use 'escalonamento', 'backup', 'billing', 'retencao', 'alarme', 'exportacao', 'arquivamento', 'expurgo-audit-log', 'asr' ou nenhum (todos)."
 	exit 2
 	;;
 esac
