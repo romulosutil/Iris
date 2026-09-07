@@ -75,6 +75,31 @@
 
 ---
 
+## 🏁 Sessão 07/09/2026 (3ª) — #500: o que falta não é código, é um smoke que ninguém sabia executar
+
+**O que a issue pedia:** fechar os dois itens que sobraram depois do provisionamento de 31/08 — (1) um lote real transcrito ponta a ponta contra uma clínica de teste, (2) revisar `INTERVALO_S` com volume observado. Ambos exigem o console do Easypanel, que só o Rômulo tem. **Nada disso é executável por código a partir daqui — o que era executável era tornar o passo 1 executável.**
+
+**Auditoria do enunciado contra `main` (regra `criterio-de-aceite-ja-fechado-em-main`) — três itens da #500 envelheceram:**
+
+- **`INTERVALO_S` não existe mais.** O laço `while :; do … sleep 20` de `infra/asr/agendador.sh` morreu na D73 (`git log -S`, commit `115bc8ce`). Quem agenda é o cron do pg-boss, `CRON_TICK_ASR = "* * * * *"`. O `INTERVALO_S` que sobra em `infra/asr/` é o do **sweeper de órfãos** (3600 s) — outro botão. O item da DoD não pode ser respondido como está: precisa ser reformulado (§6.6 do runbook propõe as três medições que substituem a pergunta).
+- **D71 está fechado desde 05/09** (`0155` + `audio_capture.mime_type`), mas a seção "Fora de escopo" da #500 ainda o declara aberto e pré-requisito para usuários de iPhone. Não é mais.
+- **O heartbeat mudou de lugar** na #536: não é mais arquivo em `/heartbeat` (lá só mora o lockfile), é a linha `job_heartbeat` no banco, escrita pela ROTA. A DoD diz "heartbeat avançando" sem dizer onde olhar.
+
+**Dois riscos do smoke que não estavam escritos em lugar nenhum, e que fariam a execução falhar ou — pior — passar verde à toa:**
+
+1. **`ASR_PROVIDER` != `self-hosted` faz o smoke inteiro passar contra o `StubAsrProvider`.** `getAsrProvider()` (`src/lib/asr/provider.ts`) cai no stub para qualquer valor diferente da string exata, inclusive ausente. O clipe percorreria `na_fila → transcrevendo → transcrito`, a UI mostraria texto, e nem o MinIO nem o `iris-asr` teriam sido tocados. Mesma classe da memória `gate-de-flag-cega-a-suite-inteira`. Virou item 1 do pré-voo, com oráculo: texto que começa com `[transcrição stub —` invalida o smoke.
+2. **`FEATURE_FLAG_ASR_ENABLED` é GLOBAL.** `asrHabilitado()` lê a env e mais nada — não há coluna por clínica nem allowlist. "Smoke contra uma clínica de teste" não isola ninguém: ligar a flag libera o ditado para toda clínica do ambiente no mesmo instante. Virou item 5 do pré-voo, com as duas consultas que medem quantas clínicas estão vivas antes de escolher a janela.
+
+**Entregue — `infra/asr/runbook.md` §6 (PR):** procedimento executável do smoke, no formato clique-a-clique com "como saber que deu certo" (memória `como-explicar-passo-a-passo-de-infra`): §6.0 o que envelheceu, §6.1 cinco medições de pré-voo (provider, grants da role, heartbeat avançando medido DUAS vezes, domínio público do `iris-asr` removido, flag global), §6.2 execução com o SQL de cada transição, §6.3 oráculo de aceite, §6.4 triagem por sintoma, §6.5 rollback, §6.6 registro + as três medições que substituem o `INTERVALO_S`. Cross-link do `infra/README.md`, e a pendência do §5 (domínio público temporário, R11) passou a bloquear explicitamente o smoke — o benchmark levou áudio sintético por ali, o smoke leva áudio real.
+
+**Detalhe que o §6.2 documenta e que teria queimado a medição:** `aceitarTranscricaoLote` apaga `transcricao_texto` no MESMO statement em que devolve o texto (T25/R19, decisão C). Quem aceitar na UI antes de consultar o banco não distingue "transcreveu e foi consumido" de "transcreveu vazio". A ordem dos passos 5 e 6 existe por isso.
+
+**Higiene:** `### 1.4` estava duplicado no runbook (janela de resgate e host com hífen) — o segundo virou `### 1.5`, com as duas referências cruzadas corrigidas.
+
+**Continua aberto (só o Rômulo fecha):** executar o §6. A #500 não fecha por esta PR.
+
+---
+
 ## 🏁 Sessão 07/09/2026 (2ª) — #604: o clipe preso já tinha se autorresolvido; faltava era teste
 
 **O que a issue pedia:** medir (não presumir) o estado real de um clipe de ASR preso em `na_fila`/`transcrevendo` desde 31/08, nomear a causa raiz com arquivo:linha, e só então corrigir.

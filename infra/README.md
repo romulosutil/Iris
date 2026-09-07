@@ -2543,6 +2543,14 @@ PENDÊNCIA abaixo fecha.
 
 ### ❌ PENDENTE — o gate que só o Rômulo fecha, e só depois do provisionamento
 
+> 📋 **O passo a passo executável destes dois itens** — pré-voo, SQL de cada
+> transição, oráculo de aceite, triagem e rollback — está em
+> [`infra/asr/runbook.md` §6](asr/runbook.md#6-smoke-de-produção-do-ditado-de-voz-500).
+> Leia o §6.1 antes de ligar a flag: o item 1 (`ASR_PROVIDER=self-hosted`) é o
+> que separa um smoke real de um smoke que passa verde contra o `StubAsrProvider`,
+> e o item 5 registra que `FEATURE_FLAG_ASR_ENABLED` é **global** — não existe
+> gate por clínica, então "clínica de teste" não isola ninguém.
+
 **Não considerar T08 encerrado sem os dois itens abaixo, medidos, não
 deduzidos** (mesma régua de `verificar-fato-de-infra-com-medicao` e
 `job-provisionado-nao-e-job-que-fecha-ciclo` — issue fechada não é serviço
