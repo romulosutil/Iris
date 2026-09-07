@@ -21,7 +21,7 @@ name: Carga das imagens de infra
 
 on:
   pull_request:
-    # Só os caminhos que ENTRAM nas imagens (o que os quatro Dockerfiles copiam ou
+    # Só os caminhos que ENTRAM nas imagens (o que os Dockerfiles copiam ou
     # instalam), mais o próprio workflow e o script. `pnpm-lock.yaml` está aqui
     # porque as versões de `postgres`/`resend` na imagem do escalonamento são
     # pinadas à mão e precisam acompanhar o lockfile — um bump lá tem que
@@ -43,6 +43,17 @@ on:
       # Imagem criada em 03/09/2026 (#536): a medição em produção mostrou que
       # o serviço `iris-expurgo-audit-log` nunca existiu no Easypanel.
       - "infra/expurgo-audit-log/**"
+      # `infra/asr/**` são DUAS imagens (`Dockerfile`, Python/faster-whisper, e
+      # `Dockerfile.agendador`, Node) e NENHUMA das duas era construída por CI
+      # nenhum — nem aqui no `paths`, nem no `case` do script. Mesmo buraco que
+      # o D64 fechou para `arquivamento` e que o comentário do `alarme` acima já
+      # registrava. Gravidade específica desta: `requests` está pinado em
+      # `infra/asr/requirements.txt` por causa de uma quebra REAL de build
+      # (`ModuleNotFoundError: No module named 'requests'`, medida no log do
+      # Easypanel em 31/08/2026), e nenhum comando do repo olha uma linha de
+      # Python — um bump nesse pin ficava 100% verde sem a imagem ser
+      # construída uma única vez.
+      - "infra/asr/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/carga-imagens-infra.yml"
   push:
@@ -64,6 +75,17 @@ on:
       # Imagem criada em 03/09/2026 (#536): a medição em produção mostrou que
       # o serviço `iris-expurgo-audit-log` nunca existiu no Easypanel.
       - "infra/expurgo-audit-log/**"
+      # `infra/asr/**` são DUAS imagens (`Dockerfile`, Python/faster-whisper, e
+      # `Dockerfile.agendador`, Node) e NENHUMA das duas era construída por CI
+      # nenhum — nem aqui no `paths`, nem no `case` do script. Mesmo buraco que
+      # o D64 fechou para `arquivamento` e que o comentário do `alarme` acima já
+      # registrava. Gravidade específica desta: `requests` está pinado em
+      # `infra/asr/requirements.txt` por causa de uma quebra REAL de build
+      # (`ModuleNotFoundError: No module named 'requests'`, medida no log do
+      # Easypanel em 31/08/2026), e nenhum comando do repo olha uma linha de
+      # Python — um bump nesse pin ficava 100% verde sem a imagem ser
+      # construída uma única vez.
+      - "infra/asr/**"
       - "pnpm-lock.yaml"
       - ".github/workflows/carga-imagens-infra.yml"
   # Botão manual: útil para reexercitar as imagens depois de uma mudança de base
@@ -77,13 +99,21 @@ concurrency:
 jobs:
   carga:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 30, não 20: a imagem de `infra/asr/Dockerfile` é a única não-alpine da
+    # lista (python:3.12-slim + apt de ffmpeg/build-essential + wheels de
+    # ctranslate2/faster-whisper), e sozinha custa mais que todas as outras
+    # somadas. Continua sem o download do modelo — a carga para no estágio
+    # `carga`, antes dele (ver a nota em scripts/ci/carga-imagens-infra.sh).
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
 
-      # Um job só, sequencial, em vez de matrix por serviço: são quatro builds
-      # alpine pequenos e o log fica em um lugar só na hora de ler o incidente.
+      # Um job só, sequencial, em vez de matrix por serviço: quase todos são
+      # builds alpine pequenos e o log fica em um lugar só na hora de ler o
+      # incidente. A exceção é a imagem Python do ASR — se um dia ela dominar o
+      # tempo de parede, o corte natural é ela num job separado, não uma matrix
+      # por serviço.
       - name: Buildar e carregar as imagens de infra
         run: bash scripts/ci/carga-imagens-infra.sh
