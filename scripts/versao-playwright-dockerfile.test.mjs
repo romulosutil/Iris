@@ -47,8 +47,14 @@ export function versaoResolvidaNoLockfile(conteudoLockfile) {
 /**
  * Todas as versões do Playwright fixadas à mão no Dockerfile, com o número da
  * linha para a mensagem de erro. Reconhece as duas formas:
- *   - `ARG PLAYWRIGHT_VERSION=1.62.1` (forma preferida: um ponto único)
- *   - `playwright@1.62.1` cru numa linha de `npm install`
+ *   - `playwright@1.62.1` literal na linha de `npm install` (forma CORRETA
+ *     neste repositório — ver infra/Dockerfile, bloco "POR QUE LITERAL")
+ *   - `ARG PLAYWRIGHT_VERSION=1.62.1` — reconhecido para que um pino movido
+ *     para ARG continue sendo comparado com o lockfile, NÃO porque seja a
+ *     forma desejada: o Easypanel repassa toda env var do serviço como
+ *     `--build-arg`, então uma env var de painel com esse nome sobrescreveria
+ *     o pino em produção sem deixar rastro no repositório, com este guard
+ *     (que lê o arquivo, não a imagem) continuando verde.
  * Interpolações (`playwright@${PLAYWRIGHT_VERSION}`) não são pinos literais e
  * por isso não entram na lista.
  */
@@ -95,8 +101,12 @@ describe("versão do Playwright: Dockerfile x pnpm-lock.yaml", () => {
     expect(
       fixadas.length,
       "nenhuma versão de Playwright encontrada em infra/Dockerfile. O estágio " +
-        "`runner` precisa continuar fixando a versão (via `ARG PLAYWRIGHT_VERSION=`) " +
-        "para que este guard consiga compará-la com o lockfile.",
+        "`runner` precisa continuar fixando a versão de forma LITERAL na linha de " +
+        "instalação (`npm install --no-save playwright@<versão>`) para que este " +
+        "guard consiga compará-la com o lockfile. Não trocar por " +
+        "`ARG PLAYWRIGHT_VERSION=`: o Easypanel repassa toda env var do serviço " +
+        "como `--build-arg` e uma env var de painel sobrescreveria o pino sem " +
+        "rastro no repositório (ver bloco `POR QUE LITERAL` no infra/Dockerfile).",
     ).toBeGreaterThan(0);
   });
 
@@ -132,7 +142,11 @@ describe("versão do Playwright: Dockerfile x pnpm-lock.yaml", () => {
     expect(
       distintas,
       `infra/Dockerfile fixa mais de uma versão de Playwright: ${distintas.join(", ")}. ` +
-        `Manter um único \`ARG PLAYWRIGHT_VERSION\` e interpolá-lo nos usos.`,
+        `Manter um único ponto de manutenção: o literal ` +
+        `\`playwright@<versão>\` na linha de \`npm install\` do estágio \`runner\`. ` +
+        `Não centralizar via \`ARG PLAYWRIGHT_VERSION\` — o Easypanel repassa toda ` +
+        `env var do serviço como \`--build-arg\` e sobrescreveria o pino sem rastro ` +
+        `no repositório (ver bloco \`POR QUE LITERAL\` no infra/Dockerfile).`,
     ).toHaveLength(1);
   });
 });
