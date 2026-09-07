@@ -42,12 +42,15 @@
  *
  * Uso:
  *   node scripts/ci/verificar-cobertura-e2e.mjs <relatorio.json> \
- *     --min-tests=17 --min-files=10 \
+ *     --min-tests=64 --min-files=21 \
  *     --flaky-baseline=scripts/ci/e2e-flaky.baseline.json
  *
- * Pisos medidos em 23/08/2026, suíte local do zero (`pnpm seed:e2e` +
- * `pnpm test:e2e`): 10 arquivos (9 specs + `servidor.setup.ts`), 17 testes,
- * 0 falha, 0 pulado.
+ * Os pisos vivem no `.github/workflows/ci.yml` (job `test-e2e`), com a
+ * medição e a data ao lado da linha que os passa — este arquivo não é a
+ * fonte da verdade deles. Os primeiros (17/10, 23/08/2026) ficaram para trás
+ * quando os specs `mobile-*` entraram e não subiram junto: o job passou a
+ * rodar 63 testes contra um piso de 17, e o gate tolerava apagar 46 deles.
+ * Piso é para ser a contagem EXATA da corrida verde mais recente — ver #501.
  */
 import { readFileSync } from "node:fs";
 
