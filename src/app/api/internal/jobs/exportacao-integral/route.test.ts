@@ -7,12 +7,32 @@ vi.mock("@/lib/export/acervo/motor", () => ({
   expirarVencidos: vi.fn(),
 }));
 
+/**
+ * #636 (mesmo defeito da #609) — `registrarHeartbeat` roda
+ * `sql\`SELECT app_job_heartbeat_gravar(…)\`` contra o Postgres de verdade
+ * (`@/db/client`). Sem este dublê, o teste abre conexão TCP com o banco local
+ * e o veredito passa a depender da latência dele.
+ *
+ * O dublê é do MÓDULO, não da conexão: `detalheSemPii`/`detalheDoErro` seguem
+ * reais (são puras e não tocam banco) porque é o texto que produzem que este
+ * arquivo afirma no `detalhe` do heartbeat.
+ */
+const heartbeat = vi.hoisted(() => ({ registrarHeartbeat: vi.fn() }));
+vi.mock("@/lib/jobs/heartbeat", async (original) => ({
+  ...(await original<typeof import("@/lib/jobs/heartbeat")>()),
+  registrarHeartbeat: heartbeat.registrarHeartbeat,
+}));
+
 describe("POST /api/internal/jobs/exportacao-integral (Task T5)", () => {
   const originalEnv = process.env.EXPORT_JOB_TOKEN;
 
   beforeEach(() => {
     process.env.EXPORT_JOB_TOKEN = "token-secreto-export-123";
     vi.clearAllMocks();
+    // O contrato real: `registrarHeartbeat` NUNCA lança (o próprio módulo
+    // engole a falha e devolve `false`). O dublê resolve para manter esse
+    // contrato.
+    heartbeat.registrarHeartbeat.mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -150,5 +170,100 @@ describe("POST /api/internal/jobs/exportacao-integral (Task T5)", () => {
     expect(body.totalProcessados).toBe(1);
     expect(body.expirados).toBe(2);
     expect(body.processados[0].bundleId).toBe("bundle-1");
+  });
+
+  /**
+   * #636 — o heartbeat era EXECUTADO por todos os testes deste arquivo
+   * (contra o banco de verdade) e AFIRMADO por nenhum. A chamada podia sumir
+   * da rota sem um teste ficar vermelho, e o que ela deixaria de existir é o
+   * sinal de vida que `scripts/alarme-jobs.mjs` lê para saber se a
+   * exportação rodou.
+   */
+  describe("heartbeat (#636)", () => {
+    it("grava ok:true com as contagens quando a passada correu limpa", async () => {
+      vi.mocked(motor.processarProximo)
+        .mockResolvedValueOnce({
+          processado: true,
+          bundleId: "bundle-1",
+          status: "pronto",
+        })
+        .mockResolvedValueOnce({ processado: false });
+      vi.mocked(motor.expirarVencidos).mockResolvedValueOnce({ expirados: 2 });
+
+      await POST(
+        new Request("http://localhost/api/internal/jobs/exportacao-integral", {
+          method: "POST",
+          headers: { authorization: "Bearer token-secreto-export-123" },
+        }),
+      );
+
+      expect(heartbeat.registrarHeartbeat).toHaveBeenCalledTimes(1);
+      expect(heartbeat.registrarHeartbeat).toHaveBeenCalledWith(
+        "exportacao",
+        true,
+        // `detalheSemPii` é o real: só contagem chega ao banco, nunca
+        // `bundleId` nem `erro`.
+        "processados=1 bundlesFalhos=0 expirados=2",
+      );
+    });
+
+    it("grava ok:false quando um bundle falhou, sem derrubar a gravação (Q-07)", async () => {
+      vi.mocked(motor.processarProximo)
+        .mockResolvedValueOnce({
+          processado: true,
+          bundleId: "bundle-ruim",
+          status: "falhou",
+          erro: "storage fora",
+        })
+        .mockResolvedValueOnce({ processado: false });
+      vi.mocked(motor.expirarVencidos).mockResolvedValueOnce({ expirados: 0 });
+
+      await POST(
+        new Request("http://localhost/api/internal/jobs/exportacao-integral", {
+          method: "POST",
+          headers: { authorization: "Bearer token-secreto-export-123" },
+        }),
+      );
+
+      expect(heartbeat.registrarHeartbeat).toHaveBeenCalledWith(
+        "exportacao",
+        false,
+        "processados=1 bundlesFalhos=1 expirados=0",
+      );
+    });
+
+    it("grava ok:false com o detalhe do erro quando a passada aborta inteira", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      vi.mocked(motor.processarProximo).mockRejectedValueOnce(
+        new Error("connection terminated unexpectedly"),
+      );
+
+      await POST(
+        new Request("http://localhost/api/internal/jobs/exportacao-integral", {
+          method: "POST",
+          headers: { authorization: "Bearer token-secreto-export-123" },
+        }),
+      );
+
+      expect(heartbeat.registrarHeartbeat).toHaveBeenCalledTimes(1);
+      // `detalheDoErro` real: classe do erro, nunca a `message` (que num
+      // `DrizzleQueryError` é o SQL com os params).
+      expect(heartbeat.registrarHeartbeat).toHaveBeenCalledWith(
+        "exportacao",
+        false,
+        "erro=Error",
+      );
+    });
+
+    it("uma passada recusada na autorização não carimba sinal de vida", async () => {
+      await POST(
+        new Request(
+          "http://localhost/api/internal/jobs/exportacao-integral",
+          { method: "POST" },
+        ),
+      );
+
+      expect(heartbeat.registrarHeartbeat).not.toHaveBeenCalled();
+    });
   });
 });
