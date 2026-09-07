@@ -75,6 +75,22 @@
 
 ---
 
+## 🏁 Sessão 07/09/2026 (2ª) — #604: o clipe preso já tinha se autorresolvido; faltava era teste
+
+**O que a issue pedia:** medir (não presumir) o estado real de um clipe de ASR preso em `na_fila`/`transcrevendo` desde 31/08, nomear a causa raiz com arquivo:linha, e só então corrigir.
+
+**Medido em produção (07/09, Bash do container `iris-postgres` via Easypanel):** a linha `2cddb384-289b-414d-a765-671530c771cb` já está em `asr_status='falhou'`, `falhou_em` preenchido, `tentativas=0`, `reversoes=0` — assinatura do backstop `app_asr_expirar_presos`, nunca de um ciclo normal de falha. Nunca foi reservada: ficou em `na_fila` o tempo todo em que o `asr-agendador` esteve em crash loop (#588). Hoje **0 rows** em `asr_status IN ('na_fila','transcrevendo')`, e `asr-sweeper` reporta `emUso=0`.
+
+**A hipótese da issue não se confirmou.** Ela suspeitava que faltasse um "reclaim por estagnação". Esse mecanismo **já existe** desde a `0141`/redefinido pela `0155` (#494/T19): `app_asr_expirar_presos`, chamado por `expirarPresos()` (`route.ts:165-171`) **antes** de cada reserva. Ele funcionou — assim que o #588 foi corrigido e alguém religou o `asr-agendador` manualmente, o primeiro tick seguinte expirou a linha sozinho.
+
+**Causa raiz real, composta e já resolvida:** (1) #588 (guarda de instância única travando no próprio pid) impediu QUALQUER tick por ~3 dias — sem tick, nem reserva nem backstop rodam; (2) o backstop em si estava correto, mas **sem nenhum teste cobrindo**, então uma regressão futura nele (predicado errado, `ASR_BACKSTOP_HORAS` trocado, falha silenciosa no `try/catch` que o envolve) passaria despercebida com CI verde.
+
+**O que a PR #642 faz:** adiciona a cobertura que faltava em `route.int.test.ts` — planta uma linha `na_fila` com `criado_em` de 7h e cobra que o tick a expire para `falhou` antes da reserva, sem processá-la. Nenhuma mudança de produção: a issue já tinha se autorresolvido. Prova por mutação: `expirarPresos()` forçado a `return 0`, teste cai (`expected 0 to be greater than or equal to 1`); revertido, `git diff` limpo, suíte volta a 7/7.
+
+**Achado lateral, não perseguido nesta sessão:** o reclaim por idade só roda como efeito colateral de um tick da rota — se o agendador cair por qualquer OUTRO motivo futuro, o mesmo represamento silencioso se repete até religamento manual, sem alarme dedicado (só o heartbeat de liveness, que não distingue "rodou e não achou nada" de "não rodou"). Não virou débito D-numerado porque não foi medido como problema atual — fica registrado aqui para não se perder.
+
+---
+
 ## 🏁 Sessão 07/09/2026 — #609: o pisca de 5s era I/O real de banco dentro de teste unitário
 
 **O que a issue pedia:** distinguir duas hipóteses antes de mexer — (1) o teste é lento de verdade, (2) há espera não determinística no caminho. **As duas estavam erradas, e as duas levariam a subir `testTimeout`** — que é justamente o que a issue proibia.
