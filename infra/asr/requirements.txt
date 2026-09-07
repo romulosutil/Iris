@@ -10,4 +10,4 @@ ctranslate2==4.4.0
 # com `ModuleNotFoundError: No module named 'requests'` — medido no log real
 # de build do Easypanel, não deduzido. Pinado explícito para não depender de
 # novo do grafo transitivo de outro pacote.
-requests==2.32.3
+requests==2.33.0
