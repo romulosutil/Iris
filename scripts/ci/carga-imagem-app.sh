@@ -182,8 +182,7 @@ esperar_falha_sem() {
 
 	if [[ ${rc} -eq 0 ]]; then
 		log_error "${rotulo}: saiu 0. Sem banco alcançável, o migrator TEM de falhar — exit 0 aqui significa que ele não chegou a tentar conectar."
-		printf '%s
-' "${saida}" | sed 's/^/    | /'
+		printf '%s\n' "${saida}" | sed 's/^/    | /'
 		FALHAS=$((FALHAS + 1))
 		return
 	fi
@@ -192,8 +191,7 @@ esperar_falha_sem() {
 	for padrao in "${PADROES_PROIBIDOS[@]}"; do
 		if [[ "${saida}" == *"${padrao}"* ]]; then
 			log_error "${rotulo}: saída contém \"${padrao}\" — arquivo ou dependência NÃO chegou na imagem."
-			printf '%s
-' "${saida}" | sed 's/^/    | /'
+			printf '%s\n' "${saida}" | sed 's/^/    | /'
 			FALHAS=$((FALHAS + 1))
 			return
 		fi
@@ -201,8 +199,7 @@ esperar_falha_sem() {
 
 	if [[ "${saida}" == *"${proibido}"* ]]; then
 		log_error "${rotulo}: a saída AINDA contém \"${proibido}\" — o CMD não está lendo ${CAMINHO_SEGREDO}. Conferir a flag --env-file-if-exists no Dockerfile."
-		printf '%s
-' "${saida}" | sed 's/^/    | /'
+		printf '%s\n' "${saida}" | sed 's/^/    | /'
 		FALHAS=$((FALHAS + 1))
 		return
 	fi
