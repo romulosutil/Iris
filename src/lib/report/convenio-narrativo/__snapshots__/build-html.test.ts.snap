@@ -10,7 +10,13 @@ exports[`snapshot estrutural 1`] = `
   .nota{background:#f4efe6;padding:8px 12px;border-radius:4px}
   .dominio{margin:8px 0}
   .rodape{margin-top:16px;font-size:10px;color:#555}
+
+  .marca-clinica{display:flex;align-items:center;gap:12px;border-bottom:3px solid #1a1a1a;padding-bottom:8px;margin-bottom:16px}
+  .marca-clinica img{max-height:56px;max-width:180px;object-fit:contain}
+  .marca-clinica .nome{font-weight:700;font-size:15px;color:#1a1a1a}
+  .selo-iris{margin-top:20px;border-top:1px solid #999;padding-top:6px;font-size:9px;color:#333;letter-spacing:.02em}
 </style></head><body>
+
 <h1>Relatório de convênio — Miguel S.</h1>
 <p>Período: 2026-06-01 a 2026-06-30 · Operadora: Amil</p>
 <p>CID (conforme prescrição médica assistente): F84.0</p>
@@ -45,5 +51,6 @@ exports[`snapshot estrutural 1`] = `
 <ul><li>Objetivo IA 1</li></ul>
 
 <p class="rodape">Documento de suporte à solicitação de cobertura, revisado por [coordenador]. Diagnóstico e prescrição são do médico assistente externo; a clínica não diagnostica.</p>
+<p class="selo-iris">Gerado via Iris SaaS | Hash SHA-256: registrado na trilha de auditoria</p>
 </body></html>"
 `;

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildFamiliaHtml } from "./build-html";
+import { SELO_IRIS } from "../../branding/marca";
 import type { FamilyReportDraft, PayloadFamilia } from "./types";
 
 function draft(over: Partial<FamilyReportDraft> = {}): FamilyReportDraft {
@@ -27,6 +28,18 @@ function payload(over: Partial<PayloadFamilia> = {}): PayloadFamilia {
     ...over,
   };
 }
+
+// ── #258 (D9) — marca institucional white-label ─────────────────────────────
+const PNG_1X1 = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+const MARCA_CONFIGURADA = {
+  logo: PNG_1X1,
+  logoMime: "image/png",
+  corPrimaria: "#1f4e79",
+  nomeClinica: "Clínica Vida Plena",
+};
 
 describe("buildFamiliaHtml", () => {
   it("escapa injeção em todo texto livre", () => {
@@ -109,5 +122,27 @@ describe("buildFamiliaHtml", () => {
     expect(html).toContain("O que estamos trabalhando agora");
     expect(html).toContain("Como apoiar em casa");
     expect(html).toContain("não substitui orientação clínica");
+  });
+
+  // ── #258 (D9) — marca institucional white-label ───────────────────────────
+  it("sem marca, não emite cabeçalho de clínica", () => {
+    const html = buildFamiliaHtml(payload());
+    expect(html).not.toContain('marca-clinica"');
+    expect(html).not.toContain("data:image/png");
+  });
+
+  it("com marca, aplica logotipo e cor no cabeçalho", () => {
+    const html = buildFamiliaHtml(payload(), MARCA_CONFIGURADA);
+    expect(html).toContain("Clínica Vida Plena");
+    expect(html).toContain(
+      `src="data:image/png;base64,${PNG_1X1.toString("base64")}"`,
+    );
+    expect(html).toContain("3px solid #1f4e79");
+  });
+
+  it("o selo Iris SOBREVIVE à marca da clínica (guardrail 3 da #258)", () => {
+    expect(buildFamiliaHtml(payload(), MARCA_CONFIGURADA)).toContain(SELO_IRIS);
+    // E também existe sem marca nenhuma: o selo não depende do white-label.
+    expect(buildFamiliaHtml(payload())).toContain(SELO_IRIS);
   });
 });

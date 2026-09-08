@@ -89,6 +89,9 @@ export function montarNav({
               { href: "/supervisao", label: "Supervisão" },
               { href: "/equipe", label: "Equipe" },
               { href: "/clinica/dados", label: "Dados da Clínica" },
+              // #258 — marca institucional dos PDFs. Coordenador-only, ao lado
+              // das outras configurações estruturais da clínica.
+              { href: "/clinica/marca", label: "Marca nos PDFs" },
               { href: "/clinica/exportacao", label: "Exportar Acervo" },
               { href: "/assinatura", label: "Assinatura" },
               { href: "/duvidas", label: "Dúvidas" },

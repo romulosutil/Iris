@@ -7,6 +7,7 @@ import { TabsNav, type TabsNavItem } from "@/components/ui/tabs-nav";
 
 const abas: TabsNavItem[] = [
   { href: "/clinica/dados", rotulo: "Dados da Clínica" },
+  { href: "/clinica/marca", rotulo: "Marca nos PDFs" },
   { href: "/clinica/feriados", rotulo: "Feriados & Recessos" },
   { href: "/clinica/emergencia", rotulo: "Emergência & Protocolo" },
   { href: "/clinica/seguranca", rotulo: "Segurança" },

@@ -259,7 +259,7 @@ async function comoDono(tx: postgres.TransactionSql) {
  * `clinic`, `clinic_id = ...` puro, com papel, e com FK de paciente).
  */
 /**
- * As 26 funções que resolvem o tenant pelo helper (`0087`, resíduo do D16; `0142` #529; `0143` #539; `0149` T07c; `0151` #552).
+ * As 27 funções que resolvem o tenant pelo helper (`0087`, resíduo do D16; `0142` #529; `0143` #539; `0149` T07c; `0151` #552; `0156` #258).
  *
  * Todas são `SECURITY DEFINER` menos nenhuma — e é justamente por isso que elas
  * importam: uma função DEFINER roda com os direitos do dono, ou seja, IGNORA a
@@ -309,6 +309,10 @@ const FUNCOES_COM_HELPER = [
   "app_salvar_cpf_cnpj_clinica",
   // #262 (0095) — grava dados cadastrais/fiscais da clínica (página Dados).
   "app_salvar_dados_clinica",
+  // #258 (0156) — grava marca institucional (logo/cor) da clínica para
+  // white-label dos PDFs exportados. Guard interno + papel coordenador é a
+  // única fronteira: `clinic` só tem policy FOR SELECT (0002, deliberado).
+  "app_salvar_marca_clinica",
   "app_session_clinica_visivel",
   // #539 (0143, revisão pós-PR) — DEFINER que grava o número sequencial da
   // sessão para titular OU substituto; guard interno = tenant +
@@ -554,7 +558,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.relname)).toEqual([]);
   });
 
-  test("as 26 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
+  test("as 27 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
     // Mesmo raciocínio do literal de policies: o oráculo é escrito à mão para
     // que uma função NOVA que entre no regime (ou uma que saia) precise de uma
     // linha aqui, no diff, e não passe por osmose.
@@ -567,12 +571,12 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_HELPER);
-    expect(FUNCOES_COM_HELPER.length).toBe(26);
+    expect(FUNCOES_COM_HELPER.length).toBe(27);
   });
 
   // ─── 2d. Q-05 (#529): oráculo SISTÊMICO de definers ───────────────────────
   //
-  // O caso acima é uma allowlist POSITIVA: "estas 26 funções usam o helper".
+  // O caso acima é uma allowlist POSITIVA: "estas 27 funções usam o helper".
   // Ele acusa quem SAI do regime, mas não quem nunca entrou — um DEFINER novo
   // sem guard nenhum não aparece em lista nenhuma e passa limpo. Foi assim que
   // `app_alerta_trecho_fonte` (0122, S-02) e o PR #422 atravessaram o CI.

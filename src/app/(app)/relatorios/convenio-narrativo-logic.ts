@@ -15,6 +15,7 @@ import { exportReport } from "@/lib/report/export";
 import { erroDeActionSeRenderOcupado } from "@/lib/report/render-lock";
 import { buildConvenioNarrativoInput } from "@/lib/report/convenio-narrativo/build-input";
 import { buildConvenioNarrativoHtml } from "@/lib/report/convenio-narrativo/build-html";
+import { lerMarcaClinica } from "@/lib/branding/leitura";
 import { resolveConvenioNarrativoProvider } from "@/lib/report/convenio-narrativo/provider";
 import type {
   CabecalhoConvenio,
@@ -249,11 +250,14 @@ export async function exportarConvenioNarrativo(
             "O relatório precisa ser revisado pelo coordenador antes de exportar.",
         };
       }
+      // #258 — marca lida DENTRO da mesma tx do export (mesmo instante
+      // transacional dos dados do relatório), nunca do payload congelado.
+      const marca = await lerMarcaClinica(tx);
       const { hash } = await exportReport(tx, {
         reportId,
         atorId: ctx.userId,
         buildHtml: (pl) =>
-          buildConvenioNarrativoHtml(pl as PayloadConvenioNarrativo),
+          buildConvenioNarrativoHtml(pl as PayloadConvenioNarrativo, marca),
         renderer,
       });
       return { reportId, hash };
