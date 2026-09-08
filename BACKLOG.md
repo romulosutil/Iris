@@ -75,6 +75,24 @@
 
 ---
 
+## 🏁 Sessão 08/09/2026 — #283: dois critérios já estavam fechados; o terceiro não tinha quem medisse
+
+**O que a issue pedia:** layout mobile da Matriz (375px, 3+ terapeutas), com três critérios de aceite.
+
+**Auditoria antes do código (regra `criterio-de-aceite-ja-fechado-em-main`):** os critérios 1 e 2 já estavam fechados em `main`. O **R-30** da #512 (T12) trocou a grade por lista cronológica abaixo de `md` (`CalendarGrid` → `CalendarDayList`), com teste nos dois lados do breakpoint; o estouro horizontal de `/agenda` a 360px tem gate rodando em CI (`e2e/mobile-app.spec.ts`, projeto `mobile-360` do Playwright, coordenador **e** terapeuta). O critério 3 (a11y preservada nas variantes) era o único aberto — e **nenhum teste do repo olhava semântica de teclado/leitor de tela dentro do card de evento**: os gates mobile medem estouro horizontal e alvo de toque, não isso.
+
+**Defeito medido (não deduzido):** `CalendarEventCard` punha `role="button"` no container inteiro e renderizava a ação do app (check-in) **dentro** dele — `nested-interactive` do axe, impacto "serious", `cat.keyboard`/`wcag2a`/`wcag412`, nas **duas** variantes (grade e lista). Junto: `<h4>` dentro do controle (filho de botão é apresentacional para o leitor de tela; conteúdo de fluxo dentro de `<button>` é HTML inválido).
+
+**Segundo defeito, que só aparece no toque:** a ação era `hidden group-hover:block`. Mobile não tem hover — o check-in **nunca** aparecia na lista; no desktop, quem chegava por Tab também não o alcançava (`display: none` não recebe foco). Nenhum dos gates existentes pegaria: overflow e alvo de toque não falam de elemento invisível.
+
+**O que entrou (PR #647, draft):** container vira `<div>` puro, o clicável é um `<button>` interno e a ação fica irmã, não filha; `<h4>` → `<span>`; ação sempre visível abaixo de `md` (mesmo corte do R-30) e revelada por hover **ou foco** no desktop. Teste novo `calendar-grid.a11y.test.tsx` roda axe nas duas variantes com a ação montada como `/agenda` monta, com 3 terapeutas (o cenário do QA). **Mutação executada:** devolver o `hidden` sem prefixo derruba o teste de visibilidade; revertido por edição inversa, com o estado conferido depois.
+
+**Decisão do Rômulo na mesma sessão — muda o default.** A pergunta aberta era: no mobile o usuário escolhia "Matriz Geral" e recebia uma lista (o R-30 degradando por dentro do `CalendarGrid`), com o seletor continuando a marcar "Matriz". Entre avisar e trocar o default, ele escolheu **trocar**: em tela estreita o default do coordenador é "Por Horário" — a visão que a largura de fato renderiza. `modoVisao` deixou de nascer em estado e virou **derivado** enquanto ninguém escolheu (`?visao=` e o toggle continuam vencendo, e a escolha sobrevive a mudança de largura); o corte do breakpoint saiu de dentro de `calendar-grid.tsx` para `use-viewport-mobile.ts`, porque agora **duas** decisões dependem do mesmo número e duas cópias dessincronizariam em silêncio. O R-30 segue armado como rede para quem escolhe Matriz no celular. 5 testes novos; **mutação executada:** devolver `matriz` no ramo mobile derruba exatamente 1 dos 5, revertida por edição inversa.
+
+**Achado de processo:** durante a sessão o working tree ganhou edições de **outra sessão concorrente** (`app-header`, `rail`, `header`, `bottom-nav`, `layout` — linha #509/#512). O commit foi feito por arquivo, sem `git add -A`; a suíte completa rodada nesse estado não é oráculo desta mudança (memória `sessao-concorrente-no-mesmo-working-tree`).
+
+---
+
 ## 🏁 Sessão 08/09/2026 — #648: o rail media a página, não o dispositivo; e a nav horizontal era um segundo landmark igual
 
 **Pedido do Rômulo:** rail `fixed` e dimensionado pelo dispositivo (estava relativo ao tamanho da página) + remover o menu horizontal.

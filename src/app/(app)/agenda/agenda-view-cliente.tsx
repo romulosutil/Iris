@@ -22,6 +22,7 @@ import { CalendarEventCard } from "@/components/ui/calendar/calendar-event-card"
 import { EmptyState } from "@/components/ui/empty-state";
 import { CareCalendarIllustration } from "@/components/ui/illustrations";
 import { podeCriarSessaoEmAgenda } from "@/lib/agenda/gating";
+import { useViewportMobile } from "@/components/ui/calendar/use-viewport-mobile";
 import { SemanaCliente, type Prefill } from "./semana/semana-cliente";
 import type { SessaoDoDia } from "./actions";
 
@@ -112,9 +113,11 @@ export function AgendaViewCliente({
     router.replace(`/agenda?${qs.toString()}`, { scroll: false });
   };
 
-  // Modo de exibição: Matriz (Geral), Terapeuta (Bento) ou Horário (Cronológico)
-  const [modoVisao, setModoVisao] = React.useState<string>(
-    visaoInicial ?? (isCoordenador ? "matriz" : "terapeuta"),
+  // Modo de exibição: Matriz (Geral), Terapeuta (Bento) ou Horário
+  // (Cronológico). `null` = ninguém escolheu ainda — nem a URL, nem o toggle —
+  // e aí a visão é DERIVADA da largura, não guardada em estado.
+  const [visaoEscolhida, setVisaoEscolhida] = React.useState<string | null>(
+    visaoInicial ?? null,
   );
 
   // Back/forward ou link com ?visao= muda a prop sem remontar — sincroniza.
@@ -124,8 +127,23 @@ export function AgendaViewCliente({
   const [visaoAnterior, setVisaoAnterior] = React.useState(visaoInicial);
   if (visaoInicial !== visaoAnterior) {
     setVisaoAnterior(visaoInicial);
-    if (visaoInicial) setModoVisao(visaoInicial);
+    if (visaoInicial) setVisaoEscolhida(visaoInicial);
   }
+
+  // #283 (decisão do Rômulo, 08/09/2026): em tela estreita o default do
+  // coordenador deixa de ser "Matriz Geral". A grade HORA × terapeuta com 3+
+  // profissionais é ilegível em 375px — o R-30 já a degradava para lista
+  // cronológica DENTRO do `CalendarGrid`, mas o seletor continuava marcando
+  // "Matriz", prometendo uma coisa e entregando outra. O default passa a ser
+  // a visão que a tela estreita de fato renderiza. O R-30 segue valendo como
+  // rede para quem ESCOLHE Matriz no celular.
+  const mobile = useViewportMobile();
+  const visaoPadrao = isCoordenador
+    ? mobile
+      ? "horario"
+      : "matriz"
+    : "terapeuta";
+  const modoVisao = visaoEscolhida ?? visaoPadrao;
 
   // Sessão aberta no modal de detalhe (visão matriz)
   const [sessaoSelecionada, setSessaoSelecionada] =
@@ -133,7 +151,7 @@ export function AgendaViewCliente({
 
   // Troca de visão: estado local + URL (preservando `dia`), sem scroll reset.
   const trocarVisao = (v: string) => {
-    setModoVisao(v);
+    setVisaoEscolhida(v);
     const qs = new URLSearchParams();
     qs.set("visao", v);
     if (diaISO) qs.set("dia", diaISO);
