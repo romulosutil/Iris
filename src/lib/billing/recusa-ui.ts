@@ -93,6 +93,10 @@ const CTA_POR_GRUPO: Readonly<
   G6: { href: "/assinatura", label: "Ver assinatura" },
   G7: { href: "/assinatura", label: "Ver assinatura" },
   G8: { href: "/assinatura", label: "Ver assinatura" },
+  // G9 (#378) é o oposto de G1/G2: no cartão a ação MORA no Iris — trocar o
+  // cartão é uma tela nossa, não o app do banco. Por isso o rótulo é o gesto
+  // ("Atualizar cartão"), não a navegação ("Ver assinatura").
+  G9: { href: "/assinatura", label: "Atualizar cartão" },
 };
 
 export function montarAvisoRecusa(entrada: EntradaAvisoRecusa): AvisoRecusa {
