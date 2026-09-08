@@ -75,6 +75,24 @@
 
 ---
 
+## 🏁 Sessão 08/09/2026 — #648: o rail media a página, não o dispositivo; e a nav horizontal era um segundo landmark igual
+
+**Pedido do Rômulo:** rail `fixed` e dimensionado pelo dispositivo (estava relativo ao tamanho da página) + remover o menu horizontal.
+
+**Os dois defeitos.** O rail era filho `flex` de uma coluna `min-h-dvh`, então esticava com o **documento**: em lista longa os itens subiam para fora da tela com o scroll e o rodapé (Administração, `Sair`) só voltava no fim da página. E a "faixa 2" do `Header` (`hidden sm:block`) repetia, de 640px para cima, os mesmos destinos do rail — sob um **segundo** `aria-label="Navegação principal"`, ou seja, dois landmarks idênticos para quem navega por landmarks — gastando uma linha inteira de altura contra o argumento geométrico do §3.7 que justifica o rail existir.
+
+**O que entrou:** rail `fixed top-0 left-0 h-dvh z-30`; como ele sai do fluxo, quem reserva a coluna passa a ser o `padding-left` do conteúdo (`lg:pl-[var(--rail-largura)]`), com as duas larguras vindo da MESMA função (`larguraRail`) — daí o estado colapsado ter saído do componente para o hook `useRailColapsado`, com o `Rail` ainda governando o próprio estado quando ninguém o controla (Storybook, axe, teste de componente). Faixa 2 removida.
+
+**Consequência que a remoção obriga (e que quase passou batido):** sem a faixa, a janela **640–1023px** ficaria sem navegação nenhuma — o rail é `lg`+ e o ÚNICO gatilho do Drawer mora na `BottomNav`, que era `sm:hidden`. Ela passou para `lg:hidden`, e a reserva de `padding-bottom` do `main` acompanhou. Detalhe medido: `sm:py-10` reescreve as duas bordas verticais, então a reserva precisou ser repetida em `sm:pb-…` e só vira `pb-10` em `lg`.
+
+**Decisão (a validar com o Rômulo):** o corte ficou em **`lg` (1024px)**, não em `md`. Mover o rail para 768px daria conteúdo mais folgado em tablet, mas contraria o §3.7 já ratificado ("Desktop (≥1024px): rail lateral"); esticar a barra inferior até 1023 não mexe em régua de produto nenhuma. Se a preferência for rail a partir de 768px, é uma linha em cada um dos dois componentes.
+
+**Armadilha de verificação:** `getComputedStyle` lido logo após um resize emulado do navegador devolve valor **velho** — o `padding-left` aparecia como 236px num viewport de 900px com `matchMedia('(min-width:1024px)')` já em `false`. Parecia bug de breakpoint e não era: depois de `location.reload()` no mesmo 900px, o valor correto é `0px` e o rail `display: none`. `transition-[padding]` no elemento agrava a leitura stale. Medir depois de recarregar, não logo depois de redimensionar.
+
+**Estado:** PR #650 (fecha #648) — 13/13 checks verdes (`test`, `test-rls`, `test-e2e`, `lint`, `typecheck`, `build`, CodeQL), marcado Ready for Review.
+
+---
+
 ## 🏁 Sessão 07/09/2026 (4ª) — #464: a "Fase 4 futura" do comentário já tinha entrado
 
 **O que a issue pedia:** decidir, antes de qualquer código, (1) a fonte de `paciente.resumo_repertorio` e (2) que "Fase 4" o comentário de `context-loader.ts` mencionava ao justificar `historico_relevante: []`.
