@@ -6,6 +6,7 @@ import {
   CalendarEventCard,
   type CalendarEventoEstado,
 } from "./calendar-event-card";
+import { useViewportMobile } from "./use-viewport-mobile";
 
 /**
  * O mínimo que a grade precisa de um evento para posicioná-lo e descrevê-lo.
@@ -129,24 +130,9 @@ const DIAS_PADRAO = [
 ];
 
 // R-30: grade de N colunas (uma por recurso) é ilegível em viewport estreito
-// — abaixo do breakpoint `md` (768px, convenção Tailwind do repo) a escala
-// "Dia" (`modo="daily-resources"`) troca para lista cronológica.
-const MOBILE_BREAKPOINT_PX = 768;
-
-function useEscalaDiaMobile(): boolean {
-  const [mobile, setMobile] = React.useState(false);
-
-  React.useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT_PX - 1}px)`);
-    const atualizar = () => setMobile(mql.matches);
-    atualizar();
-    mql.addEventListener("change", atualizar);
-    return () => mql.removeEventListener("change", atualizar);
-  }, []);
-
-  return mobile;
-}
+// — abaixo do breakpoint `md` a escala "Dia" (`modo="daily-resources"`) troca
+// para lista cronológica. O corte mora em `use-viewport-mobile` porque
+// `/agenda` decide a visão padrão pelo MESMO número (#283).
 
 interface CalendarDayListProps<T extends CalendarEvento> {
   sessoes: T[];
@@ -254,7 +240,7 @@ export function CalendarGrid<T extends CalendarEvento = CalendarEvento>({
   bloqueios = [],
   fuso,
 }: CalendarGridProps<T>) {
-  const mobileDia = useEscalaDiaMobile();
+  const mobileDia = useViewportMobile();
 
   const horarios = React.useMemo(
     () => gerarHorarios(abertura, fechamento, passoMin),
