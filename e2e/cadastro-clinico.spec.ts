@@ -73,8 +73,10 @@ test("coordenador completa cadastro administrativo, clínico e vê a equipe", as
   );
 
   // Equipe de cuidado do paciente é acessível ao coordenador.
+  // Título segue o padrão de esqueleto de página (breadcrumb + `Aba · Nome`)
+  // adotado por todas as abas do paciente — não mais o rótulo fixo antigo.
   await page.goto(`/pacientes/${patientId}/equipe`);
   await expect(
-    page.getByRole("heading", { name: "Equipe de cuidado" }),
+    page.getByRole("heading", { name: "Equipe · Paciente E2E" }),
   ).toBeVisible();
 });
