@@ -46,9 +46,10 @@ test.describe("BottomNav do coordenador", () => {
     });
     // Coordenador: Agenda/Sessões/Pacientes/Relatórios (itemsNav, 4) +
     // Validação/Alertas de risco/Supervisão (governança, #533 · PR-01/PR-02) +
-    // Equipe/Dados/Exportação/Assinatura/Dúvidas/Perfil (itemsAdmin, 9).
+    // Equipe/Dados/Marca nos PDFs (#258)/Exportação/Assinatura/Dúvidas/Perfil
+    // (itemsAdmin, 10).
     await expect(drawerNav.getByRole("link")).toHaveCount(4);
-    await expect(drawerAdmin.getByRole("link")).toHaveCount(9);
+    await expect(drawerAdmin.getByRole("link")).toHaveCount(10);
   });
 
   test("navega pelo 2º slot da barra", async ({ page }) => {

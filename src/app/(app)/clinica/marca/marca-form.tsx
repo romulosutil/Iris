@@ -21,6 +21,10 @@ import type { MarcaView } from "./logic";
 
 const COR_NEUTRA = "#1a1a1a";
 
+/** Assinatura de 8 bytes do PNG (RFC 2083 §3.1) — cópia client-side de
+ * `ASSINATURA_PNG` (marca.ts): aquela usa `Buffer`, que não roda no browser. */
+const ASSINATURA_PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
 /**
  * #258 (D9) — configuração da marca institucional, com pré-visualização do
  * topo do PDF (T5).
@@ -69,7 +73,7 @@ export function MarcaForm({ marca }: { marca: MarcaView }) {
         ? `Contraste ${contraste!.toFixed(2)}:1 sobre o papel branco do PDF — abaixo do mínimo de ${CONTRASTE_MINIMO_AA}:1 (WCAG 2.1 AA). Escolha um tom mais escuro.`
         : undefined;
 
-  function aoEscolherArquivo(e: React.ChangeEvent<HTMLInputElement>) {
+  async function aoEscolherArquivo(e: React.ChangeEvent<HTMLInputElement>) {
     const arquivo = e.target.files?.[0];
     if (!arquivo) {
       setLogoPreview(marca.logoDataUri);
@@ -79,6 +83,20 @@ export function MarcaForm({ marca }: { marca: MarcaView }) {
     if (arquivo.size > TAMANHO_MAX_LOGO_BYTES) {
       setAvisoArquivo(
         `O arquivo tem ${(arquivo.size / 1024 / 1024).toFixed(2)} MB e o limite é 2 MB.`,
+      );
+      setLogoPreview(marca.logoDataUri);
+      return;
+    }
+    // Mesma régua do servidor (`validarLogoPng`, marca.ts): magic bytes, não
+    // extensão nem `arquivo.type` — os dois são texto livre do cliente. Sem
+    // esta checagem, um arquivo renomeado para `.png` viraria um blob: URL
+    // (`URL.createObjectURL`) exibido cru num `<img src>` — o preview
+    // reinterpretaria bytes escolhidos pelo usuário sem validar o formato.
+    const assinatura = new Uint8Array(await arquivo.slice(0, 8).arrayBuffer());
+    const ehPng = ASSINATURA_PNG.every((byte, i) => assinatura[i] === byte);
+    if (!ehPng) {
+      setAvisoArquivo(
+        "O arquivo não é um PNG válido. Envie o logotipo em PNG (SVG não é aceito por segurança).",
       );
       setLogoPreview(marca.logoDataUri);
       return;
