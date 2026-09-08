@@ -75,6 +75,33 @@
 
 ---
 
+## 🏁 Sessão 08/09/2026 (2ª) — #378 cartão: gate de tokenização aprovado, T0/T1/T2/T9 fechados, e T3 travado por um piso de R$ 5,00 que ninguém tinha medido
+
+**Gatilho:** o Asaas aprovou a habilitação de **tokenização em produção** — o gate externo registrado em 24/08/2026. Ele destravava a virada da flag `BILLING_CARTAO_HABILITADO`, não a implementação; a implementação estava parada por outro motivo (T0 nunca medido).
+
+**Feito (4 commits na branch `feat/cartao-credito-378`, worktree isolado):**
+
+- **T0 — spike no sandbox, os 6 itens, com corpos crus** (`.specs/features/378-cartao-credito-pos-pago/medicao-t0.md`). Nenhuma regra de parada disparou: a fatura hospedada **devolve** `payment.creditCard.creditCardToken` (o desenho inteiro dependia disso); cobrar com token **sem** `remoteIp` volta `200`, então **nenhum IP é persistido** e nada entra no checklist LGPD; e o Asaas **não retenta** cobrança avulsa de cartão — nem a `Assinatura` nativa entrega o 3+2 —, logo o motor de 5x de T5b é nosso, como D11 já supunha.
+- **T1 — colunas de cartão** (`0159_cartao_credito_colunas`), 4 colunas + CHECK, verificado **medindo** num banco migrado do zero: colunas, definição do CHECK e as 16 permissões por coluna. O CHECK foi **exercitado**, não só lido — promover cartão a `active` sem token e zerar o token de um ativo falham com `23514`; `setup_pending` sem token, `active` com token e linha Pix sem token passam.
+- **T2 — grupo `G9 CARD_DECLINED`** no catálogo de recusa, com prova de mutação: esvaziar a linha do catálogo mata 4 testes, virar `carimbaPastDue` para `false` mata exatamente 1.
+- **T9 — guarda anti-PAN** (`src/security/pan-cartao-guard.test.ts`), que distingue **ler resposta** de **escrever request**: injetar `ccv` num corpo de request real derruba o guard nomeando arquivo e campo; ler `payment.creditCard.creditCardToken` continua permitido.
+- **T8 (parte)** — `BILLING_CARTAO_HABILITADO` documentada no `.env.example`, com o gate aprovado e o bloqueio novo escritos ali.
+
+**Duas correções de spec que só a medição produziu:**
+
+1. **O discriminador da recusa síncrona estava invertido.** A spec (seguindo a doc pública do Asaas) mandava tratar `errors[].code === "invalid_creditCard"` como recusa do emissor. Medido: a recusa vem como **`invalid_action`**, e `invalid_creditCard` é **token inexistente** — defeito nosso. Implementar como estava escrito carimbaria `past_due` na clínica por bug do Iris e deixaria a recusa real estourar como exceção.
+2. **Piso de R$ 5,00 por cobrança de cartão**, que não estava na spec.
+
+**Pendente — e é decisão de dinheiro, não de código:** `VALOR_ATIVACAO_PADRAO_CENTAVOS` vale **1** (um centavo, decisão D22 de 09/08/2026, porque a Jornada 3 do Bacen exige QR liquidado). D3 manda o cartão cobrar o mesmo valor, e o Asaas **rejeita** cobrança de cartão abaixo de R$ 5,00. Como o token só nasce de transação aprovada, ativar cartão custa no mínimo **500x** o Pix — e D12 recobra isso a cada troca de cartão. Medido também que **não existe tokenização gratuita** sob a restrição de PCI: `POST /subscriptions` com vencimento a 30 dias gerou fatura hospedada que, ao receber o cartão, **capturou no ato** (`dueDate 08/10`, `confirmedDate 08/09`, R$ 39 cobrados). O "normalmente não cobra" do FAQ vale só para o checkout transparente, vetado por SAQ-D em D1.
+
+**Decisão do Rômulo (08/09/2026):** antes de escolher o valor, **perguntar ao gerente de contas do Asaas se o mínimo de R$ 5,00 pode ser baixado na conta**. É pergunta NOVA — o gate de tokenização aprovado não a cobre. **T3, T4, T5, T5b, T6 e T7 ficam parados até a resposta.**
+
+**Próximo passo:** com o valor decidido, retomar em T3 (ativação por cartão pela fatura hospedada) — T4 já tem o discriminador corrigido esperando, e T5b tem a resposta do item 6 do T0.
+
+**Taxa medida de passagem, para a mesma conversa com o Asaas:** cobrança de R$ 39,00 no cartão devolve `netValue` R$ 37,74 — **R$ 1,26 (~3,2%) retidos por transação**. São três coisas diferentes que a palavra "taxa" mistura: esta retenção, o piso de R$ 5,00 (regra de plataforma) e a cobrança de ativação (decisão nossa).
+
+---
+
 ## 🏁 Sessão 08/09/2026 — #283: dois critérios já estavam fechados; o terceiro não tinha quem medisse
 
 **O que a issue pedia:** layout mobile da Matriz (375px, 3+ terapeutas), com três critérios de aceite.

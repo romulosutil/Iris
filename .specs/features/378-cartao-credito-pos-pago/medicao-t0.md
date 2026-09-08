@@ -211,12 +211,69 @@ Regra corrigida, para T4:
 Deixar de logar o código, ou casar por texto da `description`, refaz a cicatriz de discriminador
 cego (#289): a `description` é copy em PT-BR e muda sem aviso.
 
-### 7.2 Piso de R$ 5,00 por cobrança de cartão (novo, não estava na spec)
+### 7.2 Piso de R$ 5,00 por cobrança de cartão — e ele está no CAMINHO CRÍTICO (D3)
 
-`value` abaixo de R$ 5,00 é rejeitado com `invalid_value` **antes** de qualquer autorização. Um ciclo
-apurado abaixo do piso precisa de decisão de produto (acumular no ciclo seguinte, cobrar o piso, ou
-manter a clínica em Pix). **Não decidido aqui** — fica como pendência de ratificação para o Rômulo,
-fora do caminho crítico de T1-T9, já que a mensalidade cheia está muito acima do piso.
+`value` abaixo de R$ 5,00 é rejeitado com `invalid_value` **antes** de qualquer autorização.
+
+A primeira leitura desta medição a tratou como fora do caminho crítico ("a mensalidade cheia está
+muito acima do piso"). **Errado, e a correção veio de medir a constante em vez de lembrar dela:**
+`VALOR_ATIVACAO_PADRAO_CENTAVOS` em `asaas.ts:111` vale **1** — um centavo. A ativação por Pix cobra
+R$ 0,01 por decisão de produto explícita (D22, 09/08/2026), porque a Jornada 3 do Bacen exige um QR
+liquidado para a autorização existir e um centavo é o menor débito representável.
+
+D3 manda a ativação por cartão cobrar **o mesmo** `VALOR_ATIVACAO_PADRAO_CENTAVOS`. Isso é
+impossível: um centavo no cartão é rejeitado. Como o token só nasce de uma transação aprovada, o
+mínimo que a clínica paga para ativar cartão é **R$ 5,00 — 500x o trilho Pix** — e D12 manda
+**recobrar** esse valor a cada troca de cartão.
+
+**T3 está bloqueado nisto**, e é decisão de dinheiro, não de código: nenhum executor deve escolher o
+valor sozinho. Registrado para o Rômulo em 08/09/2026, junto da pergunta ao gerente de contas do
+Asaas sobre baixar o mínimo da conta (pergunta NOVA — o gate de tokenização aprovado no mesmo dia
+não cobre isto).
+
+### 7.3 Não existe tokenização sem cobrança sob a restrição de PCI (medido, não deduzido)
+
+Hipótese testada em 08/09/2026, a pedido do Rômulo: o FAQ de Assinaturas diz que criar assinatura
+com cartão "normalmente não cobra — o cartão é validado e utilizado nas cobranças futuras". Se valesse
+pela fatura hospedada, a ativação por cartão custaria R$ 0,00 e o problema de §7.2 sumiria.
+
+Medição: `POST /subscriptions` com `billingType: CREDIT_CARD`, `value: 39.00`,
+`nextDueDate` daqui a 30 dias, **sem** dados de cartão → `HTTP 200`, assinatura `ACTIVE`
+(`sub_m3mldxj8s7hjino6`), e `GET /subscriptions/{id}/payments` já trouxe **uma** cobrança
+`PENDING` com `dueDate: "2026-10-08"` e `invoiceUrl`.
+
+Cartão de teste digitado nessa fatura hospedada. Resultado:
+
+```json
+{
+  "id": "pay_ukg5fca1bemjja47",
+  "status": "CONFIRMED",
+  "dueDate": "2026-10-08",
+  "confirmedDate": "2026-09-08",
+  "clientPaymentDate": "2026-09-08",
+  "creditCard": { "creditCardNumber": "8829", "creditCardBrand": "MASTERCARD",
+                  "creditCardToken": "da5d7d36-e419-4e8a-8226-6bc2db56ed30" }
+}
+```
+
+**Cobrou hoje, R$ 39,00, com vencimento um mês à frente.** A fatura hospedada não agenda: ela captura
+no ato, exatamente como D7 já dizia para cobrança avulsa. O "normalmente não cobra" do FAQ vale para
+o caminho em que o cartão vai **pela API** na criação da assinatura — que é o checkout transparente
+vetado por PCI-DSS SAQ-D em D1.
+
+**Conclusão: sob a restrição de nunca tocar em PAN/CVV, não existe caminho de tokenização gratuita.**
+A escolha real é entre cobrar ≥ R$ 5,00 ou não ter trilho de cartão.
+
+Observação colateral útil: o token devolvido foi **o mesmo** (`da5d7d36-…`) da cobrança avulsa do §2.
+O token é do par (cliente, cartão) — reentrada com o mesmo cartão não gera token novo, o que é
+coerente com a doc dizendo que o token pertence ao `customer` para o qual nasceu.
+
+### 7.4 A taxa do Asaas por transação de cartão (medida de passagem)
+
+`value: 39.00` → `netValue: 37.74`. **R$ 1,26 retidos**, ~3,2%. Não é escolha nossa e não muda com o
+valor de ativação; fica registrado porque a conversa sobre "taxa" com o Asaas mistura três coisas
+diferentes — esta retenção, o piso de R$ 5,00 (regra de plataforma) e a cobrança de ativação (nossa
+decisão de produto).
 
 ## 8. Como reproduzir
 

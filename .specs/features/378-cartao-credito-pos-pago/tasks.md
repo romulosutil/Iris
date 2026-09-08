@@ -14,7 +14,14 @@ tocados** (o CI deste repo não valida Prettier — `pnpm format` no repo inteir
 > e o Asaas **não** retenta cobrança avulsa de cartão — nem via `Assinatura` nativa — então o motor
 > 5x (3+2) de T5b é nosso, como desenhado. Duas correções saíram da medição: o discriminador de
 > recusa em T4 estava invertido, e existe piso de R$ 5,00 por cobrança de cartão.
-> **T3, T4, T5 e T5b estão destravadas.**
+>
+> ⚠️ **T3 ficou bloqueado por esse piso, e o bloqueio é de dinheiro, não de código.** D3 manda a
+> ativação por cartão cobrar `VALOR_ATIVACAO_PADRAO_CENTAVOS`, que vale **1 centavo** — valor que o
+> Asaas rejeita no cartão. O mínimo real é R$ 5,00, 500x o Pix, e D12 recobra isso a cada troca de
+> cartão. Medido também (§7.3) que **não existe tokenização gratuita** sob a restrição de PCI: a
+> fatura hospedada da Assinatura nativa captura no ato, com vencimento futuro e tudo. Decisão do
+> Rômulo em 08/09/2026: **perguntar ao gerente de contas do Asaas se o mínimo da conta pode cair**
+> antes de escolher o valor. T4, T5, T5b e T6 seguem destravados tecnicamente, mas dependem de T3.
 
 **Onde:** script descartável + registro do resultado nesta spec (`.specs/features/378-.../medicao-t0.md`).
 **Depende de:** nada. **Bloqueia:** T3, T4, T5, T5b.
@@ -217,7 +224,7 @@ o Asaas sobre a taxa mínima de ativação (D3/D12).
 
 ---
 
-## T9 — Guarda anti-PAN
+## T9 — Guarda anti-PAN — ✅ **FECHADO 08/09/2026** (`src/security/pan-cartao-guard.test.ts`)
 
 **Onde:** `src/security/` (ao lado do guard de `ctx` forjável).
 
