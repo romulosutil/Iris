@@ -72,6 +72,13 @@ const POLICIES_COM_HELPER = [
   "anamnese_alvo.anamnese_alvo_select",
   "anamnese_alvo.anamnese_alvo_update",
   "app_user.app_user_read",
+  // #259 (0157, D10) — custódia da credencial de assinatura ICP-Brasil.
+  // `assinatura_credencial_revogar` é UPDATE de mão única (vigente → revogada):
+  // o `WITH CHECK` exige `revogado_em IS NOT NULL`, então o par de colunas da
+  // revogação não vira campo livre.
+  "assinatura_credencial.assinatura_credencial_insert",
+  "assinatura_credencial.assinatura_credencial_revogar",
+  "assinatura_credencial.assinatura_credencial_select",
   "audio_capture.audio_insert",
   "audio_capture.audio_select",
   "audio_capture.audio_update",
@@ -279,6 +286,12 @@ const FUNCOES_COM_HELPER = [
   "app_alerta_trecho_fonte",
   // #407/T03 — guard interno da RLS de anamnese_alvo (INSERT/UPDATE/DELETE).
   "app_anamnese_em_rascunho",
+  // #259 (0157, D10) — devolve o material CIFRADO da credencial de assinatura
+  // ICP-Brasil. DEFINER porque `app_role` não tem SELECT nas colunas de
+  // material (GRANT coluna a coluna); o guard interno copia literalmente o
+  // predicado de `assinatura_credencial_select` e ainda estreita para a
+  // credencial vigente e dentro da validade.
+  "app_assinatura_credencial_material",
   "app_cpf_hash_usado_em_outro_trial",
   "app_criar_alerta_risco",
   // D56 (0133) — autodeclaração de e-Psi (Res. CFP 009/2024). DEFINER porque
@@ -490,7 +503,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     // Redundante de propósito: se o literal for editado por engano (linha
     // duplicada, colagem parcial), o número na mensagem de falha diz o que
     // aconteceu sem precisar ler o diff inteiro.
-    expect(POLICIES_COM_HELPER.length).toBe(67);
+    expect(POLICIES_COM_HELPER.length).toBe(70);
   });
 
   // ─── 2b. o ponto cego que a #229 deixou aberto ────────────────────────────
@@ -558,7 +571,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.relname)).toEqual([]);
   });
 
-  test("as 27 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
+  test("as 28 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
     // Mesmo raciocínio do literal de policies: o oráculo é escrito à mão para
     // que uma função NOVA que entre no regime (ou uma que saia) precise de uma
     // linha aqui, no diff, e não passe por osmose.
@@ -571,7 +584,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_HELPER);
-    expect(FUNCOES_COM_HELPER.length).toBe(27);
+    expect(FUNCOES_COM_HELPER.length).toBe(28);
   });
 
   // ─── 2d. Q-05 (#529): oráculo SISTÊMICO de definers ───────────────────────
