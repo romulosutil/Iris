@@ -169,15 +169,6 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
       );
     };
 
-    const rotuloComBadge = (item: NavItem) => (
-      <>
-        <span>{item.label}</span>
-        {item.badge !== undefined && item.badge > 0 ? (
-          <NavBadge valor={item.badge} tom={item.badgeTom} />
-        ) : null}
-      </>
-    );
-
     /**
      * O Drawer sai de dentro da faixa de identidade (#185). Antes ele estava
      * acoplado ao botão hambúrguer via `DrawerTrigger`; agora o gatilho é a
@@ -426,27 +417,18 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
           </div>
 
           {/*
-          Faixa 2 — navegação (≥ 640px). Linha própria: os 7 destinos do
-          coordenador cabem inteiros na largura do container, sem competir com
-          marca e conta. Densidade alta é requisito do perfil (doc §2.2), então
-          nada é escondido em "Mais".
+          A antiga "faixa 2" (navegação horizontal, ≥640px) foi REMOVIDA. Ela
+          repetia, em desktop, exatamente os destinos que o `Rail` (#512 · T08)
+          já mostra na lateral — inclusive o mesmo landmark
+          `aria-label="Navegação principal"`, o que dava DOIS landmarks de
+          mesmo nome para quem navega por leitor de tela — e ainda roubava uma
+          linha inteira de altura do conteúdo clínico, que é o argumento
+          geométrico do §3.7 do doc de jornada.
+
+          Quem navega agora: `Rail` a partir de `lg`; `BottomNav` + Drawer
+          abaixo de `lg`. `itemsNav` continua chegando aqui porque é ele que
+          alimenta esses dois.
         */}
-          {itemsNav.length > 0 ? (
-            <div className="hidden bg-[var(--surface-card)] sm:block">
-              <Container largura={largura}>
-                <Cluster
-                  como="nav"
-                  gap="xs"
-                  aria-label="Navegação principal"
-                  className="-mx-1.5 px-1.5 py-1"
-                >
-                  {itemsNav.map((item) =>
-                    linkRenderer(item, rotuloComBadge(item)),
-                  )}
-                </Cluster>
-              </Container>
-            </div>
-          ) : null}
         </header>
 
         {/*

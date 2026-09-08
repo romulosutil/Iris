@@ -9,9 +9,20 @@ import { ChevronDownIcon } from "@/components/ui/icon";
 /**
  * #512 · T08 — Menu lateral colapsável (R-24 … R-27).
  *
- * Substitui a navegação horizontal do topo por um rail lateral em desktop
- * (≥1024px). Mobile continua na `BottomNav` (já satisfaz R-27 — barra
- * inferior, não gaveta superior — desde #185); este componente não toca nela.
+ * É a ÚNICA navegação de desktop (≥1024px): a faixa horizontal do topo, que
+ * antes duplicava estes mesmos destinos (e o mesmo landmark
+ * `Navegação principal`), não existe mais. Abaixo de `lg` quem navega é a
+ * `BottomNav` + o Drawer do `Header` (R-27 — barra inferior, não gaveta
+ * superior, desde #185); este componente não toca neles.
+ *
+ * O rail é `position: fixed` e mede `h-dvh`: a altura é a do DISPOSITIVO, não
+ * a da página. Antes ele era um filho `flex` de uma coluna `min-h-dvh` e
+ * esticava junto com o conteúdo — numa lista longa de pacientes, os itens de
+ * navegação subiam para fora da tela junto com o scroll da página, e o rodapé
+ * (menu do usuário + `Sair`) só reaparecia no fim do documento. Quem desloca
+ * o conteúdo para o lado do rail é `AppHeader`, com o `padding-left` derivado
+ * de `larguraRail` — por isso o estado colapsado mora em `useRailColapsado`,
+ * fora deste componente, quando há alguém interessado nele.
  */
 
 export const CHAVE_RAIL_COLAPSADO = "iris_rail_colapsado";
@@ -44,6 +55,44 @@ function gravarColapsado(colapsado: boolean): void {
   }
 }
 
+/** Largura em px do rail no estado dado — fonte única para o próprio rail e
+ * para o `padding-left` do conteúdo em `AppHeader`. Com o rail `fixed`, os
+ * dois números precisam vir do mesmo lugar: se divergirem, ou sobra uma
+ * faixa vazia, ou o rail come a primeira coluna do conteúdo. */
+export function larguraRail(colapsado: boolean): number {
+  return colapsado ? RAIL_LARGURA_COLAPSADA : RAIL_LARGURA_EXPANDIDA;
+}
+
+/**
+ * Estado colapsado do rail + persistência.
+ *
+ * Inicializador preguiçoso, não `useEffect` + `setState` (o lint da Compiler
+ * barra setState síncrono dentro de efeito — cascata de render). No servidor
+ * (SSR não tem `window`) nasce expandido, igual ao default seguro de
+ * `lerColapsado`; no cliente já nasce com a preferência real, sem o salto de
+ * um segundo render. Custo aceito: se o operador tinha colapsado, o HTML do
+ * servidor diverge por um frame do primeiro render do cliente (warning de
+ * hidratação, não erro) — é preferência de exibição, não dado clínico.
+ */
+export function useRailColapsado(): {
+  colapsado: boolean;
+  alternar: () => void;
+} {
+  const [colapsado, setColapsado] = React.useState<boolean>(() =>
+    typeof window === "undefined" ? false : lerColapsado(),
+  );
+
+  const alternar = React.useCallback(() => {
+    setColapsado((atual) => {
+      const proximo = !atual;
+      gravarColapsado(proximo);
+      return proximo;
+    });
+  }, []);
+
+  return { colapsado, alternar };
+}
+
 const IGNORAR_NO_MONOGRAMA = new Set(["de", "da", "do", "e", "a", "o"]);
 
 /**
@@ -63,6 +112,13 @@ function monograma(label: string): string {
 
 export interface RailProps {
   itemsNav: NavItem[];
+  /** Estado colapsado CONTROLADO. Quando ausente, o rail governa o próprio
+   * estado (e persiste em `localStorage`) — é o modo usado nos testes de
+   * componente e no Storybook. `AppHeader` controla de fora porque precisa da
+   * mesma largura para deslocar o conteúdo (`larguraRail`). */
+  colapsado?: boolean;
+  /** Par de `colapsado`. Só é lido quando `colapsado` é fornecido. */
+  onAlternar?: () => void;
   /** #512 · T09 (R-22) — administração da clínica (`Dados da Clínica`,
    * `Exportar Acervo`, `Equipe`, `Assinatura`, `Dúvidas`, `Meu Perfil`), fora
    * do menu diário. Vive atrás de um gatilho no rodapé — são itens de baixa
@@ -225,34 +281,23 @@ function MenuUsuario({
 export function Rail({
   itemsNav,
   itemsAdmin = [],
+  colapsado: colapsadoProp,
+  onAlternar,
   signOutSlot,
   renderLink,
   renderAdminLink,
   className,
 }: RailProps) {
-  // Inicializador preguiçoso, não `useEffect` + `setState` (o lint da
-  // Compiler barra setState síncrono dentro de efeito — cascata de render).
-  // No servidor (SSR não tem `window`) nasce expandido, igual ao default
-  // seguro de `lerColapsado`; no cliente já nasce com a preferência real, sem
-  // o salto de um segundo render. Custo aceito: se o operador tinha
-  // colapsado, o HTML do servidor diverge por um frame do primeiro render do
-  // cliente (warning de hidratação, não erro) — é preferência de exibição, não
-  // dado clínico.
-  const [colapsado, setColapsado] = React.useState<boolean>(() =>
-    typeof window === "undefined" ? false : lerColapsado(),
-  );
-
-  const alternar = React.useCallback(() => {
-    setColapsado((atual) => {
-      const proximo = !atual;
-      gravarColapsado(proximo);
-      return proximo;
-    });
-  }, []);
+  // O hook roda SEMPRE (regra dos Hooks), mesmo controlado de fora: o custo é
+  // uma leitura de `localStorage` no mount, e a alternativa — chamar o hook
+  // condicionalmente — é o bug clássico de ordem de hooks.
+  const interno = useRailColapsado();
+  const colapsado = colapsadoProp ?? interno.colapsado;
+  const alternar = onAlternar ?? interno.alternar;
 
   if (itemsNav.length === 0) return null;
 
-  const largura = colapsado ? RAIL_LARGURA_COLAPSADA : RAIL_LARGURA_EXPANDIDA;
+  const largura = larguraRail(colapsado);
 
   const linkClasse = (item: NavItem) =>
     cn(
@@ -320,7 +365,11 @@ export function Rail({
     <nav
       aria-label="Navegação principal"
       className={cn(
-        "hidden shrink-0 flex-col border-r-2 border-[var(--border-brutal)] bg-[var(--surface-card)] lg:flex",
+        // `fixed` + `h-dvh`: a altura é a do dispositivo. `z-30` fica ABAIXO
+        // do overlay de Dialog/Drawer (`z-40`) e do painel deles (`z-50`) —
+        // um rail que pintasse por cima de um modal seria clicável com o
+        // modal aberto.
+        "fixed top-0 left-0 z-30 hidden h-dvh flex-col border-r-2 border-[var(--border-brutal)] bg-[var(--surface-card)] lg:flex",
         "transition-[width] duration-150 ease-out",
         className,
       )}

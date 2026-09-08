@@ -117,7 +117,12 @@ export function BottomNav({ items, onAbrirMenu, renderLink }: BottomNavProps) {
         "fixed inset-x-0 bottom-0 z-50 flex items-stretch",
         "border-t-2 border-[var(--border-brutal)] bg-[var(--surface-card)]",
         "pb-[env(safe-area-inset-bottom)] shadow-[var(--ds-shadow)]",
-        "sm:hidden",
+        // Abaixo de `lg` a `BottomNav` é a ÚNICA navegação: o rail lateral só
+        // aparece a partir de `lg` e a faixa horizontal do topo foi removida.
+        // Trocar `sm:hidden` por `lg:hidden` fecha a janela 640–1023px, que
+        // ficaria sem NENHUM acesso à navegação nem ao Drawer (o gatilho
+        // "Abrir menu de navegação" mora aqui).
+        "lg:hidden",
       )}
     >
       {visiveis.map((item) => {

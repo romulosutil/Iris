@@ -6,6 +6,7 @@ import {
   RAIL_LARGURA_COLAPSADA,
   RAIL_LARGURA_EXPANDIDA,
   CHAVE_RAIL_COLAPSADO,
+  larguraRail,
 } from "./rail";
 import type { NavItem } from "./header";
 
@@ -31,6 +32,55 @@ function larguraDoRail(): string | null {
   const nav = screen.getByRole("navigation", { name: "Navegação principal" });
   return nav.style.width || null;
 }
+
+describe("Rail — fixo à viewport, não à página", () => {
+  it("o rail é `fixed` e mede a altura do DISPOSITIVO (`h-dvh`), não a da página", () => {
+    render(<Rail itemsNav={ITENS} />);
+    const nav = screen.getByRole("navigation", { name: "Navegação principal" });
+    const classes = nav.className.split(/\s+/);
+
+    // Regressão do bug relatado: o rail era um filho `flex` de uma coluna
+    // `min-h-dvh` e esticava com o conteúdo — numa lista longa, os itens
+    // saíam da tela junto com o scroll e o rodapé (menu do usuário, `Sair`)
+    // só voltava no fim do documento.
+    expect(classes).toContain("fixed");
+    expect(classes).toContain("h-dvh");
+    expect(classes).toContain("top-0");
+    expect(classes).toContain("left-0");
+    // Fora do fluxo, ele não pode mais reservar a própria coluna: quem faz
+    // isso é o `padding-left` do conteúdo em `AppHeader`.
+    expect(classes).not.toContain("shrink-0");
+    // Abaixo do overlay (`z-40`) e do painel (`z-50`) de Dialog/Drawer: um
+    // rail por cima de um modal continuaria clicável com o modal aberto.
+    expect(classes).toContain("z-30");
+  });
+
+  it("`larguraRail` é a fonte única das duas larguras", () => {
+    expect(larguraRail(false)).toBe(RAIL_LARGURA_EXPANDIDA);
+    expect(larguraRail(true)).toBe(RAIL_LARGURA_COLAPSADA);
+  });
+
+  it("modo controlado: a prop `colapsado` vence o estado persistido", () => {
+    localStorage.setItem(CHAVE_RAIL_COLAPSADO, "1");
+    render(<Rail itemsNav={ITENS} colapsado={false} onAlternar={() => {}} />);
+    expect(larguraDoRail()).toBe(`${RAIL_LARGURA_EXPANDIDA}px`);
+  });
+
+  it("modo controlado: alternar chama `onAlternar` e NÃO grava sozinho — quem manda é o dono do estado", async () => {
+    const aoAlternar = vi.fn();
+    render(<Rail itemsNav={ITENS} colapsado={false} onAlternar={aoAlternar} />);
+
+    const usuario = userEvent.setup();
+    await usuario.click(screen.getByRole("button", { name: "Recolher menu" }));
+
+    expect(aoAlternar).toHaveBeenCalledTimes(1);
+    // Controlado, o rail não muda de largura por conta própria: ele espera a
+    // prop voltar. Se largasse o próprio estado aqui, o `padding-left` do
+    // conteúdo (que vem do estado de fora) ficaria dessincronizado do rail.
+    expect(larguraDoRail()).toBe(`${RAIL_LARGURA_EXPANDIDA}px`);
+    expect(localStorage.getItem(CHAVE_RAIL_COLAPSADO)).toBeNull();
+  });
+});
 
 describe("Rail — T08 (R-24 … R-27)", () => {
   it("nasce expandido (236px) quando não há preferência salva", () => {
