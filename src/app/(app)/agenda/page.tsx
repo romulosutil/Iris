@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getTenantContext } from "@/auth/tenant";
 import { Stack, Cluster } from "@/components/ui/layout";
 import { Button } from "@/components/ui/button";
+import { CalendarPlusIcon } from "@/components/ui/icon";
 import { PageHeader } from "@/components/ui/page-header";
 import { DataRow } from "@/components/ui/data-row";
 import { listarTerapeutas } from "@/app/(app)/equipe/[id]/queries";
@@ -248,7 +249,19 @@ export default async function AgendaPage({
         actions={
           podeAgendar ? (
             <Button asChild variante="primaria">
-              <Link href="/agenda?escala=semana">+ Agendar no Calendário</Link>
+              {/* O ícone substitui o "+" que era texto no rótulo: o sinal de
+                  adição era lido em voz alta pelo leitor de tela ("mais
+                  agendar no calendário") e não sobrevivia a `forced-colors`
+                  como forma. Aqui é `aria-hidden` e o rótulo diz tudo. */}
+              <Link href="/agenda?escala=semana">
+                <CalendarPlusIcon
+                  size={18}
+                  aria-hidden
+                  focusable="false"
+                  className="h-[18px] w-[18px] shrink-0"
+                />
+                Agendar no Calendário
+              </Link>
             </Button>
           ) : undefined
         }

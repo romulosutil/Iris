@@ -4,7 +4,8 @@ import * as React from "react";
 import { cn } from "@/lib/cn";
 import { control } from "@/components/ui/primitives/surface";
 import { NavBadge, type NavItem } from "@/components/ui/header";
-import { ChevronDownIcon } from "@/components/ui/icon";
+import { ChevronDownIcon, SlidersIcon } from "@/components/ui/icon";
+import { IconeDaRota } from "@/components/ui/nav-icon";
 
 /**
  * #512 · T08 — Menu lateral colapsável (R-24 … R-27).
@@ -147,9 +148,39 @@ export function useRailColapsado(): {
 const IGNORAR_NO_MONOGRAMA = new Set(["de", "da", "do", "e", "a", "o"]);
 
 /**
+ * Slot fixo de 28px à esquerda do rótulo — ícone quando a rota é conhecida,
+ * monograma quando não é. A largura é a MESMA nos dois casos e nos dois
+ * estados do rail: colapsado, é ela que fica centrada nos 68px; expandido, é
+ * ela que alinha verticalmente os rótulos. Se variasse, o texto dançaria de
+ * item para item.
+ */
+function GlifoItem({ item }: { item: NavItem }) {
+  return (
+    <IconeDaRota
+      href={item.href}
+      size={20}
+      className="h-5 w-5 shrink-0"
+      fallback={
+        <span
+          aria-hidden
+          className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-control)] border-2 border-current/30 font-mono text-xs font-bold"
+        >
+          {monograma(item.label)}
+        </span>
+      }
+    />
+  );
+}
+
+/**
  * Marca decorativa de 1-2 letras para o estado colapsado. NUNCA é o portador
  * de significado (R-26) — só o `aria-label`/`title` do link são; isto é só o
  * `aria-hidden` visual que substitui o rótulo por texto truncado.
+ *
+ * Hoje é o FALLBACK: quando `iconeDaRota` conhece o destino, quem ocupa o
+ * slot é o ícone. Um destino novo, ainda sem ícone no mapa, continua
+ * navegável e continua legível colapsado — só volta a se parecer com o rail
+ * de antes da iconografia.
  */
 function monograma(label: string): string {
   const palavras = label
@@ -159,6 +190,23 @@ function monograma(label: string): string {
   if (palavras.length === 0) return "?";
   if (palavras.length === 1) return palavras[0]!.slice(0, 2).toUpperCase();
   return (palavras[0]![0]! + palavras[1]![0]!).toUpperCase();
+}
+
+/**
+ * Glifo dos itens do painel de Administração — 16px, sem caixa e sem
+ * monograma. O painel tem largura própria e rótulo SEMPRE visível (nunca
+ * colapsa), então uma rota sem ícone não perde nada: reserva o mesmo espaço e
+ * fica vazia, mantendo os rótulos alinhados na coluna.
+ */
+function GlifoItemAdmin({ item }: { item: NavItem }) {
+  return (
+    <IconeDaRota
+      href={item.href}
+      size={16}
+      className="h-4 w-4 shrink-0"
+      fallback={<span aria-hidden className="h-4 w-4 shrink-0" />}
+    />
+  );
 }
 
 export interface RailProps {
@@ -281,11 +329,13 @@ function MenuUsuario({
             : "border-transparent font-semibold text-[var(--text-secondary)] hover:border-[var(--border-muted)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]",
         )}
       >
-        <span
-          aria-hidden
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-control)] border-2 border-current/30 font-mono text-xs font-bold"
-        >
-          AD
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center">
+          <SlidersIcon
+            size={20}
+            aria-hidden
+            focusable="false"
+            className="h-5 w-5"
+          />
         </span>
         {!colapsado ? <span className="truncate">Administração</span> : null}
       </button>
@@ -297,7 +347,14 @@ function MenuUsuario({
             // isto o número que a nav promete ficaria só no menu diário.
             const conteudo = (
               <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
-                <span className="truncate">{item.label}</span>
+                {/* O painel do coordenador tem 9 destinos; sem âncora visual
+                    a leitura vira uma coluna de texto uniforme. O ícone é o
+                    MESMO do item equivalente do menu diário quando há um
+                    (Pacientes/Equipe são grupos distintos de propósito). */}
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <GlifoItemAdmin item={item} />
+                  <span className="truncate">{item.label}</span>
+                </span>
                 {item.badge !== undefined && item.badge > 0 ? (
                   <NavBadge valor={item.badge} tom={item.badgeTom} />
                 ) : null}
@@ -365,13 +422,8 @@ export function Rail({
   const conteudoItem = (item: NavItem) => (
     <>
       <span className="relative flex h-7 w-7 shrink-0 items-center justify-center">
-        <span
-          aria-hidden
-          className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-control)] border-2 border-current/30 font-mono text-xs font-bold"
-        >
-          {monograma(item.label)}
-        </span>
-        {/* R-26 — colapsado, o badge migra para cima do monograma: continua
+        <GlifoItem item={item} />
+        {/* R-26 — colapsado, o badge migra para cima do glifo: continua
             visível, nunca só o ícone carrega a pendência. */}
         {colapsado && item.badge !== undefined && item.badge > 0 ? (
           <span className="absolute -top-1.5 -right-1.5">

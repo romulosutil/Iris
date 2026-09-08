@@ -16,6 +16,7 @@ import {
   DrawerFooter,
 } from "@/components/ui/drawer";
 import { BottomNav } from "@/components/ui/bottom-nav";
+import { IconeDaRota } from "@/components/ui/nav-icon";
 
 /**
  * Tom da contagem ao lado do rótulo. A cor NUNCA carrega o significado sozinha
@@ -41,6 +42,26 @@ export interface NavItem {
   badge?: number;
   badgeTom?: NavBadgeTom;
   active?: boolean;
+}
+
+/**
+ * Glifo do item no Drawer mobile — MESMO ícone que o destino tem no rail e na
+ * `BottomNav`. Abaixo de `lg` o Drawer é o único lugar onde o coordenador vê
+ * a lista inteira (13 destinos entre nav diária e Administração): sem âncora
+ * visual, encontrar "Exportar Acervo" no meio dela é leitura linha a linha.
+ *
+ * Rota desconhecida reserva o espaço e fica vazia — os rótulos continuam
+ * alinhados. R-26: decorativo, o rótulo textual está sempre ao lado.
+ */
+function GlifoDrawer({ href }: { href: string }) {
+  return (
+    <IconeDaRota
+      href={href}
+      size={18}
+      className="h-[18px] w-[18px] shrink-0"
+      fallback={<span aria-hidden className="h-[18px] w-[18px] shrink-0" />}
+    />
+  );
 }
 
 /** #512 · R-24 — combo (valor persistido no cookie, rótulo legível). */
@@ -237,8 +258,11 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
             <nav aria-label="Navegação mobile" className="flex flex-col gap-2">
               {itemsNav.map((item) => {
                 const content = (
-                  <span className="flex w-full items-center justify-between">
-                    <span>{item.label}</span>
+                  <span className="flex w-full items-center justify-between gap-2">
+                    <span className="flex min-w-0 flex-1 items-center gap-2">
+                      <GlifoDrawer href={item.href} />
+                      <span className="truncate">{item.label}</span>
+                    </span>
                     {item.badge !== undefined && item.badge > 0 ? (
                       <NavBadge valor={item.badge} tom={item.badgeTom} />
                     ) : null}
@@ -272,8 +296,11 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
                   // #533 — mesmo badge do rail para Validação / Alertas de
                   // risco; o drawer mobile não pode esconder a contagem.
                   const content = (
-                    <span className="flex w-full items-center justify-between">
-                      <span>{item.label}</span>
+                    <span className="flex w-full items-center justify-between gap-2">
+                      <span className="flex min-w-0 flex-1 items-center gap-2">
+                        <GlifoDrawer href={item.href} />
+                        <span className="truncate">{item.label}</span>
+                      </span>
                       {item.badge !== undefined && item.badge > 0 ? (
                         <NavBadge valor={item.badge} tom={item.badgeTom} />
                       ) : null}

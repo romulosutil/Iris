@@ -10,28 +10,34 @@ const meta = {
 
 export default meta;
 
+/**
+ * Os `href` são os REAIS do produto, não âncoras `#`: é por eles que
+ * `nav-icon.tsx` resolve o ícone da `BottomNav` e do Drawer. Com `#agenda` a
+ * story mostraria o espaçador vazio do fallback e a documentação do DS
+ * esconderia justamente a iconografia que ela deveria estar documentando.
+ */
 const itemsNavExemplo: NavItem[] = [
-  { href: "#agenda", label: "Agenda", active: true },
-  { href: "#pendencias", label: "Pendências", badge: 3, badgeTom: "ia" },
-  { href: "#duvidas", label: "Dúvidas" },
-  { href: "#supervisao", label: "Supervisão" },
-  { href: "#equipe", label: "Equipe" },
+  { href: "/agenda", label: "Agenda", active: true },
+  { href: "/sessoes", label: "Pendências", badge: 3, badgeTom: "ia" },
+  { href: "/duvidas", label: "Dúvidas" },
+  { href: "/supervisao", label: "Supervisão" },
+  { href: "/equipe", label: "Equipe" },
 ];
 
 /** Carga real do coordenador: 7 destinos + contagem. É o caso que quebrava. */
 const itemsNavCoordenador: NavItem[] = [
   {
-    href: "#validacao",
+    href: "/validacao",
     label: "Central de Validação",
     badge: 12,
     badgeTom: "ia",
   },
-  { href: "#agenda", label: "Agenda" },
-  { href: "#pacientes", label: "Pacientes", active: true },
-  { href: "#equipe", label: "Equipe" },
-  { href: "#relatorios", label: "Relatórios" },
-  { href: "#clinica", label: "Dados da Clínica" },
-  { href: "#duvidas", label: "Dúvidas" },
+  { href: "/agenda", label: "Agenda" },
+  { href: "/pacientes", label: "Pacientes", active: true },
+  { href: "/equipe", label: "Equipe" },
+  { href: "/relatorios", label: "Relatórios" },
+  { href: "/clinica/dados", label: "Dados da Clínica" },
+  { href: "/duvidas", label: "Dúvidas" },
 ];
 
 const outrasClinicasExemplo = [

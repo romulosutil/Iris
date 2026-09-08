@@ -3,6 +3,8 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
 import type { NavItem, NavBadgeTom } from "@/components/ui/header";
+import { MenuIcon } from "@/components/ui/icon";
+import { IconeDaRota } from "@/components/ui/nav-icon";
 import { useTecladoVirtualAberto } from "@/lib/hooks/use-teclado-virtual";
 
 /**
@@ -21,23 +23,24 @@ const badgeTomClasse: Record<NavBadgeTom, string> = {
     "border-[var(--status-error-border)] bg-[var(--status-error-bg)] text-[var(--status-error-fg)]",
 };
 
-function MenuIcon() {
+/**
+ * Glifo do slot — o MESMO ícone que o destino tem no rail (`iconeDaRota`), em
+ * 22px. Antes só o slot "Menu" tinha ícone e os quatro destinos eram texto
+ * puro: na prática o único elemento com forma reconhecível na barra era o que
+ * NÃO leva a lugar nenhum. Rota sem ícone reserva o mesmo espaço e fica
+ * vazia — a altura dos slots não pode variar dentro da barra.
+ *
+ * R-26 — decorativo: o rótulo continua visível abaixo e o `aria-label` do
+ * link carrega o nome completo (`labelCurto` é só o que cabe em 360px).
+ */
+function GlifoSlot({ href }: { href: string }) {
   return (
-    <svg
-      width={22}
-      height={22}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden
-      focusable="false"
-    >
-      <path
-        d="M4 6h16M4 12h16M4 18h16"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="square"
-      />
-    </svg>
+    <IconeDaRota
+      href={href}
+      size={22}
+      className="h-[22px] w-[22px]"
+      fallback={<span aria-hidden className="h-[22px] w-[22px]" />}
+    />
   );
 }
 
@@ -93,6 +96,7 @@ export function BottomNav({ items, onAbrirMenu, renderLink }: BottomNavProps) {
 
   const conteudo = (item: NavItem) => (
     <>
+      <GlifoSlot href={item.href} />
       <span className="w-full truncate">{item.labelCurto ?? item.label}</span>
       {item.badge !== undefined && item.badge > 0 ? (
         <span
@@ -150,7 +154,12 @@ export function BottomNav({ items, onAbrirMenu, renderLink }: BottomNavProps) {
           "border-t-2 border-transparent text-[var(--text-secondary)]",
         )}
       >
-        <MenuIcon />
+        <MenuIcon
+          size={22}
+          aria-hidden
+          focusable="false"
+          className="h-[22px] w-[22px]"
+        />
         <span>Menu</span>
       </button>
     </nav>
