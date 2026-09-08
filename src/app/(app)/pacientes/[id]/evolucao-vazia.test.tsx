@@ -37,11 +37,52 @@ describe("EvolucaoVazia", () => {
     expect(screen.queryByText(/agendar primeira sessão/i)).toBeNull();
   });
 
-  it("aponta o degrau que realmente falta", () => {
+  // A escada inteira mora em `layout.tsx` (spec §3.3, superfície 1), e o layout
+  // do App Router envolve ESTA página. Repetir o `CartaoProntidao` aqui
+  // desenhava a MESMA escada duas vezes na aba Evolução, com dois botões
+  // primários idênticos — a carga cognitiva que a §3.4 ("um gesto primário por
+  // vez") existe para remover, montada dentro de uma única tela.
+  it("não repete a escada que o layout já mostra", () => {
     render(<EvolucaoVazia prontidao={SEM_META} />);
-    expect(screen.getByTestId("gesto-primario").getAttribute("href")).toBe(
-      "/pacientes/p1/metas",
-    );
+    expect(screen.queryByTestId("gesto-primario")).toBeNull();
+    expect(screen.queryByText(/prescrever um protocolo/i)).toBeNull();
+  });
+
+  it("nomeia o próximo passo como texto e aponta o cartão do topo", () => {
+    render(<EvolucaoVazia prontidao={SEM_META} />);
+    // Diz POR QUE o gráfico está vazio e onde está o gesto — sem virar um
+    // segundo botão disputando o clique com o do cartão acima.
+    expect(screen.queryByText(/ativar ao menos uma meta/i)).not.toBeNull();
+    expect(
+      screen.queryByText(/para este prontuário gerar dados/i),
+    ).not.toBeNull();
+  });
+
+  // Degrau RECOMENDADO não trava o gráfico — só o bloqueante trava. Contar
+  // "tudo que não está concluído" fazia a tela dizer que faltavam 3 passos
+  // "para a sessão gerar dado" num prontuário cujos dois passos obrigatórios
+  // já estavam cumpridos: manda resolver o degrau errado.
+  it("sem bloqueante, não conta passo recomendado como impedimento", () => {
+    const soRecomendados = montarProntidao({
+      modalidade: "protocol_driven",
+      fatos: {
+        temFichaClinica: false,
+        temAnamnese: false,
+        temProtocoloAtivo: true,
+        temMetaAtiva: true,
+        temInstrumentoAplicado: false,
+        temSessaoConsolidada: false,
+      },
+      role: "coordenador",
+      patientId: "p1",
+    });
+
+    render(<EvolucaoVazia prontidao={soRecomendados} />);
+
+    expect(screen.queryByText(/faltam? \d+ passos? obrigat/i)).toBeNull();
+    expect(
+      screen.queryByText(/nenhum passo obrigatório falta/i),
+    ).not.toBeNull();
   });
 
   it("com o prontuário pronto, explica que falta só documentar a sessão", () => {
