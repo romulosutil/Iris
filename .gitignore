@@ -138,3 +138,24 @@ ds-bundle/
 # Bundle do consumidor de fila (gerado por `pnpm queue:build`; a imagem
 # constroi o dele no proprio Dockerfile).
 dist/
+
+# --- Docs internos: liability legal, gap de segurança, plano de negócio ---
+# Não são pra repo público: parecer jurídico, briefing pré-decisão, auditoria
+# de débito técnico com dado clínico infantil, e o levantamento que confessa
+# quais controles NÃO são medidos. Termos/políticas/consentimento (entregáveis
+# a usuário final) continuam versionados normalmente.
+docs/legal/aditivo-especificacoes-legais.md
+docs/legal/briefing-duty-to-warn.md
+docs/legal/briefing-para-advogado.md
+docs/legal/dpa-asr-audio.md
+docs/legal/parecer-juridico-duty-to-warn.md
+docs/legal/pesquisa-planos-de-saude-prontuario.md
+docs/legal/revisao-juridica-2026-08-21.md
+docs/legal/teste-proporcionalidade-legitimo-interesse-antifraude.md
+docs/legal/validacao-legal-prontuario.md
+docs/produto/auditoria-360-plano-de-resolucao-2026-09-02.md
+docs/produto/auditoria-360-prompt.md
+docs/produto/auditoria-360-relatorio-2026-09-01.md
+docs/produto/auditoria-360-revisao-admissao-2026-09-02.md
+docs/produto/modelo-de-negocio.md
+docs/arquitetura/levantamento-controles-de-seguranca.md

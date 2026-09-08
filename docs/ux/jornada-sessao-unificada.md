@@ -281,14 +281,24 @@ eixo horizontal é onde sobra espaço; o vertical é onde falta.
 - **Desktop (≥1024px):** rail lateral, 236px expandido ↔ 68px colapsado (só
   ícones). O estado é preferência do operador e persiste por navegador
   (`localStorage`, com `try/catch` — a leitura estoura em janela anônima e a UI
-  precisa renderizar certo com valor ausente).
+  precisa renderizar certo com valor ausente). O rail é `fixed` e mede a altura
+  do **dispositivo** (`h-dvh`), não a da página: numa lista longa ele não sobe
+  com o scroll, e o rodapé (menu do usuário, `Sair`) fica sempre alcançável.
+  Quem reserva a coluna da esquerda é o `padding-left` do conteúdo, derivado da
+  mesma largura.
+- **A navegação horizontal do topo não existe mais.** Ela repetia, em desktop,
+  os mesmos destinos do rail — inclusive o mesmo landmark `Navegação principal`,
+  duplicado para quem navega por leitor de tela — e ocupava uma linha inteira de
+  altura, contra o argumento geométrico desta própria seção.
 - **Faixa superior fina:** seletor de clínica + **papel ativo (C7)**. Deixa de
   existir cookie invisível decidindo o que os botões fazem.
 - **Rodapé do rail:** bloco do usuário → `Meu Perfil`, administração da clínica
   **(C1)** e **`Sair`**. O sair deixa de ocupar espaço no cabeçalho.
-- **Mobile:** barra inferior com os itens diários + avatar que abre uma folha.
-  Barra inferior, não gaveta superior: o terapeuta opera de uma mão e o polegar
-  alcança a base, não o topo.
+- **Abaixo de 1024px:** barra inferior com os itens diários + gatilho que abre
+  a folha (Drawer) com o resto. Barra inferior, não gaveta superior: o terapeuta
+  opera de uma mão e o polegar alcança a base, não o topo. O corte é em `lg` — e
+  não em `sm`, como era enquanto a faixa horizontal existia — porque sem ela a
+  janela 640–1023px ficaria sem navegação nenhuma.
 - **Colapsado não degrada acessibilidade:** alvo permanece ≥44px, cada ícone
   carrega `aria-label` e tooltip, e o **badge continua visível** — ícone sozinho
   nunca é o único portador de significado.

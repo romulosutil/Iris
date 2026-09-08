@@ -8,7 +8,7 @@ import {
   type NavBadgeTom,
   type NavItem as HeaderNavItem,
 } from "@/components/ui/header";
-import { Rail } from "@/components/ui/rail";
+import { Rail, larguraRail, useRailColapsado } from "@/components/ui/rail";
 
 export interface NavItem {
   href: string;
@@ -57,6 +57,12 @@ export function AppHeader({
   children,
 }: AppHeaderProps) {
   const pathname = usePathname();
+
+  // O estado do rail mora aqui, e não dentro do `Rail`, porque com o rail
+  // `fixed` ele sai do fluxo: quem reserva a coluna da esquerda passa a ser o
+  // `padding-left` desta coluna de conteúdo, e os dois números têm que vir da
+  // mesma fonte (`larguraRail`) para não divergirem ao colapsar.
+  const { colapsado, alternar } = useRailColapsado();
 
   const clinicaAtiva = clinicas.find((c) => c.clinicId === ativaId);
   const outrasClinicas = clinicas
@@ -124,14 +130,28 @@ export function AppHeader({
     // carrega a faixa superior (`Header`, com o papel ativo — R-24) e todo o
     // resto da página. `Header` continua sozinho abaixo de `lg` (a `BottomNav`
     // que ele já monta satisfaz R-27 desde #185; não é tocada aqui).
-    <div className="flex min-h-dvh w-full bg-[var(--bg-app)]">
+    <div className="min-h-dvh w-full bg-[var(--bg-app)]">
       <Rail
         itemsNav={navItemsComEstado}
         itemsAdmin={itemsAdminComEstado}
+        colapsado={colapsado}
+        onAlternar={alternar}
         renderLink={linkCompartilhado}
         renderAdminLink={linkCompartilhado}
       />
-      <div className="flex min-h-dvh w-full min-w-0 flex-1 flex-col">
+      {/* `--rail-largura` em vez de um `paddingLeft` inline direto: o
+          deslocamento só vale a partir de `lg` (onde o rail existe), e
+          breakpoint é coisa de classe, não de style inline. A transição
+          acompanha a mesma duração do `transition-[width]` do rail — sem ela,
+          colapsar deixa uma faixa vazia piscando ao lado do conteúdo. */}
+      <div
+        className="flex min-h-dvh w-full min-w-0 flex-col transition-[padding] duration-150 ease-out lg:pl-[var(--rail-largura)]"
+        style={
+          {
+            "--rail-largura": `${larguraRail(colapsado)}px`,
+          } as React.CSSProperties
+        }
+      >
         <Header
           clinicaAtivaNome={clinicaAtiva?.nome ?? "Clínica Ativa"}
           outrasClinicas={outrasClinicas}

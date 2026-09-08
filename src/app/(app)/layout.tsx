@@ -172,11 +172,16 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         diário, confirmar validação) fica embaixo da barra — invisível e
         inclicável, e nenhum teste de componente pega, porque o jsdom não
         conhece `position: fixed`.
+
+        A reserva vai até `lg`, não até `sm`: com a faixa de navegação
+        horizontal removida, a `BottomNav` é a navegação de tudo abaixo de
+        `lg`. `sm:py-10` reescreve as DUAS bordas verticais, então a reserva
+        precisa ser repetida em `sm:pb-…` — só em `lg` ela vira `pb-10`.
       */}
       <Container
         como="main"
         largura="md"
-        className="flex-1 py-6 pb-[calc(56px+env(safe-area-inset-bottom)+1.5rem)] sm:py-10 sm:pb-10"
+        className="flex-1 py-6 pb-[calc(56px+env(safe-area-inset-bottom)+1.5rem)] sm:py-10 sm:pb-[calc(56px+env(safe-area-inset-bottom)+1.5rem)] lg:pb-10"
       >
         {children}
       </Container>
