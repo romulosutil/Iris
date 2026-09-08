@@ -88,6 +88,10 @@ export const TABELAS_NEGADAS = [
   "protocol_familia_catalogo",
   "export_bundle",
   "export_bundle_blob",
+  // #259 — material de credencial de assinatura (cifrado), não dado clínico
+  // do paciente. Mesmo tratamento de auth_account/two_factor: segurança da
+  // conta, não acervo de titular.
+  "assinatura_credencial",
 ] as const;
 
 export type PdfCongelado = {

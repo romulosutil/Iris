@@ -571,7 +571,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.relname)).toEqual([]);
   });
 
-  test("as 27 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
+  test("as 28 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
     // Mesmo raciocínio do literal de policies: o oráculo é escrito à mão para
     // que uma função NOVA que entre no regime (ou uma que saia) precise de uma
     // linha aqui, no diff, e não passe por osmose.
@@ -584,7 +584,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_HELPER);
-    expect(FUNCOES_COM_HELPER.length).toBe(27);
+    expect(FUNCOES_COM_HELPER.length).toBe(28);
   });
 
   // ─── 2d. Q-05 (#529): oráculo SISTÊMICO de definers ───────────────────────
