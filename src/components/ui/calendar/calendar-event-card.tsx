@@ -73,86 +73,81 @@ export function CalendarEventCard({
 
   if (variante === "compacta") {
     return (
-      <div
+      <button
+        type="button"
         onClick={onClick}
-        tabIndex={0}
-        role="button"
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onClick?.();
-          }
-        }}
         className={cn(
-          "group font-display focus-visible:outline-focus relative flex cursor-pointer items-center justify-between gap-1.5 rounded-[var(--radius-control)] border-2 px-2 py-1 shadow-[var(--shadow-brutal-xs)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--elevation-1)]",
+          "group font-display focus-visible:outline-focus relative flex w-full cursor-pointer items-center justify-between gap-1.5 rounded-[var(--radius-control)] border-2 px-2 py-1 text-left shadow-[var(--shadow-brutal-xs)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--elevation-1)]",
           estilo.bg,
           estilo.border,
           estilo.text,
         )}
       >
-        <div className="flex items-center gap-1.5 overflow-hidden">
+        <span className="flex items-center gap-1.5 overflow-hidden">
           <span className="h-2 w-2 shrink-0 rounded-full border border-[var(--border-brutal)] bg-current" />
           <span className="truncate text-xs font-semibold">
             {pacienteNome}
             {disciplinaNome ? ` · ${disciplinaNome}` : ""}
           </span>
-        </div>
+        </span>
         {horarioStr && (
           <span className="shrink-0 font-mono text-xs font-bold opacity-80">
             {horarioStr}
           </span>
         )}
-      </div>
+      </button>
     );
   }
 
   return (
+    // #283: o card é o container; quem é clicável é o <button> interno. Antes o
+    // container inteiro era `role="button"` e a `acao` (check-in) ficava DENTRO
+    // dele — controle aninhado em controle, violação `nested-interactive`
+    // (WCAG 4.1.2, axe "serious") nas duas variantes da escala Dia.
     <div
-      onClick={onClick}
-      tabIndex={0}
-      role="button"
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onClick?.();
-        }
-      }}
       className={cn(
-        "group font-display focus-visible:outline-focus relative flex cursor-pointer flex-col justify-between rounded-[var(--radius-control)] border-2 p-2.5 shadow-[var(--elevation-1)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--elevation-2)]",
+        "group font-display relative flex flex-col justify-between rounded-[var(--radius-control)] border-2 p-2.5 shadow-[var(--elevation-1)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--elevation-2)]",
         estilo.bg,
         estilo.border,
         estilo.text,
       )}
     >
-      <div>
-        <div className="flex items-center justify-between gap-2">
+      <button
+        type="button"
+        onClick={onClick}
+        className="focus-visible:outline-focus flex w-full cursor-pointer flex-col text-left"
+      >
+        <span className="flex w-full items-center justify-between gap-2">
           {horarioStr && (
             <span className="font-mono text-xs font-bold tracking-tight">
               {horarioStr}
             </span>
           )}
           <span className="h-2.5 w-2.5 rounded-full border border-[var(--border-brutal)] bg-current" />
-        </div>
-        <h4 className="mt-1 text-sm leading-tight font-bold text-balance">
+        </span>
+        {/* Era um <h4>: conteúdo de fluxo dentro de botão é HTML inválido, e o
+            texto do card nomeia o controle — não é cabeçalho de seção. */}
+        <span className="mt-1 text-sm leading-tight font-bold text-balance">
           {pacienteNome}
-        </h4>
+        </span>
         {disciplinaNome && (
-          <p className="mt-0.5 font-mono text-xs font-medium uppercase opacity-85">
+          <span className="mt-0.5 font-mono text-xs font-medium uppercase opacity-85">
             {disciplinaNome}
-          </p>
+          </span>
         )}
         {terapeutaNome && (
-          <p className="font-body mt-1 text-xs text-[var(--text-secondary)]">
+          <span className="font-body mt-1 text-xs text-[var(--text-secondary)]">
             {terapeutaNome}
-          </p>
+          </span>
         )}
-      </div>
+      </button>
 
       {acao ? (
-        <div
-          className="mt-2 hidden transition-all group-hover:block"
-          onClick={(e) => e.stopPropagation()}
-        >
+        // #283: revelar no hover deixa a ação inalcançável em toque — mobile
+        // não tem hover. Abaixo de `md` (mesmo corte do R-30, onde a escala Dia
+        // vira lista) a ação fica sempre visível; no desktop segue no hover,
+        // agora também no foco de teclado (antes era inalcançável por Tab).
+        <div className="mt-2 transition-all md:hidden md:group-focus-within:block md:group-hover:block">
           {acao}
         </div>
       ) : null}
