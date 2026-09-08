@@ -1114,6 +1114,13 @@
       "when": 1788847025205,
       "tag": "0158_rag_patient_record_embeddings",
       "breakpoints": true
+    },
+    {
+      "idx": 159,
+      "version": "7",
+      "when": 1788890998023,
+      "tag": "0159_cartao_credito_colunas",
+      "breakpoints": true
     }
   ]
 }

@@ -2093,6 +2093,26 @@ export const subscription = pgTable(
      */
     valorAtivacaoCentavos: integer("valor_ativacao_centavos"),
     metodoPagamento: text("metodo_pagamento"),
+    /**
+     * Vínculo de pagamento do trilho cartão (#378, D2). Cartão não tem
+     * autorização: o "vínculo" é o par (`providerCustomerId`, token), e o token
+     * pertence ao cliente para o qual nasceu — não serve em cobrança de outro.
+     *
+     * Colunas próprias, e não `providerSubscriptionId` reaproveitado, porque
+     * aquela coluna significa "id da autorização Pix" e é UNIQUE; carregar
+     * token nela repetiria o D21 (BR Code guardado em `checkoutUrl`).
+     *
+     * Quem escreve é o webhook de setup, nunca o request da clínica: o cartão é
+     * digitado na fatura hospedada do Asaas e o token só chega de volta pelo
+     * evento (D1/D4). Bandeira e 4 últimos são o que a tela mostra — o Asaas
+     * devolve apenas esses dois, nunca o PAN.
+     */
+    creditCardToken: text("credit_card_token"),
+    creditCardBandeira: text("credit_card_bandeira"),
+    creditCardUltimos4: text("credit_card_ultimos4"),
+    creditCardAtualizadoEm: timestamp("credit_card_atualizado_em", {
+      withTimezone: true,
+    }),
     cicloDias: integer("ciclo_dias").notNull().default(30),
     cicloAtualInicio: timestamp("ciclo_atual_inicio", { withTimezone: true }),
     cicloAtualFim: timestamp("ciclo_atual_fim", { withTimezone: true }),
@@ -2126,6 +2146,14 @@ export const subscription = pgTable(
     ),
     check("subscription_carencia_nao_negativa", sql`${t.carenciaDias} >= 0`),
     check("subscription_ciclo_dias_positivo", sql`${t.cicloDias} > 0`),
+    // Assinatura de cartão ATIVA sem token é a linha que fecha ciclo e não
+    // consegue cobrar (#378, D2/D4). Antes de ativar ela existe legitimamente
+    // sem token: em `free_tier` (nunca ativou) e em `setup_pending` (fatura
+    // hospedada emitida, cartão ainda não digitado).
+    check(
+      "subscription_cartao_ativo_tem_token",
+      sql`${t.metodoPagamento} <> 'cartao' OR ${t.status} IN ('free_tier', 'setup_pending') OR ${t.creditCardToken} IS NOT NULL`,
+    ),
   ],
 );
 
