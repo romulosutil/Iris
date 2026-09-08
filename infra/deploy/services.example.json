@@ -1,0 +1,21 @@
+{
+  "_comment": "Copie para services.json (gitignored) e preencha url com a 'Deployment Trigger URL' de cada serviço (aba Deployments no Easypanel). A URL já carrega um token secreto — nunca commitar services.json.",
+  "gate": [
+    { "name": "iris-migrate", "url": "SET_ME" }
+  ],
+  "rest": [
+    { "name": "iris-app", "url": "SET_ME" },
+    { "name": "iris-alarme", "url": "SET_ME" },
+    { "name": "iris-arquivamento", "url": "SET_ME" },
+    { "name": "iris-asr", "url": "SET_ME" },
+    { "name": "asr-agendador", "url": "SET_ME" },
+    { "name": "asr-sweeper", "url": "SET_ME" },
+    { "name": "iris-backup", "url": "SET_ME" },
+    { "name": "iris-billing", "url": "SET_ME" },
+    { "name": "iris-escalonamento", "url": "SET_ME" },
+    { "name": "iris-exportacao", "url": "SET_ME" },
+    { "name": "iris-expurgo-audit-log", "url": "SET_ME" },
+    { "name": "iris-retencao", "url": "SET_ME" }
+  ],
+  "_fora_da_lista": "iris-glitchtip / iris-glitchtip-worker (app terceiro, não builda deste repo), iris-minio / iris-postgres / iris-redis (infra gerenciada, sem build) — não entram em rest."
+}
