@@ -5,6 +5,12 @@
 // sem asset remoto.
 import { renderDossieTablesHtml } from "../convenio-bruto/render-dossie";
 import { escapeHtml } from "../sanitize";
+import {
+  cabecalhoMarcaHtml,
+  marcaCssHtml,
+  rodapeIrisHtml,
+} from "../marca-html";
+import type { MarcaClinica } from "../../branding/marca";
 import type { ConvenioNarrativoDraft, PayloadConvenioNarrativo } from "./types";
 
 function li(texto: string): string {
@@ -23,8 +29,13 @@ function nota(draft: ConvenioNarrativoDraft): string {
     : "";
 }
 
+// #258 (D9) — `marca` é PARÂMETRO, não campo do payload: o payload é jsonb
+// congelado na geração e uma clínica que trocasse de logotipo depois veria o
+// relatório antigo sair com a marca velha. A marca é lida no export, do estado
+// atual do tenant.
 export function buildConvenioNarrativoHtml(
   payload: PayloadConvenioNarrativo,
+  marca?: MarcaClinica | null,
 ): string {
   const d = payload.curado ?? payload.iaOriginal;
   const { cabecalho } = payload;
@@ -38,7 +49,8 @@ export function buildConvenioNarrativoHtml(
   .nota{background:#f4efe6;padding:8px 12px;border-radius:4px}
   .dominio{margin:8px 0}
   .rodape{margin-top:16px;font-size:10px;color:#555}
-</style></head><body>
+${marcaCssHtml(marca)}</style></head><body>
+${cabecalhoMarcaHtml(marca)}
 <h1>Relatório de convênio — ${escapeHtml(payload.paciente.nome)}</h1>
 <p>Período: ${escapeHtml(payload.periodo.inicio)} a ${escapeHtml(payload.periodo.fim)} · Operadora: ${escapeHtml(cabecalho.operadora)}</p>
 <p>CID (conforme prescrição médica assistente): ${cabecalho.cid ? escapeHtml(cabecalho.cid) : "—"}</p>
@@ -55,5 +67,6 @@ ${d.evolucaoPorDominio.map(evolucao).join("")}
 <ul>${d.objetivosProximoPeriodo.map(li).join("")}</ul>
 ${nota(d)}
 <p class="rodape">Documento de suporte à solicitação de cobertura, revisado por [coordenador]. Diagnóstico e prescrição são do médico assistente externo; a clínica não diagnostica.</p>
+${rodapeIrisHtml()}
 </body></html>`;
 }

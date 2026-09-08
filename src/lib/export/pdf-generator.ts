@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import PDFDocument from "pdfkit";
+import { SELO_IRIS, type MarcaClinica } from "../branding/marca";
 
 export interface SecaoProntuario {
   titulo: string;
@@ -13,6 +14,12 @@ export interface DadosProntuarioExport {
   cpfSolicitante: string;
   timestampEmissao: Date;
   secoes: SecaoProntuario[];
+  /**
+   * #258 (D9) — marca institucional da clínica. Opcional: `undefined` (clínica
+   * sem white-label configurado) é o caminho normal, não um erro, e produz
+   * exatamente o documento que existia antes desta feature.
+   */
+  marca?: MarcaClinica | null;
 }
 
 export interface InputComposicaoProntuario {
@@ -93,6 +100,14 @@ function desenharMarcaDagua(doc: PDFKit.PDFDocument, texto: string) {
   doc.y = savedY;
 }
 
+/**
+ * Rodapé auditável + selo de integridade da plataforma.
+ *
+ * INVIOLÁVEL (guardrail 3 da #258): a função NÃO recebe `marca` — não existe
+ * assinatura por onde uma configuração de clínica alcance este texto, mude a
+ * cor dele ou o desligue. Ele é desenhado depois de todo o conteúdo, em preto,
+ * em TODAS as páginas.
+ */
 function desenharRodapeAuditavel(
   doc: PDFKit.PDFDocument,
   pagina: number,
@@ -105,13 +120,66 @@ function desenharRodapeAuditavel(
     .fillColor("black")
     .opacity(0.75)
     .text(
-      `CÓPIA INTEGRAL DE PRONTUÁRIO CLÍNICO (LGPD ART. 18, II E V) — PÁGINA ${pagina}/${totalPaginas} — ASSINATURA DE INTEGRIDADE SHA-256 REGISTRADA NA TRILHA DE AUDITORIA`,
+      `CÓPIA INTEGRAL DE PRONTUÁRIO CLÍNICO (LGPD ART. 18, II E V) — PÁGINA ${pagina}/${totalPaginas}`,
       50,
-      doc.page.height - 35,
+      doc.page.height - 45,
       { width: doc.page.width - 100, align: "center", lineBreak: false },
-    );
+    )
+    .text(SELO_IRIS, 50, doc.page.height - 35, {
+      width: doc.page.width - 100,
+      align: "center",
+      lineBreak: false,
+    });
   doc.restore();
   doc.y = savedY;
+}
+
+/**
+ * Cabeçalho institucional da clínica na capa: logotipo (PNG) e/ou nome no tom
+ * da marca, sobre uma régua da cor primária. É o ÚNICO ponto do documento em
+ * que a marca da clínica escreve — o corpo clínico, a marca d'água e o rodapé
+ * seguem com o tratamento neutro.
+ *
+ * Falha de decodificação do PNG NÃO derruba a exportação: o prontuário é um
+ * direito do titular (LGPD Art. 18) e um logotipo corrompido não pode ser
+ * motivo para não entregá-lo. Cai no cabeçalho neutro.
+ */
+function desenharCabecalhoMarca(
+  doc: PDFKit.PDFDocument,
+  marca: MarcaClinica | null | undefined,
+): void {
+  if (!marca) return;
+  const cor = marca.corPrimaria ?? "#1a1a1a";
+  const nome = marca.nomeClinica.trim();
+  if (!marca.logo && nome === "" && !marca.corPrimaria) return;
+
+  const margem = doc.page.margins.left;
+  const larguraUtil = doc.page.width - margem * 2;
+
+  if (marca.logo) {
+    try {
+      doc.image(marca.logo, margem, doc.y, { fit: [140, 44] });
+      doc.y += 48;
+    } catch {
+      // PNG ilegível para o pdfkit — segue sem logotipo, com nome e cor.
+    }
+  }
+  if (nome !== "") {
+    doc.fontSize(12).fillColor(cor).text(nome, margem, doc.y, {
+      width: larguraUtil,
+    });
+    doc.moveDown(0.2);
+  }
+  doc
+    .save()
+    .lineWidth(2)
+    .strokeColor(cor)
+    .moveTo(margem, doc.y)
+    .lineTo(margem + larguraUtil, doc.y)
+    .stroke()
+    .restore();
+  doc.y += 12;
+  doc.fillColor("black");
 }
 
 /**
@@ -145,9 +213,13 @@ export async function gerarPdfProntuario(
     doc.on("error", (err) => reject(err));
   });
 
-  // Página 1: Capa do Prontuário
+  // Página 1: Capa do Prontuário — marca da clínica no topo (#258), acima do
+  // título. Ordem de precedência: a marca abre o documento, o selo Iris o
+  // fecha; nenhuma das duas depende da outra.
+  desenharCabecalhoMarca(doc, dados.marca);
   doc
     .fontSize(20)
+    .fillColor("black")
     .text(`Prontuário Clínico — ${dados.nomePaciente}`, { align: "center" });
   doc.moveDown(0.5);
   doc

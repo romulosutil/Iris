@@ -1093,6 +1093,13 @@
       "when": 1788647798324,
       "tag": "0155_asr_mime_e_janela_de_resgate",
       "breakpoints": true
+    },
+    {
+      "idx": 156,
+      "version": "7",
+      "when": 1788647798325,
+      "tag": "0156_marca_white_label",
+      "breakpoints": true
     }
   ]
 }

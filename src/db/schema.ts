@@ -28,6 +28,15 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+// customType para bytea (não havia binário no banco até a Fase 5). data =
+// Buffer. Declarado no topo porque `clinic.brand_logo` (#258) usa este tipo e
+// `const` não é içado — a definição precisa preceder o primeiro uso.
+export const bytea = customType<{ data: Buffer; default: false }>({
+  dataType() {
+    return "bytea";
+  },
+});
+
 // Enum de papel. Nome _tipo evita colisão com a tabela associativa user_role.
 export const userRoleTipo = pgEnum("user_role_tipo", [
   "terapeuta",
@@ -416,6 +425,21 @@ export const clinic = pgTable("clinic", {
   enderecoUf: text("endereco_uf"),
   enderecoCep: text("endereco_cep"),
   emailFinanceiro: text("email_financeiro"),
+  // #258 (D9) — marca institucional (white-label) dos PDFs exportados.
+  // Todos NULLABLE: clínica sem marca configurada cai no cabeçalho neutro do
+  // Iris. Escrita SOMENTE via app_salvar_marca_clinica (SECURITY DEFINER,
+  // 0156) — `clinic` não tem policy de UPDATE para app_role (0002, deliberado).
+  //
+  // POR QUE BYTES E NÃO URL (a issue #258 dizia `brand_logo_url`): o
+  // renderizador de relatório roda com CSP `default-src 'none'; img-src 'self'
+  // data:` (src/lib/report/playwright-renderer.ts). Uma URL remota — MinIO
+  // inclusive — é bloqueada pelo Blink antes de qualquer requisição, e o PDF
+  // sairia sem logotipo, em silêncio. `data:` é o único esquema que atravessa
+  // esse sandbox, então a fonte da verdade tem que ser o byte, não o endereço.
+  // Ver PR da #258.
+  brandLogo: bytea("brand_logo"),
+  brandLogoMime: text("brand_logo_mime"),
+  brandPrimaryColor: text("brand_primary_color"),
 });
 
 export const userRole = pgTable(
@@ -1567,12 +1591,8 @@ export const sessionSnapshot = pgTable(
 );
 
 // ── Fase 5: relatórios ────────────────────────────────────────────────
-// customType para bytea (não havia binário no banco até aqui). data = Buffer.
-export const bytea = customType<{ data: Buffer; default: false }>({
-  dataType() {
-    return "bytea";
-  },
-});
+// (`bytea` está declarado no topo do arquivo — `clinic` passou a usá-lo na
+// #258 e `const` não é içado: a definição precisa vir ANTES do primeiro uso.)
 
 export const reportTipo = pgEnum("report_tipo", [
   "familia",

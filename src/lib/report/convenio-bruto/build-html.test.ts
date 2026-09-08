@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { buildConvenioBrutoHtml } from "./build-html";
+import { SELO_IRIS } from "../../branding/marca";
 import type { PayloadConvenioBruto } from "./types";
 
 const base: PayloadConvenioBruto = {
@@ -52,4 +53,36 @@ test("não interpola URL/asset remoto nem <script> próprio", () => {
   const html = buildConvenioBrutoHtml(base);
   expect(html).not.toMatch(/https?:\/\//);
   expect(html).not.toMatch(/<script\b(?![^>]*\/nonce)/); // sem <script> executável
+});
+
+// ── #258 (D9) — marca institucional white-label ─────────────────────────────
+const PNG_1X1 = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+const MARCA_CONFIGURADA = {
+  logo: PNG_1X1,
+  logoMime: "image/png",
+  corPrimaria: "#1f4e79",
+  nomeClinica: "Clínica Vida Plena",
+};
+
+test("sem marca, não emite cabeçalho de clínica", () => {
+  const html = buildConvenioBrutoHtml(base);
+  expect(html).not.toContain("data:image/png");
+  expect(html).not.toContain("Clínica Vida Plena");
+});
+
+test("com marca, aplica logotipo e cor no cabeçalho do dossiê", () => {
+  const html = buildConvenioBrutoHtml(base, MARCA_CONFIGURADA);
+  expect(html).toContain("Clínica Vida Plena");
+  expect(html).toContain(
+    `src="data:image/png;base64,${PNG_1X1.toString("base64")}"`,
+  );
+  expect(html).toContain("3px solid #1f4e79");
+});
+
+test("o selo Iris SOBREVIVE à marca da clínica (guardrail 3 da #258)", () => {
+  expect(buildConvenioBrutoHtml(base, MARCA_CONFIGURADA)).toContain(SELO_IRIS);
+  expect(buildConvenioBrutoHtml(base)).toContain(SELO_IRIS);
 });

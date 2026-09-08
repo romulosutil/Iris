@@ -4,6 +4,12 @@
 // HTML não deve nem tentar). Renderiza o draft curado; cai no rascunho da IA se
 // ainda não houver curadoria.
 import { escapeHtml } from "../sanitize";
+import {
+  cabecalhoMarcaHtml,
+  marcaCssHtml,
+  rodapeIrisHtml,
+} from "../marca-html";
+import type { MarcaClinica } from "../../branding/marca";
 import type { FamilyReportDraft, PayloadFamilia } from "./types";
 
 function li(texto: string): string {
@@ -34,7 +40,14 @@ function anexo(draft: FamilyReportDraft): string {
   return `<section class="anexo"><h2>Para quem gosta de acompanhar os números</h2>${tabela}${avaliacoes}</section>`;
 }
 
-export function buildFamiliaHtml(payload: PayloadFamilia): string {
+// #258 (D9) — `marca` é PARÂMETRO, não campo do payload: o payload é jsonb
+// congelado na geração e uma clínica que trocasse de logotipo depois veria o
+// relatório antigo sair com a marca velha. A marca é lida no export, do estado
+// atual do tenant.
+export function buildFamiliaHtml(
+  payload: PayloadFamilia,
+  marca?: MarcaClinica | null,
+): string {
   const draft = payload.curado ?? payload.iaOriginal;
   const nome = escapeHtml(payload.crianca.nome);
 
@@ -55,7 +68,8 @@ export function buildFamiliaHtml(payload: PayloadFamilia): string {
   th,td{border:1px solid #ccc;padding:4px 8px;text-align:left}
   .anexo{margin-top:24px;border-top:1px solid #ddd;padding-top:8px}
   .rodape{margin-top:24px;font-size:11px;color:#666}
-</style></head><body>
+${marcaCssHtml(marca)}</style></head><body>
+${cabecalhoMarcaHtml(marca)}
 <h1>Relatório de acompanhamento — ${nome}</h1>
 <p class="periodo">Período: ${escapeHtml(payload.periodo.inicio)} a ${escapeHtml(payload.periodo.fim)}</p>
 <h2>A conquista deste período</h2>
@@ -67,5 +81,6 @@ ${nota}
 <ul>${draft.comoApoiarEmCasa.map(li).join("")}</ul>
 ${anexo(draft)}
 <p class="rodape">Documento de comunicação com a família — não substitui orientação clínica presencial.</p>
+${rodapeIrisHtml()}
 </body></html>`;
 }

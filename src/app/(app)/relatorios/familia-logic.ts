@@ -13,6 +13,7 @@ import { exportReport } from "@/lib/report/export";
 import { erroDeActionSeRenderOcupado } from "@/lib/report/render-lock";
 import { buildFamiliaInput } from "@/lib/report/familia/build-input";
 import { buildFamiliaHtml } from "@/lib/report/familia/build-html";
+import { lerMarcaClinica } from "@/lib/branding/leitura";
 import { resolveFamilyReportProvider } from "@/lib/report/familia/provider";
 import type {
   FamilyReportDraft,
@@ -226,10 +227,13 @@ export async function exportarFamilia(
             "O relatório precisa ser revisado pelo coordenador antes de exportar.",
         };
       }
+      // #258 — marca lida DENTRO da mesma tx do export (mesmo instante
+      // transacional dos dados do relatório), nunca do payload congelado.
+      const marca = await lerMarcaClinica(tx);
       const { hash } = await exportReport(tx, {
         reportId,
         atorId: ctx.userId,
-        buildHtml: (pl) => buildFamiliaHtml(pl as PayloadFamilia),
+        buildHtml: (pl) => buildFamiliaHtml(pl as PayloadFamilia, marca),
         renderer,
       });
       return { reportId, hash };

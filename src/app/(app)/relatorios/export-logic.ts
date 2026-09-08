@@ -8,6 +8,7 @@ import { exportReport } from "@/lib/report/export";
 import { erroDeActionSeRenderOcupado } from "@/lib/report/render-lock";
 import { buildConvenioBrutoPayload } from "@/lib/report/convenio-bruto/build-payload";
 import { buildConvenioBrutoHtml } from "@/lib/report/convenio-bruto/build-html";
+import { lerMarcaClinica } from "@/lib/branding/leitura";
 import type { PayloadConvenioBruto } from "@/lib/report/convenio-bruto/types";
 import { playwrightRenderer } from "@/lib/report/playwright-renderer";
 
@@ -49,10 +50,14 @@ export async function exportarConvenioBruto(
       RETURNING id
     `)) as unknown as Array<{ id: string }>;
       const reportId = rows[0]!.id;
+      // #258 — marca lida DENTRO da mesma tx do export (mesmo instante
+      // transacional dos dados do relatório), nunca do payload congelado.
+      const marca = await lerMarcaClinica(tx);
       const { hash } = await exportReport(tx, {
         reportId,
         atorId: ctx.userId,
-        buildHtml: (pl) => buildConvenioBrutoHtml(pl as PayloadConvenioBruto),
+        buildHtml: (pl) =>
+          buildConvenioBrutoHtml(pl as PayloadConvenioBruto, marca),
         renderer,
       });
       return { reportId, hash };
