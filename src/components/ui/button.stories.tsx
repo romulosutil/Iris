@@ -1,7 +1,14 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
 import { Button } from "./button";
-import { CheckIcon, PencilIcon, CloseIcon, SparkleIcon } from "./icon";
+import {
+  CheckIcon,
+  PencilIcon,
+  CloseIcon,
+  SparkleIcon,
+  CalendarPlusIcon,
+  UserPlusIcon,
+} from "./icon";
 
 const meta = {
   title: "03. PRIMITIVES/Button",
@@ -87,6 +94,40 @@ export const ComIcones: Story = {
       </Button>
     </div>
   ),
+};
+
+/**
+ * CTA de página — o padrão real de `/agenda`, `/pacientes` e `/equipe`.
+ *
+ * Antes o rótulo começava com um "+" DE TEXTO ("+ Novo Paciente"). Três
+ * problemas: o leitor de tela anunciava "mais novo paciente"; o sinal herdava
+ * a fonte de display e não o peso do traço do resto da iconografia; e sob
+ * `forced-colors` ele continuava sendo uma letra, não uma forma.
+ *
+ * `asChild` (o caso do Link do Next) IGNORA `iconLeft` de propósito — o
+ * elemento renderizado é o filho, e o ícone tem de morar dentro dele. O `gap`
+ * e o `inline-flex items-center` vêm da classe do Button, que é aplicada ao
+ * filho: as duas formas abaixo alinham igual.
+ */
+export const AcaoDePagina: Story = {
+  name: "CTA de página (ícone + rótulo)",
+  render: () => (
+    <div className="flex flex-wrap items-center gap-4">
+      <Button
+        variante="primaria"
+        iconLeft={<UserPlusIcon size={18} aria-hidden focusable="false" />}
+      >
+        Convidar Membro
+      </Button>
+      <Button variante="primaria" asChild>
+        <a href="#agendar">
+          <CalendarPlusIcon size={18} aria-hidden focusable="false" />
+          Agendar no Calendário
+        </a>
+      </Button>
+    </div>
+  ),
+  parameters: { controls: { disable: true } },
 };
 
 export const ApenasIcone: Story = {

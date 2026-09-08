@@ -10,6 +10,25 @@ import {
   ClockIcon,
   ChevronDownIcon,
   CloseIcon,
+  AlertTriangleIcon,
+  BuildingIcon,
+  CalendarIcon,
+  CalendarPlusIcon,
+  ClipboardCheckIcon,
+  CreditCardIcon,
+  DownloadIcon,
+  EyeIcon,
+  FileTextIcon,
+  HelpCircleIcon,
+  IdBadgeIcon,
+  ImageIcon,
+  LogOutIcon,
+  MenuIcon,
+  NotebookIcon,
+  SlidersIcon,
+  UserIcon,
+  UserPlusIcon,
+  UsersIcon,
   IconProps,
 } from "@/components/ui/icon";
 
@@ -92,6 +111,164 @@ const ICONS: IconItem[] = [
   },
 ];
 
+/**
+ * Iconografia de NAVEGAÇÃO e AÇÃO. Separada da lista acima de propósito: os
+ * ícones de estado descrevem o que aconteceu com um dado (sugerido, validado,
+ * devolvido); estes descrevem para ONDE se vai ou o que se vai FAZER. Confundir
+ * as duas famílias é como o produto acaba com dois "check" querendo dizer
+ * coisas diferentes na mesma tela.
+ *
+ * Resolvidos pelo `href` em `src/components/ui/nav-icon.tsx` — o rail, a
+ * `BottomNav` e o Drawer mobile leem do MESMO mapa, então um destino tem uma
+ * única forma no produto inteiro.
+ */
+const NAV_ICONS: IconItem[] = [
+  {
+    name: "Calendar",
+    source: "Rail / BottomNav — /agenda",
+    description:
+      "Agenda do dia. O ponto marca o dia corrente e distingue do ícone de AÇÃO de agendar.",
+    Icon: CalendarIcon,
+  },
+  {
+    name: "Notebook",
+    source: "Rail / BottomNav — /sessoes",
+    description:
+      "Sessões. Caderno é o que se ESCREVE (registro clínico), em oposição à folha entregue de Relatórios.",
+    Icon: NotebookIcon,
+  },
+  {
+    name: "Users",
+    source: "Rail / BottomNav — /pacientes",
+    description: "Pacientes — quem é atendido na clínica.",
+    Icon: UsersIcon,
+  },
+  {
+    name: "File Text",
+    source: "Rail / BottomNav — /relatorios",
+    description:
+      "Relatórios (família e convênio). Folha com canto dobrado: documento que sai da clínica.",
+    Icon: FileTextIcon,
+  },
+  {
+    name: "Clipboard Check",
+    source: "Menu do usuário — /validacao",
+    description:
+      "Fila de validação do coordenador. Reaproveita o gesto do Check dentro do suporte da fila.",
+    Icon: ClipboardCheckIcon,
+  },
+  {
+    name: "Alert Triangle",
+    source: "StatusBadge / Menu do usuário — /alertas-risco",
+    description:
+      "Alerta de risco. Único destino que compartilha ícone com a família de estado — é o mesmo significado.",
+    Icon: AlertTriangleIcon,
+  },
+  {
+    name: "Eye",
+    source: "Menu do usuário — /supervisao",
+    description: "Supervisão — observação do trabalho da equipe.",
+    Icon: EyeIcon,
+  },
+  {
+    name: "Id Badge",
+    source: "Menu do usuário — /equipe",
+    description:
+      "Equipe — quem TRABALHA na clínica. Crachá separa do grupo de pacientes (Users).",
+    Icon: IdBadgeIcon,
+  },
+  {
+    name: "Building",
+    source: "Menu do usuário — /clinica/dados",
+    description:
+      "Dados da Clínica. Prédio, não engrenagem: é a identidade da clínica, não preferência de app.",
+    Icon: BuildingIcon,
+  },
+  {
+    name: "Image",
+    source: "Menu do usuário — /clinica/marca",
+    description:
+      "Marca nos PDFs (#258). Moldura de imagem: o que a tela recebe é o ARQUIVO do logotipo, não uma paleta de cores.",
+    Icon: ImageIcon,
+  },
+  {
+    name: "Download",
+    source: "Menu do usuário — /clinica/exportacao",
+    description: "Exportar Acervo — saída de dados do tenant.",
+    Icon: DownloadIcon,
+  },
+  {
+    name: "Credit Card",
+    source: "Menu do usuário — /assinatura",
+    description: "Assinatura — o plano cobrado, não a rubrica de documento.",
+    Icon: CreditCardIcon,
+  },
+  {
+    name: "Help Circle",
+    source: "Menu do usuário — /duvidas",
+    description: "Dúvidas — ajuda e suporte.",
+    Icon: HelpCircleIcon,
+  },
+  {
+    name: "User",
+    source: "Menu do usuário — /perfil",
+    description: "Meu Perfil — a pessoa logada, no singular.",
+    Icon: UserIcon,
+  },
+  {
+    name: "Sliders",
+    source: "Rail (gatilho do menu do usuário)",
+    description:
+      "Administração. Dois cursores em vez de engrenagem: os dentes somem no traço de 1.8 a 16px.",
+    Icon: SlidersIcon,
+  },
+  {
+    name: "Menu",
+    source: "BottomNav (abre o Drawer)",
+    description:
+      "Acesso aos destinos que não cabem nos 4 slots da barra inferior.",
+    Icon: MenuIcon,
+  },
+  {
+    name: "Calendar Plus",
+    source: "Ação — Agendar no Calendário",
+    description:
+      'Ação de agendar. Substitui o "+" que era texto no rótulo (e que o leitor de tela lia em voz alta).',
+    Icon: CalendarPlusIcon,
+  },
+  {
+    name: "User Plus",
+    source: "Ação — Novo Paciente / Convidar Membro",
+    description:
+      "Ação de cadastrar ou convidar pessoa. Mesma forma nas duas ações porque o gesto é o mesmo.",
+    Icon: UserPlusIcon,
+  },
+  {
+    name: "Log Out",
+    source: "Ação — Sair",
+    description: "Encerra a sessão. Porta com seta para fora.",
+    Icon: LogOutIcon,
+  },
+];
+
+function CardIcone({ icon }: { icon: IconItem }) {
+  const IconComponent = icon.Icon;
+  return (
+    <div className="shadow-brutal-sm hover:shadow-brutal flex flex-col items-center rounded-lg border-2 border-black bg-stone-50 p-4 text-center transition-all duration-150 hover:-translate-x-0.5 hover:-translate-y-0.5">
+      <div className="shadow-brutal-sm mb-4 flex h-16 w-16 items-center justify-center rounded-md border-2 border-black bg-white text-black">
+        <IconComponent size={24} className="text-stone-900" />
+      </div>
+      <h3 className="mb-1 text-base font-extrabold">{icon.name}</h3>
+      <span className="mb-2 font-mono text-[10px] font-bold text-stone-500 uppercase">
+        Origem: {icon.source}
+      </span>
+      <p className="mt-auto w-full border-t border-stone-200 pt-2 text-xs leading-relaxed text-stone-600">
+        {icon.description}
+      </p>
+    </div>
+  );
+}
+
 export const Gallery: StoryObj = {
   render: () => (
     <div className="max-w-6xl space-y-12 font-sans text-stone-900">
@@ -128,26 +305,28 @@ export const Gallery: StoryObj = {
           Biblioteca de Ícones Core (src/components/ui/icon.tsx)
         </h2>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {ICONS.map((icon) => {
-            const IconComponent = icon.Icon;
-            return (
-              <div
-                key={icon.name}
-                className="shadow-brutal-sm hover:shadow-brutal flex flex-col items-center rounded-lg border-2 border-black bg-stone-50 p-4 text-center transition-all duration-150 hover:-translate-x-0.5 hover:-translate-y-0.5"
-              >
-                <div className="shadow-brutal-sm mb-4 flex h-16 w-16 items-center justify-center rounded-md border-2 border-black bg-white text-black">
-                  <IconComponent size={24} className="text-stone-900" />
-                </div>
-                <h3 className="mb-1 text-base font-extrabold">{icon.name}</h3>
-                <span className="mb-2 font-mono text-[10px] font-bold text-stone-500 uppercase">
-                  Origem: {icon.source}
-                </span>
-                <p className="mt-auto w-full border-t border-stone-200 pt-2 text-xs leading-relaxed text-stone-600">
-                  {icon.description}
-                </p>
-              </div>
-            );
-          })}
+          {ICONS.map((icon) => (
+            <CardIcone key={icon.name} icon={icon} />
+          ))}
+        </div>
+      </section>
+
+      <section className="shadow-brutal rounded-lg border-2 border-black bg-white p-6 md:p-8">
+        <h2 className="mb-2 border-b-2 border-black pb-2 font-mono text-2xl font-black uppercase">
+          Navegação e Ação (src/components/ui/nav-icon.tsx)
+        </h2>
+        <p className="mb-6 text-sm leading-relaxed text-stone-600">
+          Um destino, uma forma: o rail, a barra inferior e o Drawer mobile
+          resolvem o ícone pelo <code>href</code> no mesmo mapa. O ícone entra
+          sempre <code>aria-hidden</code>, ao lado do rótulo visível — no rail
+          colapsado, quem nomeia o destino é o <code>aria-label</code> do link
+          (R-26). Rota sem ícone no mapa não some da navegação: cai no monograma
+          de duas letras.
+        </p>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+          {NAV_ICONS.map((icon) => (
+            <CardIcone key={icon.name} icon={icon} />
+          ))}
         </div>
       </section>
     </div>
