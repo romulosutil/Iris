@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { buildCanonicalContext } from "./context-assembler";
 
 const input = {
-  paciente: { idadeMeses: 60 },
+  paciente: { idadeMeses: 60, sessaoNumero: 8 },
   protocolos: [
     {
       familia: "vbmapp",
@@ -25,6 +25,7 @@ const input = {
   ],
   historico: [
     {
+      tipo: "protocolo" as const,
       dominioId: "tato",
       protocolFamilia: "vbmapp",
       resumo: "nunca sem dica ecoica",
@@ -51,8 +52,9 @@ describe("buildCanonicalContext", () => {
 
   test("historico_relevante usa protocol_id (familia), habilitando R14", () => {
     const ctx = buildCanonicalContext(input);
-    expect(ctx.historico_relevante[0]!.protocol_id).toBe("vbmapp");
-    expect(ctx.historico_relevante[0]!.dominio_id).toBe("tato");
+    const item = ctx.historico_relevante[0]!;
+    expect("protocol_id" in item && item.protocol_id).toBe("vbmapp");
+    expect("dominio_id" in item && item.dominio_id).toBe("tato");
   });
 
   test("historico vazio é válido (1ªs sessões do paciente: R14 dormente)", () => {
@@ -95,5 +97,115 @@ describe("buildCanonicalContext", () => {
     const ctx = buildCanonicalContext(input);
     expect(ctx.familia_abordagem).toBeUndefined();
     expect("familia_abordagem" in ctx).toBe(false);
+  });
+});
+
+// #464 — `historico_relevante` tem TRÊS formas, uma por modo. O tipo antigo
+// (`dominio_id` e `protocol_id` ambos obrigatórios) não conseguia expressar
+// nem TCC (sem domínio) nem convencional (tema, sem protocolo).
+describe("historico_relevante — forma por modo (#464)", () => {
+  test("entrada de instrumento (tcc) sai sem dominio_id", () => {
+    const ctx = buildCanonicalContext({
+      ...input,
+      historico: [
+        {
+          tipo: "instrumento" as const,
+          protocolFamilia: "phq9",
+          resumo: "última aplicação há 26 dias; escore 16.",
+        },
+      ],
+    });
+    const item = ctx.historico_relevante[0]!;
+    expect(item).toEqual({
+      protocol_id: "phq9",
+      resumo: "última aplicação há 26 dias; escore 16.",
+    });
+    expect("dominio_id" in item).toBe(false);
+  });
+
+  test("entrada de tema (convencional) sai com tema, sem protocol_id", () => {
+    const ctx = buildCanonicalContext({
+      ...input,
+      historico: [
+        {
+          tipo: "tema" as const,
+          tema: "luto do pai",
+          resumo: "presente nas últimas 5 sessões.",
+        },
+      ],
+    });
+    const item = ctx.historico_relevante[0]!;
+    expect(item).toEqual({
+      tema: "luto do pai",
+      resumo: "presente nas últimas 5 sessões.",
+    });
+    expect("protocol_id" in item).toBe(false);
+  });
+
+  test("o discriminador `tipo` não vaza para o contrato do agente", () => {
+    const ctx = buildCanonicalContext(input);
+    expect("tipo" in ctx.historico_relevante[0]!).toBe(false);
+  });
+});
+
+// #464 — `resumo_repertorio` é DERIVADO em runtime; não existe coluna, ninguém
+// escreve à mão, e por isso nunca desatualiza. Carrega só o que nenhum outro
+// campo do contrato carrega: idade legível e a posição da sessão no
+// acompanhamento.
+describe("resumo_repertorio derivado (#464)", () => {
+  test("idade >= 24 meses sai em anos", () => {
+    expect(buildCanonicalContext(input).paciente.resumo_repertorio).toBe(
+      "5 anos; sessão 8 do acompanhamento.",
+    );
+  });
+
+  test("abaixo de 24 meses sai em meses (a granularidade que importa clinicamente)", () => {
+    const ctx = buildCanonicalContext({
+      ...input,
+      paciente: { idadeMeses: 18, sessaoNumero: 3 },
+    });
+    expect(ctx.paciente.resumo_repertorio).toBe(
+      "18 meses; sessão 3 do acompanhamento.",
+    );
+  });
+
+  test("exatamente 24 meses já é '2 anos' (fronteira)", () => {
+    const ctx = buildCanonicalContext({
+      ...input,
+      paciente: { idadeMeses: 24, sessaoNumero: 1 },
+    });
+    expect(ctx.paciente.resumo_repertorio).toBe(
+      "2 anos; sessão 1 do acompanhamento.",
+    );
+  });
+
+  test("idade desconhecida é dita, não omitida nem inventada", () => {
+    const ctx = buildCanonicalContext({
+      ...input,
+      paciente: { idadeMeses: null, sessaoNumero: 8 },
+    });
+    expect(ctx.paciente.resumo_repertorio).toBe(
+      "Idade não informada; sessão 8 do acompanhamento.",
+    );
+  });
+
+  test("sessão ainda sem número sequencial é dita, não vira 'sessão 0'", () => {
+    const ctx = buildCanonicalContext({
+      ...input,
+      paciente: { idadeMeses: 60, sessaoNumero: null },
+    });
+    expect(ctx.paciente.resumo_repertorio).toBe(
+      "5 anos; número de sessão ainda não atribuído.",
+    );
+  });
+
+  test("sem idade e sem número, o campo ainda é uma frase válida", () => {
+    const ctx = buildCanonicalContext({
+      ...input,
+      paciente: { idadeMeses: null, sessaoNumero: null },
+    });
+    expect(ctx.paciente.resumo_repertorio).toBe(
+      "Idade não informada; número de sessão ainda não atribuído.",
+    );
   });
 });

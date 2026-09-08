@@ -7,6 +7,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
+import { derivarFaixaDeCorte } from "@/lib/tcc/faixa-de-corte";
 
 /**
  * #393/T6 — lista texto de aplicações de instrumento na aba TCC. Decisão de
@@ -37,48 +38,13 @@ const ROTULO_TIPO: Record<
 };
 
 /**
- * Cortes públicos/estrutura confirmada, não conteúdo licenciado (spec.md
- * RQ8 + Invariantes: "estrutura numérica... pode ser hardcoded — só o TEXTO
- * dos itens é gated"). PHQ-9 (0-27) e GAD-7 (0-21) têm faixas diferentes;
- * GAD-7 não tem a banda "moderadamente grave" (só 4 faixas, não 5).
- *
- * Boundaries são inclusivos no limite inferior de cada faixa (>=), testados
- * nos dois lados (ex.: PHQ-9 4 vs. 5) — off-by-one é o bug clássico aqui.
+ * Os cortes moram em `@/lib/tcc/faixa-de-corte` desde a #464 — a projeção de
+ * `historico_relevante` do modo TCC precisa da MESMA régua, e não pode
+ * importar este `.tsx` (arrastaria a árvore de componentes de UI para o
+ * caminho da extração). Reexportado aqui para não quebrar os importadores
+ * existentes (`instrumento-lista.test.tsx`, `grafico-escore-instrumento`).
  */
-const CORTES_PHQ9 = [
-  { min: 0, rotulo: "mínimo" },
-  { min: 5, rotulo: "leve" },
-  { min: 10, rotulo: "moderado" },
-  { min: 15, rotulo: "moderadamente grave" },
-  { min: 20, rotulo: "grave" },
-] as const;
-
-const CORTES_GAD7 = [
-  { min: 0, rotulo: "mínimo" },
-  { min: 5, rotulo: "leve" },
-  { min: 10, rotulo: "moderado" },
-  { min: 15, rotulo: "grave" },
-] as const;
-
-/**
- * Deriva a faixa de corte (label) a partir do tipo de instrumento e do
- * escore total. Função pura, testável isoladamente (sem render) — ver
- * `instrumento-lista.test.tsx`. `escoreTotal === null` (não deveria
- * acontecer em produção, coluna é preenchida no INSERT — mas o tipo da
- * coluna no schema é nullable) retorna `null` em vez de estourar.
- */
-export function derivarFaixaDeCorte(
-  tipoInstrumento: InstrumentoAplicacaoLinha["tipoInstrumento"],
-  escoreTotal: number | null,
-): string | null {
-  if (escoreTotal === null) return null;
-  const cortes = tipoInstrumento === "phq9" ? CORTES_PHQ9 : CORTES_GAD7;
-  // Percorre de trás para frente: primeiro corte cujo `min` o escore atinge.
-  for (let i = cortes.length - 1; i >= 0; i -= 1) {
-    if (escoreTotal >= cortes[i]!.min) return cortes[i]!.rotulo;
-  }
-  return cortes[0]!.rotulo;
-}
+export { derivarFaixaDeCorte };
 
 function formatarData(valor: Date | string): string {
   const d = valor instanceof Date ? valor : new Date(valor);

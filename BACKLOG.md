@@ -75,6 +75,29 @@
 
 ---
 
+## 🏁 Sessão 07/09/2026 (4ª) — #464: a "Fase 4 futura" do comentário já tinha entrado
+
+**O que a issue pedia:** decidir, antes de qualquer código, (1) a fonte de `paciente.resumo_repertorio` e (2) que "Fase 4" o comentário de `context-loader.ts` mencionava ao justificar `historico_relevante: []`.
+
+**Auditoria — o comentário estava velho, não a lacuna.** `context-loader.ts:46` dizia "não há tabela evidence; fonte futura = Plano 2/Fase 4". A Fase 4 **já entrou**: `evidence` + view `evidence_current` (`0014`), `session_snapshot.repertorio_state`/`segmentacao` (`0015`/`0017`), marco-zero da anamnese (`0115`), `materializar.ts` gravando por sessão. Não faltava fonte de dado — faltava fiação. O spec da Fase 4 (§8.3) já tinha fechado o desenho: projetar de `repertorio_state` (baseline as-of), **nunca** de `segmentacao` (sinais diferentes).
+
+**Achado que a issue não previa: `historico_relevante` tem TRÊS formas, e o tipo só expressava uma.** Os docs de protocolo praticam `{dominio_id, protocol_id, resumo}` (ABA), `{protocol_id, resumo}` (TCC, sem domínio) e `{tema, resumo}` (convencional, sem protocolo). O tipo TS exigia `dominio_id` **e** `protocol_id` obrigatórios — convencional e TCC literalmente não cabiam. Virou união discriminada.
+
+**Terceiro achado — o modo convencional não tem fonte, e isso não é opinião:** `temas: string[]` é declarado e validado na saída do agente (`agent-output-schema.ts`), mas `LlmExtractionProvider.extrair` descarta o campo no retorno, não há coluna nem tabela para tema, e a própria tela `/pacientes/[id]/temas` documenta a lacuna em comentário e lê a **nota consolidada** como paliativo. Persistir `temas[]` virou a **#645** (7 pontos de Design abertos, `AGENTS.md` §5.2, antes de qualquer label).
+
+**Decisões do Rômulo (nesta sessão):**
+
+1. **`resumo_repertorio` é DERIVADO em runtime — não vira coluna.** Campo livre escrito no cadastro apodrece (ninguém volta para atualizar) e vira superfície de prompt-injection dentro do contexto do agente. A frase carrega só o que **nenhum outro campo do contrato carrega**: idade legível e `session.numero_sequencial_paciente` ("sessão 8 do acompanhamento"). Protocolos, metas e abordagem já têm campo próprio — repeti-los em prosa criaria duas fontes de verdade e custaria token em toda extração. Idade desconhecida e sessão sem número são **ditas**, nunca omitidas nem colapsadas em zero.
+2. **`historico_relevante`: ABA + TCC agora, convencional depois.** Ligar os dois modos cuja fonte existe e deixar o terceiro em `[]` explícito apontando para a #645 — em vez de segurar o R14 dos três esperando uma decisão de modelo de dados que é issue própria.
+
+**O que entrou:** `src/lib/extraction/historico-relevante.ts` (projeção pura, sem DB, 14 testes); união discriminada em `context-assembler.ts` + derivação de `resumo_repertorio` (17 testes); ramo por modo em `context-loader.ts`, com int-test contra o Postgres real (`db/tests/contrato-agente-historico-relevante.int.test.ts`, 5 testes) — os unitários provam a projeção e a montagem, **nenhum deles prova a fiação**, que é exatamente onde o defeito morava. **Mutação executada:** trocar `historico` por `[]` na chamada de `buildCanonicalContext` mata 2 dos 5 (ABA e TCC); revertido por substituição inversa e o `git diff` conferido depois. O teste "não acumula fonte do outro modo" passa sob o mutante — está anotado no próprio arquivo como asserção fraca, não como prova; `derivarFaixaDeCorte` extraída de `instrumento-lista.tsx` para `@/lib/tcc/faixa-de-corte` (a projeção de TCC precisa da MESMA régua de cortes, e importar o `.tsx` arrastaria a árvore de UI para o caminho da extração — a tela reexporta).
+
+**Armadilha medida no caminho:** a primeira versão de `diasDesde` usava piso do intervalo decorrido. 12/08 14:00 → 07/09 12:00 dava **25 dias** (o intervalo tem 25 d 22 h) onde qualquer pessoa conta **26** no calendário — e a hora do registro passava a mexer na contagem que o agente lê para julgar periodicidade de PHQ-9/GAD-7. Trocado por diferença de dias **civis** no fuso da clínica; duas aplicações no mesmo dia distam 0 qualquer que seja a hora.
+
+**O que NÃO foi feito, de propósito:** `niveis_nao_classificados` fica fora do resumo (é sinal de qualidade de dado para a tela do coordenador, não contexto que ajude a detectar contradição, e cada frase extra custa token em toda extração); `reinforcer_profile` continua fora do contrato (o doc o lista como "contexto opcional" — escopo próprio).
+
+---
+
 ## 🏁 Sessão 07/09/2026 (3ª) — #500: o que falta não é código, é um smoke que ninguém sabia executar
 
 **O que a issue pedia:** fechar os dois itens que sobraram depois do provisionamento de 31/08 — (1) um lote real transcrito ponta a ponta contra uma clínica de teste, (2) revisar `INTERVALO_S` com volume observado. Ambos exigem o console do Easypanel, que só o Rômulo tem. **Nada disso é executável por código a partir daqui — o que era executável era tornar o passo 1 executável.**

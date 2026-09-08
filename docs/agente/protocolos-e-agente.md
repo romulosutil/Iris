@@ -832,6 +832,33 @@ Regras do formato:
 - `historico_relevante` habilita a sinalização de inconsistência (anti-rubber-stamping).
 - Adicionar protocolo novo = novo objeto neste array. Zero mudança no agente.
 
+> **Decisão fechada (#464) — `resumo_repertorio` e `historico_relevante`.**
+>
+> **`resumo_repertorio` é DERIVADO em runtime, não é coluna.** Não existe campo
+> livre que alguém escreva no cadastro: resumo escrito à mão apodrece (ninguém
+> volta para atualizar) e vira superfície de prompt-injection dentro do contexto
+> do agente. `context-assembler.ts` monta a frase por regra determinística, e ela
+> carrega só o que NENHUM outro campo do contrato carrega — idade legível e a
+> posição desta sessão no acompanhamento (`session.numero_sequencial_paciente`).
+> Protocolos, metas e abordagem já têm campo próprio; repeti-los em prosa criaria
+> duas fontes de verdade e custaria token em toda extração. Idade desconhecida e
+> sessão sem número são DITAS, nunca omitidas nem colapsadas em zero.
+>
+> **`historico_relevante` tem TRÊS formas, uma por modo** — o que a prosa dos
+> casos de teste já praticava e o contrato não expressava:
+>
+> | modo                   | forma                               | fonte                                                               |
+> | ---------------------- | ----------------------------------- | ------------------------------------------------------------------- |
+> | `protocol_driven`      | `{dominio_id, protocol_id, resumo}` | `session_snapshot.repertorio_state` (Fase 4)                        |
+> | `tcc`                  | `{protocol_id, resumo}`             | `instrumento_aplicacao` (última aplicação de PHQ-9/GAD-7)           |
+> | `terapia_convencional` | `{tema, resumo}`                    | `temas[]` das extrações aprovadas — **ainda não persistido** (#645) |
+>
+> A fonte do modo ABA é o **repertório** (baseline as-of), nunca `segmentacao` —
+> são sinais diferentes (spec da Fase 4 §8.3). A projeção vive em
+> `src/lib/extraction/historico-relevante.ts`, é determinística e não usa IA.
+> Enquanto `temas[]` não for persistido, o modo convencional recebe `[]` e o R14
+> segue dormente só nele.
+
 ### 2.1 Extensões de contrato resolvidas — cobertura de domínio (09/07/2026)
 
 A validação especialista por protocolo (10/10, ver Parte 1 e `BACKLOG.md` seção

@@ -1,18 +1,26 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import type { withTenant } from "@/db/rls";
 import {
   goal,
   goalMilestoneMapping,
+  instrumentoAplicacao,
   milestone,
   patient,
   patientProtocol,
   protocol,
+  session,
   sessionProtocolScope,
+  sessionSnapshot,
 } from "@/db/schema";
+import { lerRepertorioState } from "@/lib/evidence/snapshot-schema";
 import {
   buildCanonicalContext,
   type AssemblerInput,
 } from "./context-assembler";
+import {
+  projetarHistoricoDeInstrumentos,
+  projetarHistoricoDeRepertorio,
+} from "./historico-relevante";
 
 // Tipo da transação que withTenant entrega ao callback (evita reimportar o tipo
 // interno do drizzle/postgres).
@@ -42,9 +50,42 @@ function resolverModoExtracao(
   }
 }
 
+/**
+ * `historico_relevante` do modo `protocol_driven`: o `repertorio_state` do
+ * snapshot MAIS RECENTE do paciente.
+ *
+ * `materializar.ts` só grava snapshot para números de sessão que tiveram ao
+ * menos uma evidência — não há 1 linha por sessão. Por isso a leitura é
+ * "última linha por `session_numero`", nunca "linha da sessão N". A tabela
+ * está sob RLS (`session_snapshot_select`, 0014/0015): a transação com tenant
+ * já escopa por clínica.
+ */
+async function carregarRepertorioRecente(tx: Tx, patientId: string) {
+  const [snap] = await tx
+    .select({ repertorioState: sessionSnapshot.repertorioState })
+    .from(sessionSnapshot)
+    .where(eq(sessionSnapshot.patientId, patientId))
+    .orderBy(desc(sessionSnapshot.sessionNumero))
+    .limit(1);
+  return snap ? lerRepertorioState(snap.repertorioState) : {};
+}
+
 // Carrega do banco o contrato canônico que o agente recebe. Roda DENTRO de uma
-// transação com tenant (RLS ativo). historico_relevante fica vazio na Fase 3
-// (não há tabela evidence; fonte futura = extrações aprovadas — Plano 2/Fase 4).
+// transação com tenant (RLS ativo).
+//
+// #464 — `historico_relevante` deixou de ser `[]` fixo. O comentário anterior
+// aqui dizia "fonte futura = Fase 4": a Fase 4 já entrou (`evidence` + view
+// `evidence_current` na 0014, `session_snapshot` na 0015/0017), e o que
+// faltava era a fiação. Ligado agora para os dois modos cuja fonte existe:
+//
+//   - `protocol_driven` ← `session_snapshot.repertorio_state`;
+//   - `tcc`             ← `instrumento_aplicacao` (PHQ-9/GAD-7).
+//
+// `terapia_convencional` continua `[]`: a fonte seria `temas[]`, que o agente
+// produz (`agent-output-schema.ts`) e NINGUÉM persiste — a própria tela
+// `/pacientes/[id]/temas` documenta a lacuna. Persistir `temas[]` é a #645;
+// a variante do contrato já existe para que ligá-la depois não seja
+// outra mudança de contrato.
 export async function loadCanonicalContext(
   tx: Tx,
   args: { sessionId: string; patientId: string; clinicId: string },
@@ -156,8 +197,53 @@ export async function loadCanonicalContext(
 
   const modo = resolverModoExtracao(pac?.clinicalModality);
 
+  const [sess] = await tx
+    .select({ numero: session.numeroSequencialPaciente })
+    .from(session)
+    .where(eq(session.id, args.sessionId));
+
+  // #464 — a projeção do histórico é por modo. Cada ramo faz a SUA leitura:
+  // nenhum modo paga a query do outro.
+  let historico: AssemblerInput["historico"] = [];
+  if (modo === "protocol_driven") {
+    historico = projetarHistoricoDeRepertorio({
+      repertorio: await carregarRepertorioRecente(tx, args.patientId),
+      // Escopado às metas ativas que já vão no contrato — são as únicas que o
+      // agente pode tocar nesta sessão, e é o que mantém o histórico curto.
+      metas: metas.map((m) => ({
+        id: m.id,
+        mapeamentos: m.mapeamentos.map((mp) => ({
+          familia: mp.familia,
+          dominioId: mp.dominioId,
+        })),
+      })),
+      taxonomiaPorFamilia: new Map(
+        protocolos.map((p) => [p.familia, p.taxonomiaAjuda]),
+      ),
+    });
+  } else if (modo === "tcc") {
+    const aplicacoes = await tx
+      .select({
+        tipoInstrumento: instrumentoAplicacao.tipoInstrumento,
+        escoreTotal: instrumentoAplicacao.escoreTotal,
+        criadoEm: instrumentoAplicacao.criadoEm,
+      })
+      .from(instrumentoAplicacao)
+      .where(eq(instrumentoAplicacao.patientId, args.patientId))
+      .orderBy(desc(instrumentoAplicacao.criadoEm))
+      // Teto de leitura: a projeção só usa a ÚLTIMA aplicação de cada
+      // instrumento, e são dois (PHQ-9/GAD-7). Ordenado por `criado_em DESC`,
+      // 20 linhas cobrem folgadamente os dois mais recentes sem varrer a
+      // série inteira de um paciente de anos.
+      .limit(20);
+    historico = projetarHistoricoDeInstrumentos({ aplicacoes });
+  }
+
   return buildCanonicalContext({
-    paciente: { idadeMeses: idadeEmMeses(pac?.nascimento ?? null) },
+    paciente: {
+      idadeMeses: idadeEmMeses(pac?.nascimento ?? null),
+      sessaoNumero: sess?.numero ?? null,
+    },
     modo,
     // #331 — só passa adiante quando o modo é convencional; em qualquer
     // outro modo a coluna pode ter lixo de um cadastro mal feito no
@@ -168,6 +254,6 @@ export async function loadCanonicalContext(
         : undefined,
     protocolos,
     metas,
-    historico: [],
+    historico,
   });
 }
