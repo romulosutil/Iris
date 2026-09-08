@@ -11,7 +11,18 @@
 
 services:
   postgres:
-    image: postgres:17-alpine
+    # `pgvector/pgvector:pg17`, NÃO `postgres:17-alpine` (#260 / D11): a partir
+    # da migração `0158` o schema exige `CREATE EXTENSION vector`, e a imagem
+    # oficial do Postgres não traz a extensão — a migração falha com
+    # `could not open extension control file ".../vector.control"`. É a mesma
+    # imagem do Postgres 17, só que com o pgvector compilado dentro; o diretório
+    # de dados é compatível e não há passo de migração de dados.
+    #
+    # ⚠️ PRODUÇÃO NÃO ACOMPANHA ESTE ARQUIVO. O Postgres do Easypanel/VPS é
+    # provisionado pelo painel, e trocar a imagem lá é ação manual do Rômulo —
+    # ver `infra/README.md`, seção "pgvector: dependência de imagem do Postgres".
+    # Sem essa troca, o `pnpm db:migrate` do deploy quebra com o CI verde.
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_USER: iris
       POSTGRES_PASSWORD: iris

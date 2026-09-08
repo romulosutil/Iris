@@ -673,6 +673,43 @@ Em dev local (docker-compose) o superuser é `iris`; rodar o SQL acima com
 `psql` apontando pro container. Em produção (Easypanel `iris-postgres`), idem
 via console SQL do serviço.
 
+## pgvector: dependência de imagem do Postgres (#260 / D11) — AÇÃO MANUAL EM PRODUÇÃO
+
+**A migração `0158_rag_patient_record_embeddings.sql` executa
+`CREATE EXTENSION IF NOT EXISTS vector`. A imagem oficial `postgres:17-alpine`
+NÃO traz o pgvector.** Num Postgres sem a extensão, o `pnpm db:migrate` do
+deploy aborta com:
+
+```
+ERROR: could not open extension control file "/usr/share/postgresql/17/extension/vector.control": No such file or directory
+```
+
+Esse é o modo de falha caro: o CI fica **verde** (o CI roda contra o Postgres do
+`infra/docker-compose.yml`, que este PR já trocou) e a quebra só aparece no
+deploy, no estágio `migrate` do Dockerfile.
+
+- **Dev local:** já resolvido — `infra/docker-compose.yml` usa
+  `pgvector/pgvector:pg17`. Quem tiver o container antigo de pé precisa recriar
+  o serviço uma vez: `docker compose -f infra/docker-compose.yml up -d postgres`
+  (o volume `pgdata` é preservado; é o mesmo Postgres 17, só com a extensão
+  compilada dentro).
+- **Produção (Easypanel/VPS):** **não** acompanha este arquivo. O serviço de
+  Postgres é provisionado pelo painel e a troca de imagem é ação manual do
+  Rômulo, **antes** do primeiro deploy que carregue a `0158`:
+  1. Easypanel → projeto → serviço do Postgres → **Imagem** →
+     `pgvector/pgvector:pg17`.
+  2. **Implantar** (salvar não aplica — ver a nota de "Segredos de runtime").
+  3. Verificar MEDINDO, não lendo:
+     ```bash
+     psql "$MIGRATION_DATABASE_URL" -c \
+       "select name, default_version from pg_available_extensions where name='vector'"
+     ```
+     Sem linha, a imagem não trocou — não rode o deploy.
+  4. Só então liberar o deploy que aplica a `0158`.
+
+Enquanto o passo 3 não devolver linha, a `0158` **não** deve ser aplicada em
+produção. Não há caminho de contorno na aplicação: o tipo `vector` é do banco.
+
 ## Migrations e seed
 
 ```bash
