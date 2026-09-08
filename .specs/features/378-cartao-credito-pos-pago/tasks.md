@@ -7,7 +7,14 @@ tocados** (o CI deste repo não valida Prettier — `pnpm format` no repo inteir
 
 ---
 
-## T0 — SPIKE bloqueante no sandbox (mede, não presume)
+## T0 — SPIKE bloqueante no sandbox (mede, não presume) — ✅ **FECHADO 08/09/2026**
+
+> Resultado dos 6 itens em `medicao-t0.md`, com corpos crus. Nenhuma regra de parada disparou:
+> a fatura hospedada devolve `creditCardToken`, `remoteIp` **não** é exigido (nada de IP persistido),
+> e o Asaas **não** retenta cobrança avulsa de cartão — nem via `Assinatura` nativa — então o motor
+> 5x (3+2) de T5b é nosso, como desenhado. Duas correções saíram da medição: o discriminador de
+> recusa em T4 estava invertido, e existe piso de R$ 5,00 por cobrança de cartão.
+> **T3, T4, T5 e T5b estão destravadas.**
 
 **Onde:** script descartável + registro do resultado nesta spec (`.specs/features/378-.../medicao-t0.md`).
 **Depende de:** nada. **Bloqueia:** T3, T4, T5, T5b.
@@ -99,8 +106,10 @@ distintos = testes distintos).
   (D7), `externalReference: cycle:<id>`. **Sem** `pixAutomaticAuthorizationId`, **sem** ler
   `/pix/automatic/authorizations` (não existe autorização aqui: o `customer` vem de
   `subscription.provider_customer_id`, passado pela porta).
-- 400 com `errors[].code === "invalid_creditCard"` → `{desfecho:"recusada_na_origem", codigo:"CARD_DECLINED"}`.
-  Qualquer outro 400 **sobe**.
+- 400 com `errors[].code === "invalid_action"` → `{desfecho:"recusada_na_origem", codigo:"CARD_DECLINED"}`
+  (**corrigido pelo T0** — `invalid_creditCard` significa token inexistente, bug nosso).
+  Qualquer outro 400 **sobe**, `invalid_creditCard` incluído. `code` + `description` crus vão para o
+  log em todos os ramos.
 - `buscarCobrancaPorReferencia` continua sendo a guarda de idempotência antes de emitir.
 - **D11 revisado:** este resultado por si só não marca o ciclo `falhou` — só a última das 5
   tentativas (contagem vem de T5b). A `externalReference` de cada tentativa precisa ser distinta
