@@ -7,6 +7,7 @@ import {
   RAIL_LARGURA_EXPANDIDA,
   CHAVE_RAIL_COLAPSADO,
   larguraRail,
+  _resetRailParaTeste,
 } from "./rail";
 import type { NavItem } from "./header";
 
@@ -14,6 +15,7 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   vi.restoreAllMocks();
+  _resetRailParaTeste();
 });
 
 const ITENS: NavItem[] = [
