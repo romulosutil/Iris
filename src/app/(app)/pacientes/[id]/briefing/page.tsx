@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { getTenantContext } from "@/auth/tenant";
 import { requireRole } from "@/auth/require-role";
 import { Stack } from "@/components/ui/layout";
+import { PageHeader } from "@/components/ui/page-header";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Card } from "@/components/ui/card";
 import { control, surface } from "@/components/ui/primitives/surface";
 import { cn } from "@/lib/cn";
@@ -84,25 +86,40 @@ export default async function BriefingPage({
 
   return (
     <Stack gap="lg" className="pb-24">
-      <header className="flex flex-col gap-1">
-        <Link
-          href="/agenda"
-          className="text-text-body focus-visible:outline-focus w-fit text-sm outline-none hover:underline focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
-        >
-          ← Agenda
-        </Link>
-        <h1 className="font-display text-text-heading text-3xl font-bold">
-          {proximaSessao?.numeroSequencial
+      {/* Mesma casca de topo das abas irmãs do prontuário (`page.tsx`,
+          `metas/page.tsx`): breadcrumb + título + descrição pelo `PageHeader`.
+          O atalho "← Agenda" continua existindo — esta aba também é alcançada
+          a partir da grade da Agenda, e o breadcrumb do prontuário não leva de
+          volta para lá. */}
+      <PageHeader
+        breadcrumb={
+          <Breadcrumb
+            itens={[
+              { rotulo: "Pacientes", href: "/pacientes" },
+              { rotulo: paciente.nome, href: `/pacientes/${paciente.id}` },
+              { rotulo: "Briefing", atual: true },
+            ]}
+          />
+        }
+        title={`${
+          proximaSessao?.numeroSequencial
             ? `Sessão ${proximaSessao.numeroSequencial}`
-            : "Briefing"}{" "}
-          · {paciente.nome}
-        </h1>
-        <p className="text-text-body text-sm">
-          {proximaSessao
+            : "Briefing"
+        } · ${paciente.nome}`}
+        description={
+          proximaSessao
             ? dataDaSessao(proximaSessao.agendadaPara, fuso)
-            : "Nenhuma sessão agendada para este paciente."}
-        </p>
-      </header>
+            : "Nenhuma sessão agendada para este paciente."
+        }
+        actions={
+          <Link
+            href="/agenda"
+            className="text-text-body focus-visible:outline-focus w-fit text-sm outline-none hover:underline focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
+          >
+            ← Agenda
+          </Link>
+        }
+      />
 
       {/* Título de seção h2 sempre FORA do Card: `Card.titulo` já renderiza um
           h3 interno (rótulo do cartão) — colocar o h2 da página dentro dele

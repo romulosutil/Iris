@@ -10,6 +10,8 @@ import {
 } from "@/lib/agenda/horas-queries";
 import { Stack } from "@/components/ui/layout";
 import { Alert } from "@/components/ui/alert";
+import { PageHeader } from "@/components/ui/page-header";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -131,9 +133,21 @@ export default async function HorasPage({ params }: Props) {
 
   return (
     <main className="flex flex-col gap-6">
-      <h1 className="font-display text-ink-anchor text-2xl font-black">
-        Horas — {pac.nome}
-      </h1>
+      {/* Mesma casca de topo das abas irmãs do prontuário (`page.tsx`,
+          `metas/page.tsx`): breadcrumb + título + descrição pelo `PageHeader`. */}
+      <PageHeader
+        breadcrumb={
+          <Breadcrumb
+            itens={[
+              { rotulo: "Pacientes", href: "/pacientes" },
+              { rotulo: pac.nome, href: `/pacientes/${pac.id}` },
+              { rotulo: "Horas", atual: true },
+            ]}
+          />
+        }
+        title={`Horas · ${pac.nome}`}
+        description="Carga horária por disciplina: alvo prescrito, agendado e realizado."
+      />
       <TabelaHoras linhas={linhas} />
     </main>
   );

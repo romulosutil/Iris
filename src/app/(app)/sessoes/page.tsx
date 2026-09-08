@@ -17,6 +17,7 @@ import {
   type Ordenacao,
 } from "./queries";
 import { definirFiltroTerapeuta } from "./actions";
+import { NATIVE_SELECT_CLASSNAME } from "@/components/ui/native-select";
 
 /**
  * `/sessoes` — fila única de sessões travadas (#512 · T03 + T04).
@@ -95,7 +96,7 @@ export default async function SessoesPage({
             id="terapeutaId"
             name="terapeutaId"
             defaultValue={terapeutaFiltro ?? ""}
-            className="rounded-[var(--radius-control)] border-2 px-2 py-1 text-sm"
+            className={NATIVE_SELECT_CLASSNAME}
           >
             <option value="">Todos</option>
             {fila.terapeutas.map((t) => (
@@ -129,9 +130,7 @@ export default async function SessoesPage({
           aria-current={ordenacao === "dia" ? "true" : undefined}
           className={
             "flex min-h-11 items-center underline " +
-            (ordenacao === "dia"
-              ? "font-bold"
-              : "text-[var(--text-secondary)]")
+            (ordenacao === "dia" ? "font-bold" : "text-[var(--text-secondary)]")
           }
         >
           Por dia

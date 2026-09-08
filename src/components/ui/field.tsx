@@ -8,6 +8,17 @@ export interface FieldProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Texto de apoio estático (ex.: "Mínimo 12 caracteres."). Gera
    * `${htmlFor}-hint` e o liga sozinho no input (ver nota do componente). */
   hint?: React.ReactNode;
+  /**
+   * Controle acoplado à LINHA do input (tipicamente o botão que submete aquele
+   * campo sozinho — "Atualizar carga"). Existe porque a alternativa que os
+   * formulários usavam mentia no alinhamento: pôr o botão como irmão do
+   * `<Field>` numa linha `items-end` encosta o botão no fim da COLUNA, e a
+   * coluna termina na dica, não no input — o botão descia uma linha de texto
+   * inteira. Aqui o botão entra na mesma linha do input (base alinhada por
+   * construção, sem px mágico) e a dica continua ABAIXO da linha inteira, sem
+   * o consumidor perder o `aria-describedby` automático.
+   */
+  acao?: React.ReactNode;
 }
 
 /**
@@ -48,7 +59,7 @@ function unirDescribedBy(
  */
 export const Field = React.forwardRef<HTMLDivElement, FieldProps>(
   function Field(
-    { className, label, htmlFor, error, hint, children, ...props },
+    { className, label, htmlFor, error, hint, acao, children, ...props },
     ref,
   ) {
     const idsDoCampo = unirDescribedBy(
@@ -83,7 +94,17 @@ export const Field = React.forwardRef<HTMLDivElement, FieldProps>(
         >
           {label}
         </label>
-        {slot}
+        {acao ? (
+          // `items-end` aqui alinha PELA BASE do input (o input é o item mais
+          // alto: 48px do `md` contra os 44px do botão `sm`), que é o que o
+          // olho lê como "o botão pertence a este campo".
+          <div className="flex items-end gap-3">
+            <div className="min-w-0 flex-1">{slot}</div>
+            {acao}
+          </div>
+        ) : (
+          slot
+        )}
         {hint ? (
           <p
             id={`${htmlFor}-hint`}

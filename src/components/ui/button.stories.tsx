@@ -23,7 +23,7 @@ const meta = {
   argTypes: {
     variante: {
       control: "inline-radio",
-      options: ["primaria", "secundaria", "terciaria"],
+      options: ["primaria", "secundaria", "terciaria", "destrutiva"],
     },
     disabled: { control: "boolean" },
   },
@@ -40,6 +40,17 @@ export const Secundaria: Story = {
 
 export const Terciaria: Story = {
   args: { variante: "terciaria", children: "Cancelar" },
+};
+
+/**
+ * Confirmação de ação que REMOVE ou ENCERRA (desencaixar protocolo, encerrar
+ * prescrição). Fica fora da escala de ênfase: mesmo peso da secundária, paleta
+ * de risco. Só para o botão que consuma a remoção — o gatilho que apenas ABRE o
+ * diálogo continua terciário, e "salvar mesmo assim" (aviso, não remoção)
+ * continua primário. Cor é pista redundante: o rótulo já diz o que some.
+ */
+export const Destrutiva: Story = {
+  args: { variante: "destrutiva", children: "Desencaixar protocolo" },
 };
 
 export const Desabilitado: Story = { args: { disabled: true } };

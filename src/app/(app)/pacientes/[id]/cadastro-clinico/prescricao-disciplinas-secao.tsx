@@ -287,12 +287,27 @@ function LinhaPrescricao({
 
       {state.error ? <Alert severidade="erro">{state.error}</Alert> : null}
 
-      <form action={formAction} className="flex flex-wrap items-end gap-3">
+      {/* O botão entra pelo slot `acao` do `Field`, não como irmão dele numa
+          linha `items-end`: a coluna do campo termina na DICA, então o irmão
+          descia uma linha de texto abaixo do input que ele submete. */}
+      <form action={formAction}>
         <input type="hidden" name="disciplina" value={prescricao.disciplina} />
         <Field
+          className="max-w-sm"
           label="Alterar carga semanal"
           htmlFor={`horas-${prescricao.id}`}
           hint={`Vigente desde ${new Date(prescricao.vigenciaInicio + "T00:00:00").toLocaleDateString("pt-BR")}`}
+          acao={
+            <Button
+              type="submit"
+              variante="secundaria"
+              tamanho="sm"
+              isLoading={isPending}
+              className="shrink-0"
+            >
+              {isPending ? "Salvando..." : "Atualizar carga"}
+            </Button>
+          }
         >
           <Input
             id={`horas-${prescricao.id}`}
@@ -306,14 +321,6 @@ function LinhaPrescricao({
             required
           />
         </Field>
-        <Button
-          type="submit"
-          variante="secundaria"
-          tamanho="sm"
-          isLoading={isPending}
-        >
-          {isPending ? "Salvando..." : "Atualizar carga"}
-        </Button>
       </form>
 
       <ConfirmarSobrealocacaoDialog
@@ -359,7 +366,7 @@ function LinhaPrescricao({
                 prescricao.disciplina,
               )}
             >
-              <Button type="submit" tamanho="sm">
+              <Button type="submit" variante="destrutiva" tamanho="sm">
                 Encerrar prescrição
               </Button>
             </form>

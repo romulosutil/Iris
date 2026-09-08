@@ -76,7 +76,7 @@ export function TabsNav({
             aria-current={ativo ? "page" : undefined}
             className={cn(
               "font-display -mb-0.5 inline-flex min-h-11 shrink-0 items-center border-2 border-transparent px-4 py-2 text-base font-semibold text-[var(--text-secondary)] transition-colors duration-100 ease-out",
-              "hover:border-[var(--border-brutal)]/40 hover:bg-[var(--gray-light-hover)]/40 hover:text-[var(--text-primary)]",
+              "hover:rounded-t-[var(--radius-control)] hover:border-[var(--border-brutal)]/40 hover:bg-[var(--gray-light-hover)]/40 hover:text-[var(--text-primary)]",
               "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:-outline-offset-[var(--ring-offset)]",
               ativo &&
                 "rounded-t-[var(--radius-control)] border-b-[3px] border-[var(--border-brutal)] border-b-[var(--action-primary,#F2B705)] bg-[var(--surface-elevated)] font-bold text-[var(--text-primary)] shadow-none",

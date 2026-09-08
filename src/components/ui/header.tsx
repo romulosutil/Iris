@@ -357,24 +357,24 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
         */}
           <div className="border-b border-[var(--border-brutal)]/15">
             <Container largura={largura}>
-              <div className="flex min-h-[60px] items-center justify-between gap-3 py-2 sm:min-h-[52px] sm:py-1">
-                <Cluster gap="sm" className="min-w-0 flex-nowrap">
+              <div className="flex min-h-14 items-center justify-between gap-3 py-2 sm:min-h-16 sm:py-3">
+                <Cluster gap="md" className="min-w-0 flex-nowrap">
                   <Link
                     href="/"
                     aria-label="Iris — Início"
                     className={cn(
-                      control("sm"),
+                      control("md"),
                       "focus-visible:outline-focus flex shrink-0 items-center",
                     )}
                   >
-                    <Logo variante="completo" altura={32} />
+                    <Logo variante="completo" altura={40} />
                   </Link>
 
                   {/* Clínica ativa (Desktop) */}
                   <div className="hidden min-w-0 items-center gap-2 sm:flex">
                     <span
                       aria-hidden
-                      className="h-5 w-px shrink-0 bg-[var(--border-brutal)]/20"
+                      className="h-6 w-px shrink-0 bg-[var(--border-brutal)]/20"
                     />
                     <span className="font-display truncate text-sm font-bold text-[var(--text-primary)]">
                       {clinicaAtivaNome}
@@ -399,7 +399,7 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(
                     <div className="hidden min-w-0 items-center gap-2 lg:flex">
                       <span
                         aria-hidden
-                        className="h-5 w-px shrink-0 bg-[var(--border-brutal)]/20"
+                        className="h-6 w-px shrink-0 bg-[var(--border-brutal)]/20"
                       />
                       <span className="font-mono text-xs font-semibold text-[var(--text-secondary)] uppercase">
                         Papel:

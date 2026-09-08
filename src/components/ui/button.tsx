@@ -10,15 +10,24 @@ import { comporRefs, mesclarPropsSlot } from "./primitives/slot";
  * primária e secundária carregam a superfície sólida com sombra dura que
  * LEVANTA (não são contornos finos); só a terciária é leve, para ações de
  * baixa ênfase (cancelar, voltar).
+ *
+ * `destrutiva` é ortogonal à escala, não um degrau dela: mesma estrutura e
+ * mesmo peso da secundária (superfície sólida, borda brutal, sombra que
+ * levanta), trocando só a paleta para a terracota de risco. Confirmar uma
+ * remoção com o MESMO ouro de "Registrar anamnese" fazia o botão prometer
+ * avanço onde há desfazimento — e a cor não é a única pista (o rótulo diz
+ * "Desencaixar"/"Encerrar"), então continua legível sem percepção de cor.
  */
 type Variante =
   | "primaria"
   | "secundaria"
   | "terciaria"
   | "neutra"
+  | "destrutiva"
   | "primary"
   | "secondary"
-  | "tertiary";
+  | "tertiary"
+  | "destructive";
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variante?: Variante;
@@ -40,6 +49,20 @@ function estiloVariante(v: Variante): string {
       return cn(
         surface("solida", { radius: "control" }),
         "bg-[var(--action-primary)] text-[var(--action-primary-fg)] font-bold",
+        "hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[var(--ds-shadow-hover)]",
+        "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all duration-75",
+      );
+    case "destrutiva":
+    case "destructive":
+      // Trio já medido do status de erro (o mesmo do `Alert severidade="erro"`
+      // e do badge de risco do header): fg 4.66:1 sobre o fill em claro, e o
+      // par #fecaca/rgba(127,29,29,.4) no escuro. Nada de vermelho novo — a
+      // borda de erro só substitui a `border-border-brutal` do `surface()`
+      // (twMerge resolve o conflito de cor; a LARGURA fica, porque vem com
+      // rótulo `[length:...]`).
+      return cn(
+        surface("solida", { radius: "control" }),
+        "border-[var(--status-error-border)] bg-[var(--status-error-bg)] text-[var(--status-error-fg)] font-bold",
         "hover:-translate-x-[1px] hover:-translate-y-[1px] hover:shadow-[var(--ds-shadow-hover)]",
         "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all duration-75",
       );
