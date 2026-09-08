@@ -36,7 +36,7 @@ export const RAIL_LARGURA_COLAPSADA = 68;
  * não é defesa cosmética: sem ele, o rail inteiro quebra a renderização do
  * shell do app para quem abre o produto numa aba anônima. O default seguro é
  * SEMPRE expandido — é o mesmo estado que o servidor "renderiza" (SSR não tem
- * `localStorage`), então não há salto de hidratação.
+ * `localStorage`).
  */
 function lerColapsado(): boolean {
   try {
@@ -46,13 +46,65 @@ function lerColapsado(): boolean {
   }
 }
 
+const railListeners = new Set<() => void>();
+
+/**
+ * Cache em memória do valor corrente — não é só otimização. R-25: quando
+ * `setItem` lança (quota, modo anônimo), a UI ainda precisa alternar dentro
+ * da MESMA aba (só não sobrevive a um reload). Se o snapshot lesse
+ * `localStorage` direto, uma gravação falha faria `useSyncExternalStore`
+ * recalcular o MESMO valor antigo — `Object.is` não vê mudança e o rail trava
+ * visualmente, mesmo o clique tendo "funcionado". `valorAtual` é a fonte de
+ * verdade da aba; `storage` (evento de OUTRA aba) é quem a invalida.
+ */
+let valorAtual: boolean | null = null;
+
+function notificarRailListeners(): void {
+  railListeners.forEach((listener) => listener());
+}
+
 function gravarColapsado(colapsado: boolean): void {
+  valorAtual = colapsado;
   try {
     window.localStorage.setItem(CHAVE_RAIL_COLAPSADO, colapsado ? "1" : "0");
   } catch {
     // Sem persistir, a próxima carga volta ao default expandido. Aceitável:
-    // é preferência de exibição do rail, não dado clínico.
+    // é preferência de exibição do rail, não dado clínico. O estado em
+    // memória (`valorAtual`) já mudou — a aba atual não trava.
   }
+  notificarRailListeners();
+}
+
+function inscreverRail(listener: () => void): () => void {
+  railListeners.add(listener);
+  const aoMudarStorage = (evento: StorageEvent) => {
+    if (evento.key === CHAVE_RAIL_COLAPSADO || evento.key === null) {
+      valorAtual = lerColapsado();
+    }
+    listener();
+  };
+  window.addEventListener("storage", aoMudarStorage);
+  return () => {
+    railListeners.delete(listener);
+    window.removeEventListener("storage", aoMudarStorage);
+  };
+}
+
+function obterSnapshotRail(): boolean {
+  if (valorAtual === null) {
+    valorAtual = lerColapsado();
+  }
+  return valorAtual;
+}
+
+function obterSnapshotServidorRail(): boolean {
+  return false;
+}
+
+/** Só para teste: `valorAtual` é cache de módulo, sobrevive entre `it()` do
+ * mesmo arquivo — sem isto, o valor otimista de um teste vaza pro próximo. */
+export function _resetRailParaTeste(): void {
+  valorAtual = null;
 }
 
 /** Largura em px do rail no estado dado — fonte única para o próprio rail e
@@ -66,28 +118,27 @@ export function larguraRail(colapsado: boolean): number {
 /**
  * Estado colapsado do rail + persistência.
  *
- * Inicializador preguiçoso, não `useEffect` + `setState` (o lint da Compiler
- * barra setState síncrono dentro de efeito — cascata de render). No servidor
- * (SSR não tem `window`) nasce expandido, igual ao default seguro de
- * `lerColapsado`; no cliente já nasce com a preferência real, sem o salto de
- * um segundo render. Custo aceito: se o operador tinha colapsado, o HTML do
- * servidor diverge por um frame do primeiro render do cliente (warning de
- * hidratação, não erro) — é preferência de exibição, não dado clínico.
+ * `useSyncExternalStore`, não `useState` com inicializador preguiçoso lendo
+ * `localStorage`: o inicializador rodava só no cliente, então o snapshot do
+ * servidor (`false`) e o primeiro snapshot do cliente (preferência real)
+ * podiam divergir — hydration mismatch descartado de propósito, o que o
+ * `useSyncExternalStore` resolve por contrato (React usa o snapshot do
+ * servidor na hidratação e só troca depois, sem warning). `alternar` lê o
+ * valor corrente do próprio store (não do closure) para não perder toggles
+ * em sequência.
  */
 export function useRailColapsado(): {
   colapsado: boolean;
   alternar: () => void;
 } {
-  const [colapsado, setColapsado] = React.useState<boolean>(() =>
-    typeof window === "undefined" ? false : lerColapsado(),
+  const colapsado = React.useSyncExternalStore(
+    inscreverRail,
+    obterSnapshotRail,
+    obterSnapshotServidorRail,
   );
 
   const alternar = React.useCallback(() => {
-    setColapsado((atual) => {
-      const proximo = !atual;
-      gravarColapsado(proximo);
-      return proximo;
-    });
+    gravarColapsado(!obterSnapshotRail());
   }, []);
 
   return { colapsado, alternar };
