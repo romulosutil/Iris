@@ -56,13 +56,21 @@ const S_NOVA = "00000000-0000-0000-0000-000000163b03";
 const S_VIZINHA = "00000000-0000-0000-0000-000000163b04";
 
 /**
- * As 18 tabelas que a 0073 lista como alvo. Escrita à mão de propósito: ler o
- * array do próprio SQL faria o teste concordar com o arquivo em vez de medir o
- * banco — e um `ALTER TABLE ... DISABLE TRIGGER` aplicado à mão em produção
- * passaria despercebido.
+ * As 18 tabelas que a 0073 lista como alvo, mais `assinatura_credencial`
+ * (0157, #259). Escrita à mão de propósito: ler o array do próprio SQL faria o
+ * teste concordar com o arquivo em vez de medir o banco — e um
+ * `ALTER TABLE ... DISABLE TRIGGER` aplicado à mão em produção passaria
+ * despercebido.
+ *
+ * `assinatura_credencial` é a única cujo trigger é `BEFORE INSERT` apenas, e
+ * não `INSERT OR UPDATE OR DELETE`: instalar certificado é configuração de
+ * produto e para com a conta, mas REVOGAR (o único UPDATE que a RLS permite)
+ * não pode parar — certificado comprometido se corta mesmo com a mensalidade
+ * em atraso.
  */
 const TABELAS_COM_BARREIRA = [
   "agendamento_recorrente",
+  "assinatura_credencial",
   "bloqueio",
   "care_team_membership",
   "clinic",
@@ -230,8 +238,8 @@ describe.skipIf(!hasDb)("#163 · barreira da conta em somente-leitura", () => {
     expect(role!.rolbypassrls).toBe(false);
   });
 
-  // ─── 2. os 18 triggers estão instalados E ligados ─────────────────────────
-  test("os 18 triggers de barreira existem e estão HABILITADOS", async () => {
+  // ─── 2. os 19 triggers estão instalados E ligados ─────────────────────────
+  test("os 19 triggers de barreira existem e estão HABILITADOS", async () => {
     // A 0073 cria os triggers DESABILITADOS de propósito e a 0074 liga a chave.
     // Sem a checagem de `tgenabled` este teste ficaria verde com a 0074 nunca
     // aplicada — que é precisamente o incidente da 0055 (migração commitada,

@@ -1100,6 +1100,13 @@
       "when": 1788647798325,
       "tag": "0156_marca_white_label",
       "breakpoints": true
+    },
+    {
+      "idx": 157,
+      "version": "7",
+      "when": 1788847025204,
+      "tag": "0157_credencial_assinatura_icp",
+      "breakpoints": true
     }
   ]
 }

@@ -2756,3 +2756,99 @@ export const jobHeartbeat = pgTable("job_heartbeat", {
   ultimoErro: timestamp("ultimo_erro", { withTimezone: true }),
   detalhe: text("detalhe"),
 });
+
+// ─── #259 (D10) — Custódia da credencial de assinatura ICP-Brasil ────────────
+// Uma credencial vigente por clínica (a vigente é a única com `revogado_em IS
+// NULL`). O certificado A1 chega como arquivo `.pfx`/`.p12` protegido por
+// senha; NADA disso entra aqui em texto plano — o desenho é envelope
+// encryption de dois níveis:
+//
+//   - `dek_cifrada`   → chave de dados (DEK) da clínica, ela própria cifrada
+//                       pela chave-mestra (KEK) referida por `chave_envelope_ref`.
+//   - `pfx_cifrado`   → o `.pfx` cifrado com a DEK.
+//   - `senha_cifrada` → a senha do `.pfx` cifrada com a DEK.
+//
+// LACUNA CONHECIDA E DELIBERADA (repetida na 0157 e no PR da #259): este
+// repositório NÃO tem KMS. `chave_envelope_ref` é hoje uma referência opaca —
+// o esquema está pronto para o envelope, mas o custodiante da KEK ainda não
+// existe. Enquanto não existir, nenhuma credencial de produção deve ser
+// gravada aqui; o provider de dublê não lê esta tabela.
+//
+// A3 em nuvem/HSM não tem material exportável: `pfx_*` e `senha_*` ficam NULL
+// (CHECK `assinatura_credencial_a3_sem_material`) e a chave privada nunca sai
+// do custodiante — só o digest do PDF viaja.
+//
+// GRANTs por coluna, RLS e a função SECURITY DEFINER que lê o material cifrado
+// são escritos à mão na migração `0157_credencial_assinatura_icp.sql`.
+export const assinaturaCertificadoTipo = pgEnum("assinatura_certificado_tipo", [
+  "a1_arquivo",
+  "a3_nuvem",
+]);
+
+export const assinaturaCredencial = pgTable(
+  "assinatura_credencial",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    tipo: assinaturaCertificadoTipo("tipo").notNull(),
+    // Nome do provedor PKI que custodia/opera a chave (`fake_local` em dev).
+    provedor: text("provedor").notNull(),
+    chaveEnvelopeRef: text("chave_envelope_ref").notNull(),
+    chaveEnvelopeAlg: text("chave_envelope_alg")
+      .notNull()
+      .default("AES-256-GCM"),
+    dekCifrada: bytea("dek_cifrada").notNull(),
+    dekNonce: bytea("dek_nonce").notNull(),
+    pfxCifrado: bytea("pfx_cifrado"),
+    pfxNonce: bytea("pfx_nonce"),
+    senhaCifrada: bytea("senha_cifrada"),
+    senhaNonce: bytea("senha_nonce"),
+    // Metadados públicos do certificado — saem no `audit_log` e na UI. O número
+    // de série é o que a guardrail #3 da #259 exige na trilha de assinatura.
+    certificadoNumeroSerie: text("certificado_numero_serie").notNull(),
+    certificadoTitular: text("certificado_titular").notNull(),
+    certificadoEmissor: text("certificado_emissor").notNull(),
+    validoDe: timestamp("valido_de", { withTimezone: true }).notNull(),
+    validoAte: timestamp("valido_ate", { withTimezone: true }).notNull(),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    criadoPor: uuid("criado_por")
+      .notNull()
+      .references(() => appUser.id, { onDelete: "restrict" }),
+    revogadoEm: timestamp("revogado_em", { withTimezone: true }),
+    revogadoPor: uuid("revogado_por").references(() => appUser.id, {
+      onDelete: "set null",
+    }),
+  },
+  (t) => [
+    uniqueIndex("uq_assinatura_credencial_vigente")
+      .on(t.clinicId)
+      .where(sql`${t.revogadoEm} IS NULL`),
+    check(
+      "assinatura_credencial_validade",
+      sql`${t.validoAte} > ${t.validoDe}`,
+    ),
+    // `tipo::text` de propósito: comparar enum recém-criado com literal dentro
+    // da mesma migração já custou uma sessão (memória `enum-novo-e-check-numa-
+    // migracao`). O cast para texto contorna sem mudar a semântica.
+    check(
+      "assinatura_credencial_a1_material",
+      sql`${t.tipo}::text <> 'a1_arquivo' OR (${t.pfxCifrado} IS NOT NULL AND ${t.pfxNonce} IS NOT NULL AND ${t.senhaCifrada} IS NOT NULL AND ${t.senhaNonce} IS NOT NULL)`,
+    ),
+    check(
+      "assinatura_credencial_a3_sem_material",
+      sql`${t.tipo}::text <> 'a3_nuvem' OR (${t.pfxCifrado} IS NULL AND ${t.pfxNonce} IS NULL AND ${t.senhaCifrada} IS NULL AND ${t.senhaNonce} IS NULL)`,
+    ),
+    check(
+      "assinatura_credencial_revogacao_completa",
+      sql`(${t.revogadoEm} IS NULL) = (${t.revogadoPor} IS NULL)`,
+    ),
+    index("idx_assinatura_credencial_clinic").on(
+      t.clinicId,
+      t.validoAte.desc(),
+    ),
+  ],
+);
