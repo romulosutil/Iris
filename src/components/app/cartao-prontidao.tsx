@@ -63,6 +63,18 @@ const TOKENS_ESTADO: Record<EstadoDegrau, string> = {
   pendente: "border-[var(--border-brutal)] text-[var(--text-secondary)]",
 };
 
+/**
+ * Título padrão do cartão da escada — o que o operador LÊ no topo do
+ * prontuário.
+ *
+ * Exportado porque a aba Evolução precisa CITAR este cartão pelo nome ("veja
+ * … no topo desta página") em vez de desenhar uma segunda escada. Repetir a
+ * string lá criaria duas fontes para o mesmo rótulo, livres para divergir na
+ * primeira mudança de copy — e a divergência apareceria como uma referência a
+ * um cartão que não existe com aquele nome.
+ */
+export const TITULO_CARTAO_PRONTIDAO = "Para este prontuário gerar dados";
+
 export interface CartaoProntidaoProps {
   prontidao: Prontidao;
   titulo?: string;
@@ -85,7 +97,7 @@ export interface CartaoProntidaoProps {
 
 export function CartaoProntidao({
   prontidao,
-  titulo = "Para este prontuário gerar dados",
+  titulo = TITULO_CARTAO_PRONTIDAO,
   motivoSomenteLeitura,
 }: CartaoProntidaoProps) {
   const { degraus, proximo, quemResolve } = prontidao;

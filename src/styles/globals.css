@@ -1,6 +1,25 @@
 @import "tailwindcss";
 
 /*
+ * Markdown fora da varredura do Tailwind.
+ *
+ * O detector automático da v4 varre a árvore do repositório inteira, e um
+ * utilitário arbitrário CITADO dentro de um `.md` vira regra gerada — inclusive
+ * quando a citação está no doc que AVISA para não fazer isso
+ * (`docs/superpowers/plans/2026-08-29-36-blocos-a-c-d-...md` documenta a
+ * armadilha e a disparava). O scanner leu a citação, emitiu um
+ * `padding-bottom` com reticências literais dentro de `env()`, o parser de CSS
+ * recusou (`Unexpected token Delim('.')`) e TODA rota passou a responder 500 —
+ * com o erro apontando uma linha do CSS gerado que não existe em arquivo
+ * nenhum do projeto.
+ *
+ * Markdown nunca é fonte de classe usada em runtime: nenhuma página renderiza
+ * `docs/**` nem `*.md` da raiz. Excluir a extensão inteira é mais barato que
+ * confiar em cada autor de doc lembrar de não citar um utilitário arbitrário.
+ */
+@source not "../../**/*.md";
+
+/*
   Fallback das vars de fonte. No app quem as define é o next/font (as classes
   geradas em layout.tsx, que são unlayered e por isso vencem esta camada).
   Fora do Next — Storybook, previews do /design-sync, qualquer consumo do CSS

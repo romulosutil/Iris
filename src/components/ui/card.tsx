@@ -103,7 +103,7 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
         Candidato
       </Pill>
     );
-  } else {
+  } else if (resolvedState === "conquistado") {
     variante = "solida";
     badgeNode = (
       <Pill
@@ -115,6 +115,22 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
         Conquistado
       </Pill>
     );
+  } else {
+    // `fact` — o DEFAULT de todo `<Card>` que não declara estado. Sem selo.
+    //
+    // Este ramo era o `else` que estampava "Conquistado ✓" incondicionalmente,
+    // e o default caía nele: cartão que não dizia nada sobre si ganhava um selo
+    // menta afirmando conquista. Na navegação isso aparecia como o briefing
+    // dizendo "Última sessão · Conquistado — Nenhuma sessão anterior registrada
+    // ainda", "Metas de hoje · Conquistado — Nenhuma meta ativa registrada" e o
+    // checklist de onboarding com "Conquistado" ao lado de "0 de 5 concluídos".
+    // Selo é afirmação: cartão sem estado declarado não tem o que afirmar.
+    //
+    // `cartao-prontidao.tsx` documenta este mesmo defeito e por isso monta o
+    // próprio contêiner com `surface()` em vez de usar `Card`. Aquela decisão
+    // segue de pé (o cartão da escada não quer selo NENHUM em estado algum);
+    // o que muda aqui é que ela deixa de ser a única defesa.
+    variante = "solida";
   }
 
   const isFact = variante === "solida";
@@ -161,14 +177,20 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(function Card(
           className="absolute inset-x-0 top-0 h-2 rounded-t-[var(--radius-control)] bg-[var(--action-primary)]"
         />
       ) : null}
-      <div className="flex items-center justify-between gap-3">
-        {titulo ? (
-          <h3 className="font-display text-lg font-semibold text-[var(--text-primary)]">
-            {titulo}
-          </h3>
-        ) : null}
-        <div className="shrink-0">{badgeNode}</div>
-      </div>
+      {/* Cabeçalho só existe quando há o que colocar nele. Com o selo agora
+          opt-in, um `<Card>` sem título e sem estado renderizava esta linha
+          vazia — e ela cobra o `gap-2` do contêiner como se houvesse conteúdo,
+          empurrando o corpo do cartão para baixo sem motivo visível. */}
+      {titulo || badgeNode ? (
+        <div className="flex items-center justify-between gap-3">
+          {titulo ? (
+            <h3 className="font-display text-lg font-semibold text-[var(--text-primary)]">
+              {titulo}
+            </h3>
+          ) : null}
+          {badgeNode ? <div className="shrink-0">{badgeNode}</div> : null}
+        </div>
+      ) : null}
       {children ? (
         <div className="text-sm text-[var(--text-primary)]">{children}</div>
       ) : null}
