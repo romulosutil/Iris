@@ -117,30 +117,28 @@ export default async function PacientePage({
     ]);
 
     return (
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Stack gap="lg">
-          <PageHeader
-            breadcrumb={
-              <Breadcrumb
-                itens={[
-                  { rotulo: "Pacientes", href: "/pacientes" },
-                  { rotulo: paciente.nome, atual: true },
-                ]}
-              />
-            }
-            title={paciente.nome}
-            description="Evolução clínica em Terapia Cognitivo-Comportamental"
-          />
-          <AvisosArquivamento {...avisos} />
-          <EvolucaoTcc
-            aplicacoes={aplicacoes}
-            entriesRpd={entriesRpd.map((e) => ({
-              ...e,
-              distorcoesCognitivas: e.distorcoesCognitivas as string[] | null,
-            }))}
-          />
-        </Stack>
-      </div>
+      <Stack gap="lg">
+        <PageHeader
+          breadcrumb={
+            <Breadcrumb
+              itens={[
+                { rotulo: "Pacientes", href: "/pacientes" },
+                { rotulo: paciente.nome, atual: true },
+              ]}
+            />
+          }
+          title={paciente.nome}
+          description="Evolução clínica em Terapia Cognitivo-Comportamental"
+        />
+        <AvisosArquivamento {...avisos} />
+        <EvolucaoTcc
+          aplicacoes={aplicacoes}
+          entriesRpd={entriesRpd.map((e) => ({
+            ...e,
+            distorcoesCognitivas: e.distorcoesCognitivas as string[] | null,
+          }))}
+        />
+      </Stack>
     );
   }
 
@@ -165,69 +163,67 @@ export default async function PacientePage({
     : [];
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <Stack gap="lg">
-        {/* PageHeader Padronizado */}
-        <PageHeader
-          breadcrumb={
-            <Breadcrumb
-              itens={[
-                { rotulo: "Pacientes", href: "/pacientes" },
-                { rotulo: paciente.nome, atual: true },
-              ]}
-            />
-          }
-          title={paciente.nome}
-          description="Prontuário e linha do tempo de evolução clínica"
-        />
-
-        {/* A faixa de abas vive em `layout.tsx` desde a Fatia C. Estava aqui,
-            hardcoded, e por isso só existia NESTA aba: quem entrasse em
-            "Briefing" ou "Horas" perdia a navegação e só voltava pelo botão do
-            browser. Além disso listava 4 das 7 rotas irmãs reais.
-
-            #619 — os botões "Ficha Clínica" e "PEI & Metas" no `actions` acima
-            eram a mesma duplicação: hardcoded aqui, sem gate por modalidade
-            (linkavam `/metas` mesmo para paciente TCC/convencional), enquanto
-            `layout.tsx` já resolve a aba central certa via
-            `capacidadesDaModalidade`. Removidos — a faixa de abas abaixo é a
-            única fonte de navegação. */}
-
-        {/* #174 — o que o job de arquivamento fez sozinho com a contagem de
-            ativos, dito na tela em vez de só na fatura. */}
-        <AvisosArquivamento {...avisos} />
-
-        {/* Estado Vazio ou Timeline */}
-        {!temSnapshots ? (
-          // `fatos === null` é falha de leitura (não "sem dado"): nesse caso
-          // não afirma nada — nem "falta meta" nem "está pronto" seria
-          // verdade garantida, e as duas mentem sob o mesmo risco que motivou
-          // esta troca. Nada na tela é o único estado honesto.
-          fatos ? (
-            <EvolucaoVazia
-              prontidao={montarProntidao({
-                // Modalidade da linha `patient`, não a do definer — mesmo
-                // motivo de `layout.tsx`: quem chega nesta página já passou
-                // por `patient_select`. Só os call sites de SESSÃO precisam da
-                // modalidade que sai por `app_fatos_prontidao`.
-                modalidade: paciente.clinicalModality,
-                fatos: fatos.fatos,
-                role: ctx.role,
-                patientId: id,
-              })}
-            />
-          ) : null
-        ) : (
-          <TimelineClient
-            patientId={paciente.id}
-            pacienteNome={paciente.nome}
-            initialData={timeline}
-            vista={vista}
-            rotinas={rotinas}
-            papel={ctx.role}
+    <Stack gap="lg">
+      {/* PageHeader Padronizado */}
+      <PageHeader
+        breadcrumb={
+          <Breadcrumb
+            itens={[
+              { rotulo: "Pacientes", href: "/pacientes" },
+              { rotulo: paciente.nome, atual: true },
+            ]}
           />
-        )}
-      </Stack>
-    </div>
+        }
+        title={paciente.nome}
+        description="Prontuário e linha do tempo de evolução clínica"
+      />
+
+      {/* A faixa de abas vive em `layout.tsx` desde a Fatia C. Estava aqui,
+          hardcoded, e por isso só existia NESTA aba: quem entrasse em
+          "Briefing" ou "Horas" perdia a navegação e só voltava pelo botão do
+          browser. Além disso listava 4 das 7 rotas irmãs reais.
+
+          #619 — os botões "Ficha Clínica" e "PEI & Metas" no `actions` acima
+          eram a mesma duplicação: hardcoded aqui, sem gate por modalidade
+          (linkavam `/metas` mesmo para paciente TCC/convencional), enquanto
+          `layout.tsx` já resolve a aba central certa via
+          `capacidadesDaModalidade`. Removidos — a faixa de abas abaixo é a
+          única fonte de navegação. */}
+
+      {/* #174 — o que o job de arquivamento fez sozinho com a contagem de
+          ativos, dito na tela em vez de só na fatura. */}
+      <AvisosArquivamento {...avisos} />
+
+      {/* Estado Vazio ou Timeline */}
+      {!temSnapshots ? (
+        // `fatos === null` é falha de leitura (não "sem dado"): nesse caso
+        // não afirma nada — nem "falta meta" nem "está pronto" seria
+        // verdade garantida, e as duas mentem sob o mesmo risco que motivou
+        // esta troca. Nada na tela é o único estado honesto.
+        fatos ? (
+          <EvolucaoVazia
+            prontidao={montarProntidao({
+              // Modalidade da linha `patient`, não a do definer — mesmo
+              // motivo de `layout.tsx`: quem chega nesta página já passou
+              // por `patient_select`. Só os call sites de SESSÃO precisam da
+              // modalidade que sai por `app_fatos_prontidao`.
+              modalidade: paciente.clinicalModality,
+              fatos: fatos.fatos,
+              role: ctx.role,
+              patientId: id,
+            })}
+          />
+        ) : null
+      ) : (
+        <TimelineClient
+          patientId={paciente.id}
+          pacienteNome={paciente.nome}
+          initialData={timeline}
+          vista={vista}
+          rotinas={rotinas}
+          papel={ctx.role}
+        />
+      )}
+    </Stack>
   );
 }

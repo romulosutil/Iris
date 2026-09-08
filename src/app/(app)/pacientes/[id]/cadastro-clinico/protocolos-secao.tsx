@@ -370,6 +370,7 @@ function ProtocoloAtivo({
                   no cartão, que continua na tela. */}
               <Button
                 type="submit"
+                variante="destrutiva"
                 tamanho="sm"
                 isLoading={isPending}
                 onClick={() => setConfirmando(false)}

@@ -6,9 +6,12 @@ import {
   careTeamMembership,
   appUser,
   userRole,
+  patient,
   patientAlvoDisciplina,
 } from "@/db/schema";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { formatarDisciplina } from "@/lib/disciplinas";
 import { formatarHoras, papelConsomeSaldo } from "@/lib/horas";
@@ -63,9 +66,17 @@ export default async function EquipePage({
   const { id } = await params;
   const ctx = await getTenantContext();
 
-  const { equipe, profissionaisClinica, alvosCarga } = await withTenant(
-    ctx,
-    async (tx) => {
+  const { pacienteNome, equipe, profissionaisClinica, alvosCarga } =
+    await withTenant(ctx, async (tx) => {
+      // Nome do paciente para o breadcrumb/título da casca de topo. Leitura
+      // TOLERANTE de propósito: se a RLS não devolver a linha, a aba continua
+      // renderizando (era o comportamento antes desta casca existir) — só o
+      // nome some do topo, em vez de a tela inteira virar 404.
+      const [pac] = await tx
+        .select({ nome: patient.nome })
+        .from(patient)
+        .where(eq(patient.id, id));
+
       // Query membros ativos e históricos da equipe do paciente com dados de usuário
       const membros = await tx
         .select({
@@ -120,12 +131,12 @@ export default async function EquipePage({
         );
 
       return {
+        pacienteNome: pac?.nome ?? null,
         equipe: membros,
         profissionaisClinica: profissionaisRaw,
         alvosCarga: alvos,
       };
-    },
-  );
+    });
 
   // Mapear responsáveis técnicos por ID para busca rápida na lista de membros
   const usuariosMap = new Map<string, string>();
@@ -302,16 +313,26 @@ export default async function EquipePage({
 
   return (
     <div className="flex flex-col gap-8">
-      {/* Header da Página */}
-      <div className="flex flex-col gap-1">
-        <h1 className="font-display text-3xl font-bold text-[var(--text-primary)]">
-          Equipe de Cuidado
-        </h1>
-        <p className="text-sm text-[var(--text-secondary)]">
-          Profissionais da saúde vinculados ao acompanhamento clínico deste
-          paciente.
-        </p>
-      </div>
+      {/* Mesma casca de topo das abas irmãs do prontuário (`page.tsx`,
+          `metas/page.tsx`): breadcrumb + título + descrição pelo `PageHeader`.
+          O título só ganha o nome do paciente quando a leitura o devolveu —
+          sem nome, mantém o rótulo antigo em vez de imprimir "Equipe · null". */}
+      <PageHeader
+        breadcrumb={
+          <Breadcrumb
+            itens={[
+              { rotulo: "Pacientes", href: "/pacientes" },
+              {
+                rotulo: pacienteNome ?? "Paciente",
+                href: `/pacientes/${id}`,
+              },
+              { rotulo: "Equipe", atual: true },
+            ]}
+          />
+        }
+        title={pacienteNome ? `Equipe · ${pacienteNome}` : "Equipe de Cuidado"}
+        description="Profissionais da saúde vinculados ao acompanhamento clínico deste paciente."
+      />
 
       {/* MV2 — sem prescrição não há teto, então não há o que alocar. Estado
           vazio DIRECIONADO: o formulário fica OCULTO, não desabilitado.

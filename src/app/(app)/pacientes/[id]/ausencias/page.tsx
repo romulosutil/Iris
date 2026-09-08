@@ -5,6 +5,8 @@ import { requireRole } from "@/auth/require-role";
 import { withTenant } from "@/db/rls";
 import { patient } from "@/db/schema";
 import { listarBloqueios } from "@/lib/agenda/bloqueio-queries";
+import { PageHeader } from "@/components/ui/page-header";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { AusenciasForm } from "./ausencias-form";
 
 interface Props {
@@ -30,9 +32,21 @@ export default async function AusenciasPage({ params }: Props) {
   });
   return (
     <main className="flex flex-col gap-6">
-      <h1 className="font-display text-2xl font-black text-[var(--text-primary)]">
-        Ausências — {pac.nome}
-      </h1>
+      {/* Mesma casca de topo das abas irmãs do prontuário (`page.tsx`,
+          `metas/page.tsx`): breadcrumb + título + descrição pelo `PageHeader`. */}
+      <PageHeader
+        breadcrumb={
+          <Breadcrumb
+            itens={[
+              { rotulo: "Pacientes", href: "/pacientes" },
+              { rotulo: pac.nome, href: `/pacientes/${pac.id}` },
+              { rotulo: "Ausências", atual: true },
+            ]}
+          />
+        }
+        title={`Ausências · ${pac.nome}`}
+        description="Períodos de indisponibilidade do paciente que bloqueiam a agenda."
+      />
       <AusenciasForm patientId={id} bloqueios={bloqueios} />
     </main>
   );

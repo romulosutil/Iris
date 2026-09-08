@@ -18,6 +18,7 @@ import {
   type AnamneseActionResult,
 } from "./actions";
 import { PROCEDENCIAS, type Procedencia, type Alvo } from "./schemas";
+import { NATIVE_SELECT_CLASSNAME } from "@/components/ui/native-select";
 
 export type MilestoneOpcao = {
   id: string;
@@ -349,7 +350,7 @@ export function AnamneseForm({
                       e.target.value as EixoEspectro,
                     )
                   }
-                  className="focus-visible:outline-focus h-10 w-full rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-3 text-sm text-[var(--text-primary)]"
+                  className={`${NATIVE_SELECT_CLASSNAME} w-full`}
                 >
                   {ORDEM_EIXOS.map((eixo) => (
                     <option key={eixo} value={eixo}>
@@ -373,7 +374,7 @@ export function AnamneseForm({
                       e.target.value as Procedencia,
                     )
                   }
-                  className="focus-visible:outline-focus h-10 w-full rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-3 text-sm text-[var(--text-primary)]"
+                  className={`${NATIVE_SELECT_CLASSNAME} w-full`}
                 >
                   {PROCEDENCIAS.map((proc) => (
                     <option key={proc} value={proc}>
@@ -419,7 +420,7 @@ export function AnamneseForm({
                       v === "null" ? null : Number(v),
                     );
                   }}
-                  className="focus-visible:outline-focus h-10 w-full rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-3 text-sm text-[var(--text-primary)]"
+                  className={`${NATIVE_SELECT_CLASSNAME} w-full`}
                 >
                   <option value="null">Não avaliado (sem medida)</option>
                   {taxonomiaAjuda.map((nivelNome, nIdx) => (
@@ -445,7 +446,7 @@ export function AnamneseForm({
                         e.target.value || null,
                       )
                     }
-                    className="focus-visible:outline-focus h-10 w-full rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-3 text-sm text-[var(--text-primary)]"
+                    className={`${NATIVE_SELECT_CLASSNAME} w-full`}
                   >
                     <option value="">Nenhum marco vinculado</option>
                     {milestones.map((m) => (
@@ -467,7 +468,7 @@ export function AnamneseForm({
                         e.target.value as "ABA" | "Fono" | "TO",
                       )
                     }
-                    className="focus-visible:outline-focus h-10 w-full rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] px-3 text-sm text-[var(--text-primary)]"
+                    className={`${NATIVE_SELECT_CLASSNAME} w-full`}
                   >
                     <option value="ABA">ABA</option>
                     <option value="Fono">Fono</option>

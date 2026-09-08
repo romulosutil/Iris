@@ -24,6 +24,7 @@ import type { Papel } from "@/auth/papel-ativo";
 import type { ResultadoSegmentacao } from "@/lib/evidence/snapshot-schema";
 import { estadoDoMarco, type DeltaSessao as DeltaSessaoType } from "./logic";
 import { Button } from "@/components/ui/button";
+import { NATIVE_SELECT_CLASSNAME } from "@/components/ui/native-select";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PatientProgressIllustration } from "@/components/ui/illustrations";
 import {
@@ -496,7 +497,7 @@ export function TimelineClient({
               id="select-trajetoria-alvo"
               value={trajetoriaAlvoId}
               onChange={(e) => setTrajetoriaAlvoId(e.target.value)}
-              className="border-ink-anchor text-ink focus-visible:outline-focus min-h-[var(--control-sm)] w-full max-w-full min-w-0 flex-1 border-2 bg-[var(--surface-card)] px-3 text-sm focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
+              className={`${NATIVE_SELECT_CLASSNAME} w-full max-w-full min-w-0 flex-1`}
             >
               <option value="">Selecione...</option>
               <optgroup label="Metas Ativas">
@@ -741,7 +742,7 @@ export function TimelineClient({
                 onChange={(e) =>
                   handleSelecionarSessaoComparar(Number(e.target.value))
                 }
-                className="border-ink-anchor text-ink focus-visible:outline-focus min-h-[var(--control-sm)] w-full max-w-full min-w-0 border-2 bg-[var(--surface-card)] px-3 text-sm focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
+                className={`${NATIVE_SELECT_CLASSNAME} w-full max-w-full min-w-0`}
               >
                 <option value="" disabled>
                   Selecione...

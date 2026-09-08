@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
+import { Button } from "./button";
 import { Field } from "./field";
 import { Input } from "./input";
 
@@ -24,6 +25,34 @@ export const SemErro: Story = {
           type="email"
           placeholder="nome@clinica.com.br"
         />
+      </Field>
+    </div>
+  ),
+};
+
+/**
+ * Campo com botão acoplado (`acao`) — o padrão de "editar um valor já salvo"
+ * (ex.: "Alterar carga semanal" + "Atualizar carga"). O botão fica na LINHA do
+ * input e a dica desce abaixo da linha inteira; pôr o botão como irmão do
+ * `<Field>` alinhava pelo fim da dica, uma linha de texto abaixo do input.
+ */
+export const ComAcao: Story = {
+  args: {
+    label: "Alterar carga semanal",
+    htmlFor: "horas",
+    hint: "Vigente desde 01/08/2026",
+  },
+  render: (args) => (
+    <div className="w-96">
+      <Field
+        {...args}
+        acao={
+          <Button type="button" variante="secundaria" tamanho="sm">
+            Atualizar carga
+          </Button>
+        }
+      >
+        <Input id={args.htmlFor} type="number" defaultValue={8} />
       </Field>
     </div>
   ),
