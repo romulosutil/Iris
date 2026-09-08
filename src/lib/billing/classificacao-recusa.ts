@@ -34,7 +34,7 @@
  * doc avisa que valores novos entram sem aviso prévio. Por isso:
  *
  * - `classificarRecusa` aceita `string | null`, nunca uma união de literais;
- * - qualquer coisa fora dos 25 códigos é **G0**, e `null` também (é o estado de
+ * - qualquer coisa fora do catálogo é **G0**, e `null` também (é o estado de
  *   produção enquanto o D35 não estiver medido em prod: sem instrução para
  *   consultar, o motivo chega `null`);
  * - a comparação é EXATA (`trim` + caixa alta), sem casamento parcial: um
@@ -55,15 +55,27 @@
  *   queimar uma das 3 tentativas do `3R_7D` e `retentavelAutomaticamente` diz
  *   se a varredura pode fazê-lo sem clínica no meio; quem executa é a #322.
  * - **Não renderiza nada.** `copy` é o texto que a clínica deve ver quando a
- *   #312/D36 existir — hoje nenhuma tela lê. Regra que vale para os 9 grupos:
+ *   #312/D36 existir — hoje nenhuma tela lê. Regra que vale para todos os grupos:
  *   **dizer o que fazer e onde, nunca o código** (a própria doc do Asaas
  *   orienta a não expor o código cru), e nunca citar valor (o teto do Pix
  *   Automático é ilegível por regulação).
  */
 
-/** Os 9 grupos de desfecho da #318. `G0` é o default do catálogo aberto. */
+/**
+ * Os grupos de desfecho. G0-G8 vieram da #318 (trilho Pix Automático); G9 é o
+ * trilho cartão (#378). `G0` é o default do catálogo aberto.
+ */
 export type GrupoRecusa =
-  "G0" | "G1" | "G2" | "G3" | "G4" | "G5" | "G6" | "G7" | "G8";
+  | "G0"
+  | "G1"
+  | "G2"
+  | "G3"
+  | "G4"
+  | "G5"
+  | "G6"
+  | "G7"
+  | "G8"
+  | "G9";
 
 export interface PoliticaRecusa {
   grupo: GrupoRecusa;
@@ -125,7 +137,7 @@ export interface PoliticaRecusa {
  * O catálogo publicado, agrupado por DESFECHO — dois códigos ficam juntos se e
  * somente se o sistema deve fazer a mesma coisa com eles.
  *
- * 25 códigos: 1 emitido pelo próprio Asaas (`PAYMENT_OVERDUE`) e 24 pelo banco
+ * 26 códigos: 25 do trilho Pix Automático — 1 emitido pelo próprio Asaas (`PAYMENT_OVERDUE`) e 24 pelo banco
  * pagador. Apagar a linha de um grupo joga os códigos dele em G0 — é o mutante
  * com que `classificacao-recusa.int.test.ts` é validado.
  */
@@ -179,6 +191,13 @@ const CATALOGO: Readonly<
   ],
   // G8 — a cobrança JÁ foi liquidada. Não é falha, é conciliação perdida.
   G8: ["PAYMENT_ALREADY_DONE"],
+  // G9 — cartão recusado pelo emissor (#378). `CARD_DECLINED` é código NOSSO,
+  // não do gateway: os 25 acima são literais publicados pelo Asaas/BACEN, este
+  // é inventado aqui porque o Asaas **não informa** o motivo real da recusa de
+  // cartão — devolve mensagem genérica por segurança. Um grupo só, nomeado pelo
+  // que se sabe: "recusado". "Saldo insuficiente", "cartão expirado" e "suspeita
+  // de fraude" não são obteníveis, e rotular assim seria inventar dado.
+  G9: ["CARD_DECLINED"],
 };
 
 /**
@@ -344,6 +363,39 @@ const POLITICAS: Readonly<Record<GrupoRecusa, Omit<PoliticaRecusa, "grupo">>> =
       copy: null,
     },
     /**
+     * G9 — cartão recusado pelo emissor (#378, D9).
+     *
+     * Carimba `past_due` porque a recusa prova um fato sobre a clínica sobre o
+     * qual ela pode agir: o cartão que ela cadastrou não autoriza. Qual dos
+     * motivos possíveis é indiferente para o desfecho — em todos, o caminho é
+     * trocar o cartão, e é isso que a `copy` diz.
+     *
+     * Os dois campos de retentativa são `false` porque descrevem o orçamento
+     * `3R_7D` do **Pix Automático** e a varredura que o executa. A cadência de
+     * cartão (5 tentativas, 3 no dia da recusa + 2 no dia seguinte, D11) é motor
+     * próprio, com contagem por ciclo: medido no sandbox em 08/09/2026, uma
+     * cobrança de cartão recusada **não é sequer persistida** no Asaas, então
+     * não há objeto do outro lado para retentar nem contagem para reconstruir.
+     * Marcar `retentavelAutomaticamente` aqui não ligaria essa cadência — só
+     * injetaria `CARD_DECLINED` no `WHERE` da varredura do Pix, que emite
+     * `paymentInstruction` e não existe neste trilho.
+     *
+     * `marcaCicloFalhou`/`carimbaPastDue` valem no momento em que a política é
+     * aplicada, e quem decide esse momento é o fechamento: no cartão, só depois
+     * da 5ª tentativa (D11/T5), nunca na primeira recusa.
+     */
+    G9: {
+      marcaCicloFalhou: true,
+      carimbaPastDue: true,
+      conciliaComoPago: false,
+      valeGastarRetentativa: false,
+      retentavelAutomaticamente: false,
+      corteImediato: false,
+      diagnostico:
+        "cartão recusado pelo emissor; motivo não informado pelo gateway",
+      copy: "Não conseguimos cobrar no cartão cadastrado. Atualize o cartão em Assinatura.",
+    },
+    /**
      * G0 falha ABERTO para o cliente e BARULHENTO para nós: código desconhecido
      * (ou ausente) nunca pune a clínica no ato, porque não prova nada sobre ela.
      * O buraco de receita é fechado pelo mesmo backstop de D+7 que cobre G7.
@@ -395,12 +447,12 @@ const GRUPO_POR_CODIGO: ReadonlyMap<string, GrupoRecusa> = new Map(
 );
 
 /**
- * Classifica o código CRU da recusa num dos 9 grupos de desfecho.
+ * Classifica o código CRU da recusa num dos grupos de desfecho.
  *
  * `codigo` é `string | null` e **nunca** uma união de literais: o catálogo é
  * aberto por contrato do gateway. Desconhecido e `null` caem os dois em G0.
  *
- * `trim` + caixa alta antes de comparar porque os 25 códigos são literais ASCII
+ * `trim` + caixa alta antes de comparar porque os códigos do catálogo são literais ASCII
  * maiúsculos: normalizar não pode produzir falso positivo (só casa com um código
  * do catálogo, letra por letra) e evita que espaço em branco de transporte vire
  * "código novo".
