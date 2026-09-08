@@ -135,7 +135,10 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: postgres:17-alpine
+        # pgvector/pgvector:pg17, não postgres:17-alpine (#260 / D11): a
+        # migração 0158 exige `CREATE EXTENSION vector`, ausente na imagem
+        # oficial — mesmo motivo do `infra/docker-compose.yml`.
+        image: pgvector/pgvector:pg17
         env:
           POSTGRES_USER: iris
           POSTGRES_PASSWORD: iris
@@ -222,7 +225,10 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: postgres:17-alpine
+        # pgvector/pgvector:pg17, não postgres:17-alpine (#260 / D11): a
+        # migração 0158 exige `CREATE EXTENSION vector`, ausente na imagem
+        # oficial — mesmo motivo do `infra/docker-compose.yml`.
+        image: pgvector/pgvector:pg17
         env:
           POSTGRES_USER: iris
           POSTGRES_PASSWORD: iris
@@ -568,7 +574,10 @@ jobs:
       # (conexão + guard de hash D17 + aplicação), e não só que o módulo
       # carregou.
       postgres:
-        image: postgres:17-alpine
+        # pgvector/pgvector:pg17, não postgres:17-alpine (#260 / D11): a
+        # migração 0158 exige `CREATE EXTENSION vector`, ausente na imagem
+        # oficial — mesmo motivo do `infra/docker-compose.yml`.
+        image: pgvector/pgvector:pg17
         env:
           POSTGRES_USER: iris
           POSTGRES_PASSWORD: iris
