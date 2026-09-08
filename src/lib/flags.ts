@@ -46,6 +46,21 @@ export function relatorioConvenioLlmHabilitado(): boolean {
 }
 
 /**
+ * Indexação RAG de prontuários (#260 / D11). Gate de MATURIDADE **e** de custo:
+ * ligar isto manda texto de diário (já sanitizado por
+ * `src/lib/ai/pii-sanitizer.ts`) para o provedor de embedding do Gemini, o que
+ * é chamada paga. Desligada, nenhum chunk é gerado e nenhuma linha entra em
+ * `patient_record_embeddings`.
+ *
+ * Não substitui o gate de LGPD: o consentimento de IA por paciente é verificado
+ * dentro de `app_rag_indexar_chunk` (migração `0158`), no banco, onde nenhum
+ * caminho de escrita novo consegue esquecê-lo.
+ */
+export function ragIndexacaoHabilitada(): boolean {
+  return process.env.RAG_INDEXACAO_ENABLED === "true";
+}
+
+/**
  * Inventário de todas as flags do produto: variável de ambiente → leitor.
  * Flag nova entra aqui; `flags.test.ts` percorre a lista e afirma que cada
  * uma devolve `false` com a variável ausente, vazia, "false", "1" e "yes".
@@ -56,6 +71,7 @@ export const FLAGS = {
   EXTRACTION_LLM_ENABLED: extracaoLlmHabilitada,
   FAMILY_REPORT_LLM_ENABLED: relatorioFamiliaLlmHabilitado,
   CONVENIO_REPORT_LLM_ENABLED: relatorioConvenioLlmHabilitado,
+  RAG_INDEXACAO_ENABLED: ragIndexacaoHabilitada,
 } as const;
 
 export type FlagEnv = keyof typeof FLAGS;

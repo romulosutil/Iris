@@ -116,6 +116,11 @@ const POLICIES_COM_HELPER = [
   "patient_alvo_disciplina.patient_alvo_disciplina_insert",
   "patient_alvo_disciplina.patient_alvo_disciplina_select",
   "patient_alvo_disciplina.patient_alvo_disciplina_update",
+  // #260 (0158, D11) — acervo vetorial do RAG. Só SELECT: a escrita passa por
+  // `app_rag_indexar_chunk` (DEFINER), porque é lá que mora o gate de
+  // consentimento de IA. O predicado é o mandado pela issue: helper de tenant
+  // E `app_patient_in_clinic(patient_id)`.
+  "patient_record_embeddings.patient_record_embeddings_select",
   "professional_consent.professional_consent_select",
   "protocol.protocol_read",
   "protocol.protocol_write",
@@ -316,6 +321,17 @@ const FUNCOES_COM_HELPER = [
   "app_patient_in_clinic",
   "app_protocol_in_clinic",
   "app_proximo_numero_sequencial",
+  // #260 (0158, D11) — única porta de ESCRITA do acervo vetorial. DEFINER
+  // porque `app_role` não tem INSERT na tabela: é aqui que o gate de
+  // consentimento de IA (`app_finalidade_consentida`) deixa de ser uma
+  // verificação que um caminho novo esquece e vira condição de existência da
+  // linha. O guard interno espelha as duas metades de
+  // `patient_record_embeddings_select`.
+  "app_rag_indexar_chunk",
+  // #260 (0158, D11) — busca vetorial. DEFINER porque `app_role` não tem SELECT
+  // na coluna `embedding` (GRANT por coluna na 0158) e sem ela não há distância
+  // a calcular. Mesmo guard da função acima, mais o `LIMIT` saneado.
+  "app_rag_search_patient_history",
   "app_risco_estagio2_ativo",
   "app_salvar_config_emergencia",
   // #36 (0090) — grava o CPF/CNPJ da clínica na ativação da assinatura.
@@ -503,7 +519,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     // Redundante de propósito: se o literal for editado por engano (linha
     // duplicada, colagem parcial), o número na mensagem de falha diz o que
     // aconteceu sem precisar ler o diff inteiro.
-    expect(POLICIES_COM_HELPER.length).toBe(70);
+    expect(POLICIES_COM_HELPER.length).toBe(71);
   });
 
   // ─── 2b. o ponto cego que a #229 deixou aberto ────────────────────────────
@@ -571,7 +587,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     expect(rows.map((r) => r.relname)).toEqual([]);
   });
 
-  test("as 28 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
+  test("as 30 funções tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
     // Mesmo raciocínio do literal de policies: o oráculo é escrito à mão para
     // que uma função NOVA que entre no regime (ou uma que saia) precise de uma
     // linha aqui, no diff, e não passe por osmose.
@@ -584,7 +600,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
        ORDER BY 1`;
 
     expect(rows.map((r) => r.proname)).toEqual(FUNCOES_COM_HELPER);
-    expect(FUNCOES_COM_HELPER.length).toBe(28);
+    expect(FUNCOES_COM_HELPER.length).toBe(30);
   });
 
   // ─── 2d. Q-05 (#529): oráculo SISTÊMICO de definers ───────────────────────

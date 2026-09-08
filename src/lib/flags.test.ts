@@ -14,7 +14,7 @@ describe("flags.ts — inventário de flags (A-04)", () => {
     for (const env of TODAS) delete process.env[env];
   });
 
-  test("o inventário lista exatamente as quatro flags do produto", () => {
+  test("o inventário lista exatamente as cinco flags do produto", () => {
     // Lista LITERAL, não derivada do módulo: uma flag nova precisa aparecer
     // aqui de propósito, para que o revisor veja o gate entrar no inventário.
     expect(TODAS.sort()).toEqual(
@@ -23,6 +23,10 @@ describe("flags.ts — inventário de flags (A-04)", () => {
         "EXTRACTION_LLM_ENABLED",
         "FAMILY_REPORT_LLM_ENABLED",
         "FEATURE_FLAG_ASR_ENABLED",
+        // #260 / D11 — indexação RAG de prontuários. Gate de maturidade e de
+        // custo: ligada, o pipeline manda chunk sanitizado ao provedor de
+        // embedding (chamada paga). O gate de LGPD é outro e mora no banco.
+        "RAG_INDEXACAO_ENABLED",
       ].sort(),
     );
   });
