@@ -72,6 +72,17 @@ export const META_SEM_MODELO: ExtractionMeta = {
 export type ExtractionResult = {
   drafts: ExtractionDraft[];
   alertaRisco: AlertaRiscoAgente | null;
+  /**
+   * #645 — temas livres da sessão (`temas[]` do contrato, R7-TC). Só o modo
+   * `terapia_convencional` produz; nos outros o campo não vem e o caller
+   * grava nada.
+   *
+   * Opcional para não obrigar dublê de teste nem provider sem LLM a declarar
+   * `[]`: `undefined` e `[]` levam ao mesmo lugar no caller (nenhuma linha
+   * `sugerido` nova) — a distinção "não avaliado" já está no estado da
+   * extração (`pendente_reprocessamento`), não aqui.
+   */
+  temas?: string[];
   /** Opcional só para não obrigar dublês de teste; providers reais preenchem. */
   meta?: ExtractionMeta;
 };

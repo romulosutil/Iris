@@ -140,6 +140,17 @@ export const extractionEstado = pgEnum("extraction_estado", [
   "erro_validacao",
 ]);
 
+// #645 — ciclo de vida do tema do modo convencional. Só dois valores: o tema
+// nasce `sugerido` na consolidação e vira `aprovado` quando o terapeuta aprova
+// alguma extração da mesma sessão. NÃO existe `descartado` — a correção antes
+// da aprovação é reconsolidar a nota (o que substitui as linhas `sugerido`), e
+// depois da aprovação a linha é registro (G-5). Valor que nada produz é estado
+// inalcançável; acrescentar um terceiro depois é uma linha de migração.
+export const sessionTemaEstado = pgEnum("session_tema_estado", [
+  "sugerido",
+  "aprovado",
+]);
+
 // subtipo/confianca text→enum agora que o contrato do agente estabilizou (dívida
 // registrada na Fase 2). "pendente" entra no enum de subtipo porque o
 // NullProvider já gravou linhas assim em produção (não quebrar dado existente).
@@ -1148,6 +1159,63 @@ export const sessionNote = pgTable(
     index("idx_session_note_sigilo")
       .on(t.sessionId)
       .where(sql`visibility_level = 'discipline_only'`),
+  ],
+);
+
+/**
+ * #645 — temas do modo `terapia_convencional`. Uma linha por
+ * `(session_id, tema_chave)`.
+ *
+ * Fonte: `temas[]` da saída do agente (`agent-output-schema.ts`), que até esta
+ * issue o provider descartava. É o produtor que faltava para a variante
+ * `{tipo:"tema"}` de `HistoricoEntrada` (`historico-relevante.ts`, #464) e,
+ * por consequência, para o R14 (anti-rubber-stamping) sair de dormente no
+ * único modo em que recorrência de tema é o sinal clínico principal.
+ *
+ * `tema` guarda o texto CRU do agente (o que a pessoa lê na tela);
+ * `tema_chave` guarda a normalização determinística (`normalizarTema`,
+ * G-3) que agrupa "luto do pai" com "luto pelo pai". A unicidade é pela
+ * CHAVE — é ela que torna a promoção idempotente.
+ *
+ * FKs em CASCADE (não RESTRICT como `extraction`): o expurgo de prontuário
+ * (`app_purgar_paciente_interno`, 0128) apaga `session` e `patient`, e a
+ * cascata leva os temas junto sem `CREATE OR REPLACE` da função de expurgo —
+ * mesmo caminho que a 0158 escolheu para `patient_record_embedding`. Há
+ * int-test que MEDE a cascata em vez de presumi-la do DDL.
+ */
+export const sessionTema = pgTable(
+  "session_tema",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clinicId: uuid("clinic_id")
+      .notNull()
+      .references(() => clinic.id, { onDelete: "restrict" }),
+    sessionId: uuid("session_id")
+      .notNull()
+      .references(() => session.id, { onDelete: "cascade" }),
+    patientId: uuid("patient_id")
+      .notNull()
+      .references(() => patient.id, { onDelete: "cascade" }),
+    /** Texto cru do agente — o que a UI mostra. */
+    tema: text("tema").notNull(),
+    /** `normalizarTema(tema)` — o que agrupa. Nunca vazio (o caller descarta). */
+    temaChave: text("tema_chave").notNull(),
+    estado: sessionTemaEstado("estado").notNull().default("sugerido"),
+    criadoEm: timestamp("criado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    /** Quando o tema foi promovido a `aprovado`. NULL enquanto `sugerido`. */
+    revisadoEm: timestamp("revisado_em", { withTimezone: true }),
+  },
+  (t) => [
+    unique("uq_session_tema_chave").on(t.sessionId, t.temaChave),
+    // A projeção do histórico varre "temas aprovados deste paciente"; o índice
+    // parcial mantém a varredura fora das linhas `sugerido`, que são a maioria
+    // volátil (reescritas a cada reconsolidação).
+    index("idx_session_tema_patient_aprovado")
+      .on(t.patientId)
+      .where(sql`estado = 'aprovado'`),
+    index("idx_session_tema_session").on(t.sessionId),
   ],
 );
 
