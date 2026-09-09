@@ -1,6 +1,6 @@
 {
-  "id": "827ca9dd-c991-4fd3-a6e1-6a812c0e0bcf",
-  "prevId": "4bee7cb4-2736-4942-8d53-8f3a99e979cf",
+  "id": "3eb90d0c-200d-481a-9b26-b5af6e9e8d0a",
+  "prevId": "827ca9dd-c991-4fd3-a6e1-6a812c0e0bcf",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -7354,6 +7354,30 @@
           "primaryKey": false,
           "notNull": false
         },
+        "credit_card_token": {
+          "name": "credit_card_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "credit_card_bandeira": {
+          "name": "credit_card_bandeira",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "credit_card_ultimos4": {
+          "name": "credit_card_ultimos4",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "credit_card_atualizado_em": {
+          "name": "credit_card_atualizado_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "ciclo_dias": {
           "name": "ciclo_dias",
           "type": "integer",
@@ -7502,6 +7526,10 @@
         "subscription_ciclo_dias_positivo": {
           "name": "subscription_ciclo_dias_positivo",
           "value": "\"subscription\".\"ciclo_dias\" > 0"
+        },
+        "subscription_cartao_ativo_tem_token": {
+          "name": "subscription_cartao_ativo_tem_token",
+          "value": "\"subscription\".\"metodo_pagamento\" <> 'cartao' OR \"subscription\".\"status\" IN ('free_tier', 'setup_pending', 'canceled') OR \"subscription\".\"credit_card_token\" IS NOT NULL"
         }
       },
       "isRLSEnabled": false

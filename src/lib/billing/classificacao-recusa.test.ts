@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { classificarRecusa, type GrupoRecusa } from "./classificacao-recusa";
+import {
+  CODIGOS_RETENTAVEIS_AUTOMATICAMENTE,
+  classificarRecusa,
+  type GrupoRecusa,
+} from "./classificacao-recusa";
 
 /**
  * #322 · D-2 — `retentavelAutomaticamente` é campo PRÓPRIO, e a varredura só
@@ -34,10 +38,11 @@ const CODIGO_POR_GRUPO: ReadonlyArray<readonly [GrupoRecusa, string]> = [
   ["G6", "EXCEEDED_MAXIMUM_RETRY_ATTEMPTS"],
   ["G7", "EXTERNAL_INSTITUTION_ERROR"],
   ["G8", "PAYMENT_ALREADY_DONE"],
+  ["G9", "CARD_DECLINED"],
 ];
 
 describe("#322 · retentavelAutomaticamente", () => {
-  it("percorre os 9 grupos e só G2 é retentável automaticamente", () => {
+  it("percorre os 10 grupos e só G2 é retentável automaticamente", () => {
     // Uma asserção por grupo, e não um `filter(...).toEqual(["G2"])`: assim a
     // falha nomeia QUAL grupo virou `true` por engano.
     const observado = CODIGO_POR_GRUPO.map(([grupo, codigo]) => {
@@ -58,6 +63,7 @@ describe("#322 · retentavelAutomaticamente", () => {
       ["G6", false],
       ["G7", false],
       ["G8", false],
+      ["G9", false],
     ]);
   });
 
@@ -97,6 +103,17 @@ describe("#322 · retentavelAutomaticamente", () => {
     expect(politica.retentavelAutomaticamente).toBe(true);
   });
 
+  it("a lista derivada da varredura do Pix não ganhou CARD_DECLINED", () => {
+    // O `WHERE` da varredura do #322 emite `paymentInstruction`, que não existe
+    // no trilho cartão. Marcar G9 como retentável não ligaria a cadência de
+    // cartão (motor próprio, D11/T5b) — só mandaria a varredura errada buscar
+    // esses ciclos. A asserção é o conjunto EXATO, não um `not.toContain`: uma
+    // lista que crescesse por outro grupo passaria no `not.toContain` calada.
+    expect([...CODIGOS_RETENTAVEIS_AUTOMATICAMENTE]).toEqual([
+      "PAYMENT_OVERDUE",
+    ]);
+  });
+
   it("código desconhecido e null caem em G0, sem comando automático", () => {
     // O catálogo é aberto: motivo novo do gateway nunca pode virar comando
     // automático por default.
@@ -105,5 +122,42 @@ describe("#322 · retentavelAutomaticamente", () => {
       classificarRecusa("MOTIVO_QUE_AINDA_NAO_EXISTE")
         .retentavelAutomaticamente,
     ).toBe(false);
+  });
+});
+
+/**
+ * #378 · G9 — cartão recusado. Três comportamentos distintos, três casos: sair
+ * de G0 (o mutante "apagar a linha do catálogo"), carimbar carência (o mutante
+ * "trocar `carimbaPastDue` para false") e não vazar código cru na copy.
+ */
+describe("#378 · G9 cartão recusado", () => {
+  it("CARD_DECLINED sai de G0 e marca ciclo falhou", () => {
+    // Apagar `G9` do CATALOGO joga o código em G0, que NÃO marca falhou — é
+    // esta asserção que morre no mutante.
+    const politica = classificarRecusa("CARD_DECLINED");
+    expect(politica.grupo).toBe("G9");
+    expect(politica.marcaCicloFalhou).toBe(true);
+  });
+
+  it("carimba a carência: o cartão recusado é fato sobre a clínica", () => {
+    // Comportamento separado do de cima de propósito: marcar o ciclo e carimbar
+    // `past_due` são duas escritas, e um mutante que zere só a segunda deixaria
+    // a clínica em falha sem nunca começar a contar os 10 dias.
+    expect(classificarRecusa("CARD_DECLINED").carimbaPastDue).toBe(true);
+  });
+
+  it("não concilia como pago nem corta no ato", () => {
+    const politica = classificarRecusa("CARD_DECLINED");
+    expect(politica.conciliaComoPago).toBe(false);
+    expect(politica.corteImediato).toBe(false);
+  });
+
+  it("a copy manda trocar o cartão sem citar código nem valor", () => {
+    const copy = classificarRecusa("CARD_DECLINED").copy ?? "";
+    expect(copy).toContain("Atualize o cartão");
+    // A doc do próprio Asaas orienta a não expor o código cru ao pagador, e a
+    // regra da tabela inteira proíbe citar valor.
+    expect(copy).not.toContain("CARD_DECLINED");
+    expect(copy).not.toMatch(/R\$/);
   });
 });

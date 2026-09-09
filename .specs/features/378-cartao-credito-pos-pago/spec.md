@@ -152,7 +152,20 @@ A doc: transação recusada → a cobrança **não é persistida** e a API devol
 `billing_cycle.provider_charge_id` — ela **não é acionada** neste caminho.
 
 Decisão: `emitirCobrancaDeCiclo`, no trilho cartão, captura o `BillingProviderError` de status 400
-cujo corpo traga `errors[].code === "invalid_creditCard"` e devolve resultado de recusa explícito.
+cujo corpo traga `errors[].code === "invalid_action"` e devolve resultado de recusa explícito.
+
+> **Corrigido em 08/09/2026 pela medição do T0** (`medicao-t0.md` §4/§4b/§7.1). A redação anterior
+> desta decisão mandava casar `invalid_creditCard`, seguindo a doc pública do Asaas. Medido no
+> sandbox, os dois códigos significam o **oposto** do que a spec presumia: `invalid_action` é a
+> recusa do emissor ("Transação não autorizada…", idêntica nas duas bandeiras de teste), e
+> `invalid_creditCard` sai quando o **token não existe** — defeito nosso, que precisa subir. Casar
+> pelo código antigo carimbaria `past_due` na clínica por bug do Iris e deixaria a recusa real
+> estourar como exceção.
+>
+> Obrigatório em **todos** os ramos: logar `code` + `description` crus. A doc pública e o sandbox
+> já divergem hoje, então a única defesa contra deriva futura é enxergar o código que chegou.
+> **Nunca** discriminar pelo texto da `description` (copy em PT-BR, muda sem aviso).
+
 Extensão mínima da porta:
 
 ```ts
@@ -167,7 +180,14 @@ de D11) e só grava ciclo `falhou` + `recusa_codigo = 'CARD_DECLINED'` + `erro` 
 + `past_due_desde` (só se ainda for NULL — preserva o carimbo anterior, regra de G6) quando a **5ª**
 tentativa também for recusada. `provider_charge_id` **continua NULL** em qualquer tentativa recusada
 (nada existe do outro lado). Erro 400 com qualquer outro `code` **sobe**: é bug nosso, não recusa do
-emissor.
+emissor — inclusive `invalid_creditCard` (token inexistente), `invalid_customer`, `invalid_value` e
+`invalid_dueDate`, todos medidos no T0.
+
+**Piso de R$ 5,00 (medido no T0, não previsto nesta spec):** cobrança de cartão abaixo de R$ 5,00 é
+recusada com `invalid_value` **antes** de qualquer autorização — não existe piso equivalente no Pix.
+Ciclo apurado abaixo do piso é caso de produto ainda **não decidido** (acumular, cobrar o piso, ou
+manter a clínica no Pix); fora do caminho crítico porque a mensalidade cheia está muito acima dele.
+Pendente de ratificação com o Rômulo.
 
 Idempotência: ciclo em `falhou` não pode voltar ao conjunto elegível da varredura sem ação humana
 (cicatriz `varredura-escreve-o-proprio-predicado`). Conferir o `WHERE` de `fecharCiclosVencendo` e
