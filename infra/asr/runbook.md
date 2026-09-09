@@ -551,3 +551,46 @@ SELECT date_trunc('day', criado_em) AS dia,
 Se a mediana ficar bem abaixo de 1 min, o cron está fazendo o que devia (nada,
 quase sempre) e não há o que ajustar. Quem precisa de revisão sob volume é o
 teto de concorrência do serviço (`ASR_MAX_CONCORRENTES`, §1.3), não a cadência.
+
+#### 6.6.1 O comando que responde tudo isso de uma vez
+
+As consultas acima e as do §6.1 viraram um script — `scripts/medir-adocao-asr.mjs`
+—, porque medir isso pelo painel exige um humano colando SQL, e foi exatamente
+o que não aconteceu durante os sete dias em que a produção não transcreveu
+nada:
+
+```bash
+SMOKE_DATABASE_URL='postgres://iris:...@HOST:5432/iris' ALLOW_SEED_REMOTE=true node scripts/medir-adocao-asr.mjs --dias=7
+```
+
+Ele imprime, numa passada: clínicas reais vs. demo, sessões criadas, **sessões
+documentadas** (as oportunidades reais de ditado), clipes por `asr_status`
+separando demo de real, latência `criado_em → transcrito_em` (p50 e máximo),
+resgate pendente, idade dos heartbeats, o piso de ticks vazios e um
+**veredito**.
+
+Três coisas que ele NÃO faz, de propósito:
+
+| Não faz                                          | Por quê                                                                                                                                                                                     |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Não escreve                                      | A transação roda sob `SET TRANSACTION READ ONLY`. Escrita futura por descuido vira `25006` do Postgres — trava medida em `db/tests/medir-adocao-asr.int.test.ts`, não promessa de docblock. |
+| Não lê `FEATURE_FLAG_ASR_ENABLED`/`ASR_PROVIDER` | São env do serviço `App`, não linha de banco. O passo 1 do §6.1 continua sendo no painel — e sem ele os números abaixo não têm interpretação.                                               |
+| Não conta o `processados: N`                     | Esse número só existe no LOG da rota. O script publica um **piso** derivado de ticks vazios (`dias × 1440 − clipes`) e diz que é piso.                                                      |
+
+Os vereditos, e o que cada um significa:
+
+- `sem-uso-do-produto` — nenhuma sessão documentada na janela. **Não** conclua
+  nada sobre o ditado: sem oportunidade de gravar, zero clipe não é evidência.
+  Amplie com `--dias`.
+- `gap-de-adocao` — houve sessão documentada e nenhum clipe. Foi este o estado
+  de 07/09/2026. O problema é de descoberta/UI, e **nenhum alarme do repo o
+  cobre**: `alarme-jobs.mjs`, heartbeat e fila medem saúde de job, e todos
+  respondiam `ok` enquanto isso.
+- `pipeline-travado` — gravaram e nada transcreveu. Aí sim é infraestrutura:
+  triagem no §6.4.
+- `em-uso` — há clipe transcrito; a latência impressa responde à pergunta de
+  cadência reformulada acima.
+
+Rode-o **antes** do §6.2 (linha de base) e **depois** (prova de que o clipe do
+smoke atravessou). A diferença entre as duas execuções é o registro que o §6.6
+pede.
