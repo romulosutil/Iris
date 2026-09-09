@@ -75,6 +75,29 @@
 
 ---
 
+## 🏁 Sessão 09/09/2026 — #500: o que faltava era medição, não infraestrutura — e medir exigia um humano colando SQL
+
+**Gatilho:** fechar o que resta da #500. Restavam dois itens, ambos "do Rômulo": executar o smoke com áudio real (§6.2) e responder a cadência reformulada (§6.6).
+
+**O que NÃO foi possível fazer nesta sessão, e por quê:** a extensão Claude in Chrome não estava conectada, então o Easypanel abriu só na tela de login — e credencial não é coisa que o agente digita. **Nenhuma medição de produção foi feita hoje.** Os números de 07/09/2026 (8 clínicas, 2 ativas, 28 sessões, zero clipe) continuam sendo os últimos medidos; não os reconfirmei.
+
+**O achado que redirecionou a sessão:** medir a #500 pelo painel exige um humano colando sete consultas. Foi exatamente o que não aconteceu durante os sete dias em que a produção não transcreveu nada — e o motivo pelo qual o gap só apareceu em 07/09, por acaso, dentro de uma auditoria de DoD. `alarme-jobs.mjs`, heartbeat e fila respondiam `ok` o tempo todo: **todo alarme do repo mede saúde de job, nenhum mede se alguém exerceu o caminho**.
+
+**O que entrou:** `scripts/medir-adocao-asr.mjs` — um comando que responde §6.1 (item 5) e §6.6 numa passada, com veredito. Quatro decisões que valem registro:
+
+1. **Role DONA, não `DATABASE_URL`.** `audio_capture`/`session`/`session_note` são `FORCE RLS`: a role da aplicação sem `app.clinic_id` contaria **zero clipe em qualquer cenário** — e esse zero é indistinguível do zero por falta de uso, que é justamente o número em disputa. O script recusa `DATABASE_URL` nomeando esse motivo.
+2. **`SET TRANSACTION READ ONLY` como trava, não como promessa.** O script existe para rodar contra produção. A garantia de que nenhuma edição futura escreva por descuido vem do Postgres (`25006`), e está **medida** em `db/tests/medir-adocao-asr.int.test.ts` — o int-test tenta um `INSERT` dentro da mesma transação que `main()` abre e afirma o código do erro.
+3. **O veredito recusa afirmar causa que a medição não sustenta.** Zero clipe **com** zero sessão documentada sai como `sem-uso-do-produto`, não como `gap-de-adocao`: sem oportunidade de gravar, zero não é evidência de nada. A ordem das perguntas é o que faz isso — mutação medida (`sessoesComCaptura === 0` → `=== -1`) derruba o teste, e a suíte só fica verde com a ordem certa.
+4. **Ticks vazios saem como PISO, e o texto diz que é piso.** O `processados: N` só existe no LOG da rota; não há tabela que o conte. `dias × 1440 − clipes` é limite inferior porque um mesmo tick leva vários clipes — publicá-lo como valor exato seria número inventado.
+
+**Buraco encontrado de raspão no guard de capacidade (#534):** `guardrail-conexao-wiring.test.ts` detecta conexão por `postgres(`/`new Pool(`/`drizzle(`. Um script que **injeta** o driver (`criarSql = postgres` na assinatura) escapa da régua inteira — medido: com o guard removido do script novo, a suíte de fiação seguia **verde**. Contornado no script (a chamada `postgres(` ficou no corpo, depois do guard, e a mutação agora derruba a fiação corretamente), mas **a classe continua aberta para o próximo script** — registrar como issue.
+
+**Verificação executada:** 27 testes unitários (`scripts/medir-adocao-asr.test.mjs`), 3 int-tests contra Postgres local com o schema real, duas mutações que derrubam a suíte, e o script rodado de verdade contra o banco local (`--dias=30`, saiu `sem-uso-do-produto`, que é o veredito correto para um banco sem sessão).
+
+**Próximo passo (continua do Rômulo):** rodar o comando contra produção como **linha de base**, executar o §6.2 com áudio real, e rodá-lo de novo. A diferença entre as duas execuções é o registro que a #500 pede — e é o que finalmente fecha a issue.
+
+---
+
 ## 🏁 Sessão 08/09/2026 (2ª) — #378 cartão: gate de tokenização aprovado, T0/T1/T2/T9 fechados, e T3 travado por um piso de R$ 5,00 que ninguém tinha medido
 
 **Gatilho:** o Asaas aprovou a habilitação de **tokenização em produção** — o gate externo registrado em 24/08/2026. Ele destravava a virada da flag `BILLING_CARTAO_HABILITADO`, não a implementação; a implementação estava parada por outro motivo (T0 nunca medido).
