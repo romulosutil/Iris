@@ -131,6 +131,10 @@ const POLICIES_COM_HELPER = [
   "session_note.session_note_insert",
   "session_note.session_note_select",
   "session_note.session_note_update",
+  "session_tema.session_tema_delete",
+  "session_tema.session_tema_insert",
+  "session_tema.session_tema_select",
+  "session_tema.session_tema_update",
   "subscription.subscription_select",
   "tcc_rpd_entry.tcc_rpd_entry_delete",
   "tcc_rpd_entry.tcc_rpd_entry_insert",
@@ -507,7 +511,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
   });
 
   // ─── 2. trava por policy: conjunto EXATO ──────────────────────────────────
-  test("as 48 policies tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
+  test("as 75 policies tenant-scoped chamam app_clinic_id_exigido() — conjunto exato", async () => {
     const rows = await owner!<{ alvo: string }[]>`
       SELECT tablename || '.' || policyname AS alvo
         FROM pg_policies
@@ -519,7 +523,7 @@ describe.skipIf(!hasDb)("#229 · helper de tenant nas policies de RLS", () => {
     // Redundante de propósito: se o literal for editado por engano (linha
     // duplicada, colagem parcial), o número na mensagem de falha diz o que
     // aconteceu sem precisar ler o diff inteiro.
-    expect(POLICIES_COM_HELPER.length).toBe(71);
+    expect(POLICIES_COM_HELPER.length).toBe(75);
   });
 
   // ─── 2b. o ponto cego que a #229 deixou aberto ────────────────────────────

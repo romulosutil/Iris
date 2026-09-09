@@ -202,3 +202,109 @@ export function projetarHistoricoDeInstrumentos(args: {
       };
     });
 }
+
+/** Janela de sessões da projeção de temas (#645, G-4). */
+export const JANELA_SESSOES_TEMA = 5;
+/** A partir de quantas sessões da janela um tema é dito recorrente (#645, G-4). */
+export const MIN_SESSOES_RECORRENTE = 3;
+
+/**
+ * Projeta `historico_relevante` do modo `terapia_convencional` (#645) — a
+ * terceira variante, `{tema, resumo}`, que estava declarada desde a #464 e sem
+ * produtor.
+ *
+ * A régua é a que `docs/agente/protocolo-terapia-convencional.md` já pratica:
+ * **presente nas últimas 5 sessões, recorrente quando aparece em 3 delas**.
+ *
+ * "Últimas 5 sessões" conta só as sessões QUE TÊM TEMA REGISTRADO, não as 5
+ * últimas do calendário: um paciente convencional que teve três sessões sem
+ * nenhum tema aprovado (revisão não concluída, nota curta) perderia todo o
+ * histórico por uma janela vazia, e é justamente o histórico que o R14 usa.
+ *
+ * "Sinalizado" é presença — o tema aparece na sessão. Não há grau nem peso: o
+ * contrato do agente é `temas: string[]` (`agent-output-schema.ts`), sem
+ * intensidade, e inventar peso aqui seria afirmar dado que ninguém coletou.
+ *
+ * A grafia mostrada é a da sessão MAIS RECENTE do grupo (é a que o terapeuta
+ * acabou de ler); o agrupamento é por `tema_chave` (`normalizarTema`).
+ *
+ * Nada aqui é IA: contagem e frase são regra determinística sobre linha já
+ * materializada, mesmo espírito do G4 da Fase 4.
+ */
+export function projetarHistoricoDeTemas(args: {
+  temas: Array<{
+    /** `session.numero_sequencial_paciente` — define a janela. */
+    sessionNumero: number;
+    /** Texto cru do agente. */
+    tema: string;
+    /** `normalizarTema(tema)` — o agrupador. */
+    temaChave: string;
+    /** Data da sessão, para a frase "última em …". */
+    quando: Date;
+  }>;
+  janelaSessoes?: number;
+  minSessoesRecorrente?: number;
+}): HistoricoDe<"tema">[] {
+  const janela = args.janelaSessoes ?? JANELA_SESSOES_TEMA;
+  const minRecorrente = args.minSessoesRecorrente ?? MIN_SESSOES_RECORRENTE;
+
+  // Sessões COM TEMA, mais recente primeiro, cortadas na janela.
+  const numerosNaJanela = new Set(
+    [...new Set(args.temas.map((t) => t.sessionNumero))]
+      .sort((a, b) => b - a)
+      .slice(0, janela),
+  );
+  if (numerosNaJanela.size === 0) return [];
+
+  type Grupo = {
+    tema: string;
+    sessoes: Set<number>;
+    ultimoNumero: number;
+    ultimaData: Date;
+  };
+  const grupos = new Map<string, Grupo>();
+  for (const t of args.temas) {
+    if (!numerosNaJanela.has(t.sessionNumero)) continue;
+    const g = grupos.get(t.temaChave);
+    if (!g) {
+      grupos.set(t.temaChave, {
+        tema: t.tema,
+        sessoes: new Set([t.sessionNumero]),
+        ultimoNumero: t.sessionNumero,
+        ultimaData: t.quando,
+      });
+      continue;
+    }
+    g.sessoes.add(t.sessionNumero);
+    if (t.sessionNumero > g.ultimoNumero) {
+      g.ultimoNumero = t.sessionNumero;
+      g.tema = t.tema;
+      g.ultimaData = t.quando;
+    }
+  }
+
+  const totalSessoes = numerosNaJanela.size;
+  return (
+    [...grupos.entries()]
+      .map(([chave, g]) => {
+        const n = g.sessoes.size;
+        const recorrente = n >= minRecorrente ? " Recorrente." : "";
+        return {
+          chave,
+          n,
+          entrada: {
+            tipo: "tema" as const,
+            tema: g.tema,
+            resumo:
+              `presente em ${n} ${n === 1 ? "sessão" : "sessões"} das últimas ` +
+              `${totalSessoes} com tema registrado; última em ` +
+              `${formatarData(g.ultimaData)}.${recorrente}`,
+          },
+        };
+      })
+      // Recorrência desc, depois chave asc: ordem estável entre duas execuções
+      // iguais — a ordem de chegada das linhas do banco não pode mexer no prompt.
+      .sort((a, b) => b.n - a.n || a.chave.localeCompare(b.chave))
+      .map((x) => x.entrada)
+  );
+}

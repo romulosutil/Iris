@@ -172,6 +172,11 @@ export class LlmExtractionProvider implements ExtractionProvider {
         estado: "sugerida" as const,
       })),
       alertaRisco: saida.alerta_risco ?? null,
+      // #645 — até aqui `temas` era validado pelo schema e jogado fora no
+      // retorno; era essa a razão de `historico_relevante` seguir `[]` no modo
+      // convencional. Passa cru: normalizar e deduplicar é do caller que grava
+      // (`diario-consolidacao.ts` + `normalizarTema`), não do provider.
+      temas: saida.temas,
       meta,
     };
   }

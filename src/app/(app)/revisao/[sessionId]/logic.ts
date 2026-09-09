@@ -5,7 +5,13 @@ import { z } from "zod";
 import { requireRole, RoleError } from "@/auth/require-role";
 import { codigoPg } from "@/db/pg-error";
 import { withTenant, type TenantContext } from "@/db/rls";
-import { evidence, extraction, reinforcerProfile, session } from "@/db/schema";
+import {
+  evidence,
+  extraction,
+  reinforcerProfile,
+  session,
+  sessionTema,
+} from "@/db/schema";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
 import {
@@ -204,6 +210,39 @@ async function inserirReforcadoresOnApprove(
     .onConflictDoNothing({
       target: [reinforcerProfile.extractionId, reinforcerProfile.itemAtividade],
     });
+}
+
+/**
+ * #645 — promove os temas `sugerido` da sessão a `aprovado`.
+ *
+ * `temas[]` é do RUN inteiro, não de um item de `extracoes[]` (é campo irmão
+ * de `extracoes` no contrato, `agent-output-schema.ts`), então não há "o tema
+ * desta extração": aprovar QUALQUER extração da sessão é o gesto humano que
+ * transforma a leitura da IA sobre aquela nota em registro. É a régua que a
+ * própria #645 fixa na Definição de Pronto.
+ *
+ * Idempotente por construção: é UPDATE filtrado por `estado = 'sugerido'`.
+ * Reaprovar a mesma extração, ou aprovar a segunda extração da sessão, não
+ * encontra mais nenhuma linha `sugerido` e não muda nada — nem `revisado_em`,
+ * que ficaria reescrito a cada clique se o filtro não estivesse ali.
+ *
+ * Sessão sem tema (todo modo que não é `terapia_convencional`) faz 0 linhas —
+ * nenhuma query extra vale a pena evitar isso, o UPDATE já é indexado por
+ * `idx_session_tema_session`.
+ */
+async function promoverTemasDaSessao(
+  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  sessionId: string,
+): Promise<void> {
+  await tx
+    .update(sessionTema)
+    .set({ estado: "aprovado", revisadoEm: new Date() })
+    .where(
+      and(
+        eq(sessionTema.sessionId, sessionId),
+        eq(sessionTema.estado, "sugerido"),
+      ),
+    );
 }
 
 async function inserirEvidenciasOnApprove(
@@ -594,6 +633,10 @@ async function transicionar(
           },
           colapso,
         );
+        // #645 — mesma transação da evidência: ou os dois registros nascem, ou
+        // nenhum. Um tema aprovado sem a evidência que o gesto criou seria
+        // histórico afirmando uma sessão que a revisão não completou.
+        await promoverTemasDaSessao(tx, row.sessionId);
       }
       success = true;
     });

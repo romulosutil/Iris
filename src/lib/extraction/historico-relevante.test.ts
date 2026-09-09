@@ -1,7 +1,9 @@
 import { describe, expect, test } from "vitest";
+import { normalizarTema } from "./normalizar-tema";
 import {
   projetarHistoricoDeInstrumentos,
   projetarHistoricoDeRepertorio,
+  projetarHistoricoDeTemas,
 } from "./historico-relevante";
 
 const TAXONOMIA = new Map([
@@ -253,5 +255,106 @@ describe("projetarHistoricoDeInstrumentos (modo tcc)", () => {
     expect(projetarHistoricoDeInstrumentos({ aplicacoes: [], agora })).toEqual(
       [],
     );
+  });
+});
+
+// ─── #645 · modo terapia_convencional ────────────────────────────────────────
+
+describe("projetarHistoricoDeTemas", () => {
+  // Sessão N com os temas dados; data = 2026-09-01 + N dias (fuso da clínica
+  // não vira o dia nesses horários).
+  function linhas(porSessao: Record<number, string[]>) {
+    return Object.entries(porSessao).flatMap(([numero, temas]) =>
+      temas.map((tema) => ({
+        sessionNumero: Number(numero),
+        tema,
+        temaChave: normalizarTema(tema),
+        quando: new Date(
+          `2026-09-${String(Number(numero)).padStart(2, "0")}T15:00:00Z`,
+        ),
+      })),
+    );
+  }
+
+  test("sem tema nenhum devolve lista vazia", () => {
+    expect(projetarHistoricoDeTemas({ temas: [] })).toEqual([]);
+  });
+
+  test("marca Recorrente a partir de 3 sessões e não antes", () => {
+    const itens = projetarHistoricoDeTemas({
+      temas: linhas({
+        1: ["luto do pai", "trabalho"],
+        2: ["luto pelo pai"],
+        3: ["luto do pai"],
+      }),
+    });
+    const luto = itens.find((i) => i.tema.startsWith("luto"))!;
+    const trabalho = itens.find((i) => i.tema === "trabalho")!;
+    expect(luto.resumo).toContain("presente em 3 sessões das últimas 3");
+    expect(luto.resumo).toContain("Recorrente.");
+    expect(trabalho.resumo).toContain("presente em 1 sessão das últimas 3");
+    expect(trabalho.resumo).not.toContain("Recorrente");
+  });
+
+  test("agrupa variações de conectivo sob a mesma entrada", () => {
+    const itens = projetarHistoricoDeTemas({
+      temas: linhas({ 1: ["luto do pai"], 2: ["luto pelo pai"] }),
+    });
+    expect(itens).toHaveLength(1);
+    // A grafia exibida é a da sessão MAIS RECENTE.
+    expect(itens[0]!.tema).toBe("luto pelo pai");
+  });
+
+  test("janela corta as sessões antigas — só as 5 mais recentes contam", () => {
+    const itens = projetarHistoricoDeTemas({
+      temas: linhas({
+        1: ["antigo"],
+        2: ["antigo"],
+        3: ["recente"],
+        4: ["recente"],
+        5: ["recente"],
+        6: ["recente"],
+        7: ["recente"],
+      }),
+    });
+    expect(itens.map((i) => i.tema)).toEqual(["recente"]);
+    expect(itens[0]!.resumo).toContain("presente em 5 sessões das últimas 5");
+  });
+
+  test("a janela conta sessões COM tema, não números consecutivos", () => {
+    // Sessões 10, 20 e 30 tiveram tema; as do meio não. As três entram.
+    const itens = projetarHistoricoDeTemas({
+      temas: linhas({
+        10: ["ansiedade"],
+        20: ["ansiedade"],
+        30: ["ansiedade"],
+      }),
+    });
+    expect(itens[0]!.resumo).toContain("presente em 3 sessões das últimas 3");
+    expect(itens[0]!.resumo).toContain("Recorrente.");
+  });
+
+  test("ordena por recorrência desc e chave asc — estável", () => {
+    const entrada = linhas({
+      1: ["zelo", "ansiedade", "briga"],
+      2: ["ansiedade", "briga"],
+      3: ["ansiedade"],
+    });
+    const a = projetarHistoricoDeTemas({ temas: entrada });
+    const b = projetarHistoricoDeTemas({ temas: [...entrada].reverse() });
+    expect(a.map((i) => i.tema)).toEqual(["ansiedade", "briga", "zelo"]);
+    expect(b.map((i) => i.tema)).toEqual(a.map((i) => i.tema));
+  });
+
+  test("a data mostrada é a da sessão mais recente do grupo", () => {
+    const itens = projetarHistoricoDeTemas({
+      temas: linhas({ 2: ["luto"], 9: ["luto"] }),
+    });
+    expect(itens[0]!.resumo).toContain("última em 09/09/2026");
+  });
+
+  test("tipo do item é a variante `tema` da união (contrato da #464)", () => {
+    const [item] = projetarHistoricoDeTemas({ temas: linhas({ 1: ["luto"] }) });
+    expect(item).toMatchObject({ tipo: "tema", tema: "luto" });
   });
 });

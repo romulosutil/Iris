@@ -54,7 +54,7 @@ describe.skipIf(!hasDb)("coletarAcervo (integração RLS e isolamento)", () => {
       );
 
       // Asserções
-      expect(resultado.tabelas.length).toBe(37);
+      expect(resultado.tabelas.length).toBe(38);
 
       // Pacientes da Clínica A
       const tabelaPatient = resultado.tabelas.find(

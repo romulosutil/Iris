@@ -14,6 +14,18 @@ agente, e o eval set deixaria de servir como referência de comparação. Guard 
 `src/lib/extraction/agent-output-schema.test.ts` valida cada bloco deste arquivo
 contra o schema de runtime.
 
+> **`historico_relevante` destas fixtures é o texto REAL do produto (#645).**
+> Até a #645 o campo era prosa escrita à mão aqui, porque nada produzia a
+> variante `{tema, resumo}` — o modo convencional recebia `[]` em runtime e o
+> R14 ficava dormente justamente nos casos que este arquivo usa para
+> exercitá-lo. Agora o `resumo` é gerado por `projetarHistoricoDeTemas`
+> (`src/lib/extraction/historico-relevante.ts`) sobre `session_tema`, na forma
+> fixa `presente em N sessões das últimas M com tema registrado; última em
+dd/mm/aaaa.` mais ` Recorrente.` quando N ≥ 3 — a régua do protocolo
+> (5 sessões de janela, recorrência a partir de 3). As fixtures abaixo foram
+> reescritas nesse formato: comparar a saída do modelo contra uma frase que o
+> produto nunca manda é medir outra coisa.
+
 Total: **5 casos**, cobrindo o escopo pedido na issue #98: escuta simples,
 risco/crise, baixa participação verbal, encerramento de ciclo, e **um caso
 cruzado entre famílias de abordagem**.
@@ -57,7 +69,7 @@ cruzado entre famílias de abordagem**.
   "historico_relevante": [
     {
       "tema": "luto do pai",
-      "resumo": "presente nas últimas 5 sessões; sinalizado como tema recorrente em 3 delas, com a culpa por não ter estado presente no momento da morte aparecendo literalmente no relato."
+      "resumo": "presente em 4 sessões das últimas 5 com tema registrado; última em 01/09/2026. Recorrente."
     }
   ]
 }
@@ -247,7 +259,7 @@ relato dela **não** usa a palavra "resistência", e a saída esperada também n
   "historico_relevante": [
     {
       "tema": "separação conjugal",
-      "resumo": "presente desde a 1ª sessão; paciente não aprofunda, muda de assunto quando o tema é trazido diretamente."
+      "resumo": "presente em 5 sessões das últimas 5 com tema registrado; última em 01/09/2026. Recorrente."
     }
   ]
 }

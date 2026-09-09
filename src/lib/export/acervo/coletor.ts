@@ -31,6 +31,7 @@ export const TABELAS_EXPORTADAS = [
   "agendamento_recorrente",
   "session",
   "session_note",
+  "session_tema",
   "session_protocol_scope",
   "extraction",
   "milestone",
@@ -399,6 +400,22 @@ export async function coletarAcervo(tx: Tx): Promise<ResultadoColeta> {
     tabela: "extraction",
     ndjson: rowsExtraction.map((r) => serializarLinha(r) + "\n").join(""),
     total: rowsExtraction.length,
+  });
+
+  // 18.1. session_tema (#645) — tema clínico derivado da nota consolidada do
+  // modo convencional. É prontuário: entra no acervo como o resto. Exporta os
+  // dois estados; `estado` diz se o tema chegou a virar registro.
+  const rowsSessionTema = (await tx.execute(sql`
+    SELECT id, clinic_id, session_id, patient_id, tema, tema_chave,
+           estado, criado_em, revisado_em
+      FROM session_tema
+     ORDER BY id
+  `)) as unknown as Record<string, unknown>[];
+  contagens.session_tema = rowsSessionTema.length;
+  tabelas.push({
+    tabela: "session_tema",
+    ndjson: rowsSessionTema.map((r) => serializarLinha(r) + "\n").join(""),
+    total: rowsSessionTema.length,
   });
 
   // 19. milestone

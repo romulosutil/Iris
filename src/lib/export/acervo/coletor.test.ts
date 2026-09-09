@@ -9,8 +9,8 @@ import {
 } from "./coletor";
 
 describe("Coletor do Acervo — regras de catálogo (D4)", () => {
-  it("tem exatamente as 37 tabelas no escopo clínico", () => {
-    expect(TABELAS_EXPORTADAS.length).toBe(37);
+  it("tem exatamente as 38 tabelas no escopo clínico", () => {
+    expect(TABELAS_EXPORTADAS.length).toBe(38);
   });
 
   it("não há intersecção entre tabelas exportadas e a lista de negação", () => {

@@ -3,7 +3,14 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireDiario } from "@/auth/require-role";
 import { withTenant, type TenantContext } from "@/db/rls";
-import { clinic, extraction, goal, session, sessionNote } from "@/db/schema";
+import {
+  clinic,
+  extraction,
+  goal,
+  session,
+  sessionNote,
+  sessionTema,
+} from "@/db/schema";
 import { desarquivarPacienteSeArquivado } from "@/lib/patient/desarquivamento";
 import {
   assertPodeDocumentar,
@@ -26,6 +33,7 @@ import { loadCanonicalContext } from "@/lib/extraction/context-loader";
 import { deveReextrair } from "@/lib/extraction/reextraction-policy";
 import { comEscrita, type BloqueioConta } from "@/lib/billing/guard-escrita";
 import { logarErroSemPII } from "@/lib/observabilidade/logar-erro";
+import { deduplicarTemas } from "@/lib/extraction/normalizar-tema";
 import { mensagemDeConsentimento } from "./diario-comum";
 
 /**
@@ -255,6 +263,9 @@ async function consolidarSessaoCore(
     const provider = resolveProvider({ isDemo: prep.isDemo });
     let drafts: ExtractionDraft[];
     let alertaRisco: AlertaRiscoAgente | null = null;
+    // #645 — temas do modo convencional. Fica vazio quando a chamada falha:
+    // o texto mudou, então a sugestão anterior é velha e não pode sobreviver.
+    let temas: string[] = [];
     let avisoExtracao: string | undefined;
     // DA-02 (#535): meta da chamada. Começa com o que se sabe ANTES de chamar
     // (o modelo que o provider usa) para a linha `pendente_reprocessamento`
@@ -274,6 +285,7 @@ async function consolidarSessaoCore(
       });
       drafts = saida.drafts;
       alertaRisco = saida.alertaRisco;
+      temas = saida.temas ?? [];
       metaExtracao = {
         ...metaExtracao,
         ...saida.meta,
@@ -310,6 +322,39 @@ async function consolidarSessaoCore(
             ]),
           ),
         );
+      // #645 — temas do modo convencional, na MESMA transação das extrações.
+      // Apaga só o que está `sugerido`: linha `aprovado` é registro e sobrevive
+      // a qualquer reconsolidação (é a regra do `evidence` — sugestão não é
+      // registro, e registro não é reescrito por uma nova leitura da IA).
+      await tx
+        .delete(sessionTema)
+        .where(
+          and(
+            eq(sessionTema.sessionId, sid),
+            eq(sessionTema.estado, "sugerido"),
+          ),
+        );
+      const temasParaGravar = deduplicarTemas(temas);
+      if (temasParaGravar.length > 0) {
+        await tx
+          .insert(sessionTema)
+          .values(
+            temasParaGravar.map((t) => ({
+              clinicId: ctx.clinicId,
+              sessionId: sid,
+              patientId: prep.patientId,
+              tema: t.tema,
+              temaChave: t.temaChave,
+              estado: "sugerido" as const,
+            })),
+          )
+          // Conflito em `uq_session_tema_chave` = o tema JÁ está aprovado nesta
+          // sessão (a linha `sugerido` acabou de ser apagada, então só o
+          // aprovado pode colidir). Rebaixá-lo a `sugerido` faria a IA
+          // desfazer uma decisão humana; ignorar é o comportamento certo.
+          .onConflictDoNothing();
+      }
+
       if (drafts.length === 0) return [];
       const inseridos = await tx
         .insert(extraction)
