@@ -847,17 +847,23 @@ Regras do formato:
 > **`historico_relevante` tem TRÊS formas, uma por modo** — o que a prosa dos
 > casos de teste já praticava e o contrato não expressava:
 >
-> | modo                   | forma                               | fonte                                                               |
-> | ---------------------- | ----------------------------------- | ------------------------------------------------------------------- |
-> | `protocol_driven`      | `{dominio_id, protocol_id, resumo}` | `session_snapshot.repertorio_state` (Fase 4)                        |
-> | `tcc`                  | `{protocol_id, resumo}`             | `instrumento_aplicacao` (última aplicação de PHQ-9/GAD-7)           |
-> | `terapia_convencional` | `{tema, resumo}`                    | `temas[]` das extrações aprovadas — **ainda não persistido** (#645) |
+> | modo                   | forma                               | fonte                                                     |
+> | ---------------------- | ----------------------------------- | --------------------------------------------------------- |
+> | `protocol_driven`      | `{dominio_id, protocol_id, resumo}` | `session_snapshot.repertorio_state` (Fase 4)              |
+> | `tcc`                  | `{protocol_id, resumo}`             | `instrumento_aplicacao` (última aplicação de PHQ-9/GAD-7) |
+> | `terapia_convencional` | `{tema, resumo}`                    | `session_tema` — `temas[]` das extrações aprovadas (#645) |
 >
 > A fonte do modo ABA é o **repertório** (baseline as-of), nunca `segmentacao` —
 > são sinais diferentes (spec da Fase 4 §8.3). A projeção vive em
 > `src/lib/extraction/historico-relevante.ts`, é determinística e não usa IA.
-> Enquanto `temas[]` não for persistido, o modo convencional recebe `[]` e o R14
-> segue dormente só nele.
+> A #645 fechou o terceiro ramo: `temas[]` passou a ser persistido em
+> `session_tema` (`sugerido` na consolidação, `aprovado` quando o terapeuta
+> aprova uma extração da sessão), agrupado por chave determinística
+> (`normalizarTema`), e a projeção usa a régua do protocolo — presente nas
+> últimas 5 sessões com tema registrado, **recorrente** a partir de 3. Só o
+> APROVADO alimenta o contexto: sugestão da IA não pode ser o histórico contra
+> o qual a própria IA é conferida. Com isso o R14 deixa de ser dormente em
+> qualquer modo.
 
 ### 2.1 Extensões de contrato resolvidas — cobertura de domínio (09/07/2026)
 

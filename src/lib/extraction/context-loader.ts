@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import type { withTenant } from "@/db/rls";
 import {
   goal,
@@ -11,6 +11,7 @@ import {
   session,
   sessionProtocolScope,
   sessionSnapshot,
+  sessionTema,
 } from "@/db/schema";
 import { lerRepertorioState } from "@/lib/evidence/snapshot-schema";
 import {
@@ -18,9 +19,12 @@ import {
   type AssemblerInput,
 } from "./context-assembler";
 import {
+  JANELA_SESSOES_TEMA,
   projetarHistoricoDeInstrumentos,
   projetarHistoricoDeRepertorio,
+  projetarHistoricoDeTemas,
 } from "./historico-relevante";
+import { MAX_TEMAS_POR_SESSAO } from "./normalizar-tema";
 
 // Tipo da transação que withTenant entrega ao callback (evita reimportar o tipo
 // interno do drizzle/postgres).
@@ -81,11 +85,13 @@ async function carregarRepertorioRecente(tx: Tx, patientId: string) {
 //   - `protocol_driven` ← `session_snapshot.repertorio_state`;
 //   - `tcc`             ← `instrumento_aplicacao` (PHQ-9/GAD-7).
 //
-// `terapia_convencional` continua `[]`: a fonte seria `temas[]`, que o agente
-// produz (`agent-output-schema.ts`) e NINGUÉM persiste — a própria tela
-// `/pacientes/[id]/temas` documenta a lacuna. Persistir `temas[]` é a #645;
-// a variante do contrato já existe para que ligá-la depois não seja
-// outra mudança de contrato.
+//   - `terapia_convencional` ← `session_tema` (#645).
+//
+// #645 fechou o terceiro ramo: `temas[]` era produzido pelo agente
+// (`agent-output-schema.ts`) e descartado pelo provider — nada o persistia.
+// Agora a consolidação grava `sugerido` e a aprovação promove a `aprovado`, e
+// só o APROVADO é lido aqui: sugestão nunca vira contexto do agente, senão o
+// R14 estaria conferindo a IA contra a própria IA.
 export async function loadCanonicalContext(
   tx: Tx,
   args: { sessionId: string; patientId: string; clinicId: string },
@@ -220,6 +226,41 @@ export async function loadCanonicalContext(
       taxonomiaPorFamilia: new Map(
         protocolos.map((p) => [p.familia, p.taxonomiaAjuda]),
       ),
+    });
+  } else if (modo === "terapia_convencional") {
+    const temas = await tx
+      .select({
+        sessionNumero: session.numeroSequencialPaciente,
+        tema: sessionTema.tema,
+        temaChave: sessionTema.temaChave,
+        quando: session.agendadaPara,
+      })
+      .from(sessionTema)
+      .innerJoin(session, eq(sessionTema.sessionId, session.id))
+      .where(
+        and(
+          eq(sessionTema.patientId, args.patientId),
+          eq(sessionTema.estado, "aprovado"),
+          isNotNull(session.numeroSequencialPaciente),
+        ),
+      )
+      .orderBy(desc(session.numeroSequencialPaciente))
+      // Teto de leitura: a projeção só usa as `JANELA_SESSOES_TEMA` sessões
+      // mais recentes COM tema, e cada sessão grava no máximo
+      // `MAX_TEMAS_POR_SESSAO` linhas. O produto das duas é, no pior caso, a
+      // janela inteira — ordenado por número de sessão desc, cobre a janela
+      // sem varrer o histórico de anos de um paciente. O filtro está no
+      // WHERE, antes do LIMIT: cortar primeiro e filtrar depois devolveria
+      // menos sessões do que a janela pede.
+      .limit(JANELA_SESSOES_TEMA * MAX_TEMAS_POR_SESSAO);
+    historico = projetarHistoricoDeTemas({
+      temas: temas.map((t) => ({
+        // `isNotNull` acima garante o número; o cast só convence o TS.
+        sessionNumero: t.sessionNumero!,
+        tema: t.tema,
+        temaChave: t.temaChave,
+        quando: t.quando,
+      })),
     });
   } else if (modo === "tcc") {
     const aplicacoes = await tx

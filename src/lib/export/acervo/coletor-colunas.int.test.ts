@@ -8,7 +8,7 @@ import { fecharOwnerDb, ownerDb } from "@tests/owner-db";
 /**
  * Guard de deriva entre o `coletor.ts` e o schema real (#374 ∪ #353).
  *
- * Por que existe: o coletor declara as colunas de cada uma das 37 tabelas à mão
+ * Por que existe: o coletor declara as colunas de cada uma das 38 tabelas à mão
  * — proposital, é o mecanismo que exclui `cpf_hash` de `patient` e projeta
  * `app_user` só em id/name/email/created_at. O custo é que nada obrigava esses
  * nomes a existirem: **20 das 37 listas** citavam colunas inventadas

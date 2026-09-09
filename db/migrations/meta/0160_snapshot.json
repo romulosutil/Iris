@@ -1,6 +1,6 @@
 {
   "id": "3eb90d0c-200d-481a-9b26-b5af6e9e8d0a",
-  "prevId": "4bee7cb4-2736-4942-8d53-8f3a99e979cf",
+  "prevId": "827ca9dd-c991-4fd3-a6e1-6a812c0e0bcf",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -7135,6 +7135,158 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.session_tema": {
+      "name": "session_tema",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "clinic_id": {
+          "name": "clinic_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "patient_id": {
+          "name": "patient_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tema": {
+          "name": "tema",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tema_chave": {
+          "name": "tema_chave",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "estado": {
+          "name": "estado",
+          "type": "session_tema_estado",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'sugerido'"
+        },
+        "criado_em": {
+          "name": "criado_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "revisado_em": {
+          "name": "revisado_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_session_tema_patient_aprovado": {
+          "name": "idx_session_tema_patient_aprovado",
+          "columns": [
+            {
+              "expression": "patient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "estado = 'aprovado'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_session_tema_session": {
+          "name": "idx_session_tema_session",
+          "columns": [
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "session_tema_clinic_id_clinic_id_fk": {
+          "name": "session_tema_clinic_id_clinic_id_fk",
+          "tableFrom": "session_tema",
+          "tableTo": "clinic",
+          "columnsFrom": [
+            "clinic_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "session_tema_session_id_session_id_fk": {
+          "name": "session_tema_session_id_session_id_fk",
+          "tableFrom": "session_tema",
+          "tableTo": "session",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "session_tema_patient_id_patient_id_fk": {
+          "name": "session_tema_patient_id_patient_id_fk",
+          "tableFrom": "session_tema",
+          "tableTo": "patient",
+          "columnsFrom": [
+            "patient_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "uq_session_tema_chave": {
+          "name": "uq_session_tema_chave",
+          "nullsNotDistinct": false,
+          "columns": [
+            "session_id",
+            "tema_chave"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.subscription": {
       "name": "subscription",
       "schema": "",
@@ -7377,7 +7529,7 @@
         },
         "subscription_cartao_ativo_tem_token": {
           "name": "subscription_cartao_ativo_tem_token",
-          "value": "\"subscription\".\"metodo_pagamento\" <> 'cartao' OR \"subscription\".\"status\" IN ('free_tier', 'setup_pending') OR \"subscription\".\"credit_card_token\" IS NOT NULL"
+          "value": "\"subscription\".\"metodo_pagamento\" <> 'cartao' OR \"subscription\".\"status\" IN ('free_tier', 'setup_pending', 'canceled') OR \"subscription\".\"credit_card_token\" IS NOT NULL"
         }
       },
       "isRLSEnabled": false
@@ -8147,6 +8299,14 @@
       "values": [
         "inferido_disciplina",
         "ajustado_manualmente"
+      ]
+    },
+    "public.session_tema_estado": {
+      "name": "session_tema_estado",
+      "schema": "public",
+      "values": [
+        "sugerido",
+        "aprovado"
       ]
     },
     "public.session_tipo": {

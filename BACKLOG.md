@@ -102,6 +102,32 @@
 
 ---
 
+## 🏁 Sessão 08/09/2026 (3ª) — #645: o campo existia no contrato, era validado, e o provider jogava fora
+
+**O que a issue pedia:** persistir os `temas[]` das extrações aprovadas e ligar a terceira variante de `historico_relevante` (`{tema, resumo}`), que a #464 deixou declarada e sem produtor. Sem ela, o **R14** (anti-rubber-stamping) segue dormente justamente no modo convencional, onde recorrência de tema é o sinal clínico principal.
+
+**Medição antes do código:** o campo não estava faltando no contrato — estava sendo descartado. `agent-output-schema.ts:320` declara e VALIDA `temas: z.array(z.string()).optional()`; `LlmExtractionProvider.extrair` montava o retorno com `drafts`/`alertaRisco`/`meta` e simplesmente não copiava `saida.temas`. Uma linha de retorno separava um contrato completo de uma feature morta. `grep session_tema src/db/schema.ts` → 0 linhas; a tela `/pacientes/[id]/temas` documentava a lacuna em comentário e lia a nota consolidada como paliativo.
+
+**As 7 áreas cinzentas do Design foram fechadas ANTES do código** (`AGENTS.md` §5.2, regra pós-mortem #285), em `.specs/features/645-temas-terapia-convencional/context.md` — **decisões minhas, pendentes de ratificação do Rômulo**:
+
+- **G-1 grão:** tabela `session_tema`, uma linha por `(session_id, tema_chave)`. Nem coluna em `extraction` (que é por draft, e `temas[]` é do run inteiro) nem em `session_note` (que é o texto do humano — misturar apaga a distinção que sustenta a auditoria da Camada 1).
+- **G-2 escrita:** dois tempos. `sugerido` na consolidação, `aprovado` quando o terapeuta aprova qualquer extração da sessão. **Consequência aceita:** sessão sem extração aprovada não contribui tema — é o mesmo contrato do `evidence`, não um bug.
+- **G-3 identidade:** `normalizarTema` determinístico (minúsculas → sem acento → sem conectivo → tokens únicos ordenados). `"luto do pai"` == `"luto pelo pai"`. Nada de IA nem similaridade difusa: um agrupamento que muda entre execuções faria o prompt mudar sem nada mudar no prontuário. Negação (`não`, `sem`) fica FORA da lista de conectivos de propósito.
+- **G-4 régua:** janela das 5 sessões mais recentes **com tema registrado** (não 5 do calendário — sessões de outro modo no meio zerariam o histórico), recorrente a partir de 3. É a régua que `protocolo-terapia-convencional.md` já pratica.
+- **G-5 correção:** não editável depois de aprovado nesta fase; a correção é reconsolidar a nota antes da aprovação. Enum nasce com dois valores — `descartado` que ninguém produz seria estado inalcançável (memória `estado-derivado-inalcancavel-por-precedencia`).
+- **G-6 tela:** mostra os dois — temas agrupados no topo, notas de sessão abaixo. A lista de notas fica por mérito próprio; o que saiu foi o comentário que a chamava de paliativo.
+- **G-7 LGPD:** tema é prontuário. Entra no acervo (`coletor.ts`, guard de cobertura sobe de 37 para 38 tabelas) e sai no expurgo por **cascata de FK**, o caminho que a 0158 já usou — sem `CREATE OR REPLACE` de `app_purgar_paciente_interno`. Nenhum arquivo de `docs/legal/` foi tocado.
+
+**O que entrou (PR #NNN, draft):** migração `0159` (tabela + enum gerados por `db:generate`; RLS/GRANT escritos à mão com o predicado copiado literal de `instrumento_aplicacao` 0113 e o tenant resolvido por `app_clinic_id_exigido()`, D16/#229); `normalizarTema` + `deduplicarTemas` (teto de 20 temas/sessão — `historico_relevante` volta pra DENTRO do prompt, cada tema custa token em toda extração seguinte); `ExtractionResult.temas`; escrita `sugerido` na Fase C da consolidação com `onConflictDoNothing` (colisão só pode ser tema já aprovado — rebaixá-lo faria a IA desfazer decisão humana); promoção dentro de `transicionar`, na MESMA transação da evidência; `projetarHistoricoDeTemas`; ramo do loader; tela; acervo; docs (`protocolos-e-agente.md` e as fixtures de `casos-de-teste-terapia-convencional.md`, que traziam prosa escrita à mão no lugar do texto que o produto de fato manda).
+
+**Verificação medida, não lida:** RLS conferida em `pg_class` (`relrowsecurity`/`relforcerowsecurity`), 4 policies em `pg_policy`, grants em `information_schema`, 4 índices, 160 migrações aplicadas. 3502 testes unitários verdes. Int-test novo com 7 casos: isolamento de LEITURA e de ESCRITA entre clínicas, unicidade por chave, idempotência da promoção (o 2º UPDATE não reescreve `revisado_em`), `historico_relevante` lendo aprovado e ignorando sugerido, promoção pelo caminho REAL de `aprovarExtracao`, e a cascata do expurgo.
+
+**Ficou de fora, registrado:** cartão de temas na tela de revisão (hoje o terapeuta aprova a extração e os temas sobem junto, sem vê-los antes) — candidato a follow-up, porque adoção só se mede depois que o dado existe (memória `feature-no-ar-nao-e-feature-usada`).
+
+**Achado de processo:** o working tree tinha edições não commitadas de `BACKLOG.md` e `CLAUDE.md` da sessão anterior (linha #658, já mesclada). Foram para `git stash` com a mensagem `645-session: BACKLOG+CLAUDE.md pendentes da sessao shell` antes de sair de `main` — **não estão em nenhum branch**; recuperar é decisão do Rômulo.
+
+---
+
 ## 🏁 Sessão 08/09/2026 — #283: dois critérios já estavam fechados; o terceiro não tinha quem medisse
 
 **O que a issue pedia:** layout mobile da Matriz (375px, 3+ terapeutas), com três critérios de aceite.

@@ -21,13 +21,15 @@ ALTER TABLE "subscription" ADD COLUMN "credit_card_atualizado_em" timestamp with
 -- cobrar: sem token não há `POST /payments` possível, e o ciclo venceria em
 -- silêncio. Antes de ativar ela existe legitimamente sem token — `free_tier`
 -- (nunca ativou) e `setup_pending` (fatura hospedada emitida, cartão ainda não
--- digitado; o token só chega pelo webhook, D4).
+-- digitado; o token só chega pelo webhook, D4). `canceled` também precisa
+-- passar sem token: desistir ainda em `setup_pending` é cancelamento legítimo,
+-- e sem essa cláusula o UPDATE de status estoura 23514.
 --
 -- Linha de Pix passa pelo primeiro ramo. `metodo_pagamento` NULL faz a
 -- expressão inteira ser NULL, e CHECK com resultado NULL é SATISFEITO — que é o
 -- comportamento desejado aqui (linha sem método declarado não é linha de
 -- cartão), mas é a armadilha que já mordeu este repo antes, então fica escrito.
-ALTER TABLE "subscription" ADD CONSTRAINT "subscription_cartao_ativo_tem_token" CHECK ("subscription"."metodo_pagamento" <> 'cartao' OR "subscription"."status" IN ('free_tier', 'setup_pending') OR "subscription"."credit_card_token" IS NOT NULL);--> statement-breakpoint
+ALTER TABLE "subscription" ADD CONSTRAINT "subscription_cartao_ativo_tem_token" CHECK ("subscription"."metodo_pagamento" <> 'cartao' OR "subscription"."status" IN ('free_tier', 'setup_pending', 'canceled') OR "subscription"."credit_card_token" IS NOT NULL);--> statement-breakpoint
 
 -- Espelha os GRANTs da 0088/0089: o privilégio de `subscription` hoje é de
 -- tabela (0071/0075), então isto é redundante — e explícito para o dia em que
