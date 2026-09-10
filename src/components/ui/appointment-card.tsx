@@ -107,9 +107,9 @@ export const AppointmentCard = React.forwardRef<
               variante="secundaria"
               tamanho="sm"
               onClick={onGerir}
-              aria-label={`Gerir agendamento de ${pacienteNome} às ${horario}`}
+              aria-label={`Gerenciar agendamento de ${pacienteNome} às ${horario}`}
             >
-              Gerir
+              Gerenciar
             </Button>
           ) : null}
         </div>
@@ -174,7 +174,7 @@ export const AppointmentCard = React.forwardRef<
                         onGerir();
                       }}
                     >
-                      Gerir atendimento
+                      Gerenciar atendimento
                     </button>
                   ) : null}
                 </div>

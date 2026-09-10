@@ -177,28 +177,24 @@ export const MatrizDeEstados: Story = {
 };
 
 /**
- * Suavização de densidade no desktop: no viewport `md` ou maior, o campo VAZIO
- * e sem foco recua para a borda grafite (`--border-muted`, 3.68:1 sobre o card
- * — acima do piso de 3:1 do WCAG 2.2 SC 1.4.11). Foco, dado preenchido e erro
- * devolvem a borda cheia com a sombra dura. Encolha a janela abaixo de `md` e
- * o piso tátil de 44px com borda cheia de 2px volta inteiro.
+ * Suavização de densidade no desktop: no viewport `md` ou maior, o campo em
+ * repouso (vazio OU preenchido) fica na borda grafite (`--border-muted`,
+ * 3.68:1 sobre o card — acima do piso de 3:1 do WCAG 2.2 SC 1.4.11). Só foco
+ * e erro devolvem a borda cheia com a sombra dura — "preenchido" deixou de
+ * ser gatilho para o formulário meio respondido não virar tabuleiro de pesos.
+ * Encolha a janela abaixo de `md` e o piso tátil de 44px com borda cheia de
+ * 2px volta inteiro.
  */
 export const DensidadeDesktop: Story = {
   render: () => (
     <div className="flex w-[26rem] flex-col gap-4">
       <div className="flex flex-col gap-1">
         <span className="text-xs font-semibold text-[var(--text-secondary)]">
-          Repouso vazio — grafite suave a partir de `md`
+          Repouso — grafite suave a partir de `md`, vazio ou preenchido
         </span>
         <Input placeholder="Nome do paciente" />
-        <Input placeholder="Responsável legal" />
-        <Input placeholder="Telefone de contato" />
-      </div>
-      <div className="flex flex-col gap-1">
-        <span className="text-xs font-semibold text-[var(--text-secondary)]">
-          Preenchido — peso brutalista de volta
-        </span>
         <Input defaultValue="Ana Lima" />
+        <Input placeholder="Telefone de contato" />
       </div>
       <div className="flex flex-col gap-1">
         <span className="text-xs font-semibold text-[var(--text-secondary)]">

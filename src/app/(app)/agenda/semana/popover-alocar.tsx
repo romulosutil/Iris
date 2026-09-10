@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useActionState, useState } from "react";
+import { useEffect, useMemo, useActionState, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { minParaHora } from "@/lib/agenda/janela";
+import { formatarDisciplina } from "@/lib/disciplinas";
 import {
   criarAvulsaAction,
   criarRegraAction,
@@ -38,6 +39,8 @@ const TIPOS_AVULSA = [
 export interface PopoverAlocarProps {
   aberto: boolean;
   aoFechar: () => void;
+  /** Disparado uma vez quando a alocação grava — quem monta a grade recarrega. */
+  aoSucesso?: () => void;
   diaSemana: number;
   inicioMin: number;
   dataISO: string;
@@ -145,14 +148,26 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
     setDuracao(props.duracaoPadrao[d] ?? 60);
   }
 
+  // `aoFechar`/`aoSucesso` chegam como arrow inline do pai (`semana-cliente`),
+  // então mudam de identidade a cada render dele. Se entrassem no array de
+  // dependências, `aoSucesso()` -> `setVersao` no pai -> novo render -> novas
+  // funções -> efeito de novo (com `estado.ok` ainda `true`) -> laço infinito.
+  // Guardar a versão mais recente num ref deixa o efeito depender só do que
+  // de fato mudou de estado: a gravação ter dado certo.
+  const aoFecharRef = useRef(props.aoFechar);
+  const aoSucessoRef = useRef(props.aoSucesso);
   useEffect(() => {
-    if (estado.ok) {
-      const timer = setTimeout(() => {
-        props.aoFechar();
-      }, 1200);
-      return () => clearTimeout(timer);
-    }
-  }, [estado.ok, props]);
+    aoFecharRef.current = props.aoFechar;
+    aoSucessoRef.current = props.aoSucesso;
+  });
+  useEffect(() => {
+    if (!estado.ok) return;
+    aoSucessoRef.current?.();
+    const timer = setTimeout(() => {
+      aoFecharRef.current();
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [estado.ok]);
 
   return (
     <Dialog open={props.aberto} onOpenChange={(o) => !o && props.aoFechar()}>
@@ -268,7 +283,7 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
             <Field label="Disciplina" htmlFor="popover-alocar-disciplina-fixa">
               <Input
                 id="popover-alocar-disciplina-fixa"
-                value={disciplina.toUpperCase()}
+                value={formatarDisciplina(disciplina)}
                 readOnly
                 disabled
               />
@@ -286,7 +301,7 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
                     );
                     return (
                       <SelectItem key={d} value={d}>
-                        {d.toUpperCase()}{" "}
+                        {formatarDisciplina(d)}{" "}
                         {ehDaEquipe ? " (Equipe de Cuidado)" : ""}
                       </SelectItem>
                     );

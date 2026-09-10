@@ -92,7 +92,13 @@ export function EvolucaoVazia({ prontidao }: { prontidao: Prontidao }) {
   // e ela não impede: `materializar.ts` descarta evidência sem meta resolvida,
   // não sem anamnese. A frase precisa distinguir "falta o que trava" de "falta
   // o que é recomendado", senão manda o operador resolver o degrau errado.
-  const bloqueantes = degraus.filter((d) => d.estado === "bloqueante").length;
+  const degrausBloqueantes = degraus.filter((d) => d.estado === "bloqueante");
+  const bloqueantes = degrausBloqueantes.length;
+  // O `proximo` da escada segue a ORDEM do roteiro (anamnese antes de meta) e
+  // pode ser um degrau recomendado. Esta frase fala do que TRAVA: nomear a
+  // anamnese aqui como "o próximo" logo depois de "falta 1 passo obrigatório"
+  // mandava resolver o degrau errado.
+  const primeiroBloqueante = degrausBloqueantes[0] ?? proximo;
 
   if (bloqueantes === 0) {
     return (
@@ -110,8 +116,8 @@ export function EvolucaoVazia({ prontidao }: { prontidao: Prontidao }) {
       {bloqueantes === 1
         ? "Falta 1 passo obrigatório"
         : `Faltam ${bloqueantes} passos obrigatórios`}{" "}
-      para a sessão gerar dado — o próximo é <strong>{proximo.rotulo}</strong>.
-      O cartão “{TITULO_CARTAO_PRONTIDAO}”, no topo desta página, lista todos e
+      para a sessão gerar dado: <strong>{primeiroBloqueante.rotulo}</strong>. O
+      cartão “{TITULO_CARTAO_PRONTIDAO}”, no topo desta página, lista todos e
       leva ao próximo.
     </Painel>
   );

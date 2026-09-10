@@ -20,6 +20,7 @@ export interface CalendarioSemanaProps {
   aoAlocar: (diaSemana: number, inicioMin: number) => void;
   aoAbrirRegra?: (regraId: string, rotulo: string) => void;
   fuso: string;
+  hojeISO?: string;
 }
 
 export function CalendarioSemana({
@@ -33,6 +34,7 @@ export function CalendarioSemana({
   aoAlocar,
   aoAbrirRegra,
   fuso,
+  hojeISO,
 }: CalendarioSemanaProps) {
   return (
     <ScheduleGrid
@@ -53,6 +55,7 @@ export function CalendarioSemana({
         recorrenteId: b.recorrenteId,
       }))}
       fuso={fuso}
+      hojeISO={hojeISO}
       aoAlocar={aoAlocar}
       aoAbrirRegra={aoAbrirRegra}
     />

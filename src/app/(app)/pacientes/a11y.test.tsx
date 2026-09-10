@@ -207,8 +207,8 @@ test("layout do paciente com indicador de segurança e sem violações", async (
   const user = userEvent.setup();
   const { container } = render(jsx);
 
-  // Verifica que o indicador "Dados Criptografados (RLS Ativo)" é exibido
-  expect(screen.getByText(/Dados Criptografados \(RLS Ativo\)/i)).toBeDefined();
+  // Verifica que o indicador "Acesso restrito à equipe" é exibido
+  expect(screen.getByText(/Acesso restrito à equipe/i)).toBeDefined();
 
   // Verifica se o conteúdo do prontuário (children) é renderizado
   expect(screen.getByTestId("child")).toBeDefined();
@@ -219,7 +219,7 @@ test("layout do paciente com indicador de segurança e sem violações", async (
   const selo = container.querySelector<HTMLElement>('[tabindex="0"]');
   expect(selo).not.toBeNull();
   expect(selo?.getAttribute("aria-label")).toBeNull();
-  expect(selo?.textContent).toContain("Dados Criptografados (RLS Ativo)");
+  expect(selo?.textContent).toContain("Acesso restrito à equipe");
 
   // O `aria-describedby` do gatilho precisa resolver JÁ no estado de repouso —
   // apontar para id inexistente é descrição que nunca chega.

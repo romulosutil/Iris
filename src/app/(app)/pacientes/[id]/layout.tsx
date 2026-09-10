@@ -15,7 +15,7 @@ import { capacidadesDaModalidade } from "./modalidade";
 import { montarProntidao } from "@/lib/patient/prontidao";
 import { logarAvisoSemPII } from "@/lib/observabilidade/logar-erro";
 import { obterFatosProntidao } from "@/lib/patient/prontidao-queries";
-import { CartaoProntidao } from "@/components/app/cartao-prontidao";
+import { CartaoProntidaoPorRota } from "@/components/app/cartao-prontidao-por-rota";
 import { CicloDeVidaPaciente } from "./ciclo-de-vida";
 
 /**
@@ -152,48 +152,59 @@ export default async function PacienteLayout({
 
   return (
     <Stack gap="md">
-      <div className="flex flex-col gap-2">
-        <TabsNav itens={abas} ariaLabel="Seções do prontuário do paciente" />
-        <div className="-mt-2 flex flex-wrap items-center justify-between gap-2">
-          {/* D65 — ações de ciclo de vida do prontuário. Ficavam nos dois
-              `PageHeader` de `page.tsx`, que a modalidade `conventional` nunca
-              renderiza (ela redireciona para `/temas`). Ver `ciclo-de-vida.tsx`. */}
-          {/* O `<div>` existe mesmo quando a barra não renderiza nada: sem ele,
-              `justify-between` com um filho só empurraria o selo de RLS para a
-              ESQUERDA no caso do terapeuta sem alta/arquivamento. */}
-          <div>
+      {/* D65 — ações de ciclo de vida do prontuário. Ficavam nos dois
+          `PageHeader` de `page.tsx`, que a modalidade `conventional` nunca
+          renderiza (ela redireciona para `/temas`). Ver `ciclo-de-vida.tsx`.
+          Moram no slot `acoes` da faixa de abas, e não numa faixa própria
+          abaixo dela: ali ficavam órfãos entre a navegação e o título da aba. */}
+      <TabsNav
+        itens={abas}
+        ariaLabel="Seções do prontuário do paciente"
+        acoes={
+          <>
+            {/*
+              O selo é focalizável (`tabIndex`) porque é o gatilho do tooltip:
+              sem isso a explicação só existiria no hover e sumiria para teclado.
+              O nome acessível vem do próprio texto visível — `aria-label` aqui
+              era ignorado (ARIA proíbe nomear elemento sem role, `<span>` cru
+              resolve para `generic`; axe acusa `aria-prohibited-attr`) e ainda
+              criava divergência com o texto na tela (WCAG 2.5.3). O cadeado vai
+              no slot `icon` com `aria-hidden` para o leitor de tela não soletrar
+              "emoji de cadeado fechado" antes da frase.
+            */}
+            {/* "Dados Criptografados (RLS Ativo)" era jargão de banco na tela
+                do clínico: RLS não diz nada a quem atende, e "criptografado"
+                prometia algo que a policy não é. O selo diz o que a pessoa
+                precisa saber; o tooltip explica. */}
+            <Tooltip conteudo="Este prontuário está visível apenas para a equipe autorizada desta clínica.">
+              <Pill
+                variant="inset"
+                colorScheme="neutral"
+                className="focus-visible:outline-focus cursor-help outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
+                tabIndex={0}
+                icon={<span aria-hidden="true">🔒</span>}
+              >
+                Acesso restrito à equipe
+              </Pill>
+            </Tooltip>
             <CicloDeVidaPaciente
               patientId={id}
               arquivadoEm={dadosPaciente?.arquivadoEm ?? null}
               altaEm={dadosPaciente?.altaEm ?? null}
               papel={ctx.role}
             />
-          </div>
-          {/*
-            O selo é focalizável (`tabIndex`) porque é o gatilho do tooltip:
-            sem isso a explicação só existiria no hover e sumiria para teclado.
-            O nome acessível vem do próprio texto visível — `aria-label` aqui
-            era ignorado (ARIA proíbe nomear elemento sem role, `<span>` cru
-            resolve para `generic`; axe acusa `aria-prohibited-attr`) e ainda
-            criava divergência com o texto na tela (WCAG 2.5.3). O cadeado vai
-            no slot `icon` com `aria-hidden` para o leitor de tela não soletrar
-            "emoji de cadeado fechado" antes da frase.
-          */}
-          <Tooltip conteudo="Este prontuário está visível apenas para a equipe autorizada desta clínica.">
-            <Pill
-              variant="inset"
-              colorScheme="neutral"
-              className="focus-visible:outline-focus cursor-help outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
-              tabIndex={0}
-              icon={<span aria-hidden="true">🔒</span>}
-            >
-              Dados Criptografados (RLS Ativo)
-            </Pill>
-          </Tooltip>
-        </div>
-      </div>
+          </>
+        }
+      />
       {fatos ? (
-        <CartaoProntidao
+        <CartaoProntidaoPorRota
+          // Escada inteira só na aba que fala dela (Evolução, ou a aba central
+          // quando a modalidade não tem Evolução); nas outras, uma linha.
+          rotaCompleta={
+            capacidades.temEvolucao
+              ? base
+              : `${base}/${capacidades.abaCentral?.slug ?? ""}`
+          }
           prontidao={montarProntidao({
             // Aqui a modalidade continua vindo da linha `patient`, e não da
             // `fatos.modalidade` do definer: quem alcança a página do paciente

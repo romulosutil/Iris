@@ -93,12 +93,20 @@ export interface CartaoProntidaoProps {
    * livre para divergir da tarja logo abaixo do cartão.
    */
   motivoSomenteLeitura?: string | null;
+  /**
+   * Forma reduzida: uma linha com a contagem e o próximo passo, sem a lista de
+   * degraus. É o que as abas que NÃO são a Evolução mostram (ver
+   * `cartao-prontidao-por-rota.tsx`) — a escada inteira em toda aba empurrava
+   * o título da tela para fora da dobra a cada clique.
+   */
+  compacto?: boolean;
 }
 
 export function CartaoProntidao({
   prontidao,
   titulo = TITULO_CARTAO_PRONTIDAO,
   motivoSomenteLeitura,
+  compacto = false,
 }: CartaoProntidaoProps) {
   const { degraus, proximo, quemResolve } = prontidao;
   const bloqueadoPelaConta = Boolean(motivoSomenteLeitura);
@@ -108,6 +116,38 @@ export function CartaoProntidao({
   if (proximo === null) return null;
 
   const concluidos = degraus.filter((d) => d.estado === "concluido").length;
+
+  if (compacto) {
+    return (
+      <div
+        data-testid="cartao-prontidao-compacto"
+        className={surface("solida", {
+          radius: "control",
+          className:
+            "flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-[var(--surface-card)] px-4 py-2.5 text-[var(--text-primary)]",
+        })}
+      >
+        <p className="text-sm">
+          <span className="font-display font-semibold">{titulo}:</span>{" "}
+          {concluidos} de {degraus.length} passos concluídos
+          {proximo.estado === "bloqueante" ? " · falta passo obrigatório" : ""}.
+        </p>
+        {proximo.rota && !bloqueadoPelaConta ? (
+          <Button variante="secundaria" tamanho="sm" asChild>
+            <Link href={proximo.rota} data-testid="gesto-primario">
+              {proximo.rotulo} →
+            </Link>
+          </Button>
+        ) : (
+          <span className="text-sm text-[var(--text-secondary)]">
+            {bloqueadoPelaConta
+              ? motivoSomenteLeitura
+              : `Aguardando ${quemResolve}: ${proximo.rotulo}.`}
+          </span>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div

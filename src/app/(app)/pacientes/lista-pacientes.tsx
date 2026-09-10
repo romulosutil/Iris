@@ -62,7 +62,15 @@ export function ListaPacientes({
                   ) : null}
                 </div>
                 <Button variante="terciaria" tamanho="sm" asChild>
-                  <Link href={`/pacientes/${p.id}`}>Ver Prontuário &rarr;</Link>
+                  {/* Sete links "Ver Prontuário" iguais são sete itens idênticos
+                      na lista de links do leitor de tela. O nome carrega o
+                      paciente; o texto visível fica curto. */}
+                  <Link
+                    href={`/pacientes/${p.id}`}
+                    aria-label={`Ver prontuário de ${p.nome}`}
+                  >
+                    Ver Prontuário &rarr;
+                  </Link>
                 </Button>
               </div>
 

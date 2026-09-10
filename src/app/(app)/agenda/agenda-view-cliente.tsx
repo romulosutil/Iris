@@ -21,6 +21,14 @@ import { CalendarGrid } from "@/components/ui/calendar/calendar-grid";
 import { CalendarEventCard } from "@/components/ui/calendar/calendar-event-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CareCalendarIllustration } from "@/components/ui/illustrations";
+import {
+  AlertTriangleIcon,
+  CalendarIcon,
+  CheckIcon,
+  ClockIcon,
+  LayersIcon,
+  UsersIcon,
+} from "@/components/ui/icon";
 import { podeCriarSessaoEmAgenda } from "@/lib/agenda/gating";
 import { useViewportMobile } from "@/components/ui/calendar/use-viewport-mobile";
 import { SemanaCliente, type Prefill } from "./semana/semana-cliente";
@@ -49,6 +57,12 @@ export interface AgendaViewClienteProps {
   /** #512 · T14-fix — prefill de "Repor" (Task 8), vindo de `/agenda?escala=
    * semana&repor=...`. Repassado direto para `SemanaCliente`. */
   prefill?: Prefill;
+}
+
+// `text-transform: capitalize` punha maiúscula em TODA palavra ("Quinta-Feira,
+// 10 De Setembro"), o que não existe em pt-BR. Só a primeira letra sobe.
+function primeiraMaiuscula(texto: string): string {
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
 
 // Soma `delta` dias a uma data YYYY-MM-DD usando aritmética UTC (evita
@@ -239,8 +253,10 @@ export function AgendaViewCliente({
   const cabecalhoData = diaExtenso ? (
     <div className="flex flex-col justify-between gap-3 border-b-2 border-[var(--border-brutal)] pb-3 sm:flex-row sm:items-center">
       <div className="flex items-center gap-2">
-        <span className="font-display flex items-center gap-2 rounded-[var(--radius-xs)] border-2 border-[var(--border-brutal)] bg-[var(--action-primary)] px-3 py-1 text-sm font-extrabold text-[var(--text-primary)] capitalize shadow-[2px_2px_0_0_#000000] sm:text-base">
-          {ehHoje ? `Hoje · ${diaExtenso}` : diaExtenso}
+        <span className="font-display flex items-center gap-2 rounded-[var(--radius-xs)] border-2 border-[var(--border-brutal)] bg-[var(--action-primary)] px-3 py-1 text-sm font-extrabold text-[var(--text-primary)] shadow-[2px_2px_0_0_#000000] sm:text-base">
+          {ehHoje
+            ? `Hoje · ${primeiraMaiuscula(diaExtenso)}`
+            : primeiraMaiuscula(diaExtenso)}
         </span>
         {diaISO ? (
           <span className="hidden rounded-[var(--radius-xs)] border border-[var(--border-brutal)]/30 bg-[var(--surface-elevated)] px-2.5 py-1 font-mono text-xs font-bold text-[var(--text-secondary)] md:inline">
@@ -347,12 +363,12 @@ export function AgendaViewCliente({
             illustration={<CareCalendarIllustration size={120} />}
             title={
               ehHoje
-                ? "Sua rotina do dia está concluída"
+                ? "Nenhum atendimento agendado para hoje"
                 : "Nenhuma sessão neste dia"
             }
             description={
               ehHoje
-                ? "Nenhum atendimento pendente para hoje. Fim do expediente de verdade!"
+                ? "A agenda de hoje está vazia. Para encaixar sessões, use a escala Semana ou o botão Agendar no Calendário."
                 : "Não há atendimentos agendados para a data selecionada. Use a navegação acima para trocar de dia."
             }
             variant="celebration"
@@ -374,15 +390,21 @@ export function AgendaViewCliente({
           {/* Métricas do Dia */}
           <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
             <span className="rounded-[var(--radius-pill)] border border-[var(--border-brutal)] bg-[var(--surface-elevated)] px-2.5 py-1 font-bold text-[var(--text-primary)]">
-              📊 <strong>{metricas.total}</strong> agendamentos
+              <CalendarIcon size={14} aria-hidden focusable="false" />{" "}
+              <strong>{metricas.total}</strong>{" "}
+              {metricas.total === 1 ? "agendamento" : "agendamentos"}
             </span>
             <span className="rounded-[var(--radius-pill)] border border-[var(--status-success-border)] bg-[var(--status-success-bg)] px-2.5 py-1 font-bold text-[var(--text-primary)]">
-              ✓ <strong>{metricas.realizadas}</strong> realizadas (
+              <CheckIcon size={14} aria-hidden focusable="false" />{" "}
+              <strong>{metricas.realizadas}</strong>{" "}
+              {metricas.realizadas === 1 ? "realizada" : "realizadas"} (
               {metricas.taxaOcupacao}%)
             </span>
             {metricas.faltas > 0 ? (
               <span className="rounded-[var(--radius-pill)] border border-[var(--status-error-border)] bg-[var(--status-error-bg)] px-2.5 py-1 font-bold text-[var(--status-error-fg)]">
-                ⚠️ <strong>{metricas.faltas}</strong> faltas
+                <AlertTriangleIcon size={14} aria-hidden focusable="false" />{" "}
+                <strong>{metricas.faltas}</strong>{" "}
+                {metricas.faltas === 1 ? "falta" : "faltas"}
               </span>
             ) : null}
           </div>
@@ -396,9 +418,33 @@ export function AgendaViewCliente({
               value={modoVisao}
               onValueChange={trocarVisao}
               opcoes={[
-                { value: "matriz", label: "🗓️ Matriz Geral" },
-                { value: "terapeuta", label: "👥 Por Terapeuta" },
-                { value: "horario", label: "🕒 Por Horário" },
+                {
+                  value: "matriz",
+                  label: (
+                    <span className="inline-flex items-center gap-1.5">
+                      <LayersIcon size={14} aria-hidden focusable="false" />
+                      Matriz Geral
+                    </span>
+                  ),
+                },
+                {
+                  value: "terapeuta",
+                  label: (
+                    <span className="inline-flex items-center gap-1.5">
+                      <UsersIcon size={14} aria-hidden focusable="false" />
+                      Por Terapeuta
+                    </span>
+                  ),
+                },
+                {
+                  value: "horario",
+                  label: (
+                    <span className="inline-flex items-center gap-1.5">
+                      <ClockIcon size={14} aria-hidden focusable="false" />
+                      Por Horário
+                    </span>
+                  ),
+                },
               ]}
             />
           </div>

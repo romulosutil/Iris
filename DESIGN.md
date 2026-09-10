@@ -186,6 +186,14 @@ A linguagem de formas equilibra bordas duras brutalistas (1.5px / 2px) com canto
 - **Aprovado:** Borda sólida 2px, elevação 2px.
 - **Sugerido IA:** Borda tracejada violeta `#6A4C93`, fundo `#F1E9F6`, sombra inset.
 
+### Listas densas (DataList)
+
+- **Regra de escala:** card é para o que se **navega** (conteúdo rico, um por tela); lista que **cresce** (fila, pendências, pacientes, equipe) usa `DataList`: **uma** superfície brutalista e N linhas dentro, separadas por fio (`--border-brutal` a 20%), sem borda nem sombra por item. Card repetido por linha dilui a semântica de "fato consolidado" e custa ~90px por item; a linha densa custa 56px.
+- **Colunas fixas:** `inicio` (hora/código, `Space Mono` bold, `tabular-nums`) | `titulo`/`detalhe` (coluna elástica, trunca) | `estado` (selo) | `acoes`. No mobile o selo desce sob o título; hora e ação ficam nas pontas.
+- **Grupo pegajoso:** `DataListGroup` = `section` rotulada por `h3` mono uppercase sobre `--surface-muted`, `sticky` ao rolar, com contagem. O container usa `overflow-clip` (não `hidden`) para o sticky funcionar.
+- **Cabeçalho com contagem:** a fila recolhida ainda diz seu tamanho (Pill neutra ao lado do título).
+- **Hover:** `--surface-muted` a 60% — feedback de linha sem deslocar layout.
+
 ### Inputs / Fields
 
 - **Style:** Fundo `#FFFFFF`, borda 2px grafite/preta, altura 40px/48px.
@@ -220,5 +228,6 @@ A linguagem de formas equilibra bordas duras brutalistas (1.5px / 2px) com canto
 
 - **Don't** utilizar a régua espectro arco-íris como plano de fundo, borda ou preenchimento de componentes de interface.
 - **Don't** usar gradientes roxos, efeitos glassmorphism ou sombras difusas em elementos de tomada de decisão da IA.
+- **Don't** renderizar uma lista que cresce como pilha de cards (borda + sombra por item). Filas e listas operacionais usam `DataList`; card por item só quando cada item é conteúdo rico que se navega.
 - **Don't** ocultar avisos de erro em toasts temporários que somem automaticamente.
 - **Don't** utilizar a fonte Space Grotesk em corpos de texto ou legendas secundárias.

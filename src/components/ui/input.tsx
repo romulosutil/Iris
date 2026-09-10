@@ -65,40 +65,15 @@ export const Input = React.forwardRef<any, InputProps>(function Input(
   );
 
   /**
-   * "Campo com dado ativo" é um dos gatilhos do peso brutalista no desktop
-   * (junto de foco e erro). Não dá para ler isso só em CSS: `:placeholder-shown`
-   * exige que exista um `placeholder`, e a maioria dos campos do app não tem —
-   * sem ele o seletor nunca casa e TODO campo pareceria preenchido. Então o
-   * estado mora aqui, cobrindo controlado (`value`) e não-controlado
-   * (`defaultValue` + digitação + autofill lido no mount).
+   * Único estado ESTÁTICO que devolve o peso brutalista cheio no desktop é o
+   * erro. Foco vem por `focus-within` no CSS. "Campo preenchido" já foi
+   * gatilho também e saiu de propósito: num formulário clínico com metade
+   * dos campos respondidos, o resultado era um tabuleiro — caixas pretas com
+   * sombra ao lado de caixas cinzas — que lia como campo "sem estilo" e
+   * pesava mais que a grade uniforme que a densidade queria evitar. Valor
+   * digitado já é sinal por si; a borda não precisa gritar junto.
    */
-  const valorControlado = props.value;
-  const onChangeExterno = props.onChange;
-  const [temValorInterno, setTemValorInterno] = React.useState(
-    () => String(props.defaultValue ?? "").length > 0,
-  );
-  const preenchido =
-    valorControlado !== undefined
-      ? String(valorControlado).length > 0
-      : temValorInterno;
-
-  React.useEffect(() => {
-    // Autofill do navegador não dispara change; ler o nó no mount cobre o caso.
-    if (valorControlado === undefined && inputRef.current) {
-      setTemValorInterno(String(inputRef.current.value ?? "").length > 0);
-    }
-  }, [valorControlado]);
-
-  const handleChange = React.useCallback(
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      setTemValorInterno(e.currentTarget.value.length > 0);
-      (onChangeExterno as ((ev: typeof e) => void) | undefined)?.(e);
-    },
-    [onChangeExterno],
-  );
-
-  /** Estados que devolvem o peso brutalista cheio no desktop. */
-  const brutalAtivo = Boolean(ariaInvalid) || preenchido;
+  const brutalAtivo = Boolean(ariaInvalid);
 
   const handleWrapperClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
@@ -129,12 +104,14 @@ export const Input = React.forwardRef<any, InputProps>(function Input(
         "transition-[border-color,box-shadow,background-color] duration-200 ease-out",
         // Densidade desktop (>= md). No mobile nada muda: borda cheia de 2px e
         // o piso tátil de `control(size)` continuam intactos. A partir de `md`
-        // o repouso VAZIO recua para o grafite suave — um formulário clínico
-        // com 8 campos deixa de ser uma grade de caixas pretas — e o
-        // neubrutalismo (borda cheia + sombra dura) volta como SINAL: foco,
-        // dado preenchido ou erro. A largura fica em 2px nos dois estados de
-        // propósito: cair para 1.5px no repouso reflowaria a linha inteira a
-        // cada foco/digitação.
+        // o REPOUSO (vazio ou preenchido) fica no grafite suave — um
+        // formulário clínico com 8 campos deixa de ser uma grade de caixas
+        // pretas — e o neubrutalismo (borda cheia + sombra dura) volta só
+        // como SINAL de atenção: foco ou erro. Mesmo contrato em `SelectTrigger`
+        // e em `NATIVE_SELECT_CLASSNAME`; os três têm que andar juntos, senão
+        // o formulário mistura pesos e parece meio sem estilo. A largura fica
+        // em 2px nos dois estados de propósito: cair para 1.5px no repouso
+        // reflowaria a linha inteira a cada foco.
         !disabled && !brutalAtivo && "md:border-[var(--border-muted)]",
         !disabled && brutalAtivo && "md:shadow-[var(--shadow-brutal)]",
         !disabled && "md:focus-within:shadow-[var(--shadow-brutal)]",
@@ -196,7 +173,6 @@ export const Input = React.forwardRef<any, InputProps>(function Input(
             aria-invalid={ariaInvalid}
             className={sharedFieldClasses}
             {...(props as React.TextareaHTMLAttributes<HTMLTextAreaElement>)}
-            onChange={handleChange}
           />
         ) : (
           <input
@@ -206,7 +182,6 @@ export const Input = React.forwardRef<any, InputProps>(function Input(
             aria-invalid={ariaInvalid}
             className={sharedFieldClasses}
             {...(props as React.InputHTMLAttributes<HTMLInputElement>)}
-            onChange={handleChange}
           />
         )}
         {suffixIcon && (

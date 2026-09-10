@@ -112,6 +112,11 @@ export function SemanaCliente({
     dataISO: string;
   } | null>(null);
   const [dados, setDados] = useState<DadosSemana>(SEM_DADOS);
+  // Contador de recarga: cada alocação/encerramento confirmado incrementa e
+  // reexecuta a leitura da semana. Sem isso a grade só mostrava o bloco novo
+  // depois de um F5 — `revalidatePath` na action não alcança dados que este
+  // client carrega por Server Action em `useEffect`.
+  const [versao, setVersao] = useState(0);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, iniciarTransicao] = useTransition();
   const [regraSelecionada, setRegraSelecionada] = useState<{
@@ -149,7 +154,7 @@ export function SemanaCliente({
       cancelado = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eixo, entidade?.id, semanaISO]);
+  }, [eixo, entidade?.id, semanaISO, versao]);
 
   const dadosVisiveis = entidade ? dados : SEM_DADOS;
 
@@ -262,6 +267,7 @@ export function SemanaCliente({
         bloqueios={dadosVisiveis.bloqueios}
         blocos={dadosVisiveis.blocos}
         fuso={fuso}
+        hojeISO={hojeISO}
         aoAlocar={(diaSemana, inicioMin) => {
           if (!podeCriarSessao || passada || carregando) return;
           const dataISO = dias[diaSemana === 0 ? 6 : diaSemana - 1]!;
@@ -274,6 +280,7 @@ export function SemanaCliente({
         <PopoverAlocar
           aberto
           aoFechar={() => setSlot(null)}
+          aoSucesso={() => setVersao((v) => v + 1)}
           diaSemana={slot.diaSemana}
           inicioMin={slot.inicioMin}
           dataISO={slot.dataISO}

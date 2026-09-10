@@ -108,7 +108,10 @@ test("prontidão: coordenador prescreve protocolo e ativa meta, o cartão e a pi
   );
 
   // ── 3. Coordenador: cartão → prescrever protocolo ─────────────────────
-  await linhaNaLista.getByRole("link", { name: /Ver Prontuário/ }).click();
+  // Nome acessível vem do `aria-label` ("Ver prontuário de <nome>"), não do
+  // texto visível ("Ver Prontuário"): regex case-insensitive para não
+  // depender da caixa da copy.
+  await linhaNaLista.getByRole("link", { name: /ver prontuário/i }).click();
   await expect(coord).toHaveURL(/\/pacientes\/[^/]+$/);
   const idPaciente = new URL(coord.url()).pathname.split("/").pop()!;
 

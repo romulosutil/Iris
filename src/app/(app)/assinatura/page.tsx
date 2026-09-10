@@ -197,8 +197,14 @@ export default async function AssinaturaPage() {
       ) : null}
 
       <section className="flex flex-col gap-3">
+        {/* Com a assinatura já ativa esta seção mostra o estado e o botão de
+            cancelar — "Ativar a assinatura" em cima de "Assinatura ativa" lia
+            como pedido para ativar de novo. */}
         <h2 className="font-display text-xl font-semibold text-[var(--text-primary)]">
-          Ativar a assinatura
+          {situacaoConta.estado === "ativa" ||
+          situacaoConta.estado === "pagamento_atrasado"
+            ? "Sua assinatura"
+            : "Ativar a assinatura"}
         </h2>
         {podeContratar ? (
           <>

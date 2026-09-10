@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import PacienteLayout from "./layout";
 import { getTenantContext } from "@/auth/tenant";
 import { obterFatosProntidao } from "@/lib/patient/prontidao-queries";
@@ -356,6 +357,18 @@ describe("PacienteLayout - ciclo de vida do prontuário (D65)", () => {
     render(LayoutComponent);
   }
 
+  // As ações moram atrás do menu `⋯` ("Ações do prontuário") na faixa de
+  // abas: o gatilho visível é UM botão, e os rótulos são `menuitem` só depois
+  // de abri-lo. Um teste que procurasse `button` "Registrar alta clínica"
+  // direto acusaria ausência sobre uma ação que existe.
+  async function abrirMenuDeAcoes() {
+    const usuario = userEvent.setup();
+    await usuario.click(
+      screen.getByRole("button", { name: "Ações do prontuário" }),
+    );
+    await screen.findByRole("menu");
+  }
+
   it.each(PAPEIS)(
     "coordenador vê Registrar alta e Arquivar em %s",
     async (modalidade) => {
@@ -367,15 +380,71 @@ describe("PacienteLayout - ciclo de vida do prontuário (D65)", () => {
       });
 
       await renderizar("pac_1");
+      await abrirMenuDeAcoes();
 
       expect(
-        screen.getByRole("button", { name: "Registrar alta clínica" }),
+        screen.getByRole("menuitem", { name: "Registrar alta clínica" }),
       ).not.toBeNull();
       expect(
-        screen.getByRole("button", { name: "Arquivar paciente" }),
+        screen.getByRole("menuitem", { name: "Arquivar paciente" }),
       ).not.toBeNull();
     },
   );
+
+  it("o menu de ações fica na faixa de abas, ao lado do selo de acesso", async () => {
+    // A regressão que este caso vigia: voltar a barra para uma faixa solta
+    // abaixo das abas. O gatilho `⋯` e o selo têm de ser descendentes do MESMO
+    // contêiner que envolve o `<nav>` das abas — é o slot `acoes` do `TabsNav`.
+    mockPaciente({ clinicalModality: "conventional" });
+    vi.mocked(getTenantContext).mockResolvedValueOnce({
+      clinicId: "clinic_1",
+      userId: "user_1",
+      role: "coordenador",
+    });
+
+    await renderizar("pac_1");
+
+    const nav = screen.getByRole("navigation", {
+      name: "Seções do prontuário do paciente",
+    });
+    const faixa = nav.parentElement;
+    expect(faixa).not.toBeNull();
+    expect(
+      faixa!.contains(
+        screen.getByRole("button", { name: "Ações do prontuário" }),
+      ),
+    ).toBe(true);
+    expect(
+      faixa!.contains(screen.getByText("Acesso restrito à equipe")),
+    ).toBe(true);
+  });
+
+  it("selecionar uma ação do menu abre o diálogo correspondente", async () => {
+    // O diálogo roda em modo controlado (sem botão próprio): quem o abre é o
+    // item do menu. Sem este caso, um `aoSelecionar` vazio passaria verde nos
+    // testes de presença acima.
+    mockPaciente({ clinicalModality: "conventional" });
+    vi.mocked(getTenantContext).mockResolvedValueOnce({
+      clinicId: "clinic_1",
+      userId: "user_1",
+      role: "coordenador",
+    });
+
+    await renderizar("pac_1");
+    await abrirMenuDeAcoes();
+    await userEvent
+      .setup()
+      .click(screen.getByRole("menuitem", { name: "Registrar alta clínica" }));
+
+    const dialogo = await screen.findByRole("dialog", {
+      name: "Registrar alta clínica",
+    });
+    expect(dialogo).not.toBeNull();
+    // Só o diálogo escolhido abre — o de arquivamento segue fechado.
+    expect(
+      screen.queryByRole("dialog", { name: "Arquivar paciente" }),
+    ).toBeNull();
+  });
 
   it("terapeuta não vê nenhum gatilho de alta nem de arquivamento", async () => {
     // `requireRole` recusa os dois cores para `terapeuta`; um botão aqui viraria
@@ -389,6 +458,10 @@ describe("PacienteLayout - ciclo de vida do prontuário (D65)", () => {
 
     await renderizar("pac_1");
 
+    // Sem ação nenhuma, o menu `⋯` não existe — nem vazio.
+    expect(
+      screen.queryByRole("button", { name: "Ações do prontuário" }),
+    ).toBeNull();
     expect(screen.queryByRole("button", { name: /alta clínica/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /rquivar/ })).toBeNull();
   });
@@ -404,10 +477,13 @@ describe("PacienteLayout - ciclo de vida do prontuário (D65)", () => {
     });
 
     await renderizar("pac_1");
+    await abrirMenuDeAcoes();
 
-    expect(screen.queryByRole("button", { name: /alta clínica/i })).toBeNull();
     expect(
-      screen.getByRole("button", { name: "Arquivar paciente" }),
+      screen.queryByRole("menuitem", { name: /alta clínica/i }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("menuitem", { name: "Arquivar paciente" }),
     ).not.toBeNull();
   });
 
@@ -422,11 +498,13 @@ describe("PacienteLayout - ciclo de vida do prontuário (D65)", () => {
     await renderizar("pac_1");
 
     expect(screen.getByText("Alta Concluída")).not.toBeNull();
+
+    await abrirMenuDeAcoes();
     expect(
-      screen.getByRole("button", { name: "Desfazer alta clínica" }),
+      screen.getByRole("menuitem", { name: "Desfazer alta clínica" }),
     ).not.toBeNull();
     expect(
-      screen.queryByRole("button", { name: "Registrar alta clínica" }),
+      screen.queryByRole("menuitem", { name: "Registrar alta clínica" }),
     ).toBeNull();
   });
 
@@ -461,6 +539,9 @@ describe("PacienteLayout - ciclo de vida do prontuário (D65)", () => {
 
     expect(screen.getByText("Alta Concluída")).not.toBeNull();
     expect(screen.getByText("Arquivado")).not.toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Ações do prontuário" }),
+    ).toBeNull();
     expect(screen.queryByRole("button", { name: /alta clínica/i })).toBeNull();
   });
 });

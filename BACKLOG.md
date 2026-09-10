@@ -102,6 +102,50 @@
 
 ---
 
+## 🏁 Sessão 10/09/2026 — passeio de produto em produção: 22 achados de UX na agenda, prontuário e equipe, 20 corrigidos
+
+**Gatilho:** Rômulo pediu para navegar `irisclinica.ia.br` (clínica de teste DesignerS, papel coordenação) como product/UX designer — criar, editar, simular atendimento e corrigir o que fosse problema real, "qualquer alteração mínima, até texto e ícone".
+
+**O que foi simulado em produção:** dados da clínica preenchidos (razão social/endereço sintéticos); janelas seg–sex 08–12/13–18 pintadas no perfil do Rômulo (capacidade 0h → 45h); meta ABA "Pedir água sozinho" criada para o Benjamin; sessão recorrente quinta 09:00 alocada; check-in, "Realizada" e captura de texto no diário. **Não** cliquei em "Consolidar sessão": dispara o Gemini (CLAUDE.md exige confirmação para chamada de LLM). A captura ficou salva, pronta para consolidar.
+
+**Achados corrigidos (commit `0636f31c` + este):**
+
+- Agenda semanal: linha do dia mostrava `2026-09-07` duas vezes (ISO quebrado em 3 linhas) → nome do dia + `dd/mm`, linha de hoje com `aria-current="date"`; janelas de trabalho eram passadas ao `ScheduleGrid` e descartadas → célula fora da janela hachurada + sufixo no nome acessível; grade não atualizava após "Confirmar alocação" → `aoSucesso` + contador de recarga; cabeçalho "Agenda do dia" e botão "Agendar no Calendário" (que levava para a própria tela) somem na escala semana.
+- Agenda do dia: "1 agendamentos"/"1 sessões (0 ok)" pluralizados; emojis nas métricas e no alternador de visão → ícones do DS; `capitalize` que fazia "Quinta-Feira, 10 De Setembro" → só a primeira letra; dia sem NADA agendado dizia "Sua rotina do dia está concluída / Fim do expediente de verdade!" → "Nenhum atendimento agendado para hoje" com onde agendar; "Gerir" (pt-PT) → "Gerenciar"; opções de disciplina em caixa alta crua → `formatarDisciplina`.
+- Matriz de disponibilidade (`/equipe/[id]`): pintura por arrasto (mousedown + mouseover; `useRef` espelha a seleção porque handlers consecutivos liam a prop velha e se sobrescreviam) — uma semana comercial eram ~90 cliques; "Vago" negativo em cor de aviso com "acima da capacidade"; cabeçalho "Dia / Data" → "Dia".
+- Prontuário: cartão "Para este prontuário gerar dados" (no layout) aparecia inteiro em TODAS as abas, empurrando o H1 ~400px → `CartaoProntidaoPorRota`: inteiro só na Evolução (ou aba central), uma linha compacta nas demais; Evolução vazia dizia "falta 1 passo obrigatório… o próximo é Registrar a anamnese" (recomendado) → nomeia o degrau bloqueante; selo "Dados Criptografados (RLS Ativo)" → "Acesso restrito à equipe"; data de revisão da meta `2026-11-05` → `05/11/2026`; links "Ver Prontuário" com nome do paciente.
+- Onboarding: "Configure a agenda" apontava para `/agenda` (onde nada se configura) → `/equipe`. Equipe: `<a><button>` aninhado → `Button asChild` com nome acessível. Sessão: cabeçalho ganha data/hora no fuso da clínica. Assinatura: H2 "Ativar a assinatura" sobre assinatura já ativa → "Sua assinatura". Diário: "toca pra trocar" → "toque para alternar".
+
+**Medido:** `typecheck`, `pnpm lint` (0 erros), 467 testes das áreas tocadas verdes; grade semanal com janelas/hoje e matriz com arrasto verificadas no Storybook (stories `ComJanelasEHoje` e `MatrizDisponibilidade` adicionadas). Produção não foi reimplantada — os achados foram vistos lá, a correção está nesta branch (PR #665).
+
+**Fica para depois (achados sem correção nesta sessão):**
+
+- `/pacientes`: sem busca/filtro — com 7 pacientes ok, com 50 não; e ainda é pilha de cards (régua da sessão de 09/09, `DataList`). Duplicatas de nome ("Rômulo Sutil Corrêa" ×2) passam sem aviso no cadastro.
+- `/assinatura`: ciclo 13/07–14/08 "AGUARDANDO PAGAMENTO" com vencimento e fatura em "—" — verificar na linha de billing se a cobrança existe no Asaas.
+- Diário: "Salvo localmente." (R-37, spec §3.4) lê como "só no navegador" quando a captura foi gravada no servidor; a nota consolidada não é pré-preenchida com a captura. Ambos exigem decisão de spec antes de mexer.
+- `/clinica/dados`: CPF travado exibido sem máscara (`12700639790`); barra de abas da clínica transborda sem sinal de rolagem.
+- Briefing do paciente mostra "10 de agosto · 08:00" sem dizer que é a última sessão agendada.
+
+---
+
+## 🏁 Sessão 09/09/2026 (2ª) — listas que crescem não podem ser pilha de cards: nasce o `DataList`
+
+**Gatilho:** a fila "Pendentes de consolidação" da agenda com 10 itens ocupava ~950px de cards idênticos (borda 2px + sombra dura + 16px de padding cada). Pergunta do Rômulo: isso não escala visualmente — qual é a forma melhor?
+
+**Diagnóstico:** no Espectro Brutal a superfície elevada significa "fato consolidado". Repetida por linha ela deixa de significar (dez caixas iguais = ruído) e o cluster de pendências era **card dentro de card**. O padrão da indústria para o que se **varre** (fila, pendências, pacientes, equipe) é _list view_ — uma superfície, linhas de altura fixa separadas por fio, colunas alinhadas, cabeçalho de grupo pegajoso (NN/g "card view vs list view"; filas de Linear/Stripe). Card fica para o que se **navega** (conteúdo rico, um por tela).
+
+**O que entrou:**
+
+- `src/components/ui/data-list.tsx` — `DataList` (uma superfície + cabeçalho opcional), `DataListGroup` (`section` + `h3` pegajoso com contagem) e `DataListRow` (`li` em grid `hora | nome/detalhe | estado | ações`, 56px; no mobile o selo desce sob o nome). `overflow-clip` no container — `overflow-hidden` matava o `sticky` (medido no Storybook).
+- `pendencias-cluster-cliente.tsx` e `ItemPendencia` (agenda) migrados. Contagem total no cabeçalho (fila recolhida ainda diz o tamanho); data aparece como detalhe só quando a pendência não é de hoje. Estado morto `filtroTerapeutaId` removido.
+- Story `DataList` com 4 cenários (agrupada, simples, rolagem longa, antes/depois) e `data-list.a11y.test.tsx` (axe + semântica de região/lista + áreas de grid). `DESIGN.md` ganhou a seção "Listas densas" e um Don't.
+
+**Medido:** 10 linhas = ~455px (antes ~950px). Mobile 375px, dark (`.dark`) e sticky verificados no Storybook. `typecheck`, eslint e 16 testes a11y (agenda + DataList) verdes. A página `/agenda` real não foi aberta (exige login); a cobertura é Storybook + a11y.
+
+**Fica para depois (mesma régua, superfícies ainda em card por item):** `pacientes/lista-pacientes.tsx`, `equipe/lista-terapeutas.tsx`, `supervisao/supervisao-fila.tsx`, `excecoes/excecoes-list.tsx`, `duvidas/duvidas-lista.tsx`, `pendencias/pendencias-list.tsx`, `clinica/feriados/feriados-form.tsx`. Migrar uma por PR; `AntesEDepois` no Storybook é o gabarito. Acima de ~100 linhas, paginar (`pagination.tsx`) antes de pensar em virtualização.
+
+---
+
 ## 🏁 Sessão 09/09/2026 — #500: o que faltava era medição, não infraestrutura — e medir exigia um humano colando SQL
 
 **Gatilho:** fechar o que resta da #500. Restavam dois itens, ambos "do Rômulo": executar o smoke com áudio real (§6.2) e responder a cadência reformulada (§6.6).

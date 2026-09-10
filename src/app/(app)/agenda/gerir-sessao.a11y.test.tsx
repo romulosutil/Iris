@@ -52,11 +52,11 @@ const terapeutas = [
 ];
 
 describe("GerirSessao", () => {
-  test("botão Gerir abre o dialog e não tem violações axe (color-contrast desligado — jsdom sem canvas)", async () => {
+  test("botão Gerenciar abre o dialog e não tem violações axe (color-contrast desligado — jsdom sem canvas)", async () => {
     const { container } = render(
       <GerirSessao sessionId="s1" terapeutas={terapeutas} />,
     );
-    const btnGerir = screen.getByRole("button", { name: /gerir/i });
+    const btnGerir = screen.getByRole("button", { name: /gerenciar/i });
     await userEvent.click(btnGerir);
     expect(screen.getByRole("dialog")).not.toBeNull();
     await semViolacoes(container);
@@ -64,13 +64,13 @@ describe("GerirSessao", () => {
 
   test("select de estado está presente", async () => {
     render(<GerirSessao sessionId="s1" terapeutas={terapeutas} />);
-    await userEvent.click(screen.getByRole("button", { name: /gerir/i }));
+    await userEvent.click(screen.getByRole("button", { name: /gerenciar/i }));
     expect(screen.getByText(/^estado$/i)).not.toBeNull();
   });
 
   test("escolher uma falta revela o controle de justificada", async () => {
     render(<GerirSessao sessionId="s1" terapeutas={terapeutas} />);
-    await userEvent.click(screen.getByRole("button", { name: /gerir/i }));
+    await userEvent.click(screen.getByRole("button", { name: /gerenciar/i }));
     expect(screen.queryByText(/justificada/i)).toBeNull();
     await userEvent.click(screen.getByRole("combobox", { name: /estado/i }));
     await userEvent.click(

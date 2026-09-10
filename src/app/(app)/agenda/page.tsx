@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { getTenantContext } from "@/auth/tenant";
-import { Stack, Cluster } from "@/components/ui/layout";
+import { Stack } from "@/components/ui/layout";
 import { Button } from "@/components/ui/button";
 import { CalendarPlusIcon } from "@/components/ui/icon";
 import { PageHeader } from "@/components/ui/page-header";
-import { DataRow } from "@/components/ui/data-row";
+import { DataListRow } from "@/components/ui/data-list";
 import { listarTerapeutas } from "@/app/(app)/equipe/[id]/queries";
 import { listarSessoesDoDia, type SessaoDoDia } from "./logic";
 import {
@@ -60,28 +60,12 @@ export function ItemPendencia({
   fuso: string;
 }) {
   return (
-    <DataRow
-      como="li"
-      title={
-        <Cluster gap="sm" className="items-center">
-          <span className="font-display text-lg font-bold">
-            {horaDaSessao(sessao.agendadaPara, fuso)}
-          </span>
-          <EstadoBadge estado={sessao.estado} />
-        </Cluster>
-      }
-      subtitle={
-        <span>
-          {sessao.pacienteNome ?? "Paciente (acesso restrito)"}
-          {sessao.terapeutaNome ? (
-            <span className="text-[var(--text-secondary)]">
-              {" "}
-              · {sessao.terapeutaNome}
-            </span>
-          ) : null}
-        </span>
-      }
-      trailing={
+    <DataListRow
+      inicio={horaDaSessao(sessao.agendadaPara, fuso)}
+      titulo={sessao.pacienteNome ?? "Paciente (acesso restrito)"}
+      detalhe={sessao.terapeutaNome ?? undefined}
+      estado={<EstadoBadge estado={sessao.estado} />}
+      acoes={
         tipo === "consolidacao" ? (
           <GerirSessao sessionId={sessao.id} terapeutas={terapeutas} />
         ) : (
@@ -243,11 +227,21 @@ export default async function AgendaPage({
         />
       ) : null}
 
+      {/* Título acompanha a escala: em `?escala=semana` a tela abaixo é a
+          grade da semana, e "Agenda do dia · quinta-feira" em cima dela era
+          um cabeçalho de outra tela. O botão "Agendar no Calendário" também
+          some ali — ele leva exatamente para onde a pessoa já está. */}
       <PageHeader
-        title="Agenda do dia"
-        description={dataPorExtenso(dia, fuso)}
+        title={
+          params.escala === "semana" ? "Agenda da semana" : "Agenda do dia"
+        }
+        description={
+          params.escala === "semana"
+            ? "Alocação de horários recorrentes e avulsos da equipe."
+            : dataPorExtenso(dia, fuso)
+        }
         actions={
-          podeAgendar ? (
+          podeAgendar && params.escala !== "semana" ? (
             <Button asChild variante="primaria">
               {/* O ícone substitui o "+" que era texto no rótulo: o sinal de
                   adição era lido em voz alta pelo leitor de tela ("mais

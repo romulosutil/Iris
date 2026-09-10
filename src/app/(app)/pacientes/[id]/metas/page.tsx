@@ -25,6 +25,14 @@ const ESTADO_ROTULO: Record<string, string> = {
   descontinuada: "Descontinuada",
 };
 
+/** `2026-11-05` → `05/11/2026`: a data ISO servia ao `<=` da comparação de
+ * vencimento, não à leitura — no meio de uma frase em pt-BR ela lia ao
+ * contrário. */
+function dataBR(iso: string): string {
+  const [ano, mes, dia] = iso.split("-");
+  return ano && mes && dia ? `${dia}/${mes}/${ano}` : iso;
+}
+
 function criterioTexto(criterio: unknown): string {
   const c = criterio as Partial<CriterioDominio>;
   if (c && c.tipo === "n_acertos_m_sessoes" && c.n != null && c.m != null) {
@@ -171,7 +179,7 @@ export default async function MetasPage({
                   <p className="text-sm text-[var(--text-primary)]">
                     Ciclo de revisão: {m.cicloRevisaoSemanas} semanas
                     {m.proximaRevisaoEm
-                      ? ` · próxima: ${m.proximaRevisaoEm}`
+                      ? ` · próxima: ${dataBR(m.proximaRevisaoEm)}`
                       : ""}
                     {vencida ? " (vencida)" : ""}
                   </p>

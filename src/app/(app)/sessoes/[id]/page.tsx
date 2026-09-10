@@ -7,6 +7,24 @@ import { carregarSessao } from "./queries";
 import { Timeline } from "./timeline";
 import { CorrigirNota } from "./corrigir-nota";
 import { PassoEmFoco } from "./passo-em-foco";
+import { fusoDaClinicaAtual } from "@/lib/agenda/clinic-timezone";
+
+/** "quinta-feira, 10 de setembro · 09:00" no fuso da clínica. */
+function quandoPorExtenso(quando: Date, fuso: string): string {
+  const data = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: fuso,
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+  }).format(quando);
+  const hora = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: fuso,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(quando);
+  return `${data} · ${hora}`;
+}
 
 /**
  * `/sessoes/[id]` — timeline dos 5 estados canônicos + o passo em foco
@@ -28,7 +46,10 @@ export default async function SessaoPage({
   const ctx = await getTenantContext();
   const agora = new Date();
 
-  const dados = await carregarSessao(ctx, sessionId, agora);
+  const [dados, fuso] = await Promise.all([
+    carregarSessao(ctx, sessionId, agora),
+    fusoDaClinicaAtual(ctx),
+  ]);
   if (!dados) notFound();
 
   // Defesa em profundidade — mesmo critério de `/diario` e `/revisao`: RLS já
@@ -54,7 +75,7 @@ export default async function SessaoPage({
           />
         }
         title="Sessão"
-        description={dados.pacienteNome ?? "Paciente (acesso restrito)"}
+        description={`${dados.pacienteNome ?? "Paciente (acesso restrito)"} · ${quandoPorExtenso(dados.agendadaPara, fuso)}`}
       />
 
       <Timeline resultado={resultado} />
