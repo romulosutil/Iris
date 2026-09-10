@@ -1,6 +1,9 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
-import { surface } from "@/components/ui/primitives/surface";
+import {
+  surface,
+  type SurfaceVariante,
+} from "@/components/ui/primitives/surface";
 
 /**
  * DataList — lista densa de registros operacionais (fila, pendências, agenda,
@@ -26,12 +29,25 @@ export interface DataListProps extends React.HTMLAttributes<HTMLElement> {
   cabecalho?: React.ReactNode;
   /** Filhos são `DataListGroup` (com `como="div"`) ou `DataListRow` (com `como="ul"`). */
   como?: "div" | "ul";
+  /**
+   * Honestidade epistêmica no CONTAINER: uma lista só de candidatos da IA
+   * usa `sugerida` (tracejado violeta + afunda) — a linha não repete a
+   * moldura, então é a superfície inteira que declara "isto ainda não é fato".
+   */
+  variante?: SurfaceVariante;
   children?: React.ReactNode;
 }
 
 export const DataList = React.forwardRef<HTMLElement, DataListProps>(
   function DataList(
-    { className, cabecalho, como = "div", children, ...props },
+    {
+      className,
+      cabecalho,
+      como = "div",
+      variante = "solida",
+      children,
+      ...props
+    },
     ref,
   ) {
     const Corpo = como as React.ElementType;
@@ -39,7 +55,7 @@ export const DataList = React.forwardRef<HTMLElement, DataListProps>(
       <section
         ref={ref as React.Ref<HTMLElement>}
         className={cn(
-          surface("solida", { radius: "control" }),
+          surface(variante, { radius: "control" }),
           // `overflow-clip`, não `hidden`: hidden cria contexto de rolagem e
           // mata o `sticky` do cabeçalho de grupo; clip só recorta o canto.
           "overflow-clip bg-[var(--surface-card)]",
@@ -127,7 +143,12 @@ export interface DataListRowProps extends Omit<
   estado?: React.ReactNode;
   /** Ações da linha (botão, link, menu). Coluna final, sempre alinhada. */
   acoes?: React.ReactNode;
-  /** Linha inteira clicável (hover mais forte, cursor). A ação real vai em `acoes`. */
+  /**
+   * Linha inteira clicável (hover mais forte, cursor, `relative`). O alvo real
+   * é um `<a>` dentro de `titulo` com `after:absolute after:inset-0` (link
+   * esticado): o nome continua sendo o link nomeado na árvore de
+   * acessibilidade e o clique em qualquer ponto da linha cai nele.
+   */
   interativa?: boolean;
 }
 
@@ -160,7 +181,8 @@ export const DataListRow = React.forwardRef<HTMLLIElement, DataListRowProps>(
           "sm:grid-cols-[auto_minmax(0,1fr)_auto_auto] sm:[grid-template-areas:'inicio_titulo_estado_acoes']",
           "border-t border-[var(--border-brutal)]/20 first:border-t-0",
           "transition-colors duration-150 hover:bg-[var(--surface-muted)]/60",
-          interativa && "cursor-pointer hover:bg-[var(--surface-muted)]",
+          interativa &&
+            "relative cursor-pointer hover:bg-[var(--surface-muted)]",
           className,
         )}
         {...props}

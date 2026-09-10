@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Alert } from "@/components/ui/alert";
-import { Stack } from "@/components/ui/layout";
+import { DataList, DataListRow } from "@/components/ui/data-list";
 import type { SessaoTravada } from "@/lib/sessao/fila";
 import { ROTULO_ESTADO, ROTULO_MOTIVO } from "./[id]/timeline";
 
@@ -62,30 +62,39 @@ export function dividaItemFila(item: ItemFilaDado): string {
   return ROTULO_MOTIVO[item.motivo];
 }
 
+/**
+ * Uma linha da fila. A linha inteira é o alvo do clique (link esticado sobre
+ * o nome do paciente), mas o `<a>` nomeado continua sendo só o nome — leitor
+ * de tela ouve "Ana, link", não a linha inteira.
+ */
 export function ItemFila({ item }: { item: SessaoTravada }) {
   return (
-    <Link
-      href={`/sessoes/${item.sessionId}`}
-      className="block rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4 hover:bg-[var(--surface-hover)]"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="font-display font-semibold text-[var(--text-primary)]">
+    <DataListRow
+      interativa
+      titulo={
+        <Link
+          href={`/sessoes/${item.sessionId}`}
+          className="focus-visible:outline-focus font-semibold outline-none after:absolute after:inset-0 after:content-[''] focus-visible:outline-[length:var(--ring-width)] focus-visible:outline-offset-[var(--ring-offset)]"
+        >
           {item.patientNome ?? "Paciente (acesso restrito)"}
-        </p>
-        {/* R-18: o selo NUNCA aparece sem a linha de dívida logo abaixo. */}
-        <span className="font-display rounded-[var(--radius-xs)] border-2 border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] px-3 py-1 text-xs font-semibold text-[var(--status-warning-fg)]">
+        </Link>
+      }
+      // R-18: o selo NUNCA aparece sem a linha de dívida ao lado.
+      detalhe={`${item.terapeutaNome ?? "Terapeuta"} · ${dividaItemFila(item)}`}
+      estado={
+        <span className="font-display rounded-[var(--radius-xs)] border-2 border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] px-2 py-0.5 text-xs font-semibold text-[var(--status-warning-fg)]">
           {ROTULO_ESTADO.precisa_atencao}
         </span>
-      </div>
-      <p className="text-sm text-[var(--text-secondary)]">
-        {item.terapeutaNome ?? "Terapeuta"} · {dividaItemFila(item)}
-      </p>
-      {/* R-17: custo declarado, separado da dívida — dívida diz o que falta,
-       * custo diz quanto vai custar resolver. */}
-      <p className="mt-1 text-sm font-semibold text-[var(--text-primary)]">
-        {custoItemFila(item)}
-      </p>
-    </Link>
+      }
+      // R-17: custo declarado, separado da dívida — dívida diz o que falta,
+      // custo diz quanto vai custar resolver. Vive na coluna de ação porque É
+      // a promessa da ação: clicar custa isto.
+      acoes={
+        <span className="text-sm font-semibold whitespace-nowrap text-[var(--text-primary)]">
+          {custoItemFila(item)}
+        </span>
+      }
+    />
   );
 }
 
@@ -117,10 +126,10 @@ export function FilaLista({
   }
 
   return (
-    <Stack gap="sm">
+    <DataList como="ul" aria-label="Sessões travadas">
       {itens.map((item) => (
         <ItemFila key={item.sessionId} item={item} />
       ))}
-    </Stack>
+    </DataList>
   );
 }

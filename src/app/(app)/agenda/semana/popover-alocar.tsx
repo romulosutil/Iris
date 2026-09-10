@@ -154,6 +154,10 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
   // funções -> efeito de novo (com `estado.ok` ainda `true`) -> laço infinito.
   // Guardar a versão mais recente num ref deixa o efeito depender só do que
   // de fato mudou de estado: a gravação ter dado certo.
+  // A sincronização mora num efeito SEM deps, declarado ANTES do efeito que
+  // consome: efeitos do mesmo commit rodam na ordem de declaração, então quando
+  // `estado.ok` vira `true` os refs já carregam as props daquele render — não
+  // há janela para callback velho (revisão do #665 levantou a dúvida).
   const aoFecharRef = useRef(props.aoFechar);
   const aoSucessoRef = useRef(props.aoSucesso);
   useEffect(() => {
