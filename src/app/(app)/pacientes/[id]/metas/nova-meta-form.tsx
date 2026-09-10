@@ -85,7 +85,9 @@ export function NovaMetaForm({
       ) : null}
 
       {/* Critério de Domínio Estruturado Redesenhado (/impeccable) */}
-      <fieldset className="flex flex-col gap-3 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4 shadow-[var(--ds-shadow-sm)]">
+      {/* Agrupador, não fato: borda grafite sem sombra — o peso brutal fica
+          para os controles em foco, não para a moldura em volta deles. */}
+      <fieldset className="flex flex-col gap-3 rounded-[var(--radius-control)] border-2 border-[var(--border-muted)] bg-[var(--surface-card)] p-4">
         <legend className="font-display flex items-center gap-1.5 px-1.5 text-sm font-bold text-[var(--text-primary)]">
           <span>🎯</span> Critério de Domínio Automático
         </legend>

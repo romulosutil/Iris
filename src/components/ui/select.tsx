@@ -84,17 +84,17 @@ export const SelectTrigger = React.forwardRef<
         "data-[placeholder]:text-[var(--text-secondary)]",
         // Densidade desktop (>= md) — mesmo contrato do Input. Mobile intocado:
         // borda cheia de 2px e piso tátil de `control(size)`. A partir de `md`,
-        // o repouso VAZIO (Radix marca `data-placeholder` enquanto nada foi
-        // escolhido) recua para o grafite suave; escolha feita, foco ou lista
-        // aberta devolvem o peso brutalista. Largura fixa em 2px nos dois
-        // estados para não reflowar a linha a cada foco.
+        // o repouso (com ou sem escolha) fica no grafite suave; foco ou lista
+        // aberta devolvem o peso brutalista. "Escolha feita" já foi gatilho
+        // (`data-placeholder`) e saiu junto com o "preenchido" do Input: um
+        // formulário meio respondido virava tabuleiro de pesos. Largura fixa
+        // em 2px nos dois estados para não reflowar a linha a cada foco.
         // O `:not(:focus-visible):not([data-state=open])` não é enfeite: sem ele
         // a regra de repouso e a de foco teriam a MESMA especificidade e quem
         // venceria dependeria da ordem que o Tailwind emitir — o campo focado
         // podia ficar cinza. Assim as duas regras são mutuamente exclusivas.
         !invalido &&
-          "md:[&[data-placeholder]:not(:focus-visible):not([data-state=open])]:border-[var(--border-muted)] md:[&[data-placeholder]:not(:focus-visible):not([data-state=open])]:shadow-none",
-        "md:shadow-[var(--shadow-brutal)]",
+          "md:[&:not(:focus-visible):not([data-state=open])]:border-[var(--border-muted)] md:[&:not(:focus-visible):not([data-state=open])]:shadow-none",
         "md:focus-visible:shadow-[var(--shadow-brutal)] md:data-[state=open]:shadow-[var(--shadow-brutal)]",
         !invalido &&
           "md:focus-visible:border-[var(--border-brutal)] md:data-[state=open]:border-[var(--border-brutal)]",

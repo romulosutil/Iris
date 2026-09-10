@@ -321,7 +321,10 @@ export function AnamneseForm({
         {alvos.map((alvo, idx) => (
           <div
             key={idx}
-            className="flex flex-col gap-4 rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4 shadow-[var(--ds-shadow-sm)]"
+            // Agrupador, não fato: borda grafite sem sombra. Com borda cheia +
+            // sombra, cada alvo era uma caixa brutal com cinco controles dentro
+            // — moldura pesada em volta de moldura pesada.
+            className="flex flex-col gap-4 rounded-[var(--radius-control)] border-2 border-[var(--border-muted)] bg-[var(--surface-card)] p-4"
           >
             <div className="flex items-center justify-between border-b border-[var(--border-brutal)]/20 pb-2">
               <span className="font-display text-xs font-bold text-[var(--text-primary)]">

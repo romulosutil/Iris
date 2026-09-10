@@ -46,15 +46,14 @@ export const FamiliaDeProtocolo: Story = {
 };
 
 /**
- * Mesmo contrato de densidade do Input. O Radix marca `data-placeholder`
- * enquanto nada foi escolhido — esse é o repouso que recua para o grafite no
- * desktop. Escolha feita, foco ou lista aberta devolvem a borda cheia com a
- * sombra dura. Abaixo de `md`, borda de 2px e piso tátil intactos.
+ * Mesmo contrato de densidade do Input: no desktop o repouso fica no grafite
+ * com ou sem escolha feita; só foco ou lista aberta devolvem a borda cheia
+ * com a sombra dura. Abaixo de `md`, borda de 2px e piso tátil intactos.
  */
 export const DensidadeDesktop: Story = {
   render: () => (
     <div className="flex w-72 flex-col gap-4">
-      <Field label="Sem escolha (repouso)" htmlFor="densidade-vazio">
+      <Field label="Sem escolha" htmlFor="densidade-vazio">
         <Select>
           <SelectTrigger id="densidade-vazio">
             <SelectValue placeholder="Selecione…" />
@@ -65,7 +64,7 @@ export const DensidadeDesktop: Story = {
           </SelectContent>
         </Select>
       </Field>
-      <Field label="Com escolha" htmlFor="densidade-preenchido">
+      <Field label="Com escolha (mesmo repouso)" htmlFor="densidade-preenchido">
         <Select defaultValue="aba">
           <SelectTrigger id="densidade-preenchido">
             <SelectValue placeholder="Selecione…" />
