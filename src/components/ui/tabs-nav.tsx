@@ -22,6 +22,16 @@ export interface TabsNavProps {
   ariaLabel: string;
   activeHref?: string;
   className?: string;
+  /**
+   * Conteúdo alinhado à direita, na MESMA faixa das abas: selos de estado da
+   * entidade e um menu de ações raras (`MenuAcoes`). É o padrão de "abas com
+   * área de ações" (repositório do GitHub, ficha do Linear): o que descreve
+   * ou muda o estado da entidade inteira mora na linha da entidade, não numa
+   * faixa solta entre a navegação e o título da aba — ali ele fica órfão, sem
+   * relação visual com nada. Quando não cabe ao lado das abas, a área desce
+   * para uma linha própria, alinhada à direita, em vez de espremer os rótulos.
+   */
+  acoes?: React.ReactNode;
 }
 
 /**
@@ -51,16 +61,23 @@ export function TabsNav({
   ariaLabel,
   activeHref,
   className,
+  acoes,
 }: TabsNavProps) {
   const pathname = usePathname();
   const currentPath = activeHref ?? pathname ?? "";
 
-  return (
+  const nav = (
     <nav
       aria-label={ariaLabel}
       className={cn(
         "flex scrollbar-none items-stretch overflow-x-auto border-b-2 border-[var(--border-brutal)]",
-        className,
+        // Com ações ao lado: base = largura do conteúdo (`grow`, não `flex-1`,
+        // cuja base é 0). É o que faz o `flex-wrap` do wrapper derrubar as
+        // AÇÕES para a linha de baixo antes de espremer as abas — abas que
+        // rolam num desktop de 1024px seriam regressão. `min-w-0` só entra em
+        // jogo quando as abas sozinhas não cabem (mobile), e aí rolam como
+        // sempre rolaram. `-mb-0.5` sobrepõe a régua do wrapper com a própria.
+        acoes ? "-mb-0.5 min-w-0 grow" : className,
       )}
     >
       {itens.map((item) => {
@@ -87,5 +104,30 @@ export function TabsNav({
         );
       })}
     </nav>
+  );
+
+  if (!acoes) return nav;
+
+  return (
+    // A régua mora no wrapper e o `<nav>` sobrepõe a sua em cima dela: na
+    // mesma linha, as duas coincidem e a régua segue contínua até a margem
+    // direita, por baixo das ações. Quando as ações descem de linha, fica uma
+    // régua sob as abas e outra sob a linha das ações — e não um bloco
+    // solto abaixo das abas sem ligação visual com nada.
+    <div
+      className={cn(
+        "flex flex-wrap items-end border-b-2 border-[var(--border-brutal)]",
+        className,
+      )}
+    >
+      {nav}
+      {/* `min-w-0` + `flex-wrap` próprio: num viewport mais estreito que o
+          conjunto (selo de RLS + selos de estado + `⋯` passam de 375px) o
+          bloco encolhe e dobra por dentro, alinhado à direita, em vez de
+          estourar a margem e esconder o `⋯` fora da tela. */}
+      <div className="ml-auto flex min-h-11 max-w-full min-w-0 flex-wrap items-center justify-end gap-2 py-1 pl-3">
+        {acoes}
+      </div>
+    </div>
   );
 }

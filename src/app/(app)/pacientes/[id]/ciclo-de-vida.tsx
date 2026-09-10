@@ -1,5 +1,12 @@
+"use client";
+
+import { useState } from "react";
 import { Cluster } from "@/components/ui/layout";
 import { StatusBadge } from "@/components/ui/patterns/status-badge";
+import {
+  MenuAcoes,
+  type MenuAcaoItem,
+} from "@/components/ui/primitives/menu-acoes";
 import { AltaDialog } from "./alta-dialog";
 import { ArquivamentoDialog } from "./arquivamento-dialog";
 import type { UserRole } from "@/db/rls";
@@ -30,6 +37,15 @@ import type { UserRole } from "@/db/rls";
  * do prontuário (Briefing, Horas, Equipe…), não só na aba clínica central.
  * Estado do paciente é do paciente, não da aba.
  *
+ * **Onde e como.** A barra mora no slot `acoes` da faixa de abas (`TabsNav`),
+ * à direita, junto do selo de RLS — a linha que descreve o prontuário inteiro.
+ * Antes ela era uma faixa solta entre as abas e o título da aba, e dois
+ * botões de borda cheia ali liam como ação primária da tela quando são o
+ * oposto: alta e arquivamento acontecem uma vez na vida do prontuário. Por
+ * isso viraram itens de um menu `⋯` ("Ações do prontuário"): ação rara e de
+ * alto atrito fica a um clique, sem disputar atenção com o conteúdo clínico.
+ * Os selos continuam à vista — estado é leitura de todo dia.
+ *
  * **Os gates de papel espelham os cores, não a UI.** `registrarAlta`/`desfazerAlta`
  * exigem `coordenador` (`logic.ts`), e arquivar/desarquivar aceitam também
  * `admin_recepcao`. Mostrar um botão a quem `requireRole` recusa produz erro no
@@ -53,18 +69,44 @@ export function CicloDeVidaPaciente({
   const podeRegistrarAlta = papel === "coordenador";
   const podeArquivar = papel === "coordenador" || papel === "admin_recepcao";
 
-  // Nem selo nem botão: não renderiza a barra. Um `terapeuta` num paciente sem
-  // alta nem arquivamento veria uma linha vazia ocupando altura acima do
-  // conteúdo da aba.
+  // Um único diálogo aberto por vez: os dois são modais e o menu fecha antes
+  // de abrir qualquer um (ver `flushSync` em `MenuAcoes`).
+  const [dialogo, setDialogo] = useState<"alta" | "arquivamento" | null>(null);
+
+  // Nem selo nem ação: não renderiza nada. Um `terapeuta` num paciente sem
+  // alta nem arquivamento não veria nem um `⋯` vazio.
   if (!comAlta && !arquivado && !podeRegistrarAlta && !podeArquivar) {
     return null;
   }
+
+  const itens: MenuAcaoItem[] = [
+    ...(podeRegistrarAlta
+      ? [
+          {
+            id: "alta",
+            rotulo: comAlta
+              ? "Desfazer alta clínica"
+              : "Registrar alta clínica",
+            aoSelecionar: () => setDialogo("alta"),
+          },
+        ]
+      : []),
+    ...(podeArquivar
+      ? [
+          {
+            id: "arquivamento",
+            rotulo: arquivado ? "Desarquivar paciente" : "Arquivar paciente",
+            aoSelecionar: () => setDialogo("arquivamento"),
+          },
+        ]
+      : []),
+  ];
 
   return (
     // `role="group"` não é decoração: sem role, o `<div>` do `Cluster` resolve
     // para `generic`, e ARIA PROÍBE nomear elemento sem role — o axe acusa
     // `aria-prohibited-attr` e o nome some para o leitor de tela (mesma pegadinha
-    // documentada no selo de RLS logo abaixo, em `layout.tsx`).
+    // documentada no selo de RLS, em `layout.tsx`).
     <Cluster gap="sm" role="group" aria-label="Ciclo de vida do prontuário">
       {/* Os dois selos convivem: alta arquiva (trigger `patient_alta_arquiva_trg`,
           `0065`), mas arquivar NÃO dá alta — então "Arquivado" sozinho é um
@@ -77,11 +119,23 @@ export function CicloDeVidaPaciente({
       {arquivado ? (
         <StatusBadge variante="neutral">Arquivado</StatusBadge>
       ) : null}
+      {/* `MenuAcoes` devolve `null` sem itens: terapeuta vê só os selos. */}
+      <MenuAcoes itens={itens} rotulo="Ações do prontuário" />
       {podeRegistrarAlta ? (
-        <AltaDialog patientId={patientId} comAlta={comAlta} />
+        <AltaDialog
+          patientId={patientId}
+          comAlta={comAlta}
+          aberto={dialogo === "alta"}
+          aoMudarAberto={(aberto) => setDialogo(aberto ? "alta" : null)}
+        />
       ) : null}
       {podeArquivar ? (
-        <ArquivamentoDialog patientId={patientId} arquivado={arquivado} />
+        <ArquivamentoDialog
+          patientId={patientId}
+          arquivado={arquivado}
+          aberto={dialogo === "arquivamento"}
+          aoMudarAberto={(aberto) => setDialogo(aberto ? "arquivamento" : null)}
+        />
       ) : null}
     </Cluster>
   );

@@ -51,11 +51,27 @@ const INICIAL: AltaState = {};
 export function AltaDialog({
   patientId,
   comAlta,
+  aberto: abertoControlado,
+  aoMudarAberto,
 }: {
   patientId: string;
   comAlta: boolean;
+  /**
+   * Modo controlado: quem abre é um gatilho de fora (o menu `⋯` de
+   * `CicloDeVidaPaciente`), e o diálogo NÃO renderiza botão próprio. Sem os
+   * dois props ele continua autônomo, com o botão de sempre — é o modo dos
+   * testes de contrato e da varredura de a11y.
+   */
+  aberto?: boolean;
+  aoMudarAberto?: (aberto: boolean) => void;
 }) {
-  const [aberto, setAberto] = useState(false);
+  const [abertoInterno, setAbertoInterno] = useState(false);
+  const controlado = abertoControlado !== undefined;
+  const aberto = controlado ? abertoControlado : abertoInterno;
+  const setAberto = (proximo: boolean) => {
+    if (!controlado) setAbertoInterno(proximo);
+    aoMudarAberto?.(proximo);
+  };
   const campoData = useId();
   const campoMotivo = useId();
 
@@ -79,11 +95,13 @@ export function AltaDialog({
 
   return (
     <Dialog open={aberto} onOpenChange={setAberto}>
-      <DialogTrigger asChild>
-        <Button type="button" variante="neutra" tamanho="sm">
-          {rotulo}
-        </Button>
-      </DialogTrigger>
+      {controlado ? null : (
+        <DialogTrigger asChild>
+          <Button type="button" variante="neutra" tamanho="sm">
+            {rotulo}
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogTitle>{rotulo}</DialogTitle>
         <DialogDescription>
