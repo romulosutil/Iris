@@ -84,8 +84,11 @@ export function TabsNav({
         // AÇÕES para a linha de baixo antes de espremer as abas — abas que
         // rolam num desktop de 1024px seriam regressão. `min-w-0` só entra em
         // jogo quando as abas sozinhas não cabem (mobile), e aí rolam como
-        // sempre rolaram. `-mb-0.5` sobrepõe a régua do wrapper com a própria.
-        acoes ? "-mb-0.5 min-w-0 grow" : className,
+        // sempre rolaram. A margem negativa sobrepõe a régua do wrapper com a
+        // própria — na MESMA unidade da régua (`--border-brutal-width`, px),
+        // não em `rem`: `-mb-0.5` só coincidia com `border-b-2` na fonte-raiz
+        // de 16px; com zoom de fonte do usuário sobrava meio pixel de fresta.
+        acoes ? "-mb-[var(--border-brutal-width)] min-w-0 grow" : className,
       )}
     >
       {itens.map((item) => {
@@ -100,7 +103,7 @@ export function TabsNav({
             href={item.href}
             aria-current={ativo ? "page" : undefined}
             className={cn(
-              "font-display -mb-0.5 inline-flex min-h-11 shrink-0 items-center border-2 border-transparent px-4 py-2 text-base font-semibold text-[var(--text-secondary)] transition-colors duration-100 ease-out",
+              "font-display -mb-[var(--border-brutal-width)] inline-flex min-h-11 shrink-0 items-center border-2 border-transparent px-4 py-2 text-base font-semibold text-[var(--text-secondary)] transition-colors duration-100 ease-out",
               "hover:rounded-t-[var(--radius-control)] hover:border-[var(--border-brutal)]/40 hover:bg-[var(--gray-light-hover)]/40 hover:text-[var(--text-primary)]",
               "focus-visible:outline-focus outline-none focus-visible:outline-[length:var(--ring-width)] focus-visible:-outline-offset-[var(--ring-offset)]",
               ativo &&
