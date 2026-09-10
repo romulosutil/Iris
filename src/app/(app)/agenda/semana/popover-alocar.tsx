@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { minParaHora } from "@/lib/agenda/janela";
+import { formatarDisciplina } from "@/lib/disciplinas";
 import {
   criarAvulsaAction,
   criarRegraAction,
@@ -38,6 +39,8 @@ const TIPOS_AVULSA = [
 export interface PopoverAlocarProps {
   aberto: boolean;
   aoFechar: () => void;
+  /** Disparado uma vez quando a alocação grava — quem monta a grade recarrega. */
+  aoSucesso?: () => void;
   diaSemana: number;
   inicioMin: number;
   dataISO: string;
@@ -145,14 +148,16 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
     setDuracao(props.duracaoPadrao[d] ?? 60);
   }
 
+  const { aoFechar, aoSucesso } = props;
   useEffect(() => {
     if (estado.ok) {
+      aoSucesso?.();
       const timer = setTimeout(() => {
-        props.aoFechar();
+        aoFechar();
       }, 1200);
       return () => clearTimeout(timer);
     }
-  }, [estado.ok, props]);
+  }, [estado.ok, aoFechar, aoSucesso]);
 
   return (
     <Dialog open={props.aberto} onOpenChange={(o) => !o && props.aoFechar()}>
@@ -268,7 +273,7 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
             <Field label="Disciplina" htmlFor="popover-alocar-disciplina-fixa">
               <Input
                 id="popover-alocar-disciplina-fixa"
-                value={disciplina.toUpperCase()}
+                value={formatarDisciplina(disciplina)}
                 readOnly
                 disabled
               />
@@ -286,7 +291,7 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
                     );
                     return (
                       <SelectItem key={d} value={d}>
-                        {d.toUpperCase()}{" "}
+                        {formatarDisciplina(d)}{" "}
                         {ehDaEquipe ? " (Equipe de Cuidado)" : ""}
                       </SelectItem>
                     );

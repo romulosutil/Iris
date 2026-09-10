@@ -62,11 +62,11 @@ export function GerirSessao({ sessionId, terapeutas }: GerirSessaoProps) {
     <Dialog open={aberto} onOpenChange={setAberto}>
       <DialogTrigger asChild>
         <Button type="button" variante="neutra">
-          Gerir
+          Gerenciar
         </Button>
       </DialogTrigger>
       <DialogContent>
-        <DialogTitle>Gerir sessão</DialogTitle>
+        <DialogTitle>Gerenciar sessão</DialogTitle>
         <DialogDescription>
           Marque o estado final da sessão após o atendimento.
         </DialogDescription>

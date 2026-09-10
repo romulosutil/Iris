@@ -40,7 +40,19 @@ export interface ScheduleGridProps {
   aoAlocar?: (diaSemana: number, inicioMin: number) => void;
   aoAbrirRegra?: (regraId: string, rotulo: string) => void;
   fuso: string;
+  /** Data de hoje no fuso da clínica — destaca a linha do dia. */
+  hojeISO?: string;
 }
+
+const NOME_DIA: Record<number, string> = {
+  0: "Domingo",
+  1: "Segunda",
+  2: "Terça",
+  3: "Quarta",
+  4: "Quinta",
+  5: "Sexta",
+  6: "Sábado",
+};
 
 function minParaHora(m: number): string {
   const hh = Math.floor(m / 60)
@@ -57,9 +69,11 @@ export function ScheduleGrid({
   fechamento = "20:00",
   blocos = [],
   bloqueios = [],
+  janelas = [],
   aoAlocar,
   aoAbrirRegra,
   fuso,
+  hojeISO,
 }: ScheduleGridProps) {
   // Converte BlocoAgendaItem para o `CalendarEvento` que a CalendarGrid posiciona
   const sessoesFormatadas: CalendarEvento[] = React.useMemo(() => {
@@ -94,12 +108,18 @@ export function ScheduleGrid({
     });
   }, [blocos, fuso]);
 
+  // `rotulo` é o NOME do dia, não a data: a grade já imprime `dataISO` (como
+  // dd/mm) na segunda linha do cabeçalho. Antes `rotulo: d` repetia o ISO
+  // inteiro duas vezes na célula fixa, quebrado em três linhas.
   const diasFormatados = React.useMemo(() => {
-    return dias.map((d, idx) => ({
-      dataISO: d,
-      rotulo: d,
-      diaSemana: (idx + 1) % 7,
-    }));
+    return dias.map((d, idx) => {
+      const diaSemana = (idx + 1) % 7;
+      return {
+        dataISO: d,
+        rotulo: NOME_DIA[diaSemana] ?? d,
+        diaSemana,
+      };
+    });
   }, [dias]);
 
   return (
@@ -111,6 +131,8 @@ export function ScheduleGrid({
       diasSemana={diasFormatados}
       sessoes={sessoesFormatadas}
       bloqueios={bloqueios}
+      janelas={janelas}
+      hojeISO={hojeISO}
       fuso={fuso}
       onSlotClick={(_, horarioStr, diaSemana) => {
         const [hh, mm] = horarioStr.split(":").map(Number);

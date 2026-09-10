@@ -42,7 +42,11 @@ export const PASSOS_ONBOARDING: readonly DefinicaoPasso[] = [
     titulo: "Configure a agenda",
     descricao:
       "Defina as janelas de trabalho da equipe. Sem elas, a agenda não tem onde encaixar sessão.",
-    rota: "/agenda",
+    // As janelas se pintam no perfil de cada membro (`/equipe/[id]`), não na
+    // agenda: apontar para `/agenda` mandava o coordenador para a tela onde o
+    // passo se CONSOME, não onde se RESOLVE — e ele voltava sem saber o que
+    // fazer. A lista de equipe é o ponto de entrada de todos os perfis.
+    rota: "/equipe",
   },
   {
     id: "paciente",

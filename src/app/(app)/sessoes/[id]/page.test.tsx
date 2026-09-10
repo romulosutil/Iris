@@ -47,6 +47,9 @@ vi.mock("@/auth/tenant", () => ({
 }));
 
 const carregarSessao = vi.fn();
+vi.mock("@/lib/agenda/clinic-timezone", () => ({
+  fusoDaClinicaAtual: vi.fn().mockResolvedValue("America/Sao_Paulo"),
+}));
 vi.mock("./queries", () => ({
   carregarSessao: (...args: unknown[]) => carregarSessao(...args),
 }));
@@ -108,6 +111,7 @@ function dados(
     patientId: PATIENT_ID,
     pacienteNome: "Paciente Teste",
     terapeutaId: ctx.userId,
+    agendadaPara: new Date("2026-09-10T12:00:00Z"),
     podeVer: true,
     ehDono: true,
     podeColapsarAprovacao: false,
@@ -175,7 +179,9 @@ async function renderPagina(ctx: TenantContext, d: DadosSessao) {
   render(ui as React.ReactElement);
   // Sonda POSITIVA antes de qualquer asserção de ausência: se o cabeçalho não
   // está aqui, a árvore não montou e nenhum `queryBy…toBeNull` vale nada.
-  expect(screen.getByText("Paciente Teste")).toBeTruthy();
+  // O cabeçalho agora junta paciente e data/hora numa frase ("Paciente Teste ·
+  // quinta-feira, 10 de setembro · 09:00"): sonda por substring.
+  expect(screen.getAllByText(/Paciente Teste/).length).toBeGreaterThan(0);
 }
 
 beforeEach(() => {

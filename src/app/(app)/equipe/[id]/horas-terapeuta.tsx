@@ -40,8 +40,22 @@ export function HorasTerapeutaBloco({ horas }: { horas: HorasTerapeuta }) {
             <dt className="font-display text-xs font-semibold tracking-wide text-[var(--text-secondary)] uppercase">
               {rotulo}
             </dt>
-            <dd className="font-display mt-1 text-2xl font-semibold text-[var(--text-primary)]">
+            {/* Overbooking (vago < 0) é o único número desta linha que pede
+                ação; a cor de aviso reforça o sinal de menos, que sozinho
+                passa despercebido num "-1,83h". */}
+            <dd
+              className={
+                chave === "vago" && horas.vago < 0
+                  ? "font-display mt-1 text-2xl font-semibold text-[var(--status-warning-fg)]"
+                  : "font-display mt-1 text-2xl font-semibold text-[var(--text-primary)]"
+              }
+            >
               {formatarHoras(horas[chave])}
+              {chave === "vago" && horas.vago < 0 ? (
+                <span className="font-body ml-2 text-xs font-normal">
+                  acima da capacidade
+                </span>
+              ) : null}
             </dd>
           </div>
         ))}

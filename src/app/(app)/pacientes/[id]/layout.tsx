@@ -15,7 +15,7 @@ import { capacidadesDaModalidade } from "./modalidade";
 import { montarProntidao } from "@/lib/patient/prontidao";
 import { logarAvisoSemPII } from "@/lib/observabilidade/logar-erro";
 import { obterFatosProntidao } from "@/lib/patient/prontidao-queries";
-import { CartaoProntidao } from "@/components/app/cartao-prontidao";
+import { CartaoProntidaoPorRota } from "@/components/app/cartao-prontidao-por-rota";
 import { CicloDeVidaPaciente } from "./ciclo-de-vida";
 
 /**
@@ -172,6 +172,10 @@ export default async function PacienteLayout({
               no slot `icon` com `aria-hidden` para o leitor de tela não soletrar
               "emoji de cadeado fechado" antes da frase.
             */}
+            {/* "Dados Criptografados (RLS Ativo)" era jargão de banco na tela
+                do clínico: RLS não diz nada a quem atende, e "criptografado"
+                prometia algo que a policy não é. O selo diz o que a pessoa
+                precisa saber; o tooltip explica. */}
             <Tooltip conteudo="Este prontuário está visível apenas para a equipe autorizada desta clínica.">
               <Pill
                 variant="inset"
@@ -180,7 +184,7 @@ export default async function PacienteLayout({
                 tabIndex={0}
                 icon={<span aria-hidden="true">🔒</span>}
               >
-                Dados Criptografados (RLS Ativo)
+                Acesso restrito à equipe
               </Pill>
             </Tooltip>
             <CicloDeVidaPaciente
@@ -193,7 +197,14 @@ export default async function PacienteLayout({
         }
       />
       {fatos ? (
-        <CartaoProntidao
+        <CartaoProntidaoPorRota
+          // Escada inteira só na aba que fala dela (Evolução, ou a aba central
+          // quando a modalidade não tem Evolução); nas outras, uma linha.
+          rotaCompleta={
+            capacidades.temEvolucao
+              ? base
+              : `${base}/${capacidades.abaCentral?.slug ?? ""}`
+          }
           prontidao={montarProntidao({
             // Aqui a modalidade continua vindo da linha `patient`, e não da
             // `fatos.modalidade` do definer: quem alcança a página do paciente

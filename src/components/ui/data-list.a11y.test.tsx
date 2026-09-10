@@ -46,7 +46,7 @@ function Fila() {
           estado={<StatusBadge estado="sugerida" />}
           acoes={
             <Button variante="neutra" tamanho="sm">
-              Gerir
+              Gerenciar
             </Button>
           }
         />
@@ -57,7 +57,7 @@ function Fila() {
           estado={<StatusBadge estado="aprovada" />}
           acoes={
             <Button variante="neutra" tamanho="sm">
-              Gerir
+              Gerenciar
             </Button>
           }
         />
@@ -101,7 +101,7 @@ test("DataListRow — os quatro slots caem nas áreas de grid nomeadas", () => {
         titulo="Melinda"
         detalhe="Psicologia"
         estado={<span data-testid="estado">Agendada</span>}
-        acoes={<button type="button">Gerir</button>}
+        acoes={<button type="button">Gerenciar</button>}
       />
     </ul>,
   );
@@ -116,7 +116,7 @@ test("DataListRow — os quatro slots caem nas áreas de grid nomeadas", () => {
   ).toBeTruthy();
   expect(
     screen
-      .getByRole("button", { name: "Gerir" })
+      .getByRole("button", { name: "Gerenciar" })
       .closest("[class*='grid-area:acoes']"),
   ).toBeTruthy();
 });

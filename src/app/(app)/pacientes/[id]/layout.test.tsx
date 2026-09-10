@@ -391,7 +391,7 @@ describe("PacienteLayout - ciclo de vida do prontuário (D65)", () => {
     },
   );
 
-  it("o menu de ações fica na faixa de abas, ao lado do selo de RLS", async () => {
+  it("o menu de ações fica na faixa de abas, ao lado do selo de acesso", async () => {
     // A regressão que este caso vigia: voltar a barra para uma faixa solta
     // abaixo das abas. O gatilho `⋯` e o selo têm de ser descendentes do MESMO
     // contêiner que envolve o `<nav>` das abas — é o slot `acoes` do `TabsNav`.
@@ -415,7 +415,7 @@ describe("PacienteLayout - ciclo de vida do prontuário (D65)", () => {
       ),
     ).toBe(true);
     expect(
-      faixa!.contains(screen.getByText("Dados Criptografados (RLS Ativo)")),
+      faixa!.contains(screen.getByText("Acesso restrito à equipe")),
     ).toBe(true);
   });
 

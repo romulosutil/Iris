@@ -86,6 +86,7 @@ function dadosBase(prontidao: Prontidao): DadosSessao {
     patientId: "00000000-0000-0000-0000-0000000000p1",
     pacienteNome: "Paciente Teste",
     terapeutaId: ctx.userId,
+    agendadaPara: new Date("2026-09-10T12:00:00Z"),
     podeVer: true,
     ehDono: true,
     podeColapsarAprovacao: false,

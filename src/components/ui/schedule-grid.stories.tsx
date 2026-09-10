@@ -1,5 +1,7 @@
+import * as React from "react";
 import type { Meta } from "@storybook/nextjs-vite";
 import { ScheduleGrid, type BlocoAgendaItem } from "./schedule-grid";
+import { CalendarGrid } from "./calendar/calendar-grid";
 
 const meta = {
   title: "05. PATTERNS/Clinical & Schedules/ScheduleGrid",
@@ -65,6 +67,55 @@ export const Padrao = {
       />
     </div>
   ),
+};
+
+/**
+ * Com janelas de trabalho (seg–sex 08–12 / 13–18) e "hoje" = quarta: célula
+ * fora da janela fica hachurada e a linha de hoje ganha destaque. É o estado
+ * real de `/agenda?escala=semana` depois que o terapeuta pintou a
+ * disponibilidade em `/equipe/[id]`.
+ */
+export const ComJanelasEHoje = {
+  render: () => (
+    <div className="mx-auto max-w-6xl space-y-4 bg-[var(--bg-app)] p-4">
+      <ScheduleGrid
+        dias={mockDias}
+        blocos={mockBlocos}
+        fuso="America/Sao_Paulo"
+        hojeISO="2026-07-22"
+        janelas={[1, 2, 3, 4, 5].flatMap((diaSemana) => [
+          { diaSemana, horaInicio: "08:00", horaFim: "12:00" },
+          { diaSemana, horaInicio: "13:00", horaFim: "18:00" },
+        ])}
+        aoAlocar={(dia, inicio) =>
+          alert(`Alocar slot no dia ${dia} às ${inicio}min`)
+        }
+      />
+    </div>
+  ),
+};
+
+/** Matriz de disponibilidade: clique marca; segurar e arrastar pinta a faixa. */
+export const MatrizDisponibilidade = {
+  render: function MatrizStory() {
+    const [celulas, setCelulas] = React.useState<Set<string>>(
+      () => new Set(["1-09:00", "1-09:30", "1-10:00"]),
+    );
+    return (
+      <div className="mx-auto max-w-6xl space-y-2 bg-[var(--bg-app)] p-4">
+        <p className="font-mono text-xs">Células ativas: {celulas.size}</p>
+        <CalendarGrid
+          modo="availability-matrix"
+          abertura="07:00"
+          fechamento="20:00"
+          passoMin={30}
+          celulasSelecionadas={celulas}
+          onCelulasChange={setCelulas}
+          fuso="America/Sao_Paulo"
+        />
+      </div>
+    );
+  },
 };
 
 export const Mobile = {

@@ -120,7 +120,7 @@ export const FilaAgrupada: Story = {
                 estado={<StatusBadge estado={s.estado} />}
                 acoes={
                   <Button variante="neutra" tamanho="sm">
-                    Gerir
+                    Gerenciar
                   </Button>
                 }
               />
@@ -192,7 +192,7 @@ export const RolagemLonga: Story = {
                   estado={<StatusBadge estado={s.estado} />}
                   acoes={
                     <Button variante="neutra" tamanho="sm">
-                      Gerir
+                      Gerenciar
                     </Button>
                   }
                 />
@@ -241,7 +241,7 @@ export const AntesEDepois: Story = {
                 subtitle={s.paciente}
                 trailing={
                   <Button variante="neutra" tamanho="sm">
-                    Gerir
+                    Gerenciar
                   </Button>
                 }
               />
@@ -264,7 +264,7 @@ export const AntesEDepois: Story = {
                 estado={<StatusBadge estado={s.estado} />}
                 acoes={
                   <Button variante="neutra" tamanho="sm">
-                    Gerir
+                    Gerenciar
                   </Button>
                 }
               />

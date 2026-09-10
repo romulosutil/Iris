@@ -227,11 +227,21 @@ export default async function AgendaPage({
         />
       ) : null}
 
+      {/* Título acompanha a escala: em `?escala=semana` a tela abaixo é a
+          grade da semana, e "Agenda do dia · quinta-feira" em cima dela era
+          um cabeçalho de outra tela. O botão "Agendar no Calendário" também
+          some ali — ele leva exatamente para onde a pessoa já está. */}
       <PageHeader
-        title="Agenda do dia"
-        description={dataPorExtenso(dia, fuso)}
+        title={
+          params.escala === "semana" ? "Agenda da semana" : "Agenda do dia"
+        }
+        description={
+          params.escala === "semana"
+            ? "Alocação de horários recorrentes e avulsos da equipe."
+            : dataPorExtenso(dia, fuso)
+        }
         actions={
-          podeAgendar ? (
+          podeAgendar && params.escala !== "semana" ? (
             <Button asChild variante="primaria">
               {/* O ícone substitui o "+" que era texto no rótulo: o sinal de
                   adição era lido em voz alta pelo leitor de tela ("mais

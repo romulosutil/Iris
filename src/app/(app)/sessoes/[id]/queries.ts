@@ -54,6 +54,9 @@ export type DadosSessao = {
   patientId: string;
   pacienteNome: string | null;
   terapeutaId: string;
+  /** Instante agendado — o cabeçalho da página precisa dizer QUANDO é a
+   * sessão; sem isso a tela só mostrava o nome do paciente. */
+  agendadaPara: Date;
   /** `true` para o terapeuta dono da sessão OU coordenação (defesa em profundidade). */
   podeVer: boolean;
   ehDono: boolean;
@@ -252,6 +255,7 @@ export async function carregarSessao(
       patientId: sess.patientId,
       pacienteNome: pac?.nome ?? null,
       terapeutaId: sess.terapeutaId,
+      agendadaPara: sess.agendadaPara,
       // #539 (D-AUD-7): "dono" = profissional responsável = titular OU
       // substituto designado na agenda. Mesma régua da RLS
       // (`app_session_profissional_responsavel`, 0143) e de `fila.ts` — se as

@@ -58,7 +58,7 @@ export const ComAcoes: Story = {
               colorScheme="neutral"
               icon={<span aria-hidden="true">🔒</span>}
             >
-              Dados Criptografados (RLS Ativo)
+              Acesso restrito à equipe
             </Pill>
             <StatusBadge variante="success">Alta Concluída</StatusBadge>
             <MenuAcoes

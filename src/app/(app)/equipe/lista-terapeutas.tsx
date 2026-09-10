@@ -29,11 +29,18 @@ export function ListaTerapeutas({ terapeutas }: { terapeutas: Terapeuta[] }) {
                 </span>
               </div>
             </div>
-            <Link href={`/equipe/${t.id}`}>
-              <Button variante="terciaria" tamanho="sm">
+            {/* `asChild`: `<a><button>` era interativo aninhado (HTML
+                inválido, mismatch de hidratação) e o link ficava sem nome
+                próprio na árvore de acessibilidade. Mesmo padrão de
+                `/pacientes`. */}
+            <Button variante="terciaria" tamanho="sm" asChild>
+              <Link
+                href={`/equipe/${t.id}`}
+                aria-label={`Ver perfil de ${t.name}`}
+              >
                 Ver Perfil &rarr;
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </li>
       ))}
