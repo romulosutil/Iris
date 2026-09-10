@@ -2,10 +2,13 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Stack, Cluster } from "@/components/ui/layout";
 import { Button } from "@/components/ui/button";
-import { DataRow } from "@/components/ui/data-row";
-import { cn } from "@/lib/cn";
+import {
+  DataList,
+  DataListGroup,
+  DataListRow,
+} from "@/components/ui/data-list";
+import { Pill } from "@/components/ui/primitives/pill";
 import { EstadoBadge } from "./estado-badge";
 import { GerirSessao } from "./gerir-sessao";
 import type { SessaoDoDia } from "./actions";
@@ -29,54 +32,55 @@ function horaDaSessao(quando: Date, fuso: string): string {
   }).format(new Date(quando));
 }
 
-function ItemPendenciaClustered({
+function diaDaSessao(quando: Date, fuso: string): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: fuso,
+    day: "2-digit",
+    month: "2-digit",
+  }).format(new Date(quando));
+}
+
+/**
+ * Uma linha da fila: hora | paciente | estado | ação. O terapeuta não se
+ * repete na linha porque o grupo já o nomeia — a coluna que sobra é a data,
+ * útil quando a pendência é de outro dia (consolidação atrasada).
+ */
+function LinhaPendencia({
   sessao,
   tipo,
   terapeutas,
   fuso,
-  ocultarNomeTerapeuta = false,
+  hojeISO,
 }: {
   sessao: SessaoDoDia;
   tipo: TipoPendencia;
   terapeutas: { id: string; nome: string }[];
   fuso: string;
-  ocultarNomeTerapeuta?: boolean;
+  hojeISO: string;
 }) {
+  const diaISO = new Intl.DateTimeFormat("en-CA", { timeZone: fuso }).format(
+    new Date(sessao.agendadaPara),
+  );
+  const ehOutroDia = diaISO !== hojeISO;
   return (
-    <DataRow
-      como="li"
-      title={
-        <Cluster gap="sm" className="items-center">
-          <span className="font-display text-lg font-bold text-[var(--text-primary)]">
-            {horaDaSessao(sessao.agendadaPara, fuso)}
-          </span>
-          <EstadoBadge estado={sessao.estado} />
-        </Cluster>
-      }
-      subtitle={
-        <span className="text-sm font-medium text-[var(--text-primary)]">
-          {sessao.pacienteNome ?? "Paciente (acesso restrito)"}
-          {!ocultarNomeTerapeuta && sessao.terapeutaNome ? (
-            <span className="text-[var(--text-secondary)]">
-              {" "}
-              · {sessao.terapeutaNome}
-            </span>
-          ) : null}
-        </span>
-      }
-      trailing={
+    <DataListRow
+      inicio={horaDaSessao(sessao.agendadaPara, fuso)}
+      titulo={sessao.pacienteNome ?? "Paciente (acesso restrito)"}
+      detalhe={ehOutroDia ? diaDaSessao(sessao.agendadaPara, fuso) : undefined}
+      estado={<EstadoBadge estado={sessao.estado} />}
+      acoes={
         tipo === "consolidacao" ? (
           <GerirSessao sessionId={sessao.id} terapeutas={terapeutas} />
         ) : (
           // #512 · T14: `/agenda/semana` virou redirect para
           // `/agenda?escala=semana` — link interno aponta para a rota nova.
-          <Link
-            href={`/agenda?escala=semana&repor=${sessao.id}&patientId=${sessao.patientId}&terapeutaId=${sessao.terapeutaId}&disciplina=${encodeURIComponent(sessao.disciplina)}`}
-          >
-            <Button variante="secundaria" tamanho="sm">
+          <Button asChild variante="secundaria" tamanho="sm">
+            <Link
+              href={`/agenda?escala=semana&repor=${sessao.id}&patientId=${sessao.patientId}&terapeutaId=${sessao.terapeutaId}&disciplina=${encodeURIComponent(sessao.disciplina)}`}
+            >
               Repor
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         )
       }
     />
@@ -91,11 +95,15 @@ export function PendenciasClusterCliente({
   terapeutas,
   fuso,
 }: PendenciasClusterClienteProps) {
-  const [filtroTerapeutaId, setFiltroTerapeutaId] =
-    React.useState<string>("todos");
   const [recolhido, setRecolhido] = React.useState<boolean>(true);
+  const hojeISO = React.useMemo(
+    () =>
+      new Intl.DateTimeFormat("en-CA", { timeZone: fuso }).format(new Date()),
+    [fuso],
+  );
 
-  // Agrupar itens por terapeuta
+  // Agrupar itens por terapeuta, preservando a ordem de chegada (a query já
+  // devolve por horário).
   const gruposPorTerapeuta = React.useMemo(() => {
     const mapa = new Map<string, { nome: string; sessoes: SessaoDoDia[] }>();
 
@@ -117,59 +125,68 @@ export function PendenciasClusterCliente({
 
   if (itens.length === 0) return null;
 
-  // Itens filtrados se um terapeuta específico estiver selecionado
-  const gruposExibidos =
-    filtroTerapeutaId === "todos"
-      ? gruposPorTerapeuta
-      : gruposPorTerapeuta.filter((g) => g.terapeutaId === filtroTerapeutaId);
-
   return (
-    <div className="rounded-[var(--radius-control)] border-2 border-[var(--border-brutal)] bg-[var(--surface-card)] p-4 shadow-[var(--ds-shadow)]">
-      <div className="flex items-center justify-between border-b-2 border-[var(--border-brutal)] pb-3">
-        <div className="flex items-center gap-2">
-          <span className="rounded-[var(--radius-xs)] border border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] px-2 py-0.5 font-mono text-xs font-bold text-[var(--status-warning-fg)]">
-            [PENDÊNCIAS]
-          </span>
-          <h2
-            id={tituloId}
-            className="font-display text-base font-bold text-[var(--text-primary)]"
+    <DataList
+      aria-labelledby={tituloId}
+      cabecalho={
+        <>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="rounded-[var(--radius-xs)] border border-[var(--status-warning-border)] bg-[var(--status-warning-bg)] px-2 py-0.5 font-mono text-xs font-bold text-[var(--status-warning-fg)]">
+              [PENDÊNCIAS]
+            </span>
+            {/* A contagem vive no cabeçalho para que a fila recolhida ainda
+                diga seu tamanho — abrir não pode ser o único jeito de saber
+                se há 2 ou 40 pendências. */}
+            <Pill
+              variant="outline"
+              colorScheme="neutral"
+              size="sm"
+              className="tabular-nums"
+              aria-label={`${itens.length} ${itens.length === 1 ? "pendência" : "pendências"}`}
+            >
+              {itens.length}
+            </Pill>
+            <h2
+              id={tituloId}
+              className="font-display text-base font-bold text-[var(--text-primary)]"
+            >
+              {titulo}
+            </h2>
+          </div>
+          <Button
+            variante="neutra"
+            tamanho="sm"
+            onClick={() => setRecolhido((v) => !v)}
+            aria-expanded={!recolhido}
+            aria-controls={`${tituloId}-corpo`}
           >
-            {titulo}
-          </h2>
-        </div>
-        <Button
-          variante="neutra"
-          tamanho="sm"
-          onClick={() => setRecolhido((v) => !v)}
-          aria-expanded={!recolhido}
-        >
-          {recolhido ? "Ver todos" : "Recolher"}
-        </Button>
-      </div>
-
+            {recolhido ? "Ver todas" : "Recolher"}
+          </Button>
+        </>
+      }
+    >
       {!recolhido ? (
-        <div className="divide-y border-b border-[var(--border-brutal)]/10 pt-2">
-          {gruposExibidos.map((grupo) => (
-            <div key={grupo.terapeutaId} className="py-3">
-              <div className="mb-2 font-mono text-xs font-bold text-[var(--text-secondary)] uppercase">
-                {grupo.terapeutaNome} ({grupo.sessoes.length})
-              </div>
-              <Stack gap="xs" como="ul">
-                {grupo.sessoes.map((s) => (
-                  <ItemPendenciaClustered
-                    key={s.id}
-                    sessao={s}
-                    tipo={tipo}
-                    terapeutas={terapeutas}
-                    fuso={fuso}
-                    ocultarNomeTerapeuta={true}
-                  />
-                ))}
-              </Stack>
-            </div>
+        <div id={`${tituloId}-corpo`}>
+          {gruposPorTerapeuta.map((grupo) => (
+            <DataListGroup
+              key={grupo.terapeutaId}
+              titulo={grupo.terapeutaNome}
+              contagem={grupo.sessoes.length}
+            >
+              {grupo.sessoes.map((s) => (
+                <LinhaPendencia
+                  key={s.id}
+                  sessao={s}
+                  tipo={tipo}
+                  terapeutas={terapeutas}
+                  fuso={fuso}
+                  hojeISO={hojeISO}
+                />
+              ))}
+            </DataListGroup>
           ))}
         </div>
       ) : null}
-    </div>
+    </DataList>
   );
 }

@@ -75,6 +75,24 @@
 
 ---
 
+## 🏁 Sessão 09/09/2026 (2ª) — listas que crescem não podem ser pilha de cards: nasce o `DataList`
+
+**Gatilho:** a fila "Pendentes de consolidação" da agenda com 10 itens ocupava ~950px de cards idênticos (borda 2px + sombra dura + 16px de padding cada). Pergunta do Rômulo: isso não escala visualmente — qual é a forma melhor?
+
+**Diagnóstico:** no Espectro Brutal a superfície elevada significa "fato consolidado". Repetida por linha ela deixa de significar (dez caixas iguais = ruído) e o cluster de pendências era **card dentro de card**. O padrão da indústria para o que se **varre** (fila, pendências, pacientes, equipe) é _list view_ — uma superfície, linhas de altura fixa separadas por fio, colunas alinhadas, cabeçalho de grupo pegajoso (NN/g "card view vs list view"; filas de Linear/Stripe). Card fica para o que se **navega** (conteúdo rico, um por tela).
+
+**O que entrou:**
+
+- `src/components/ui/data-list.tsx` — `DataList` (uma superfície + cabeçalho opcional), `DataListGroup` (`section` + `h3` pegajoso com contagem) e `DataListRow` (`li` em grid `hora | nome/detalhe | estado | ações`, 56px; no mobile o selo desce sob o nome). `overflow-clip` no container — `overflow-hidden` matava o `sticky` (medido no Storybook).
+- `pendencias-cluster-cliente.tsx` e `ItemPendencia` (agenda) migrados. Contagem total no cabeçalho (fila recolhida ainda diz o tamanho); data aparece como detalhe só quando a pendência não é de hoje. Estado morto `filtroTerapeutaId` removido.
+- Story `DataList` com 4 cenários (agrupada, simples, rolagem longa, antes/depois) e `data-list.a11y.test.tsx` (axe + semântica de região/lista + áreas de grid). `DESIGN.md` ganhou a seção "Listas densas" e um Don't.
+
+**Medido:** 10 linhas = ~455px (antes ~950px). Mobile 375px, dark (`.dark`) e sticky verificados no Storybook. `typecheck`, eslint e 16 testes a11y (agenda + DataList) verdes. A página `/agenda` real não foi aberta (exige login); a cobertura é Storybook + a11y.
+
+**Fica para depois (mesma régua, superfícies ainda em card por item):** `pacientes/lista-pacientes.tsx`, `equipe/lista-terapeutas.tsx`, `supervisao/supervisao-fila.tsx`, `excecoes/excecoes-list.tsx`, `duvidas/duvidas-lista.tsx`, `pendencias/pendencias-list.tsx`, `clinica/feriados/feriados-form.tsx`. Migrar uma por PR; `AntesEDepois` no Storybook é o gabarito. Acima de ~100 linhas, paginar (`pagination.tsx`) antes de pensar em virtualização.
+
+---
+
 ## 🏁 Sessão 09/09/2026 — #500: o que faltava era medição, não infraestrutura — e medir exigia um humano colando SQL
 
 **Gatilho:** fechar o que resta da #500. Restavam dois itens, ambos "do Rômulo": executar o smoke com áudio real (§6.2) e responder a cadência reformulada (§6.6).

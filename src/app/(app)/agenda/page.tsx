@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { getTenantContext } from "@/auth/tenant";
-import { Stack, Cluster } from "@/components/ui/layout";
+import { Stack } from "@/components/ui/layout";
 import { Button } from "@/components/ui/button";
 import { CalendarPlusIcon } from "@/components/ui/icon";
 import { PageHeader } from "@/components/ui/page-header";
-import { DataRow } from "@/components/ui/data-row";
+import { DataListRow } from "@/components/ui/data-list";
 import { listarTerapeutas } from "@/app/(app)/equipe/[id]/queries";
 import { listarSessoesDoDia, type SessaoDoDia } from "./logic";
 import {
@@ -60,28 +60,12 @@ export function ItemPendencia({
   fuso: string;
 }) {
   return (
-    <DataRow
-      como="li"
-      title={
-        <Cluster gap="sm" className="items-center">
-          <span className="font-display text-lg font-bold">
-            {horaDaSessao(sessao.agendadaPara, fuso)}
-          </span>
-          <EstadoBadge estado={sessao.estado} />
-        </Cluster>
-      }
-      subtitle={
-        <span>
-          {sessao.pacienteNome ?? "Paciente (acesso restrito)"}
-          {sessao.terapeutaNome ? (
-            <span className="text-[var(--text-secondary)]">
-              {" "}
-              · {sessao.terapeutaNome}
-            </span>
-          ) : null}
-        </span>
-      }
-      trailing={
+    <DataListRow
+      inicio={horaDaSessao(sessao.agendadaPara, fuso)}
+      titulo={sessao.pacienteNome ?? "Paciente (acesso restrito)"}
+      detalhe={sessao.terapeutaNome ?? undefined}
+      estado={<EstadoBadge estado={sessao.estado} />}
+      acoes={
         tipo === "consolidacao" ? (
           <GerirSessao sessionId={sessao.id} terapeutas={terapeutas} />
         ) : (
