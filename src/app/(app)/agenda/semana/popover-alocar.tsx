@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useActionState, useState } from "react";
+import { useEffect, useMemo, useActionState, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -148,16 +148,26 @@ export function PopoverAlocar(props: PopoverAlocarProps) {
     setDuracao(props.duracaoPadrao[d] ?? 60);
   }
 
-  const { aoFechar, aoSucesso } = props;
+  // `aoFechar`/`aoSucesso` chegam como arrow inline do pai (`semana-cliente`),
+  // então mudam de identidade a cada render dele. Se entrassem no array de
+  // dependências, `aoSucesso()` -> `setVersao` no pai -> novo render -> novas
+  // funções -> efeito de novo (com `estado.ok` ainda `true`) -> laço infinito.
+  // Guardar a versão mais recente num ref deixa o efeito depender só do que
+  // de fato mudou de estado: a gravação ter dado certo.
+  const aoFecharRef = useRef(props.aoFechar);
+  const aoSucessoRef = useRef(props.aoSucesso);
   useEffect(() => {
-    if (estado.ok) {
-      aoSucesso?.();
-      const timer = setTimeout(() => {
-        aoFechar();
-      }, 1200);
-      return () => clearTimeout(timer);
-    }
-  }, [estado.ok, aoFechar, aoSucesso]);
+    aoFecharRef.current = props.aoFechar;
+    aoSucessoRef.current = props.aoSucesso;
+  });
+  useEffect(() => {
+    if (!estado.ok) return;
+    aoSucessoRef.current?.();
+    const timer = setTimeout(() => {
+      aoFecharRef.current();
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [estado.ok]);
 
   return (
     <Dialog open={props.aberto} onOpenChange={(o) => !o && props.aoFechar()}>

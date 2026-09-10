@@ -21,6 +21,14 @@ export interface TabsNavProps {
   /** Rótulo do <nav>, obrigatório: uma tela pode ter mais de uma navegação. */
   ariaLabel: string;
   activeHref?: string;
+  /**
+   * Aplica no elemento RAIZ do componente, que muda com `acoes`: sem `acoes` a
+   * raiz é o próprio `<nav>`; com `acoes` é o wrapper que carrega a régua e a
+   * área de ações. É o wrapper que precisa recebê-la — `admin-nav` passa
+   * `border-b-0` para matar a régua, e ela mora no wrapper quando ele existe.
+   * Não é concatenada no `<nav>` interno: ali ela duplicaria a régua em vez de
+   * removê-la.
+   */
   className?: string;
   /**
    * Conteúdo alinhado à direita, na MESMA faixa das abas: selos de estado da
