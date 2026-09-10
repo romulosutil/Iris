@@ -78,7 +78,7 @@ export function CapturaForm({
       {protocolos.length > 0 ? (
         <Stack gap="sm">
           <p className="text-ink font-display text-sm font-semibold">
-            Protocolos desta sessão — toca pra trocar
+            Protocolos desta sessão — toque para alternar
           </p>
           <ChipGroup rotulo="Protocolos desta sessão">
             {protocolos.map((p) => (
