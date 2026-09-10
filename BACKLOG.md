@@ -142,7 +142,9 @@
 
 **Medido:** 10 linhas = ~455px (antes ~950px). Mobile 375px, dark (`.dark`) e sticky verificados no Storybook. `typecheck`, eslint e 16 testes a11y (agenda + DataList) verdes. A página `/agenda` real não foi aberta (exige login); a cobertura é Storybook + a11y.
 
-**Fica para depois (mesma régua, superfícies ainda em card por item):** `pacientes/lista-pacientes.tsx`, `equipe/lista-terapeutas.tsx`, `supervisao/supervisao-fila.tsx`, `excecoes/excecoes-list.tsx`, `duvidas/duvidas-lista.tsx`, `pendencias/pendencias-list.tsx`, `clinica/feriados/feriados-form.tsx`. Migrar uma por PR; `AntesEDepois` no Storybook é o gabarito. Acima de ~100 linhas, paginar (`pagination.tsx`) antes de pensar em virtualização.
+**2ª rodada (10/09/2026, branch `fix/pequenos-ajustes-2`):** migradas `pacientes/lista-pacientes.tsx` (convênio/contato/nascimento deixam de ser um "Ver convênio e contato" recolhido por linha e viram a coluna de detalhe), `equipe/lista-terapeutas.tsx`, `clinica/feriados/feriados-form.tsx` (data de início na coluna mono) e a fila `/sessoes` (`fila-item.tsx`: linha inteira clicável por link esticado sobre o nome; custo R-17 na coluna de ação; skeleton do `loading.tsx` em forma de linha). `DataList` ganhou `variante` (container `sugerida` para lista só de candidatos da IA) e `DataListRow` `interativa` vira `relative` para ancorar o link.
+
+**Decididos como NÃO migrar, e por quê:** `supervisao/supervisao-fila.tsx` e `duvidas/duvidas-lista.tsx` — cada item carrega formulário/decisão inline (responder dúvida, reconhecer/resolver/descartar com diálogo): é conteúdo que se **navega**, a régua manda card. `excecoes/excecoes-list.tsx` e `pendencias/pendencias-list.tsx` — código morto: `/excecoes` e `/pendencias` são `redirect()` para `/sessoes` desde #512 (T14); migrar seria maquiar um componente que ninguém monta. Candidatos a remoção numa limpeza própria. Acima de ~100 linhas, paginar (`pagination.tsx`) antes de pensar em virtualização.
 
 ---
 

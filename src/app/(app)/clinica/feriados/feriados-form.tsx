@@ -4,7 +4,7 @@ import { Form } from "@/components/ui/form";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { DataRow } from "@/components/ui/data-row";
+import { DataList, DataListRow } from "@/components/ui/data-list";
 import { Alert } from "@/components/ui/alert";
 import {
   criarBloqueioAction,
@@ -30,16 +30,18 @@ export function FeriadosForm({ bloqueios }: { bloqueios: Bloqueio[] }) {
           Nenhum feriado cadastrado para esta clínica.
         </Alert>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <DataList como="ul" aria-label="Feriados da clínica">
           {bloqueios.map((b) => (
-            <li key={b.id}>
-              <DataRow
-                title={b.motivo}
-                subtitle={`${b.dataInicio} — ${b.dataFim}`}
-              />
-            </li>
+            <DataListRow
+              key={b.id}
+              inicio={b.dataInicio}
+              titulo={b.motivo}
+              detalhe={
+                b.dataFim !== b.dataInicio ? `até ${b.dataFim}` : undefined
+              }
+            />
           ))}
-        </ul>
+        </DataList>
       )}
       <Form action={formAction} error={state.error}>
         <input type="hidden" name="escopo" value="clinica" />
